@@ -137,6 +137,51 @@ describe("Round 1 repository abstraction", () => {
       repository.saveSnapshot("missing", buildSnapshot())
     ).rejects.toThrow("Round 1 project not found");
   });
+
+  test("stores a non-authoritative rendering with a createdAt stamp, separate from the snapshot", async () => {
+    const repository = createInMemoryRound1Repository({
+      now: () => new Date("2026-06-17T12:00:00.000Z")
+    });
+    const project = await repository.createProject({ customerName: "Ada" });
+
+    const updated = await repository.saveRendering(project.id, {
+      model: "gpt-image-2",
+      imageBase64: "rendered-bytes",
+      prompt: "concept",
+      size: "1536x1024",
+      basedOnSnapshotGeneratedAt: "2026-06-17T00:00:00.000Z",
+      salesEstimateOnly: true,
+      notForProduction: true,
+      dimensionConfidence: "ROUGH"
+    });
+
+    expect(updated.latestRendering?.createdAt).toBe("2026-06-17T12:00:00.000Z");
+
+    const loaded = await repository.getProject(project.id);
+    expect(loaded?.latestRendering?.imageBase64).toBe("rendered-bytes");
+    expect(loaded?.latestRendering?.basedOnSnapshotGeneratedAt).toBe(
+      "2026-06-17T00:00:00.000Z"
+    );
+    // The rendering must never leak into the authoritative snapshot field.
+    expect(loaded?.snapshot).toBeUndefined();
+  });
+
+  test("rejects saving a rendering to an unknown project", async () => {
+    const repository = createInMemoryRound1Repository();
+
+    await expect(
+      repository.saveRendering("missing", {
+        model: "gpt-image-2",
+        imageBase64: "x",
+        prompt: "p",
+        size: "1536x1024",
+        basedOnSnapshotGeneratedAt: "2026-06-17T00:00:00.000Z",
+        salesEstimateOnly: true,
+        notForProduction: true,
+        dimensionConfidence: "ROUGH"
+      })
+    ).rejects.toThrow("Round 1 project not found");
+  });
 });
 
 describe("File-system Round 1 repository", () => {

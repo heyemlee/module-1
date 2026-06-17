@@ -58,6 +58,62 @@ export function createOpenAIRestImageClient(input: {
         return (await response.json()) as {
           data?: Array<{ b64_json?: string }>;
         };
+      },
+
+      async edit(request) {
+        // Image+text edit uses multipart/form-data. The deterministic floor
+        // plan PNG is the spatial reference; the prompt carries semantics.
+        const form = new FormData();
+        form.append("model", request.model);
+        form.append("prompt", request.prompt);
+        form.append("size", request.size);
+        form.append("n", "1");
+        // gpt-image-* return base64 by default and reject `response_format`.
+        if (!request.model.startsWith("gpt-image")) {
+          form.append("response_format", "b64_json");
+        }
+        // A single reference uses the classic `image` field; multiple references
+        // use repeated `image[]` parts (clean top-down + optional perspective).
+        // The API rejects sending BOTH `image` and `image[]` ("parameter already
+        // has a different value"), so pick exactly one shape by count.
+        const images = request.referenceImagesBase64;
+        if (images.length === 1) {
+          const bytes = Buffer.from(images[0], "base64");
+          form.append(
+            "image",
+            new Blob([bytes], { type: "image/png" }),
+            "floor-plan.png"
+          );
+        } else {
+          images.forEach((b64, index) => {
+            const bytes = Buffer.from(b64, "base64");
+            form.append(
+              "image[]",
+              new Blob([bytes], { type: "image/png" }),
+              `reference-${index}.png`
+            );
+          });
+        }
+
+        const response = await fetchImpl(`${baseUrl}/images/edits`, {
+          method: "POST",
+          // No explicit Content-Type: fetch sets the multipart boundary.
+          headers: { Authorization: `Bearer ${input.apiKey}` },
+          body: form
+        });
+
+        if (!response.ok) {
+          const detail = await safeReadError(response);
+          throw new Error(
+            `OpenAI image edit failed with status ${response.status}${
+              detail ? `: ${detail}` : ""
+            }`
+          );
+        }
+
+        return (await response.json()) as {
+          data?: Array<{ b64_json?: string }>;
+        };
       }
     }
   };
