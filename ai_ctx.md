@@ -146,6 +146,7 @@ Implemented and verified as of 2026-06-16:
 - Dishwasher now renders as an integrated base-cabinet panel instead of a detached handle rectangle.
 - Fixed appliance SVGs (fridge, sink, range, dishwasher, oven) to correctly adapt, rotate, and center on vertical walls without deformation or mirroring.
 - Position-first preview gating: initial page load renders only the empty room shell; door/window/appliance symbols appear when entering `Adjust Positions`; preliminary cabinet fill appears only after `Generate Cabinet Fill` or advancing past `Adjust Positions`.
+- Drag UX polish: added hover halos, grab handles, and wall-target highlighting during drag operations; improved manual-adjustment status UI; and added logic to automatically clear invalid wall overrides when the layout shape changes.
 
 Latest known verification:
 
@@ -168,50 +169,11 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 
 ## Active Work: Next Session
 
-Highest priority: drag UX polish for the position-first workflow.
+Currently awaiting the next prioritization from the user. Options include:
 
-Current workflow requirement:
-
-- Round 1 should open in a position-first state, not with cabinets already visually filled.
-- Sales should rough-fill room/opening/layout/appliance info, then use `Adjust Positions` to drag doors, windows, and appliances.
-- Preliminary cabinet fill should happen only after those rough positions are confirmed via `Generate Cabinet Fill` or by advancing past `Adjust Positions`.
-
-Next drag UX polish scope:
-
-- Add obvious affordances on draggable plan objects:
-  - hover outline or halo
-  - small grab handle / anchor mark
-  - cursor should clearly imply drag on supported objects
-  - apply to `door`, `window`, `sink`, `range`, `fridge`, `dishwasher`, and wall oven if present
-- Add wall-target feedback while dragging:
-  - visually emphasize allowed walls for the current layout shape
-  - show invalid walls as unavailable or non-highlighted
-  - respect `allowedDragWallsForLayout()`
-  - examples: `L_SHAPE` -> `TOP` + `LEFT`; `GALLEY` -> `TOP` + `BOTTOM`; `U_SHAPE` -> `TOP` + `LEFT` + `RIGHT`
-- Improve manual-adjustment state:
-  - show a compact `Adjusted manually` status when `positionOverrides` is non-empty
-  - show `Positions confirmed` after cabinet fill has been enabled
-  - keep the status in `Adjust Positions`, not as noisy plan text
-- Preserve overrides across non-layout form edits.
-- Clear invalid overrides when `layoutPreference` changes and an override wall is no longer allowed for the new layout (does not apply to doors/windows).
-- Keep the existing geometry contract:
-  - dragging should not leave fixed objects overlapping
-  - appliance/opening clearance zones remain no-fill cabinet zones
-  - cabinet fill reflows around confirmed positions
-
-Suggested tests for this polish:
-
-- `AdjustPositionsStep` or app render shows `Adjusted manually` when `positionOverrides` exists.
-- `AdjustPositionsStep` shows `Positions confirmed` after the cabinet fill gate is enabled.
-- Changing a non-layout field preserves `positionOverrides`.
-- Changing `layoutPreference` removes overrides whose wall is not in `allowedDragWallsForLayout(newLayout)`.
-- Layout preview renders a stable drag affordance marker or class for draggable appliances/openings.
-- Drag wall-target feedback is present only while dragging and matches the allowed walls for the layout.
-
-Browser QA target:
-
-- At `http://127.0.0.1:3000/`, enter `Adjust Positions`, click `Start Adjusting`, hover/drag a draggable item, and verify the plan clearly communicates drag affordances and valid wall targets.
-- Confirm cabinet fill still appears only after `Generate Cabinet Fill` / advancing past `Adjust Positions`.
+1. Add persistent repository implementation behind `Round1Repository`.
+2. Optional realistic-render-from-SVG (using deterministic SVG as reference).
+3. Detailed Mode / Module 2 preparation (dimension strings, cabinet codes).
 
 ## Later Work
 

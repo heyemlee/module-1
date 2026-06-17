@@ -292,7 +292,7 @@ function overrideFromPointer(
   pt: { x: number; y: number },
   axisOffset: number
 ): PositionOverride {
-  const wall = nearestAllowedWall(plan, pt);
+  const wall = nearestAllowedWall(plan, pt, id);
   const horizontal = wall === "TOP" || wall === "BOTTOM";
   const rawPosition = (horizontal ? pt.x : pt.y) - axisOffset;
   const centerTracked = id === "door";
@@ -302,8 +302,10 @@ function overrideFromPointer(
   return { wall, position: rawPosition };
 }
 
-function nearestAllowedWall(plan: FloorPlan, pt: { x: number; y: number }): Wall {
-  const allowed = allowedDragWallsForLayout(plan.layoutPreference);
+function nearestAllowedWall(plan: FloorPlan, pt: { x: number; y: number }, id: string): Wall {
+  const allowed = id === "door" || id === "window" 
+    ? (["TOP", "BOTTOM", "LEFT", "RIGHT"] as Wall[])
+    : allowedDragWallsForLayout(plan.layoutPreference);
   const { x, y, w, h, thickness } = plan.room;
   const inner = {
     left: x + thickness,
