@@ -685,10 +685,34 @@ function placeAppliances(
         : (spec.symbol === "range" ? baseDepth * 1.05 
           : (spec.deep ? Math.min(32 * scale, baseDepth * 1.15) : baseDepth * 0.9));
       
+      let trackRect: PlanRect;
+      if (wall === "TOP") trackRect = { x: ix, y: iy, w: iw, h: depth };
+      else if (wall === "BOTTOM") trackRect = { x: ix, y: iy + ih - depth, w: iw, h: depth };
+      else if (wall === "LEFT") trackRect = { x: ix, y: iy, w: depth, h: ih };
+      else trackRect = { x: ix + iw - depth, y: iy, w: depth, h: ih };
+
+      const currentOccupied = [...occupied];
+      for (const shape of shapes) {
+        if (shape.wall === wall) continue;
+        let crossIntersect = false;
+        if (horizontal) {
+          crossIntersect = shape.y < trackRect.y + trackRect.h && shape.y + shape.h > trackRect.y;
+        } else {
+          crossIntersect = shape.x < trackRect.x + trackRect.w && shape.x + shape.w > trackRect.x;
+        }
+        if (crossIntersect) {
+          if (horizontal) {
+            currentOccupied.push({ start: shape.x, end: shape.x + shape.w });
+          } else {
+            currentOccupied.push({ start: shape.y, end: shape.y + shape.h });
+          }
+        }
+      }
+
       const preferred = overridePosition(ctx.overrides, spec.key) ?? cursor;
       const limitMin = horizontal ? ix + ctx.startOffset[wall] : iy + ctx.startOffset[wall];
       const limitMax = horizontal ? ix + iw - ctx.endOffset[wall] - length : iy + ih - ctx.endOffset[wall] - length;
-      const pos = nearestNonOverlappingStart(preferred, length, limitMin, limitMax, occupied);
+      const pos = nearestNonOverlappingStart(preferred, length, limitMin, limitMax, currentOccupied);
 
       let rect: PlanRect;
       if (wall === "TOP") rect = { x: pos, y: iy, w: length, h: depth };
