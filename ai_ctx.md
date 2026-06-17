@@ -46,6 +46,7 @@ Use the existing stack:
 - Vitest
 - Lightweight repository abstraction for MVP storage, swappable to persistent storage later
 - OpenAI image route/client exists, but is optional and not part of the authoritative plan generation path
+- Pluggable LLM provider layer for the optional Round 1 conversational intake agent. Business code should depend only on a `LLMProvider` interface under `src/server/llm/`; switch vendor via `.env.local` `LLM_PROVIDER=openai|deepseek|anthropic` plus the matching key. Server-side only. Default model choices may be overridden by `OPENAI_MODEL`, `DEEPSEEK_MODEL`, or `ANTHROPIC_MODEL`.
 
 Do not use n8n as the core Round 1 workflow engine in V1. It may be useful later for CRM, reminders, deposit follow-up, notifications, or other external automation.
 
@@ -203,8 +204,15 @@ Done (2026-06-17): snapshot persistence is implemented and verified. The snapsho
 
 Next implementation TODO:
 
-- Implement the reserved `Generate Rendering` action (currently gated + stubbed). It should send BOTH the deterministic layout image and a JSON-derived rendering prompt/summary (from the persisted snapshot) to GPT Image 2. Prerequisite: a valid `OPENAI_API_KEY` in `.env.local`, and rotate the previously-leaked key first.
-- Generated renderings are customer-facing concept images only; they must never become the source of truth for cabinet data, dimensions, counts, geometry, quote data, or production readiness.
+- Implement the reserved `Generate Rendering` action, currently gated and stubbed behind a complete Round 1 snapshot.
+- Rendering input must include BOTH:
+  - the deterministic layout image/reference generated from the frozen snapshot's `floorPlan` geometry
+  - a JSON-derived rendering prompt/summary from the same persisted snapshot
+- Use the existing OpenAI image route/client boundary where practical, but keep image generation optional and non-authoritative.
+- Prerequisite: a valid `OPENAI_API_KEY` in `.env.local`; rotate the previously leaked key before continuing real usage.
+- Generated renderings are customer-facing concept images only. They must never become the source of truth for cabinet data, dimensions, counts, geometry, quote data, production readiness, or snapshot validity.
+- The direct sales workflow must remain fully usable without any conversational agent: form -> Adjust Positions -> `Generate Cabinet Fill` -> frozen snapshot -> `Generate Rendering`.
+- Verification after implementation: `npm test`, `npx tsc --noEmit`, `npm run build`, then browser QA that a complete snapshot enables rendering, stale/edited data disables or invalidates rendering as appropriate, and the generated image is shown only as a concept preview.
 
 ## Later Work
 
@@ -218,9 +226,16 @@ After drag UX polish:
   - production-style view
   - keep it out of default Round 1 customer view
 - Persistent repository: a lightweight file-backed implementation now exists (`createFileSystemRound1Repository`). A future durable datastore (DB) can replace it behind the same `Round1Repository` interface.
-- Optional realistic-render-from-SVG:
+- Optional realistic-render-from-SVG refinements:
   - use deterministic SVG as reference
   - never use generated image as authoritative plan data
+- Optional Round 1 conversational agent:
+  - A server-side, provider-agnostic tool-use loop at `POST /api/round1/agent` may later turn natural-language customer requirements into structured form patches and explanations.
+  - The agent should edit the live on-screen form through the existing `updateForm` path, so the deterministic SVG preview updates in place and snapshot staleness rules still apply.
+  - Snapshot authority remains human-only. The agent must have no snapshot-freeze/save tool; freezing the authoritative Round 1 snapshot stays exclusively on the `Generate Cabinet Fill` button.
+  - Provider layer: `src/server/llm/provider.ts` with `ToolSpec`, `AgentInput`, `AgentOutput`, `LLMProvider`, and `getLLMProvider(env = process.env)`; adapters for `openai`, `deepseek`, and `anthropic`; 503 reason `LLM_PROVIDER_NOT_CONFIGURED` when unconfigured.
+  - Agent tools should wrap existing deterministic functions: `update_intake` (`normalizeRound1Form`), `estimate_cabinets` (`generatePreliminaryCabinetList(createDefaultCabinetRuns(ctx.form))` + `summarizePreliminaryCabinetEstimate`), and `explain_confirmations`.
+  - AI boundary: the LLM may fill fields, run rough estimates, relay deterministic tool output, and explain confirmation items; it must not invent counts/dimensions/geometry/readiness, close confirmation items, claim production-ready, or mark/save snapshots.
 
 ## Cabinet Estimate Rules
 
