@@ -173,7 +173,9 @@ Approved design:
 - Lift `PositionOverrides` state from `LayoutPreview` into `ShowroomIntakeApp`. `LayoutPreview` should receive `positionOverrides`, `onPositionOverridesChange`, and `highlightDraggableItems` props while keeping pointer drag mechanics inside the preview.
 - Position overrides remain preview-level state for this phase. Do not write them into the form schema, normalized JSON, repository payload, or production gate yet.
 - Dragging must prevent fixed objects from covering each other. A user should not be able to drag the fridge over the sink, drag one appliance over another, or move a draggable opening/appliance into a position that visually occludes another fixed element. Clamp to the nearest valid position or reject the movement; do not allow overlap as the final state.
-- Cabinet layout must reflow from the dragged fixed-object positions. After a door, window, sink, range, fridge, or dishwasher is moved, cabinet runs should treat the adjusted element as a hard obstacle/anchor, then split, shrink, grow, or align adjacent cabinet edges around it. Cabinets should automatically seek the fixed points and wrap tightly without covering appliances/openings or leaving avoidable gaps.
+- Layout validity must include functional clearance, not just visible overlap. Fridge, oven, dishwasher, range, sink, doors, and openings need rough front/access zones so doors can open and a person can stand/use the fixture. Cabinets, islands, opposite-side runs, and other fixed objects must not block these clearance zones. Example failure to prevent: a fridge drawn on a wall with a base cabinet directly in front of its door-opening/access area.
+- Cabinet layout must reflow from the dragged fixed-object positions and their clearance zones. After a door, window, sink, range, fridge, or dishwasher is moved, cabinet runs should treat the adjusted element as a hard obstacle/anchor and treat its access/door-swing clearance as a no-fill zone, then split, shrink, grow, or align adjacent cabinet edges around it. Cabinets should automatically seek the fixed points and wrap tightly without covering appliances/openings, blocking appliance/door access, or leaving avoidable gaps.
+- Apply this as a global design reasonableness rule, not as a one-off fridge fix. The deterministic plan should avoid appliance-door conflicts, blocked walk/access paths, door swing conflicts, and impossible cabinet placement across the whole room. If no reasonable position exists in Round 1 data, prefer a visible `Confirmation Required` item over silently drawing an impossible layout.
 - Since first-phase UI no longer asks these details, do not surface `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` in the first-phase confirmation list. Keep the schema/default fields available for later phases.
 
 Add or update tests:
@@ -183,7 +185,8 @@ Add or update tests:
 - Normalization no longer emits `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` for first-phase data.
 - `LayoutPreview` accepts parent-owned `positionOverrides` and updates them through `onPositionOverridesChange`.
 - Dragging the fridge toward the sink cannot leave the final fridge rect overlapping or covering the sink rect; apply the same non-overlap expectation to the draggable fixed-object set.
-- When a draggable fixed object moves, `buildFloorPlan` uses the override as the new obstacle/anchor and recalculates cabinets so adjacent cabinet edges align around the fixed object.
+- A fridge, oven, dishwasher, range, sink, or door/opening with a front/access clearance zone cannot end with that clearance blocked by a base cabinet, island, opposite run, door swing, or another fixed object.
+- When a draggable fixed object moves, `buildFloorPlan` uses the override and any derived clearance zone as the new obstacle/anchor set, then recalculates cabinets so adjacent cabinet edges align around the fixed object without blocking access.
 - The adjust-position modal appears on first entry and can be dismissed.
 - `Highlight Draggable Items` enables the highlight state for 5 seconds.
 
