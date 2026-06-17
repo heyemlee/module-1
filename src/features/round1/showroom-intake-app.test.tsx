@@ -1,12 +1,39 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { createDefaultShowroomForm } from "./showroom-intake-data";
+import {
+  generatePreliminaryCabinetList,
+  normalizeRound1Form
+} from "@/domain/round1";
+import {
+  createDefaultCabinetRuns,
+  createDefaultShowroomForm
+} from "./showroom-intake-data";
+import { buildRound1Snapshot } from "./snapshot";
 import {
   AppliancesStep,
   CabinetFillSummaryPanel,
   OpeningsStep,
+  Round1SnapshotPanel,
   ShowroomIntakeApp
 } from "./showroom-intake-app";
+
+function buildFixtureSnapshot() {
+  const form = createDefaultShowroomForm();
+  const result = normalizeRound1Form(form);
+  const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+  return buildRound1Snapshot({
+    showroomForm: form,
+    normalized: result.normalized,
+    positionOverrides: {},
+    preliminaryCabinets: estimate,
+    confirmationItems: [
+      ...result.confirmationItems,
+      ...estimate.confirmationItems
+    ],
+    readiness: result.readiness,
+    now: () => new Date("2026-06-17T12:00:00.000Z")
+  });
+}
 
 describe("OpeningsStep", () => {
   test("does not render first-phase door or window width inputs", () => {
@@ -107,5 +134,41 @@ describe("CabinetFillSummaryPanel", () => {
     expect(html).not.toContain("Add Cabinet");
     expect(html).not.toContain("Remove");
     expect(html).not.toContain("sales estimate");
+  });
+});
+
+describe("Round1SnapshotPanel", () => {
+  test("gates the rendering action and hides the JSON until a snapshot exists", () => {
+    const html = renderToStaticMarkup(<Round1SnapshotPanel snapshot={null} />);
+
+    expect(html).toContain("No snapshot yet");
+    expect(html).toContain("Generate Rendering");
+    expect(html).toContain("disabled");
+    expect(html).not.toContain("Snapshot ready");
+    expect(html).not.toContain("View snapshot JSON");
+  });
+
+  test("shows snapshot status, sales-only flags and the snapshot JSON once generated", () => {
+    const html = renderToStaticMarkup(
+      <Round1SnapshotPanel snapshot={buildFixtureSnapshot()} />
+    );
+
+    expect(html).toContain("Snapshot ready");
+    expect(html).toContain("Not production");
+    expect(html).toContain("ROUGH");
+    expect(html).toContain("Sales estimate only");
+    expect(html).toContain("View snapshot JSON");
+    expect(html).toContain("cabinetFillGenerated");
+    expect(html).toContain("schemaVersion");
+  });
+});
+
+describe("ShowroomIntakeApp snapshot gating", () => {
+  test("starts with no snapshot before cabinet fill is generated", () => {
+    const html = renderToStaticMarkup(<ShowroomIntakeApp />);
+
+    expect(html).toContain("No snapshot yet");
+    expect(html).not.toContain("Snapshot ready");
+    expect(html).not.toContain("View snapshot JSON");
   });
 });

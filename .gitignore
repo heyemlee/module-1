@@ -40,6 +40,9 @@ next-env.d.ts
 # production
 /build
 
+# Round 1 local persistence store
+/.data/
+
 # MacOS files
 .DS_Store
 

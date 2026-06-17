@@ -15,6 +15,11 @@ import {
   createDefaultCabinetRuns,
   createDefaultShowroomForm
 } from "./showroom-intake-data";
+import {
+  buildRound1Snapshot,
+  summarizeRound1Snapshot,
+  type Round1Snapshot
+} from "./snapshot";
 
 export const SHOWROOM_STEPS = [
   "Room",
@@ -55,25 +60,81 @@ function sinkPositionOptions(windowStatus: Round1FormInput["openings"]["windows"
     : appliancePositionOptions.filter((option) => option !== "UNDER_WINDOW");
 }
 
+const PROJECT_ID_STORAGE_KEY = "round1ProjectId";
+const DEFAULT_PROJECT_CUSTOMER_NAME = "Showroom Round 1";
+
+type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
+
 export function ShowroomIntakeApp() {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
   const [fixedPositionsConfirmed, setFixedPositionsConfirmed] = useState(false);
   const [cabinetFillGenerated, setCabinetFillGenerated] = useState(false);
+  const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
+  const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
+  const projectIdRef = useRef<string | null>(null);
   const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
   const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Any manual drag invalidates the confirmed positions and the generated
+  // cabinet fill, so the frozen snapshot is cleared and must be regenerated.
   const updatePositionOverrides = useCallback<Dispatch<SetStateAction<PositionOverrides>>>(
     (update) => {
       setPositionOverrides(update);
       setFixedPositionsConfirmed(false);
       setCabinetFillGenerated(false);
+      setSnapshot(null);
+      setPersistState("idle");
     },
     []
   );
+
+  // Form values are layout-critical in Round 1. Editing any of them after a
+  // snapshot exists makes the rough cabinet fill stale, so it must be
+  // regenerated before the snapshot is valid again.
+  const updateForm = useCallback((next: Round1FormInput) => {
+    setForm(next);
+    setCabinetFillGenerated(false);
+    setSnapshot(null);
+    setPersistState("idle");
+  }, []);
+
+  // Persists the frozen snapshot to the server repository. Lazily creates the
+  // project on first save and remembers its id so refreshes can restore it.
+  const persistSnapshot = useCallback(async (snap: Round1Snapshot) => {
+    setPersistState("saving");
+    try {
+      let id = projectIdRef.current;
+      if (!id) {
+        const created = await fetch("/api/round1/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customerName: DEFAULT_PROJECT_CUSTOMER_NAME })
+        });
+        if (!created.ok) throw new Error("Unable to create project");
+        const json = await created.json();
+        id = json.project.id as string;
+        projectIdRef.current = id;
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(PROJECT_ID_STORAGE_KEY, id);
+        }
+      }
+      const saved = await fetch(`/api/round1/projects/${id}/snapshot`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snap)
+      });
+      if (!saved.ok) throw new Error("Unable to save snapshot");
+      setPersistState("saved");
+    } catch {
+      // Keep the snapshot in local state; the server copy can be retried on the
+      // next generation. Surface a non-blocking error in the panel.
+      setPersistState("error");
+    }
+  }, []);
 
   const startDraggableHighlightCue = useCallback(() => {
     if (highlightTimerRef.current) {
@@ -118,6 +179,75 @@ export function ShowroomIntakeApp() {
     () => [...result.confirmationItems, ...preliminaryEstimate.confirmationItems],
     [preliminaryEstimate.confirmationItems, result.confirmationItems]
   );
+
+  // `Generate Cabinet Fill` is the authoritative snapshot point for Module 1.
+  // The estimate is computed inline (not read from the gated memo, which is
+  // still empty at click time) so the snapshot freezes the exact rough fill.
+  const handleGenerateCabinetFill = useCallback(() => {
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+    const snapshotConfirmationItems = [
+      ...result.confirmationItems,
+      ...estimate.confirmationItems
+    ];
+    const snap = buildRound1Snapshot({
+      showroomForm: form,
+      normalized: result.normalized,
+      positionOverrides,
+      preliminaryCabinets: estimate,
+      confirmationItems: snapshotConfirmationItems,
+      readiness: result.readiness
+    });
+    setSnapshot(snap);
+    setCabinetFillGenerated(true);
+    void persistSnapshot(snap);
+  }, [form, persistSnapshot, positionOverrides, result]);
+
+  const handleResetPositions = useCallback(() => {
+    setPositionOverrides({});
+    setFixedPositionsConfirmed(false);
+    setCabinetFillGenerated(false);
+    setSnapshot(null);
+    setPersistState("idle");
+  }, []);
+
+  // On mount, restore the last persisted snapshot (if any) so a refresh keeps
+  // the frozen Round 1 result. The snapshot carries everything needed to
+  // rehydrate the editing session consistently.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedId = window.localStorage.getItem(PROJECT_ID_STORAGE_KEY);
+    if (!storedId) return;
+    projectIdRef.current = storedId;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch(`/api/round1/projects/${storedId}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+            window.localStorage.removeItem(PROJECT_ID_STORAGE_KEY);
+            projectIdRef.current = null;
+          }
+          return;
+        }
+        const json = await response.json();
+        const saved = json.project?.snapshot as Round1Snapshot | undefined;
+        if (cancelled || !saved) return;
+        setForm(saved.showroomForm);
+        setPositionOverrides(saved.positionOverrides);
+        setFixedPositionsConfirmed(true);
+        setCabinetFillGenerated(true);
+        setSnapshot(saved);
+        setPersistState("saved");
+      } catch {
+        // Ignore restore failures; the user can regenerate the snapshot.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const goToNextStep = useCallback(() => {
     if (step === ADJUST_POSITIONS_STEP_INDEX && !fixedPositionsConfirmed) {
@@ -176,20 +306,16 @@ export function ShowroomIntakeApp() {
         </aside>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          {step === 0 && <RoomStep form={form} setForm={setForm} />}
-          {step === 1 && <OpeningsStep form={form} setForm={setForm} />}
-          {step === 2 && <LayoutStep form={form} setForm={setForm} setPositionOverrides={updatePositionOverrides} />}
-          {step === 3 && <AppliancesStep form={form} setForm={setForm} />}
+          {step === 0 && <RoomStep form={form} setForm={updateForm} />}
+          {step === 1 && <OpeningsStep form={form} setForm={updateForm} />}
+          {step === 2 && <LayoutStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
+          {step === 3 && <AppliancesStep form={form} setForm={updateForm} />}
           {step === 4 && (
             <AdjustPositionsStep
               onHighlight={startDraggableHighlightCue}
-              onReset={() => {
-                setPositionOverrides({});
-                setFixedPositionsConfirmed(false);
-                setCabinetFillGenerated(false);
-              }}
+              onReset={handleResetPositions}
               onConfirmPositions={() => setFixedPositionsConfirmed(true)}
-              onGenerateCabinetFill={() => setCabinetFillGenerated(true)}
+              onGenerateCabinetFill={handleGenerateCabinetFill}
               hasOverrides={Object.keys(positionOverrides).length > 0}
               fixedPositionsConfirmed={fixedPositionsConfirmed}
               cabinetFillGenerated={cabinetFillGenerated}
@@ -245,6 +371,10 @@ export function ShowroomIntakeApp() {
               positionsConfirmed={fixedPositionsConfirmed}
               cabinetFillGenerated={cabinetFillGenerated}
             />
+          </Panel>
+
+          <Panel title="Round 1 Snapshot">
+            <Round1SnapshotPanel snapshot={snapshot} persistState={persistState} />
           </Panel>
         </aside>
       </div>
@@ -853,6 +983,128 @@ function CabinetSummaryMetric({
       <p className="mt-1 text-lg font-black text-slate-950">{count}</p>
       <p className="text-xs font-bold text-slate-500">~{linearFeet} lf</p>
     </div>
+  );
+}
+
+export function Round1SnapshotPanel({
+  snapshot,
+  persistState = "idle"
+}: {
+  snapshot: Round1Snapshot | null;
+  persistState?: SnapshotPersistState;
+}) {
+  const [showRenderingNote, setShowRenderingNote] = useState(false);
+
+  if (!snapshot) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-md bg-slate-50 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            No snapshot yet
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Generate cabinet fill to freeze the authoritative Round 1 sales
+            snapshot. Until then, form and position changes stay draft only.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled
+          className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Generate Rendering
+        </button>
+        <p className="text-xs leading-5 text-slate-500">
+          Available after cabinet fill is generated. Reserved for a later step.
+        </p>
+      </div>
+    );
+  }
+
+  const summary = summarizeRound1Snapshot(snapshot);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-emerald-50 p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+          Snapshot ready
+        </p>
+        <p className="mt-1 text-xs font-bold text-emerald-800">
+          Generated {snapshot.generatedAt}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-bold">
+          <span className="rounded bg-white px-2 py-1 text-slate-700">
+            {summary.totalCabinets} cabinets
+          </span>
+          <span className="rounded bg-white px-2 py-1 text-slate-700">
+            {summary.confirmationCount} to confirm
+          </span>
+          <span className="rounded bg-white px-2 py-1 text-slate-700">
+            ~{summary.estimatedFillerWidth}&quot; filler
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
+          <span className="rounded bg-red-50 px-2 py-0.5 text-red-700">
+            Not production
+          </span>
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-800">
+            ROUGH
+          </span>
+          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">
+            Sales estimate only
+          </span>
+        </div>
+        <SnapshotPersistStatus persistState={persistState} />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowRenderingNote(true)}
+        className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+      >
+        Generate Rendering
+      </button>
+      {showRenderingNote && (
+        <p className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+          Rendering is reserved for a later step. It will send the deterministic
+          layout image plus a JSON summary of this snapshot to the image model.
+          The generated image is a concept preview only and never the source of
+          truth for cabinet data.
+        </p>
+      )}
+
+      <details className="rounded-md border border-slate-200">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">
+          View snapshot JSON
+        </summary>
+        <pre className="max-h-64 overflow-auto border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-700">
+{JSON.stringify(snapshot, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+function SnapshotPersistStatus({
+  persistState
+}: {
+  persistState: SnapshotPersistState;
+}) {
+  if (persistState === "idle") return null;
+
+  const config = {
+    saving: { text: "Saving to server…", className: "text-slate-500" },
+    saved: { text: "Saved to server", className: "text-emerald-700" },
+    error: {
+      text: "Couldn’t reach server — snapshot kept locally.",
+      className: "text-amber-700"
+    }
+  }[persistState];
+
+  return (
+    <p className={`mt-2 text-[11px] font-bold ${config.className}`}>
+      {config.text}
+    </p>
   );
 }
 
