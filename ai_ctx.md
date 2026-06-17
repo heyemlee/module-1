@@ -133,6 +133,7 @@ Implemented and verified as of 2026-06-16:
 - Geometry tests for the plan renderer.
 - Global 2D obstacle avoidance to prevent corner collisions.
 - Interactive drag-and-drop floor plan elements (doors, windows, appliances).
+- In-browser clean SVG print functionality for the floor plan.
 
 Latest known verification:
 
@@ -171,6 +172,8 @@ Approved design:
 - Use a visual cue such as a short bounce or pulse. Do not use browser alerts. The cue must not block dragging.
 - Lift `PositionOverrides` state from `LayoutPreview` into `ShowroomIntakeApp`. `LayoutPreview` should receive `positionOverrides`, `onPositionOverridesChange`, and `highlightDraggableItems` props while keeping pointer drag mechanics inside the preview.
 - Position overrides remain preview-level state for this phase. Do not write them into the form schema, normalized JSON, repository payload, or production gate yet.
+- Dragging must prevent fixed objects from covering each other. A user should not be able to drag the fridge over the sink, drag one appliance over another, or move a draggable opening/appliance into a position that visually occludes another fixed element. Clamp to the nearest valid position or reject the movement; do not allow overlap as the final state.
+- Cabinet layout must reflow from the dragged fixed-object positions. After a door, window, sink, range, fridge, or dishwasher is moved, cabinet runs should treat the adjusted element as a hard obstacle/anchor, then split, shrink, grow, or align adjacent cabinet edges around it. Cabinets should automatically seek the fixed points and wrap tightly without covering appliances/openings or leaving avoidable gaps.
 - Since first-phase UI no longer asks these details, do not surface `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` in the first-phase confirmation list. Keep the schema/default fields available for later phases.
 
 Add or update tests:
@@ -179,6 +182,8 @@ Add or update tests:
 - `Openings` no longer renders door/window width inputs.
 - Normalization no longer emits `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` for first-phase data.
 - `LayoutPreview` accepts parent-owned `positionOverrides` and updates them through `onPositionOverridesChange`.
+- Dragging the fridge toward the sink cannot leave the final fridge rect overlapping or covering the sink rect; apply the same non-overlap expectation to the draggable fixed-object set.
+- When a draggable fixed object moves, `buildFloorPlan` uses the override as the new obstacle/anchor and recalculates cabinets so adjacent cabinet edges align around the fixed object.
 - The adjust-position modal appears on first entry and can be dismissed.
 - `Highlight Draggable Items` enables the highlight state for 5 seconds.
 
@@ -322,8 +327,8 @@ Required:
 - No decorative fills or photorealistic rendering in the plan.
 - Show approximate positions only.
 - Show walls, openings, doors, windows, major appliances, sink, dishwasher, hood/oven/microwave if applicable, base cabinets, wall cabinets, corner cabinets, and optional MEP markers.
-- Include `Round 1 Sales Estimate Only` stamp.
 - Keep confirmation marker compact, such as `N to confirm`.
+- Include a Print button for clean, standalone floor plan printing.
 
 Avoid:
 
