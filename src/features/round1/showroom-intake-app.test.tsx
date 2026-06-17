@@ -9,13 +9,12 @@ import {
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot } from "./snapshot";
+import { ShowroomIntakeApp } from "./showroom-intake-app";
+import { AppliancesStep, OpeningsStep } from "./showroom-intake-steps";
 import {
-  AppliancesStep,
   CabinetFillSummaryPanel,
-  OpeningsStep,
-  Round1SnapshotPanel,
-  ShowroomIntakeApp
-} from "./showroom-intake-app";
+  Round1SnapshotPanel
+} from "./showroom-intake-panels";
 
 function buildFixtureSnapshot() {
   const form = createDefaultShowroomForm();

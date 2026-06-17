@@ -110,8 +110,18 @@ Deterministic code must own:
   - Pure geometry builder.
   - Main function: `buildFloorPlan(normalized, cabinets, confirmationCount)`.
 - `src/features/round1/layout-preview.tsx`
-  - Customer-facing SVG renderer.
-  - Uses renderer style constants such as `INK`, `LINE`, `LINE_SOFT`, `FILL_CABINET`, and `FILL_CORNER`.
+  - Customer-facing SVG preview orchestrator.
+  - Owns preview state, MEP toggle, SVG printing, pointer handling, and drag override updates.
+- `src/features/round1/layout-preview-shapes.tsx`
+  - Stateless SVG shape components used by the layout preview, such as walls, islands, corners, markers, legend, and stamp placeholders.
+- `src/features/round1/showroom-intake-app.tsx`
+  - Top-level showroom workflow state, step navigation, snapshot generation, persistence, restore, and page composition.
+- `src/features/round1/showroom-intake-steps.tsx`
+  - Step components for Room, Openings, Layout, Appliances, and Adjust Positions.
+- `src/features/round1/showroom-intake-panels.tsx`
+  - Sidebar panels for rough cabinet fill, snapshot status, snapshot JSON, rendering gate note, and snapshot save status.
+- `src/features/round1/showroom-intake-controls.tsx`
+  - Shared intake UI primitives such as `Step`, `Panel`, `NumberField`, `SelectField`, `StatusPill`, and `parseNullableSize`.
 - `src/features/round1/showroom-intake-data.ts`
   - Form defaults and `createDefaultCabinetRuns(form)`.
 - `src/domain/round1/cabinets.ts`
@@ -123,7 +133,7 @@ Deterministic code must own:
 
 ## Current Implementation
 
-Implemented and verified as of 2026-06-16:
+Implemented and verified as of 2026-06-17:
 
 - Round 1 form schema and normalized JSON schema.
 - `Confirmation Required` item model.
@@ -163,12 +173,13 @@ Implemented and verified as of 2026-06-16:
 - Reserved `Generate Rendering` button: disabled until a complete snapshot exists; once enabled it only shows a "reserved for a later step" note. Rendering itself is intentionally not implemented yet.
 - Snapshot persistence: `Round1Repository` gained `saveSnapshot` and a `Round1Project.snapshot` field, plus a file-backed implementation `createFileSystemRound1Repository` (single JSON document) alongside the in-memory one. The default `round1Repository` singleton is file-backed when `ROUND1_DATA_FILE` is set (e.g. `.data/round1-projects.json` via `.env.local` in dev) and in-memory otherwise, so tests stay disk-free. API: `PUT /api/round1/projects/[id]/snapshot` (validates the Round 1 safety invariants, passthrough rest) and `GET /api/round1/projects/[id]`.
 - Client persistence + restore: `Generate Cabinet Fill` lazily creates a project (id kept in `localStorage`) and `PUT`s the snapshot, with a `Saving/Saved/error` status line in the panel. On mount the app fetches the stored project and, if a snapshot exists, rehydrates `form`, `positionOverrides`, `fixedPositionsConfirmed`, `cabinetFillGenerated`, and the snapshot — so a page refresh keeps the frozen Round 1 result.
+- Safe refactor (2026-06-17): the oversized intake and preview files were split without behavior changes. `showroom-intake-app.tsx` now keeps workflow orchestration while steps, panels, and shared controls live in adjacent focused files. `layout-preview.tsx` keeps stateful preview/drag behavior while stateless SVG shape components live in `layout-preview-shapes.tsx`.
 
 Latest known verification:
 
-- `npm test`: 79 tests passing.
-- `npx tsc --noEmit`: passing.
-- `npm run build`: passing.
+- `npm test`: 79 tests passing after the safe refactor.
+- `npx tsc --noEmit`: passing after the safe refactor.
+- `npm run build`: passing after the safe refactor.
 - Browser QA at `http://127.0.0.1:3000/`: initial load shows an empty room shell with no appliance/opening/cabinet symbols and a `No snapshot yet` panel with the `Generate Rendering` button disabled; entering `Adjust Positions` reveals draggable door/window/appliance symbols; the first action confirms fixed positions without showing cabinet metrics; the explicit `Generate Cabinet Fill` action produces the rough cabinet fill and freezes the Round 1 snapshot (panel flips to `Snapshot ready`, JSON populated, `Generate Rendering` enabled, status shows `Saved to server`); changing a form value afterward clears the snapshot and re-disables `Generate Rendering`. Persistence round-trip verified: the snapshot is written to `.data/round1-projects.json`, and a full page reload restores it from the server (panel stays `Snapshot ready`, rough fill repopulates).
 
 Always re-run relevant verification after changing behavior.
@@ -201,6 +212,8 @@ Current Module 1 priority:
 Done (2026-06-17): the complete Round 1 JSON snapshot described below is implemented and verified. `Generate Cabinet Fill` is the authoritative snapshot point; the snapshot captures `showroomForm`, normalized data, `positionOverrides`, `fixedPositionsConfirmed: true`, `cabinetFillGenerated: true`, the preliminary cabinet list, deterministic floor plan geometry (rebuildable from captured inputs), `confirmationItems`, `readiness`, and the metadata flags. Layout-critical form changes or drags clear the snapshot. It stays sales-confirmation-level only (no Module 2 detail). See `src/features/round1/snapshot.ts`.
 
 Done (2026-06-17): snapshot persistence is implemented and verified. The snapshot is no longer React-state-only — it persists through `Round1Repository.saveSnapshot` (file-backed via `createFileSystemRound1Repository` + `ROUND1_DATA_FILE`), is saved over the API on `Generate Cabinet Fill`, and is restored on page reload. See `round1-repository.ts`, `src/app/api/round1/projects/[id]/`, and the mount-restore effect in `showroom-intake-app.tsx`.
+
+Done (2026-06-17): safe refactor / file organization pass is implemented and verified. Intake workflow, step components, panels, controls, and preview SVG shape components are split into focused files with behavior unchanged. The next functional implementation task remains `Generate Rendering`.
 
 Next implementation TODO:
 
