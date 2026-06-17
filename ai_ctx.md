@@ -155,40 +155,50 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 
 ## Active Work: Next Session
 
-Highest priority: multi-wall / multi-run layouts.
+Highest priority: align the showroom question flow with the new interactive
+drag-and-drop floor plan.
 
-Problem:
+Approved design:
 
-`createDefaultCabinetRuns` currently emits only a main run mapped to `TOP` plus one `LEFT` run for non-one-wall layouts. U-shape, galley, peninsula, and island layouts need richer generated runs. The renderer already maps cabinet `location` to wall and draws corners at occupied-wall intersections, so it should draw whatever runs the data contains.
-
-Implement layout preference to generated run mapping:
-
-- `ONE_WALL` -> `TOP`
-- `GALLEY` -> `TOP` + `BOTTOM`
-- `L_SHAPE` -> `TOP` + `LEFT`
-- `PENINSULA` -> `TOP` + `LEFT` plus a peninsula stub
-- `U_SHAPE` -> `TOP` + `LEFT` + `RIGHT`
-- `ISLAND` -> wall run plus `ON_ISLAND`
-- `L_SHAPE_ISLAND` -> `TOP` + `LEFT` + `ON_ISLAND`
-- `U_SHAPE_ISLAND` -> `TOP` + `LEFT` + `RIGHT` + `ON_ISLAND`
-
-Use existing `CabinetLocation` values where possible:
-
-- `ON_MAIN_RUN`
-- `LEFT_SIDE`
-- `RIGHT_SIDE`
-- `FRONT_SIDE`
-- `ON_ISLAND`
+- Step order becomes `Room -> Openings -> Layout -> Appliances -> Adjust Positions -> Cabinets`.
+- Remove the first-phase `MEP` step from the left-side workflow.
+- In `Openings`, keep status and rough location questions, but hide `Door width if known` and `Window width if known`.
+- Keep appliance size/status/rough-position dropdowns to generate the initial deterministic plan. Do not show a drag reminder after each dropdown.
+- Add `Adjust Positions` before `Cabinets`. When the user first enters it in the current page session, show one modal explaining that door, window, and appliance locations can be dragged on the plan and that the step is optional.
+- Modal actions: `Start Adjusting` closes the modal and triggers a 5-second highlight/jump cue; `Skip For Now` closes the modal without blocking progress.
+- The `Adjust Positions` step body should include `Highlight Draggable Items` to replay the 5-second cue and `Reset Positions` to clear manual positions.
+- Highlighted draggable objects: `door`, `window`, `sink`, `range`, `fridge`, `dishwasher`. If an object is absent from the plan, skip it.
+- Use a visual cue such as a short bounce or pulse. Do not use browser alerts. The cue must not block dragging.
+- Lift `PositionOverrides` state from `LayoutPreview` into `ShowroomIntakeApp`. `LayoutPreview` should receive `positionOverrides`, `onPositionOverridesChange`, and `highlightDraggableItems` props while keeping pointer drag mechanics inside the preview.
+- Position overrides remain preview-level state for this phase. Do not write them into the form schema, normalized JSON, repository payload, or production gate yet.
+- Since first-phase UI no longer asks these details, do not surface `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` in the first-phase confirmation list. Keep the schema/default fields available for later phases.
 
 Add or update tests:
 
-- `U_SHAPE` produces base cabinets on three walls and two corners.
-- `GALLEY` produces runs on top and bottom walls.
-- Island layouts produce a non-null island and `ON_ISLAND` cabinets.
+- Step labels include `Adjust Positions`, exclude `MEP`, and follow the approved order.
+- `Openings` no longer renders door/window width inputs.
+- Normalization no longer emits `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` for first-phase data.
+- `LayoutPreview` accepts parent-owned `positionOverrides` and updates them through `onPositionOverridesChange`.
+- The adjust-position modal appears on first entry and can be dismissed.
+- `Highlight Draggable Items` enables the highlight state for 5 seconds.
 
 ## Later Work
 
-After multi-run layouts:
+After the adjust-position flow:
+
+- Implement multi-wall / multi-run generated layouts.
+  - `createDefaultCabinetRuns` currently emits only a main run mapped to `TOP` plus one `LEFT` run for non-one-wall layouts.
+  - Target mapping:
+    - `ONE_WALL` -> `TOP`
+    - `GALLEY` -> `TOP` + `BOTTOM`
+    - `L_SHAPE` -> `TOP` + `LEFT`
+    - `PENINSULA` -> `TOP` + `LEFT` plus a peninsula stub
+    - `U_SHAPE` -> `TOP` + `LEFT` + `RIGHT`
+    - `ISLAND` -> wall run plus `ON_ISLAND`
+    - `L_SHAPE_ISLAND` -> `TOP` + `LEFT` + `ON_ISLAND`
+    - `U_SHAPE_ISLAND` -> `TOP` + `LEFT` + `RIGHT` + `ON_ISLAND`
+  - Use existing `CabinetLocation` values where possible: `ON_MAIN_RUN`, `LEFT_SIDE`, `RIGHT_SIDE`, `FRONT_SIDE`, `ON_ISLAND`.
+  - Test that `U_SHAPE` produces base cabinets on three walls and two corners, `GALLEY` produces top and bottom runs, and island layouts produce a non-null island plus `ON_ISLAND` cabinets.
 
 - Refine per-appliance placement:
   - dishwasher adjacent to sink
