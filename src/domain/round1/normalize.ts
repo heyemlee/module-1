@@ -54,32 +54,6 @@ export function normalizeRound1Form(
     );
   }
 
-  form.openings.doors.items.forEach((door, index) => {
-    if (form.openings.doors.status === "YES" && !door.width) {
-      confirmationItems.push(
-        createConfirmationItem({
-          category: "OPENING",
-          code: "MISSING_DOOR_WIDTH",
-          message: "Door width is missing or approximate.",
-          path: `openings.doors.items.${index}.width`
-        })
-      );
-    }
-  });
-
-  form.openings.windows.items.forEach((window, index) => {
-    if (form.openings.windows.status === "YES" && !window.width) {
-      confirmationItems.push(
-        createConfirmationItem({
-          category: "OPENING",
-          code: "MISSING_WINDOW_WIDTH",
-          message: "Window width is missing or approximate.",
-          path: `openings.windows.items.${index}.width`
-        })
-      );
-    }
-  });
-
   if (
     form.openings.windows.status === "NO" &&
     form.fixtures.sink.relation === "UNDER_WINDOW"
@@ -93,19 +67,6 @@ export function normalizeRound1Form(
       })
     );
   }
-
-  Object.entries(form.mep).forEach(([key, value]) => {
-    if (value.movable === "UNKNOWN") {
-      confirmationItems.push(
-        createConfirmationItem({
-          category: "MEP",
-          code: "UNKNOWN_MEP_MOVABILITY",
-          message: `${key} movability is unknown.`,
-          path: `mep.${key}.movable`
-        })
-      );
-    }
-  });
 
   Object.entries(form.fixtures).forEach(([key, value]) => {
     if (

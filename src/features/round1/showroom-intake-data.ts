@@ -48,39 +48,80 @@ export function createDefaultShowroomForm(): Round1FormInput {
 
 export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
   const mainRun = Math.max(60, Math.min(form.room.length ?? 120, 144) - 48);
-  const sideRun =
-    form.layoutPreference === "ONE_WALL"
-      ? 0
-      : Math.max(42, Math.min(form.room.width ?? 96, 120) - 48);
+  const sideRun = Math.max(42, Math.min(form.room.width ?? 96, 120) - 48);
+  const islandRun = Math.max(48, Math.min(mainRun, 72));
+  const runs: CabinetRun[] = [];
 
-  return [
-    {
-      id: "base-main",
+  const addWallRun = (
+    id: string,
+    location: CabinetRun["location"],
+    width: number
+  ) => {
+    runs.push(
+      {
+        id: `base-${id}`,
+        kind: "BASE",
+        width,
+        location
+      },
+      {
+        id: `wall-${id}`,
+        kind: "WALL",
+        width,
+        location
+      }
+    );
+  };
+
+  const addIslandRun = () => {
+    runs.push({
+      id: "base-island",
       kind: "BASE",
-      width: mainRun,
-      location: "ON_MAIN_RUN"
-    },
-    {
-      id: "wall-main",
-      kind: "WALL",
-      width: mainRun,
-      location: "ON_MAIN_RUN"
-    },
-    ...(sideRun > 0
-      ? [
-          {
-            id: "base-side",
-            kind: "BASE" as const,
-            width: sideRun,
-            location: "LEFT_SIDE" as const
-          },
-          {
-            id: "wall-side",
-            kind: "WALL" as const,
-            width: sideRun,
-            location: "LEFT_SIDE" as const
-          }
-        ]
-      : [])
-  ];
+      width: islandRun,
+      location: "ON_ISLAND"
+    });
+  };
+
+  addWallRun("main", "ON_MAIN_RUN", mainRun);
+
+  if (
+    [
+      "L_SHAPE",
+      "PENINSULA",
+      "U_SHAPE",
+      "L_SHAPE_ISLAND",
+      "U_SHAPE_ISLAND",
+      "NO_PREFERENCE"
+    ].includes(form.layoutPreference)
+  ) {
+    addWallRun("left", "LEFT_SIDE", sideRun);
+  }
+
+  if (["GALLEY"].includes(form.layoutPreference)) {
+    addWallRun("bottom", "FRONT_SIDE", mainRun);
+  }
+
+  if (["U_SHAPE", "U_SHAPE_ISLAND"].includes(form.layoutPreference)) {
+    addWallRun("right", "RIGHT_SIDE", sideRun);
+  }
+
+  if (form.layoutPreference === "PENINSULA") {
+    runs.push({
+      id: "base-peninsula",
+      kind: "BASE",
+      width: islandRun,
+      location: "FRONT_SIDE"
+    });
+  }
+
+  if (
+    ["ISLAND", "L_SHAPE_ISLAND", "U_SHAPE_ISLAND"].includes(
+      form.layoutPreference
+    ) ||
+    form.layoutSensitiveCabinets.island.requested
+  ) {
+    addIslandRun();
+  }
+
+  return runs;
 }

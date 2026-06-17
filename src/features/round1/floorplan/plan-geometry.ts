@@ -24,6 +24,11 @@ export type MarkerShape = { cx: number; cy: number; letter: MarkerLetter };
 
 export type WindowShape = PlanRect & { wall: Wall };
 export type DoorShape = { breakRect: PlanRect; swingPath: string; leafRect: PlanRect; labelX: number; labelY: number; wall: Wall; cx: number; cy: number };
+export type ClearanceZoneShape = PlanRect & {
+  ownerKey: string;
+  wall: Wall;
+  kind: "FRONT_ACCESS" | "DOOR_SWING";
+};
 
 export type DimShape = {
   orientation: "H" | "V";
@@ -46,6 +51,7 @@ export type FloorPlan = {
   corners: PlanRect[];
   wallCorners: WallCornerShape[];
   appliances: ApplianceShape[];
+  clearanceZones: ClearanceZoneShape[];
   island: PlanRect | null;
   window: WindowShape | null;
   door: DoorShape | null;
@@ -80,7 +86,12 @@ type LayoutSensitive = {
  * the same inputs always produce the same plan. The renderer (view) only draws
  * what this returns, so all positions/sizes stay testable and reproducible.
  */
-export type PositionOverrides = Record<string, number>;
+export type PositionOverride = {
+  wall: Wall;
+  position: number;
+};
+
+export type PositionOverrides = Record<string, PositionOverride>;
 
 export function buildFloorPlan(
   normalized: Round1Normalized,
@@ -170,9 +181,28 @@ export function buildFloorPlan(
     overrides
   });
 
-  const door = placeDoor(normalized, { roomX, roomY, roomW, roomH, thickness, scale, overrides });
+  const door = placeDoor(normalized, {
+    roomX,
+    roomY,
+    roomW,
+    roomH,
+    thickness,
+    scale,
+    overrides,
+    fixedObjects: appliances
+  });
+
+  const clearanceZones = buildClearanceZones(appliances, door, {
+    ix,
+    iy,
+    iw,
+    ih,
+    scale,
+    baseDepth
+  });
 
   const baseObstacles: PlanRect[] = appliances.filter(a => a.symbol === "range" || a.symbol === "fridge" || a.symbol === "oven");
+  baseObstacles.push(...clearanceZones);
   if (door) {
     let dw = door.breakRect.w;
     let dh = door.breakRect.h;
@@ -286,15 +316,13 @@ export function buildFloorPlan(
     });
   }
 
-  const island =
-    layoutSensitive.island?.requested || /ISLAND/.test(normalized.layoutPreference)
-      ? {
-          x: ix + iw * 0.32,
-          y: iy + ih * 0.36,
-          w: iw * 0.36,
-          h: ih * 0.3
-        }
-      : null;
+  const island = placeIsland(normalized, layoutSensitive, {
+    ix,
+    iy,
+    iw,
+    ih,
+    clearanceZones
+  });
 
   const dims: DimShape[] = [
     {
@@ -327,6 +355,7 @@ export function buildFloorPlan(
     corners,
     wallCorners,
     appliances,
+    clearanceZones,
     island,
     window,
     door,
@@ -422,7 +451,7 @@ function layRun(
           length = gap;
           placed = true;
         } else {
-          if (gap > 0.5 && snapObstacles && (overlap.ref as any).wall === wall) {
+          if (gap > 0.5 && snapObstacles && (overlap.ref as any).wall === wall && !("ownerKey" in overlap.ref)) {
             if (overlap.ref) {
               if (horizontal) (overlap.ref as any).x -= gap;
               else (overlap.ref as any).y -= gap;
@@ -485,6 +514,48 @@ function relationToWall(relation: string | undefined, fallback: Wall): Wall {
   }
 }
 
+export function allowedDragWallsForLayout(layoutPreference: string): Wall[] {
+  switch (layoutPreference) {
+    case "GALLEY":
+      return ["TOP", "BOTTOM"];
+    case "L_SHAPE":
+    case "PENINSULA":
+    case "L_SHAPE_ISLAND":
+      return ["TOP", "LEFT"];
+    case "U_SHAPE":
+    case "U_SHAPE_ISLAND":
+      return ["TOP", "LEFT", "RIGHT"];
+    case "ISLAND":
+    case "ONE_WALL":
+    case "NO_PREFERENCE":
+    default:
+      return ["TOP"];
+  }
+}
+
+function wallAllowed(wall: Wall, layoutPreference: string): boolean {
+  return allowedDragWallsForLayout(layoutPreference).includes(wall);
+}
+
+function overrideWall(
+  overrides: PositionOverrides,
+  key: string,
+  fallback: Wall,
+  layoutPreference?: string
+): Wall {
+  const override = overrides[key];
+  if (!override) return fallback;
+  if (layoutPreference && !wallAllowed(override.wall, layoutPreference)) return fallback;
+  return override.wall;
+}
+
+function overridePosition(
+  overrides: PositionOverrides,
+  key: string
+): number | undefined {
+  return overrides[key]?.position;
+}
+
 function placeAppliances(
   fixtures: Fixtures,
   layoutSensitive: LayoutSensitive,
@@ -505,7 +576,8 @@ function placeAppliances(
   };
   const specs: Spec[] = [];
 
-  const sinkWall: Wall = sinkUnderWindow ? "TOP" : relationToWall(fixtures.sink?.relation, "TOP");
+  const sinkFallbackWall: Wall = sinkUnderWindow ? "TOP" : relationToWall(fixtures.sink?.relation, "TOP");
+  const sinkWall = overrideWall(ctx.overrides, "sink", sinkFallbackWall, normalized.layoutPreference);
   specs.push({
     key: "sink",
     label: "Sink",
@@ -520,22 +592,35 @@ function placeAppliances(
       fixtures.dishwasher?.relation === "NEAR_SINK"
         ? sinkWall
         : relationToWall(fixtures.dishwasher?.relation, sinkWall);
+    const dishwasherWall = overrideWall(
+      ctx.overrides,
+      "dishwasher",
+      dwWall,
+      normalized.layoutPreference
+    );
     specs.push({
       key: "dishwasher",
       label: "Dishwasher",
       symbol: "dishwasher",
       sizeIn: fixtures.dishwasher?.size ?? 24,
-      wall: dwWall,
+      wall: dishwasherWall,
       deep: false
     });
   }
+
+  const rangeWall = overrideWall(
+    ctx.overrides,
+    "range",
+    relationToWall(fixtures.range?.relation, "TOP"),
+    normalized.layoutPreference
+  );
 
   specs.push({
     key: "range",
     label: "Range",
     symbol: "range",
     sizeIn: fixtures.range?.size ?? 30,
-    wall: relationToWall(fixtures.range?.relation, "TOP"),
+    wall: rangeWall,
     deep: true
   });
 
@@ -545,17 +630,29 @@ function placeAppliances(
       label: "Oven",
       symbol: "oven",
       sizeIn: 30,
-      wall: relationToWall(layoutSensitive.ovenMicrowave?.relation, "TOP"),
+      wall: overrideWall(
+        ctx.overrides,
+        "oven",
+        relationToWall(layoutSensitive.ovenMicrowave?.relation, "TOP"),
+        normalized.layoutPreference
+      ),
       deep: true
     });
   }
+
+  const fridgeWall = overrideWall(
+    ctx.overrides,
+    "fridge",
+    relationToWall(fixtures.fridge?.relation, "TOP"),
+    normalized.layoutPreference
+  );
 
   specs.push({
     key: "fridge",
     label: "Fridge",
     symbol: "fridge",
     sizeIn: fixtures.fridge?.size ?? 36,
-    wall: relationToWall(fixtures.fridge?.relation, "TOP"),
+    wall: fridgeWall,
     deep: true
   });
 
@@ -579,6 +676,7 @@ function placeAppliances(
     // Cap spacing so appliances stay clustered, allowing base cabinets to connect them
     const spacing = Math.min(rawSpacing, 12 * scale);
     let cursor = runStart + (totalApplianceWidth > span ? (span * 0.025) : spacing);
+    const occupied: AxisInterval[] = [];
 
     onWall.forEach((spec, idx) => {
       const length = rawLengths[idx] * fitFactor;
@@ -587,10 +685,10 @@ function placeAppliances(
         : (spec.symbol === "range" ? baseDepth * 1.05 
           : (spec.deep ? Math.min(32 * scale, baseDepth * 1.15) : baseDepth * 0.9));
       
-      let pos = ctx.overrides[spec.key] ?? cursor;
+      const preferred = overridePosition(ctx.overrides, spec.key) ?? cursor;
       const limitMin = horizontal ? ix + ctx.startOffset[wall] : iy + ctx.startOffset[wall];
       const limitMax = horizontal ? ix + iw - ctx.endOffset[wall] - length : iy + ih - ctx.endOffset[wall] - length;
-      pos = clamp(pos, limitMin, limitMax);
+      const pos = nearestNonOverlappingStart(preferred, length, limitMin, limitMax, occupied);
 
       let rect: PlanRect;
       if (wall === "TOP") rect = { x: pos, y: iy, w: length, h: depth };
@@ -607,6 +705,8 @@ function placeAppliances(
         wall
       });
 
+      occupied.push({ start: pos, end: pos + length });
+      occupied.sort((a, b) => a.start - b.start);
       cursor = pos + length + spacing;
     });
   }
@@ -639,9 +739,9 @@ function placeWindow(
   const sink = appliances.find((a) => a.key === "sink");
   const sinkUnderWindow = fixtures.sink?.relation === "UNDER_WINDOW" || relation === "BEHIND_SINK";
 
-  let wall = relationToWall(relation, "TOP");
+  let wall = overrideWall(ctx.overrides, "window", relationToWall(relation, "TOP"));
   if (sinkUnderWindow && sink) {
-    wall = sink.wall;
+    wall = overrideWall(ctx.overrides, "window", sink.wall);
   }
 
   const length = clamp(36 * ctx.scale, 40, (wall === "TOP" || wall === "BOTTOM" ? ctx.iw : ctx.ih) * 0.5);
@@ -656,18 +756,28 @@ function placeWindow(
     h = ctx.thickness;
     const centerX = (sinkUnderWindow && sink && sink.wall === wall) ? sink.x + sink.w / 2 : ctx.roomX + ctx.roomW / 2;
     const defaultX = clamp(centerX - length / 2, ctx.ix, ctx.ix + ctx.iw - length);
-    x = ctx.overrides["window"] !== undefined ? clamp(ctx.overrides["window"], ctx.ix, ctx.ix + ctx.iw - length) : defaultX;
+    x = overridePosition(ctx.overrides, "window") !== undefined ? clamp(overridePosition(ctx.overrides, "window")!, ctx.ix, ctx.ix + ctx.iw - length) : defaultX;
     y = wall === "TOP" ? ctx.roomY : ctx.roomY + ctx.roomH - ctx.thickness;
   } else {
     w = ctx.thickness;
     h = length;
     const centerY = (sinkUnderWindow && sink && sink.wall === wall) ? sink.y + sink.h / 2 : ctx.roomY + ctx.roomH / 2;
     const defaultY = clamp(centerY - length / 2, ctx.iy, ctx.iy + ctx.ih - length);
-    y = ctx.overrides["window"] !== undefined ? clamp(ctx.overrides["window"], ctx.iy, ctx.iy + ctx.ih - length) : defaultY;
+    y = overridePosition(ctx.overrides, "window") !== undefined ? clamp(overridePosition(ctx.overrides, "window")!, ctx.iy, ctx.iy + ctx.ih - length) : defaultY;
     x = wall === "LEFT" ? ctx.roomX : ctx.roomX + ctx.roomW - ctx.thickness;
   }
 
-  return { x, y, w, h, wall };
+  const windowShape: WindowShape = { x, y, w, h, wall };
+  if (sink && sink.wall === wall && wallProjectionOverlapRatio(windowShape, sink) >= 0.75) {
+    alignShapeCenterOnAxis(sink, windowShape, {
+      ix: ctx.ix,
+      iy: ctx.iy,
+      iw: ctx.iw,
+      ih: ctx.ih
+    });
+  }
+
+  return windowShape;
 }
 
 function placeDoor(
@@ -680,6 +790,7 @@ function placeDoor(
     thickness: number;
     scale: number;
     overrides: PositionOverrides;
+    fixedObjects?: Array<PlanRect & { wall: Wall }>;
   }
 ): DoorShape | null {
   const doors = (normalized.openings as {
@@ -688,17 +799,22 @@ function placeDoor(
   if (doors?.status === "NO") return null;
 
   const location = doors?.items?.[0]?.location;
-  const wall = relationToWall(location, "BOTTOM");
+  const wall = overrideWall(ctx.overrides, "door", relationToWall(location, "BOTTOM"));
   const opening = clamp(32 * ctx.scale, 44, 110);
   const { roomX, roomY, roomW, roomH, thickness } = ctx;
 
   if (wall === "TOP" || wall === "BOTTOM") {
+    const minStart = roomX + thickness;
+    const maxStart = roomX + roomW - thickness - opening;
+    const occupied = intervalsForWall(ctx.fixedObjects ?? [], wall, true);
     const defaultCx = clamp(
       roomX + roomW * 0.74,
       roomX + thickness + opening / 2,
       roomX + roomW - thickness - opening / 2
     );
-    const cx = ctx.overrides["door"] !== undefined ? clamp(ctx.overrides["door"], roomX + thickness + opening / 2, roomX + roomW - thickness - opening / 2) : defaultCx;
+    const preferredStart = (overridePosition(ctx.overrides, "door") ?? defaultCx) - opening / 2;
+    const start = nearestNonOverlappingStart(preferredStart, opening, minStart, maxStart, occupied);
+    const cx = start + opening / 2;
     const wy = wall === "TOP" ? roomY : roomY + roomH - thickness;
     const hingeX = cx + opening / 2;
     const dir = wall === "TOP" ? 1 : -1;
@@ -730,7 +846,12 @@ function placeDoor(
     roomY + thickness + opening / 2,
     roomY + roomH - thickness - opening / 2
   );
-  const cy = ctx.overrides["door"] !== undefined ? clamp(ctx.overrides["door"], roomY + thickness + opening / 2, roomY + roomH - thickness - opening / 2) : defaultCy;
+  const minStart = roomY + thickness;
+  const maxStart = roomY + roomH - thickness - opening;
+  const occupied = intervalsForWall(ctx.fixedObjects ?? [], wall, false);
+  const preferredStart = (overridePosition(ctx.overrides, "door") ?? defaultCy) - opening / 2;
+  const start = nearestNonOverlappingStart(preferredStart, opening, minStart, maxStart, occupied);
+  const cy = start + opening / 2;
   const wx = wall === "LEFT" ? roomX : roomX + roomW - thickness;
   const tipX = wall === "LEFT" ? roomX + thickness : roomX + roomW - thickness;
   const dir = wall === "LEFT" ? 1 : -1;
@@ -779,6 +900,214 @@ function placeMarkers(appliances: ApplianceShape[], baseDepth: number): MarkerSh
   return markers;
 }
 
+type AxisInterval = { start: number; end: number };
+
+function intervalsForWall(
+  objects: Array<PlanRect & { wall: Wall }>,
+  wall: Wall,
+  horizontal: boolean
+): AxisInterval[] {
+  return objects
+    .filter((object) => object.wall === wall)
+    .map((object) => ({
+      start: horizontal ? object.x : object.y,
+      end: horizontal ? object.x + object.w : object.y + object.h
+    }))
+    .sort((a, b) => a.start - b.start);
+}
+
+function nearestNonOverlappingStart(
+  preferred: number,
+  length: number,
+  minStart: number,
+  maxStart: number,
+  occupied: AxisInterval[]
+): number {
+  const clampedPreferred = clamp(preferred, minStart, maxStart);
+  const sorted = occupied
+    .map((item) => ({
+      start: Math.max(item.start, minStart),
+      end: Math.min(item.end, maxStart + length)
+    }))
+    .filter((item) => item.end > minStart && item.start < maxStart + length)
+    .sort((a, b) => a.start - b.start);
+
+  const valid: Array<{ start: number; end: number }> = [];
+  let cursor = minStart;
+  for (const item of sorted) {
+    const gapEnd = item.start;
+    if (gapEnd - cursor >= length) {
+      valid.push({ start: cursor, end: gapEnd - length });
+    }
+    cursor = Math.max(cursor, item.end);
+  }
+  if (maxStart + length - cursor >= length) {
+    valid.push({ start: cursor, end: maxStart });
+  }
+
+  if (valid.length === 0) {
+    return clampedPreferred;
+  }
+
+  return valid
+    .map((range) => clamp(clampedPreferred, range.start, range.end))
+    .sort((a, b) => Math.abs(a - clampedPreferred) - Math.abs(b - clampedPreferred))[0];
+}
+
+function buildClearanceZones(
+  appliances: ApplianceShape[],
+  door: DoorShape | null,
+  ctx: {
+    ix: number;
+    iy: number;
+    iw: number;
+    ih: number;
+    scale: number;
+    baseDepth: number;
+  }
+): ClearanceZoneShape[] {
+  const zones: ClearanceZoneShape[] = [];
+  for (const appliance of appliances) {
+    if (appliance.symbol === "hood") continue;
+    const depthIn =
+      appliance.symbol === "fridge" ||
+      appliance.symbol === "range" ||
+      appliance.symbol === "oven" ||
+      appliance.symbol === "dishwasher"
+        ? 36
+        : 30;
+    const depth = clamp(depthIn * ctx.scale, ctx.baseDepth * 0.85, Math.max(ctx.iw, ctx.ih));
+    const zone = frontZone(appliance, depth, {
+      ix: ctx.ix,
+      iy: ctx.iy,
+      iw: ctx.iw,
+      ih: ctx.ih
+    });
+    if (zone.w > 1 && zone.h > 1) {
+      zones.push({
+        ...zone,
+        ownerKey: appliance.key,
+        wall: appliance.wall,
+        kind: "FRONT_ACCESS"
+      });
+    }
+  }
+
+  if (door) {
+    const swing = clampRectToInterior(door.leafRect, {
+      ix: ctx.ix,
+      iy: ctx.iy,
+      iw: ctx.iw,
+      ih: ctx.ih
+    });
+    if (swing.w > 1 && swing.h > 1) {
+      zones.push({
+        ...swing,
+        ownerKey: "door",
+        wall: door.wall,
+        kind: "DOOR_SWING"
+      });
+    }
+  }
+
+  return zones;
+}
+
+function frontZone(
+  rect: PlanRect & { wall: Wall },
+  depth: number,
+  bounds: { ix: number; iy: number; iw: number; ih: number }
+): PlanRect {
+  if (rect.wall === "TOP") {
+    return clampRectToInterior(
+      { x: rect.x, y: rect.y + rect.h, w: rect.w, h: depth },
+      bounds
+    );
+  }
+  if (rect.wall === "BOTTOM") {
+    return clampRectToInterior(
+      { x: rect.x, y: rect.y - depth, w: rect.w, h: depth },
+      bounds
+    );
+  }
+  if (rect.wall === "LEFT") {
+    return clampRectToInterior(
+      { x: rect.x + rect.w, y: rect.y, w: depth, h: rect.h },
+      bounds
+    );
+  }
+  return clampRectToInterior(
+    { x: rect.x - depth, y: rect.y, w: depth, h: rect.h },
+    bounds
+  );
+}
+
+function clampRectToInterior(
+  rect: PlanRect,
+  bounds: { ix: number; iy: number; iw: number; ih: number }
+): PlanRect {
+  const x1 = clamp(rect.x, bounds.ix, bounds.ix + bounds.iw);
+  const y1 = clamp(rect.y, bounds.iy, bounds.iy + bounds.ih);
+  const x2 = clamp(rect.x + rect.w, bounds.ix, bounds.ix + bounds.iw);
+  const y2 = clamp(rect.y + rect.h, bounds.iy, bounds.iy + bounds.ih);
+  return {
+    x: Math.min(x1, x2),
+    y: Math.min(y1, y2),
+    w: Math.abs(x2 - x1),
+    h: Math.abs(y2 - y1)
+  };
+}
+
+function placeIsland(
+  normalized: Round1Normalized,
+  layoutSensitive: LayoutSensitive,
+  ctx: {
+    ix: number;
+    iy: number;
+    iw: number;
+    ih: number;
+    clearanceZones: ClearanceZoneShape[];
+  }
+): PlanRect | null {
+  if (!layoutSensitive.island?.requested && !/ISLAND/.test(normalized.layoutPreference)) {
+    return null;
+  }
+
+  const sizeOptions = [
+    { w: ctx.iw * 0.36, h: ctx.ih * 0.3 },
+    { w: ctx.iw * 0.3, h: ctx.ih * 0.24 },
+    { w: ctx.iw * 0.24, h: ctx.ih * 0.18 }
+  ];
+  const centerXOptions = [0.5, 0.42, 0.58, 0.34, 0.66];
+  const centerYOptions = [0.5, 0.42, 0.58, 0.34, 0.66];
+
+  for (const size of sizeOptions) {
+    for (const centerY of centerYOptions) {
+      for (const centerX of centerXOptions) {
+        const candidate = {
+          x: clamp(
+            ctx.ix + ctx.iw * centerX - size.w / 2,
+            ctx.ix,
+            ctx.ix + ctx.iw - size.w
+          ),
+          y: clamp(
+            ctx.iy + ctx.ih * centerY - size.h / 2,
+            ctx.iy,
+            ctx.iy + ctx.ih - size.h
+          ),
+          w: size.w,
+          h: size.h
+        };
+        if (ctx.clearanceZones.every((zone) => !rectIntersect(candidate, zone))) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (max < min) return min;
   return Math.min(Math.max(value, min), max);
@@ -790,5 +1119,54 @@ function rectIntersect(r1: PlanRect, r2: PlanRect): boolean {
     r1.x + r1.w > r2.x + 0.1 &&
     r1.y < r2.y + r2.h - 0.1 &&
     r1.y + r1.h > r2.y + 0.1
+  );
+}
+
+function rectOverlapRatio(r1: PlanRect, r2: PlanRect): number {
+  const xOverlap = Math.max(
+    0,
+    Math.min(r1.x + r1.w, r2.x + r2.w) - Math.max(r1.x, r2.x)
+  );
+  const yOverlap = Math.max(
+    0,
+    Math.min(r1.y + r1.h, r2.y + r2.h) - Math.max(r1.y, r2.y)
+  );
+  const overlapArea = xOverlap * yOverlap;
+  const smallerArea = Math.min(r1.w * r1.h, r2.w * r2.h);
+  return smallerArea > 0 ? overlapArea / smallerArea : 0;
+}
+
+function wallProjectionOverlapRatio(
+  r1: PlanRect & { wall: Wall },
+  r2: PlanRect & { wall: Wall }
+): number {
+  const horizontal = r1.wall === "TOP" || r1.wall === "BOTTOM";
+  const aStart = horizontal ? r1.x : r1.y;
+  const aEnd = aStart + (horizontal ? r1.w : r1.h);
+  const bStart = horizontal ? r2.x : r2.y;
+  const bEnd = bStart + (horizontal ? r2.w : r2.h);
+  const overlap = Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+  const smaller = Math.min(aEnd - aStart, bEnd - bStart);
+  return smaller > 0 ? overlap / smaller : 0;
+}
+
+function alignShapeCenterOnAxis(
+  moving: PlanRect & { wall: Wall },
+  target: PlanRect & { wall: Wall },
+  bounds: { ix: number; iy: number; iw: number; ih: number }
+) {
+  if (moving.wall === "TOP" || moving.wall === "BOTTOM") {
+    moving.x = clamp(
+      target.x + target.w / 2 - moving.w / 2,
+      bounds.ix,
+      bounds.ix + bounds.iw - moving.w
+    );
+    return;
+  }
+
+  moving.y = clamp(
+    target.y + target.h / 2 - moving.h / 2,
+    bounds.iy,
+    bounds.iy + bounds.ih - moving.h
   );
 }

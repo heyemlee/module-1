@@ -71,4 +71,32 @@ describe("Round 1 conditional intake flow", () => {
       "MISSING_WINDOW_WIDTH"
     );
   });
+
+  test("does not emit hidden first-phase width or MEP movability confirmation codes", () => {
+    const form = createDefaultShowroomForm();
+    const result = normalizeRound1Form({
+      ...form,
+      openings: {
+        doors: {
+          status: "YES",
+          items: [{ location: "FRONT_SIDE", width: null }]
+        },
+        windows: {
+          status: "YES",
+          items: [{ relation: "BEHIND_SINK", width: null }]
+        }
+      },
+      mep: {
+        water: { relation: "NEAR_SINK", movable: "UNKNOWN" },
+        gas: { relation: "NEAR_RANGE", movable: "UNKNOWN" },
+        electric: { relation: "NEAR_FRIDGE", movable: "UNKNOWN" },
+        vent: { relation: "ABOVE_RANGE", movable: "UNKNOWN" }
+      }
+    });
+
+    const codes = result.confirmationItems.map((item) => item.code);
+    expect(codes).not.toContain("MISSING_DOOR_WIDTH");
+    expect(codes).not.toContain("MISSING_WINDOW_WIDTH");
+    expect(codes).not.toContain("UNKNOWN_MEP_MOVABILITY");
+  });
 });

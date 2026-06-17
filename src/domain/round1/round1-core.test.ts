@@ -162,11 +162,15 @@ describe("Round 1 normalization and readiness", () => {
     expect(result.confirmationItems.map((item) => item.code)).toEqual(
       expect.arrayContaining([
         "MISSING_CEILING_HEIGHT",
-        "MISSING_DOOR_WIDTH",
-        "MISSING_WINDOW_WIDTH",
-        "UNKNOWN_MEP_MOVABILITY",
         "MISSING_APPLIANCE_DIMENSION",
         "CORNER_CABINET_UNCONFIRMED"
+      ])
+    );
+    expect(result.confirmationItems.map((item) => item.code)).not.toEqual(
+      expect.arrayContaining([
+        "MISSING_DOOR_WIDTH",
+        "MISSING_WINDOW_WIDTH",
+        "UNKNOWN_MEP_MOVABILITY"
       ])
     );
     expect(result.readiness.canGenerateRound1Layout).toBe(true);

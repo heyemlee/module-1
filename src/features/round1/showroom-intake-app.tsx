@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyCabinetReviewActions,
   buildRound1LayoutPrompt,
@@ -10,25 +10,37 @@ import {
   type Cabinet,
   type CabinetKind,
   type CabinetLocation,
+  type PreliminaryCabinetEstimate,
   type PreliminaryCabinetEstimateSummary,
   type CabinetReviewAction,
   type CabinetReviewDraft,
   type Round1FormInput
 } from "@/domain/round1";
 import { LayoutPreview } from "./layout-preview";
+import type { PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 
-const steps = [
+export const SHOWROOM_STEPS = [
   "Room",
   "Openings",
-  "MEP",
   "Layout",
   "Appliances",
+  "Adjust Positions",
   "Cabinets"
-];
+] as const;
+
+const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
+
+const EMPTY_PRELIMINARY_CABINET_ESTIMATE: PreliminaryCabinetEstimate = {
+  cabinets: [],
+  confirmationItems: [],
+  estimatedFillerWidth: 0,
+  salesEstimateOnly: true,
+  notForProduction: true
+};
 
 const appliancePositionOptions = [
   "UNDER_WINDOW",
@@ -70,14 +82,51 @@ function sinkPositionOptions(windowStatus: Round1FormInput["openings"]["windows"
 export function ShowroomIntakeApp() {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
+  const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
+  const [positionsConfirmedForCabinets, setPositionsConfirmedForCabinets] =
+    useState(false);
+  const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
+  const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
+  const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cabinetReviewActions, setCabinetReviewActions] = useState<
     CabinetReviewAction[]
   >([]);
 
+  const startDraggableHighlightCue = useCallback(() => {
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+    setHighlightDraggableItems(true);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightDraggableItems(false);
+      highlightTimerRef.current = null;
+    }, 5000);
+  }, []);
+
+  useEffect(() => {
+    if (step !== ADJUST_POSITIONS_STEP_INDEX || hasEnteredAdjustPositions) {
+      return;
+    }
+    setHasEnteredAdjustPositions(true);
+    setShowAdjustPositionsModal(true);
+  }, [hasEnteredAdjustPositions, step]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
+
   const result = useMemo(() => normalizeRound1Form(form), [form]);
   const preliminaryEstimate = useMemo(
-    () => generatePreliminaryCabinetList(createDefaultCabinetRuns(form)),
-    [form]
+    () =>
+      positionsConfirmedForCabinets
+        ? generatePreliminaryCabinetList(createDefaultCabinetRuns(form))
+        : EMPTY_PRELIMINARY_CABINET_ESTIMATE,
+    [form, positionsConfirmedForCabinets]
   );
   const estimate = useMemo(
     () => applyCabinetReviewActions(preliminaryEstimate, cabinetReviewActions),
@@ -95,6 +144,13 @@ export function ShowroomIntakeApp() {
     () => buildRound1LayoutPrompt(result.normalized),
     [result.normalized]
   );
+
+  const goToNextStep = useCallback(() => {
+    if (step === ADJUST_POSITIONS_STEP_INDEX) {
+      setPositionsConfirmedForCabinets(true);
+    }
+    setStep(Math.min(SHOWROOM_STEPS.length - 1, step + 1));
+  }, [step]);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -125,7 +181,7 @@ export function ShowroomIntakeApp() {
 
       <div className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[260px_minmax(0,1fr)_430px]">
         <aside className="h-fit rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          {steps.map((label, index) => (
+          {SHOWROOM_STEPS.map((label, index) => (
             <button
               key={label}
               type="button"
@@ -148,9 +204,21 @@ export function ShowroomIntakeApp() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           {step === 0 && <RoomStep form={form} setForm={setForm} />}
           {step === 1 && <OpeningsStep form={form} setForm={setForm} />}
-          {step === 2 && <MepStep form={form} setForm={setForm} />}
-          {step === 3 && <LayoutStep form={form} setForm={setForm} />}
-          {step === 4 && <AppliancesStep form={form} setForm={setForm} />}
+          {step === 2 && <LayoutStep form={form} setForm={setForm} />}
+          {step === 3 && <AppliancesStep form={form} setForm={setForm} />}
+          {step === 4 && (
+            <AdjustPositionsStep
+              onHighlight={startDraggableHighlightCue}
+              onReset={() => {
+                setPositionOverrides({});
+                setPositionsConfirmedForCabinets(false);
+                setCabinetReviewActions([]);
+              }}
+              onConfirmPositions={() => setPositionsConfirmedForCabinets(true)}
+              hasOverrides={Object.keys(positionOverrides).length > 0}
+              positionsConfirmed={positionsConfirmedForCabinets}
+            />
+          )}
           {step === 5 && <CabinetsStep form={form} setForm={setForm} />}
 
           <div className="mt-6 flex justify-between border-t border-slate-200 pt-4">
@@ -163,7 +231,7 @@ export function ShowroomIntakeApp() {
             </button>
             <button
               type="button"
-              onClick={() => setStep(Math.min(steps.length - 1, step + 1))}
+              onClick={goToNextStep}
               className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
             >
               Next
@@ -176,6 +244,9 @@ export function ShowroomIntakeApp() {
             normalized={result.normalized}
             cabinets={estimate.cabinets}
             confirmationItems={confirmationItems}
+            positionOverrides={positionOverrides}
+            onPositionOverridesChange={setPositionOverrides}
+            highlightDraggableItems={highlightDraggableItems}
           />
 
           <Panel title="Confirmation Required">
@@ -197,6 +268,7 @@ export function ShowroomIntakeApp() {
             <CabinetReviewPanel
               cabinets={estimate.cabinets}
               summary={estimateSummary}
+              positionsConfirmed={positionsConfirmedForCabinets}
               onAdd={(cabinet) =>
                 setCabinetReviewActions((actions) => [
                   ...actions,
@@ -227,6 +299,42 @@ export function ShowroomIntakeApp() {
           </Panel>
         </aside>
       </div>
+
+      {showAdjustPositionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+              Adjust Positions
+            </p>
+            <h2 className="mt-2 text-lg font-black text-slate-950">
+              Door, window, and appliance locations can be dragged on the plan.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Drag these rough positions first, then confirm them to generate
+              the preliminary cabinet fill around those constraints.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAdjustPositionsModal(false)}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+              >
+                Skip For Now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdjustPositionsModal(false);
+                  startDraggableHighlightCue();
+                }}
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+              >
+                Start Adjusting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -267,7 +375,7 @@ function RoomStep({
   );
 }
 
-function OpeningsStep({
+export function OpeningsStep({
   form,
   setForm
 }: {
@@ -349,22 +457,6 @@ function OpeningsStep({
                 })
               }
             />
-            <NumberField
-              label="Door width if known"
-              value={door.width ?? null}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  openings: {
-                    ...form.openings,
-                    doors: {
-                      ...form.openings.doors,
-                      items: [{ ...door, width: value }]
-                    }
-                  }
-                })
-              }
-            />
           </>
         )}
         <SelectField
@@ -387,22 +479,6 @@ function OpeningsStep({
                     windows: {
                       ...form.openings.windows,
                       items: [{ ...window, relation: value }]
-                    }
-                  }
-                })
-              }
-            />
-            <NumberField
-              label="Window width if known"
-              value={window.width ?? null}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  openings: {
-                    ...form.openings,
-                    windows: {
-                      ...form.openings.windows,
-                      items: [{ ...window, width: value }]
                     }
                   }
                 })
@@ -455,7 +531,7 @@ function LayoutStep({
   setForm: (form: Round1FormInput) => void;
 }) {
   return (
-    <Step title="4. Layout Preference">
+    <Step title="3. Layout Preference">
       <SelectField
         label="Kitchen shape"
         value={form.layoutPreference}
@@ -478,18 +554,15 @@ function LayoutStep({
   );
 }
 
-function AppliancesStep({
+export function AppliancesStep({
   form,
   setForm
 }: {
   form: Round1FormInput;
   setForm: (form: Round1FormInput) => void;
 }) {
-  const currentSinkPositionOptions = sinkPositionOptions(
-    form.openings.windows.status
-  );
   return (
-    <Step title="5. Core Appliances And Fixtures">
+    <Step title="4. Core Appliances And Fixtures">
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
           label="Sink size"
@@ -506,26 +579,6 @@ function AppliancesStep({
           }
         />
         <SelectField
-          label="Sink position"
-          value={
-            (currentSinkPositionOptions as readonly string[]).includes(
-              form.fixtures.sink.relation
-            )
-              ? form.fixtures.sink.relation
-              : "UNKNOWN"
-          }
-          options={currentSinkPositionOptions}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              fixtures: {
-                ...form.fixtures,
-                sink: { ...form.fixtures.sink, relation: value }
-              }
-            })
-          }
-        />
-        <SelectField
           label="Range size"
           value={String(form.fixtures.range.size ?? "UNKNOWN")}
           options={["30", "36", "48", "UNKNOWN"]}
@@ -535,22 +588,6 @@ function AppliancesStep({
               fixtures: {
                 ...form.fixtures,
                 range: { ...form.fixtures.range, size: parseNullableSize(value) as 30 | 36 | 48 | null }
-              }
-            })
-          }
-        />
-        <SelectField
-          label="Range / cooktop position"
-          value={form.fixtures.range.relation}
-          options={appliancePositionOptions.filter(
-            (option) => option !== "UNDER_WINDOW"
-          )}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              fixtures: {
-                ...form.fixtures,
-                range: { ...form.fixtures.range, relation: value }
               }
             })
           }
@@ -582,22 +619,6 @@ function AppliancesStep({
               fixtures: {
                 ...form.fixtures,
                 fridge: { ...form.fixtures.fridge, size: parseNullableSize(value) as 30 | 33 | 36 | 42 | 48 | null }
-              }
-            })
-          }
-        />
-        <SelectField
-          label="Fridge position"
-          value={form.fixtures.fridge.relation}
-          options={appliancePositionOptions.filter(
-            (option) => option !== "UNDER_WINDOW"
-          )}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              fixtures: {
-                ...form.fixtures,
-                fridge: { ...form.fixtures.fridge, relation: value }
               }
             })
           }
@@ -645,24 +666,51 @@ function AppliancesStep({
                 })
               }
             />
-            <SelectField
-              label="Dishwasher position"
-              value={form.fixtures.dishwasher.relation}
-              options={appliancePositionOptions.filter(
-                (option) => option !== "UNDER_WINDOW"
-              )}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  fixtures: {
-                    ...form.fixtures,
-                    dishwasher: { ...form.fixtures.dishwasher, relation: value }
-                  }
-                })
-              }
-            />
           </>
         )}
+      </div>
+    </Step>
+  );
+}
+
+function AdjustPositionsStep({
+  onHighlight,
+  onReset,
+  onConfirmPositions,
+  hasOverrides,
+  positionsConfirmed
+}: {
+  onHighlight: () => void;
+  onReset: () => void;
+  onConfirmPositions: () => void;
+  hasOverrides: boolean;
+  positionsConfirmed: boolean;
+}) {
+  return (
+    <Step title="5. Adjust Positions">
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={onHighlight}
+          className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+        >
+          Highlight Draggable Items
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={!hasOverrides && !positionsConfirmed}
+          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Reset Positions
+        </button>
+        <button
+          type="button"
+          onClick={onConfirmPositions}
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+        >
+          {positionsConfirmed ? "Positions Confirmed" : "Generate Cabinet Fill"}
+        </button>
       </div>
     </Step>
   );
@@ -753,6 +801,7 @@ function CabinetsStep({
 function CabinetReviewPanel({
   cabinets,
   summary,
+  positionsConfirmed,
   onAdd,
   onEdit,
   onRemove,
@@ -761,6 +810,7 @@ function CabinetReviewPanel({
 }: {
   cabinets: Cabinet[];
   summary: PreliminaryCabinetEstimateSummary;
+  positionsConfirmed: boolean;
   onAdd: (cabinet: CabinetReviewDraft) => void;
   onEdit: (cabinetIndex: number, cabinet: CabinetReviewDraft) => void;
   onRemove: (cabinetIndex: number) => void;
@@ -772,6 +822,19 @@ function CabinetReviewPanel({
     width: 30,
     location: "ON_MAIN_RUN"
   });
+
+  if (!positionsConfirmed) {
+    return (
+      <div className="rounded-md bg-slate-50 p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          Position setup first
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Confirm dragged door, window, and appliance positions before cabinet fill.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

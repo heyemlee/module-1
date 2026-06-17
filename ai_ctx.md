@@ -1,6 +1,6 @@
 # AI Context: Module 1 Round 1 MVP
 
-Date: 2026-06-16
+Date: 2026-06-17
 Scope: Module 1 only: Round 1 showroom intake, deterministic layout generation, and preliminary cabinet sales estimate.
 Status: Implementation in progress.
 
@@ -133,14 +133,23 @@ Implemented and verified as of 2026-06-16:
 - Geometry tests for the plan renderer.
 - Global 2D obstacle avoidance to prevent corner collisions.
 - Interactive drag-and-drop floor plan elements (doors, windows, appliances).
+- Adjust Positions workflow with parent-owned preview position overrides.
+- Functional clearance zones for dragged appliances/openings and no-fill cabinet reflow around those zones.
 - In-browser clean SVG print functionality for the floor plan.
+- Multi-wall / multi-run generated layouts for one-wall, galley, L-shape, U-shape, peninsula, and island preferences.
+- Island layout estimates now include `ON_ISLAND` base cabinet entries.
+- Wall-aware drag overrides for sink, window, range, fridge, dishwasher, and door.
+- Draggable objects can switch between layout-allowed walls during SVG dragging.
+- Sink/window center snapping when same-wall projected overlap is close enough.
+- Appliance position dropdowns are hidden from the first-phase form; rough placement is driven by layout defaults and manual SVG adjustment.
+- Dishwasher now renders as an integrated base-cabinet panel instead of a detached handle rectangle.
 
 Latest known verification:
 
-- `npm test`: 42 tests passing.
+- `npm test`: 56 tests passing.
 - `npx tsc --noEmit`: passing.
 - `npm run build`: passing.
-- Browser QA at `http://127.0.0.1:3000/`: plan rendered live from the form.
+- Browser QA at `http://127.0.0.1:3000/`: layout shape dropdown updates the deterministic SVG and estimate live; cross-wall dragging, hidden appliance position questions, and integrated dishwasher panel rendering verified.
 
 Always re-run relevant verification after changing behavior.
 
@@ -156,63 +165,61 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 
 ## Active Work: Next Session
 
-Highest priority: align the showroom question flow with the new interactive
-drag-and-drop floor plan.
+Highest priority: drag UX polish for the position-first workflow.
 
-Approved design:
+Current workflow requirement:
 
-- Step order becomes `Room -> Openings -> Layout -> Appliances -> Adjust Positions -> Cabinets`.
-- Remove the first-phase `MEP` step from the left-side workflow.
-- In `Openings`, keep status and rough location questions, but hide `Door width if known` and `Window width if known`.
-- Keep appliance size/status/rough-position dropdowns to generate the initial deterministic plan. Do not show a drag reminder after each dropdown.
-- Add `Adjust Positions` before `Cabinets`. When the user first enters it in the current page session, show one modal explaining that door, window, and appliance locations can be dragged on the plan and that the step is optional.
-- Modal actions: `Start Adjusting` closes the modal and triggers a 5-second highlight/jump cue; `Skip For Now` closes the modal without blocking progress.
-- The `Adjust Positions` step body should include `Highlight Draggable Items` to replay the 5-second cue and `Reset Positions` to clear manual positions.
-- Highlighted draggable objects: `door`, `window`, `sink`, `range`, `fridge`, `dishwasher`. If an object is absent from the plan, skip it.
-- Use a visual cue such as a short bounce or pulse. Do not use browser alerts. The cue must not block dragging.
-- Lift `PositionOverrides` state from `LayoutPreview` into `ShowroomIntakeApp`. `LayoutPreview` should receive `positionOverrides`, `onPositionOverridesChange`, and `highlightDraggableItems` props while keeping pointer drag mechanics inside the preview.
-- Position overrides remain preview-level state for this phase. Do not write them into the form schema, normalized JSON, repository payload, or production gate yet.
-- Dragging must prevent fixed objects from covering each other. A user should not be able to drag the fridge over the sink, drag one appliance over another, or move a draggable opening/appliance into a position that visually occludes another fixed element. Clamp to the nearest valid position or reject the movement; do not allow overlap as the final state.
-- Layout validity must include functional clearance, not just visible overlap. Fridge, oven, dishwasher, range, sink, doors, and openings need rough front/access zones so doors can open and a person can stand/use the fixture. Cabinets, islands, opposite-side runs, and other fixed objects must not block these clearance zones. Example failure to prevent: a fridge drawn on a wall with a base cabinet directly in front of its door-opening/access area.
-- Cabinet layout must reflow from the dragged fixed-object positions and their clearance zones. After a door, window, sink, range, fridge, or dishwasher is moved, cabinet runs should treat the adjusted element as a hard obstacle/anchor and treat its access/door-swing clearance as a no-fill zone, then split, shrink, grow, or align adjacent cabinet edges around it. Cabinets should automatically seek the fixed points and wrap tightly without covering appliances/openings, blocking appliance/door access, or leaving avoidable gaps.
-- Apply this as a global design reasonableness rule, not as a one-off fridge fix. The deterministic plan should avoid appliance-door conflicts, blocked walk/access paths, door swing conflicts, and impossible cabinet placement across the whole room. If no reasonable position exists in Round 1 data, prefer a visible `Confirmation Required` item over silently drawing an impossible layout.
-- Since first-phase UI no longer asks these details, do not surface `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` in the first-phase confirmation list. Keep the schema/default fields available for later phases.
+- Round 1 should open in a position-first state, not with cabinets already visually filled.
+- Sales should rough-fill room/opening/layout/appliance info, then use `Adjust Positions` to drag doors, windows, and appliances.
+- Preliminary cabinet fill should happen only after those rough positions are confirmed via `Generate Cabinet Fill` or by advancing past `Adjust Positions`.
 
-Add or update tests:
+Next drag UX polish scope:
 
-- Step labels include `Adjust Positions`, exclude `MEP`, and follow the approved order.
-- `Openings` no longer renders door/window width inputs.
-- Normalization no longer emits `MISSING_DOOR_WIDTH`, `MISSING_WINDOW_WIDTH`, or `UNKNOWN_MEP_MOVABILITY` for first-phase data.
-- `LayoutPreview` accepts parent-owned `positionOverrides` and updates them through `onPositionOverridesChange`.
-- Dragging the fridge toward the sink cannot leave the final fridge rect overlapping or covering the sink rect; apply the same non-overlap expectation to the draggable fixed-object set.
-- A fridge, oven, dishwasher, range, sink, or door/opening with a front/access clearance zone cannot end with that clearance blocked by a base cabinet, island, opposite run, door swing, or another fixed object.
-- When a draggable fixed object moves, `buildFloorPlan` uses the override and any derived clearance zone as the new obstacle/anchor set, then recalculates cabinets so adjacent cabinet edges align around the fixed object without blocking access.
-- The adjust-position modal appears on first entry and can be dismissed.
-- `Highlight Draggable Items` enables the highlight state for 5 seconds.
+- Add obvious affordances on draggable plan objects:
+  - hover outline or halo
+  - small grab handle / anchor mark
+  - cursor should clearly imply drag on supported objects
+  - apply to `door`, `window`, `sink`, `range`, `fridge`, `dishwasher`, and wall oven if present
+- Add wall-target feedback while dragging:
+  - visually emphasize allowed walls for the current layout shape
+  - show invalid walls as unavailable or non-highlighted
+  - respect `allowedDragWallsForLayout()`
+  - examples: `L_SHAPE` -> `TOP` + `LEFT`; `GALLEY` -> `TOP` + `BOTTOM`; `U_SHAPE` -> `TOP` + `LEFT` + `RIGHT`
+- Improve manual-adjustment state:
+  - show a compact `Adjusted manually` status when `positionOverrides` is non-empty
+  - show `Positions confirmed` after cabinet fill has been enabled
+  - keep the status in `Adjust Positions`, not as noisy plan text
+- Preserve overrides across non-layout form edits.
+- Clear invalid overrides when `layoutPreference` changes and an override wall is no longer allowed for the new layout.
+- Keep the existing geometry contract:
+  - dragging should not leave fixed objects overlapping
+  - appliance/opening clearance zones remain no-fill cabinet zones
+  - cabinet fill reflows around confirmed positions
+
+Suggested tests for this polish:
+
+- `AdjustPositionsStep` or app render shows `Adjusted manually` when `positionOverrides` exists.
+- `AdjustPositionsStep` shows `Positions confirmed` after the cabinet fill gate is enabled.
+- Changing a non-layout field preserves `positionOverrides`.
+- Changing `layoutPreference` removes overrides whose wall is not in `allowedDragWallsForLayout(newLayout)`.
+- Layout preview renders a stable drag affordance marker or class for draggable appliances/openings.
+- Drag wall-target feedback is present only while dragging and matches the allowed walls for the layout.
+
+Browser QA target:
+
+- At `http://127.0.0.1:3000/`, enter `Adjust Positions`, click `Start Adjusting`, hover/drag a draggable item, and verify the plan clearly communicates drag affordances and valid wall targets.
+- Confirm cabinet fill still appears only after `Generate Cabinet Fill` / advancing past `Adjust Positions`.
 
 ## Later Work
 
-After the adjust-position flow:
+After drag UX polish:
 
-- Implement multi-wall / multi-run generated layouts.
-  - `createDefaultCabinetRuns` currently emits only a main run mapped to `TOP` plus one `LEFT` run for non-one-wall layouts.
-  - Target mapping:
-    - `ONE_WALL` -> `TOP`
-    - `GALLEY` -> `TOP` + `BOTTOM`
-    - `L_SHAPE` -> `TOP` + `LEFT`
-    - `PENINSULA` -> `TOP` + `LEFT` plus a peninsula stub
-    - `U_SHAPE` -> `TOP` + `LEFT` + `RIGHT`
-    - `ISLAND` -> wall run plus `ON_ISLAND`
-    - `L_SHAPE_ISLAND` -> `TOP` + `LEFT` + `ON_ISLAND`
-    - `U_SHAPE_ISLAND` -> `TOP` + `LEFT` + `RIGHT` + `ON_ISLAND`
-  - Use existing `CabinetLocation` values where possible: `ON_MAIN_RUN`, `LEFT_SIDE`, `RIGHT_SIDE`, `FRONT_SIDE`, `ON_ISLAND`.
-  - Test that `U_SHAPE` produces base cabinets on three walls and two corners, `GALLEY` produces top and bottom runs, and island layouts produce a non-null island plus `ON_ISLAND` cabinets.
-
-- Refine per-appliance placement:
+- Refine per-appliance deterministic default placement:
   - dishwasher adjacent to sink
   - fridge near a run end
   - range near gas/vent
   - avoid appliance overlap with corner blocks
+
 - Add optional detailed / Module 2 mode later:
   - dimension strings
   - cabinet codes

@@ -3,7 +3,10 @@ import {
   generatePreliminaryCabinetList,
   normalizeRound1Form
 } from "@/domain/round1";
+import { createElement } from "react";
 import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-intake-data";
+import { renderToStaticMarkup } from "react-dom/server";
+import { SHOWROOM_STEPS, ShowroomIntakeApp } from "./showroom-intake-app";
 
 describe("showroom intake defaults", () => {
   test("produce a complete Round 1 customer-confirmation preview model", () => {
@@ -17,5 +20,24 @@ describe("showroom intake defaults", () => {
     expect(normalized.readiness.canEnterProduction).toBe(false);
     expect(estimate.cabinets.length).toBeGreaterThan(0);
     expect(estimate.salesEstimateOnly).toBe(true);
+  });
+
+  test("uses the approved adjust-position step order without first-phase MEP", () => {
+    expect(SHOWROOM_STEPS).toEqual([
+      "Room",
+      "Openings",
+      "Layout",
+      "Appliances",
+      "Adjust Positions",
+      "Cabinets"
+    ]);
+    expect(SHOWROOM_STEPS).not.toContain("MEP");
+  });
+
+  test("does not fill cabinets before door window and appliance positions are confirmed", () => {
+    const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
+
+    expect(html).toContain("Confirm dragged door, window, and appliance positions before cabinet fill.");
+    expect(html).not.toContain("Approximate only. The program fills standard cabinets");
   });
 });

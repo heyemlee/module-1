@@ -8,15 +8,47 @@ import {
   createDefaultCabinetRuns,
   createDefaultShowroomForm
 } from "../showroom-intake-data";
-import { buildFloorPlan } from "./plan-geometry";
+import { buildFloorPlan, type PlanRect } from "./plan-geometry";
 
-function planFromForm(form: Round1FormInput) {
+function planFromForm(form: Round1FormInput, overrides = {}) {
   const { normalized } = normalizeRound1Form(form);
   const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
   return {
-    plan: buildFloorPlan(normalized, estimate.cabinets, 3),
+    plan: buildFloorPlan(normalized, estimate.cabinets, 3, overrides),
     estimate
   };
+}
+
+function formForLayout(layoutPreference: Round1FormInput["layoutPreference"]): Round1FormInput {
+  const form = createDefaultShowroomForm();
+  return {
+    ...form,
+    layoutPreference,
+    openings: {
+      doors: { status: "NO", items: [] },
+      windows: { status: "NO", items: [] }
+    },
+    fixtures: {
+      ...form.fixtures,
+      sink: { ...form.fixtures.sink, relation: "ON_MAIN_RUN" }
+    },
+    layoutSensitiveCabinets: {
+      ...form.layoutSensitiveCabinets,
+      island: {
+        ...form.layoutSensitiveCabinets.island,
+        requested: /ISLAND/.test(layoutPreference)
+      }
+    }
+  };
+}
+
+function intersects(a: PlanRect, b: PlanRect) {
+  return (
+    a.x < b.x + b.w - 0.1 &&
+    a.x + a.w > b.x + 0.1 &&
+    a.y < b.y + b.h - 0.1 &&
+    a.y + a.h > b.y + 0.1
+  );
 }
 
 describe("buildFloorPlan", () => {
@@ -35,14 +67,16 @@ describe("buildFloorPlan", () => {
     expect(scaleX).toBeGreaterThan(0);
   });
 
-  test("lays every cabinet from the list and a corner for the L-shape", () => {
+  test("lays cabinet runs and a corner for the L-shape without forcing impossible cabinets", () => {
     const form = createDefaultShowroomForm();
     const { plan, estimate } = planFromForm(form);
 
     const baseCount = estimate.cabinets.filter((c) => c.kind === "BASE").length;
     const wallCount = estimate.cabinets.filter((c) => c.kind === "WALL").length;
-    expect(plan.baseCabinets.length).toBe(baseCount);
-    expect(plan.wallCabinets.length).toBe(wallCount);
+    expect(plan.baseCabinets.length).toBeGreaterThan(0);
+    expect(plan.baseCabinets.length).toBeLessThanOrEqual(baseCount);
+    expect(plan.wallCabinets.length).toBeGreaterThan(0);
+    expect(plan.wallCabinets.length).toBeLessThanOrEqual(wallCount);
 
     // Default L-shape has a main (top) run and a left run -> one top-left corner.
     expect(plan.corners.length).toBe(1);
@@ -89,5 +123,144 @@ describe("buildFloorPlan", () => {
 
     expect(plan.window).toBeNull();
     expect(plan.door).toBeNull();
+  });
+
+  test("uses dragged fixed-object overrides as hard anchors without final overlap", () => {
+    const form: Round1FormInput = {
+      ...createDefaultShowroomForm(),
+      layoutPreference: "ONE_WALL",
+      openings: {
+        doors: { status: "NO", items: [] },
+        windows: { status: "NO", items: [] }
+      },
+      fixtures: {
+        ...createDefaultShowroomForm().fixtures,
+        sink: { size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        range: {
+          size: 30,
+          fuel: "GAS",
+          fixedLocation: "UNKNOWN",
+          relation: "ON_MAIN_RUN"
+        },
+        fridge: { size: 36, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" }
+      }
+    };
+    const initial = planFromForm(form).plan;
+    const sink = initial.appliances.find((item) => item.key === "sink")!;
+
+    const { plan } = planFromForm(form, {
+      fridge: { wall: "TOP", position: sink.x },
+      range: { wall: "TOP", position: sink.x },
+      dishwasher: { wall: "TOP", position: sink.x }
+    });
+
+    const draggable = plan.appliances.filter((item) =>
+      ["sink", "range", "fridge", "dishwasher"].includes(item.key)
+    );
+    for (const item of draggable) {
+      for (const other of draggable) {
+        if (item.key >= other.key) continue;
+        expect(intersects(item, other), `${item.key} overlaps ${other.key}`).toBe(false);
+      }
+    }
+
+    const fridge = plan.appliances.find((item) => item.key === "fridge")!;
+    expect(
+      plan.baseCabinets.some((cabinet) => intersects(cabinet, fridge))
+    ).toBe(false);
+  });
+
+  test("keeps appliance and opening front clearance zones free of cabinetry and islands", () => {
+    const form = {
+      ...createDefaultShowroomForm(),
+      layoutPreference: "U_SHAPE_ISLAND" as const,
+      layoutSensitiveCabinets: {
+        ...createDefaultShowroomForm().layoutSensitiveCabinets,
+        island: { requested: true, functions: [] }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    expect(plan.clearanceZones.length).toBeGreaterThan(0);
+
+    const blockers = [
+      ...plan.baseCabinets,
+      ...plan.corners,
+      ...(plan.island ? [plan.island] : [])
+    ];
+
+    for (const clearance of plan.clearanceZones) {
+      for (const blocker of blockers) {
+        expect(
+          intersects(clearance, blocker),
+          `${clearance.ownerKey} clearance blocked`
+        ).toBe(false);
+      }
+    }
+  });
+
+  test("maps galley layouts to top and bottom base cabinet runs", () => {
+    const { plan } = planFromForm(formForLayout("GALLEY"));
+
+    expect(new Set(plan.baseCabinets.map((cabinet) => cabinet.wall))).toEqual(
+      new Set(["TOP", "BOTTOM"])
+    );
+  });
+
+  test("maps U-shape layouts to three wall runs and two base corners", () => {
+    const { plan } = planFromForm(formForLayout("U_SHAPE"));
+
+    expect(new Set(plan.baseCabinets.map((cabinet) => cabinet.wall))).toEqual(
+      new Set(["TOP", "LEFT", "RIGHT"])
+    );
+    expect(plan.corners).toHaveLength(2);
+  });
+
+  test("island layouts produce an island and island cabinet estimate entries", () => {
+    const { plan, estimate } = planFromForm(formForLayout("L_SHAPE_ISLAND"));
+
+    expect(plan.island).not.toBeNull();
+    expect(
+      estimate.cabinets.some((cabinet) => cabinet.location === "ON_ISLAND")
+    ).toBe(true);
+  });
+
+  test("uses wall-aware overrides for draggable appliances on layout-allowed walls", () => {
+    const lShape = planFromForm(formForLayout("L_SHAPE"), {
+      range: { wall: "LEFT", position: 170 }
+    }).plan;
+    const uShape = planFromForm(formForLayout("U_SHAPE"), {
+      fridge: { wall: "RIGHT", position: 180 }
+    }).plan;
+
+    expect(lShape.appliances.find((item) => item.key === "range")?.wall).toBe("LEFT");
+    expect(uShape.appliances.find((item) => item.key === "fridge")?.wall).toBe("RIGHT");
+  });
+
+  test("ignores wall-aware overrides outside the current layout wall set", () => {
+    const { plan } = planFromForm(formForLayout("L_SHAPE"), {
+      fridge: { wall: "RIGHT", position: 180 }
+    });
+
+    expect(plan.appliances.find((item) => item.key === "fridge")?.wall).not.toBe(
+      "RIGHT"
+    );
+  });
+
+  test("snaps sink and window centers together when their overlap is near aligned", () => {
+    const form = createDefaultShowroomForm();
+    const initial = planFromForm(form).plan;
+    const window = initial.window!;
+
+    const { plan } = planFromForm(form, {
+      window: { wall: "TOP", position: window.x },
+      sink: { wall: "TOP", position: window.x + 4 }
+    });
+
+    const sink = plan.appliances.find((item) => item.key === "sink")!;
+    const windowCenter = plan.window!.x + plan.window!.w / 2;
+    const sinkCenter = sink.x + sink.w / 2;
+    expect(Math.abs(windowCenter - sinkCenter)).toBeLessThan(2);
   });
 });

@@ -1,6 +1,7 @@
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import type { Cabinet, ConfirmationItem, Round1Normalized } from "@/domain/round1";
 import {
+  allowedDragWallsForLayout,
   buildFloorPlan,
   type ApplianceShape,
   type FloorPlan,
@@ -8,6 +9,7 @@ import {
   type PlanRect,
   type WallCornerShape,
   type PositionOverrides,
+  type PositionOverride,
   type Wall
 } from "./floorplan/plan-geometry";
 
@@ -15,6 +17,9 @@ type LayoutPreviewProps = {
   normalized: Round1Normalized;
   cabinets: Cabinet[];
   confirmationItems: ConfirmationItem[];
+  positionOverrides: PositionOverrides;
+  onPositionOverridesChange: Dispatch<SetStateAction<PositionOverrides>>;
+  highlightDraggableItems: boolean;
 };
 
 const INK = "#1f2937";
@@ -26,12 +31,18 @@ const FILL_CORNER = "#e2e8f0";
 export function LayoutPreview({
   normalized,
   cabinets,
-  confirmationItems
+  confirmationItems,
+  positionOverrides,
+  onPositionOverridesChange,
+  highlightDraggableItems
 }: LayoutPreviewProps) {
   const [showMep, setShowMep] = useState(false);
-  const [overrides, setOverrides] = useState<PositionOverrides>({});
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const plan = useMemo(
+    () => buildFloorPlan(normalized, cabinets, confirmationItems.length, positionOverrides),
+    [cabinets, confirmationItems.length, normalized, positionOverrides]
+  );
 
   const getSvgPoint = useCallback((clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
@@ -44,9 +55,9 @@ export function LayoutPreview({
 
   type DragInfo = {
     id: string;
-    wall: Wall;
     startVal: number;
     startSvgPt: { x: number, y: number };
+    axisOffset: number;
   };
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
 
@@ -55,24 +66,21 @@ export function LayoutPreview({
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
     const pt = getSvgPoint(e.clientX, e.clientY);
-    setDragInfo({ id, wall, startVal: currentVal, startSvgPt: pt });
+    const horizontal = wall === "TOP" || wall === "BOTTOM";
+    setDragInfo({
+      id,
+      startVal: currentVal,
+      startSvgPt: pt,
+      axisOffset: (horizontal ? pt.x : pt.y) - currentVal
+    });
   }, [getSvgPoint]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragInfo) return;
     const pt = getSvgPoint(e.clientX, e.clientY);
-    const dx = pt.x - dragInfo.startSvgPt.x;
-    const dy = pt.y - dragInfo.startSvgPt.y;
-    
-    let newVal = dragInfo.startVal;
-    if (dragInfo.wall === "TOP" || dragInfo.wall === "BOTTOM") {
-      newVal += dx;
-    } else {
-      newVal += dy;
-    }
-    
-    setOverrides(prev => ({ ...prev, [dragInfo.id]: newVal }));
-  }, [dragInfo, getSvgPoint]);
+    const nextOverride = overrideFromPointer(plan, dragInfo.id, pt, dragInfo.axisOffset);
+    onPositionOverridesChange((prev) => ({ ...prev, [dragInfo.id]: nextOverride }));
+  }, [dragInfo, getSvgPoint, onPositionOverridesChange, plan]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (dragInfo) {
@@ -117,21 +125,8 @@ export function LayoutPreview({
     }
   }, []);
 
-  const plan = useMemo(
-    () => buildFloorPlan(normalized, cabinets, confirmationItems.length, overrides),
-    [cabinets, confirmationItems.length, normalized, overrides]
-  );
-
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white relative">
-      {Object.keys(overrides).length > 0 && (
-        <button
-          onClick={() => setOverrides({})}
-          className="absolute bottom-4 left-4 z-10 rounded bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow border border-slate-200 hover:bg-slate-50"
-        >
-          Reset Positions
-        </button>
-      )}
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
@@ -234,6 +229,7 @@ export function LayoutPreview({
             appliance={appliance} 
             onPointerDown={handlePointerDown} 
             dragging={dragInfo?.id === appliance.key} 
+            highlighted={highlightDraggableItems && isHighlightableAppliance(appliance.key)}
           />
         ))}
 
@@ -241,6 +237,7 @@ export function LayoutPreview({
           plan={plan} 
           onPointerDown={handlePointerDown} 
           draggingId={dragInfo?.id} 
+          highlighted={highlightDraggableItems}
         />
 
         {showMep && plan.markers.map((marker, index) => (
@@ -257,6 +254,47 @@ export function LayoutPreview({
       </svg>
     </div>
   );
+}
+
+function overrideFromPointer(
+  plan: FloorPlan,
+  id: string,
+  pt: { x: number; y: number },
+  axisOffset: number
+): PositionOverride {
+  const wall = nearestAllowedWall(plan, pt);
+  const horizontal = wall === "TOP" || wall === "BOTTOM";
+  const rawPosition = (horizontal ? pt.x : pt.y) - axisOffset;
+  const centerTracked = id === "door";
+  if (centerTracked) {
+    return { wall, position: horizontal ? pt.x : pt.y };
+  }
+  return { wall, position: rawPosition };
+}
+
+function nearestAllowedWall(plan: FloorPlan, pt: { x: number; y: number }): Wall {
+  const allowed = allowedDragWallsForLayout(plan.layoutPreference);
+  const { x, y, w, h, thickness } = plan.room;
+  const inner = {
+    left: x + thickness,
+    right: x + w - thickness,
+    top: y + thickness,
+    bottom: y + h - thickness
+  };
+  const distances: Record<Wall, number> = {
+    TOP: Math.abs(pt.y - inner.top),
+    BOTTOM: Math.abs(pt.y - inner.bottom),
+    LEFT: Math.abs(pt.x - inner.left),
+    RIGHT: Math.abs(pt.x - inner.right)
+  };
+
+  return allowed
+    .map((wall) => ({ wall, distance: distances[wall] }))
+    .sort((a, b) => a.distance - b.distance)[0].wall;
+}
+
+function isHighlightableAppliance(key: string) {
+  return ["sink", "range", "fridge", "dishwasher"].includes(key);
 }
 
 function Walls({ plan }: { plan: FloorPlan }) {
@@ -377,7 +415,17 @@ function WallCorner({ corner }: { corner: WallCornerShape }) {
   );
 }
 
-function Appliance({ appliance, onPointerDown, dragging }: { appliance: ApplianceShape, onPointerDown: any, dragging?: boolean }) {
+function Appliance({
+  appliance,
+  onPointerDown,
+  dragging,
+  highlighted
+}: {
+  appliance: ApplianceShape;
+  onPointerDown: any;
+  dragging?: boolean;
+  highlighted?: boolean;
+}) {
   const cx = appliance.x + appliance.w / 2;
   const cy = appliance.y + appliance.h / 2;
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
@@ -386,16 +434,31 @@ function Appliance({ appliance, onPointerDown, dragging }: { appliance: Applianc
     <g
       onPointerDown={(e) => onPointerDown(appliance.key, appliance.wall, currentVal, e)}
       style={{ cursor: isHorizontal ? "ew-resize" : "ns-resize" }}
-      className={`transition-opacity duration-100 ${dragging ? "opacity-60" : "hover:opacity-80"}`}
+      className={`transition-opacity duration-100 ${dragging ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+      data-appliance-symbol={appliance.symbol}
     >
+      {highlighted && (
+        <rect
+          x={appliance.x - 5}
+          y={appliance.y - 5}
+          width={appliance.w + 10}
+          height={appliance.h + 10}
+          rx="5"
+          fill="none"
+          stroke="#0284c7"
+          strokeWidth="2.2"
+          strokeDasharray="5 4"
+          pointerEvents="none"
+        />
+      )}
       <rect
         x={appliance.x}
         y={appliance.y}
         width={appliance.w}
         height={appliance.h}
         rx="2"
-        fill={appliance.symbol === "dishwasher" ? "transparent" : "#ffffff"}
-        stroke={appliance.symbol === "dishwasher" ? "none" : INK}
+        fill="#ffffff"
+        stroke={INK}
         strokeWidth="1.3"
       />
       <ApplianceSymbol appliance={appliance} />
@@ -473,17 +536,44 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
     const hTL = pt(-handleW / 2, handleY);
     const hBR = pt(handleW / 2, handleY + handleD);
 
+    const inset = Math.max(3, Math.min(len, dep) * 0.06);
+    const panelX = x + inset;
+    const panelY = y + inset;
+    const panelW = Math.max(1, w - inset * 2);
+    const panelH = Math.max(1, h - inset * 2);
+
     return (
-      <rect
-        x={Math.min(hTL[0], hBR[0])}
-        y={Math.min(hTL[1], hBR[1])}
-        width={Math.abs(hBR[0] - hTL[0])}
-        height={Math.abs(hBR[1] - hTL[1])}
-        fill="#ffffff"
-        stroke={LINE}
-        strokeWidth="1.2"
-        rx="1.5"
-      />
+      <g data-dishwasher-panel="true">
+        <title>Dishwasher integrated base cabinet panel</title>
+        <rect
+          x={panelX}
+          y={panelY}
+          width={panelW}
+          height={panelH}
+          fill="none"
+          stroke={LINE}
+          strokeWidth="1.1"
+          rx="2"
+        />
+        <line
+          x1={panelX}
+          y1={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
+          x2={panelX + panelW}
+          y2={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
+          stroke={LINE}
+          strokeWidth="0.9"
+        />
+        <rect
+          x={Math.min(hTL[0], hBR[0])}
+          y={Math.min(hTL[1], hBR[1])}
+          width={Math.abs(hBR[0] - hTL[0])}
+          height={Math.abs(hBR[1] - hTL[1])}
+          fill="#ffffff"
+          stroke={LINE}
+          strokeWidth="1.2"
+          rx="1.5"
+        />
+      </g>
     );
   }
   if (symbol === "sink") {
@@ -623,15 +713,39 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
   );
 }
 
-function Openings({ plan, onPointerDown, draggingId }: { plan: FloorPlan, onPointerDown: any, draggingId?: string }) {
+function Openings({
+  plan,
+  onPointerDown,
+  draggingId,
+  highlighted
+}: {
+  plan: FloorPlan;
+  onPointerDown: any;
+  draggingId?: string;
+  highlighted?: boolean;
+}) {
   return (
     <g>
       {plan.window && (
         <g
           onPointerDown={(e) => onPointerDown("window", plan.window!.wall, plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM" ? plan.window!.x : plan.window!.y, e)}
           style={{ cursor: (plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM") ? "ew-resize" : "ns-resize" }}
-          className={`transition-opacity duration-100 ${draggingId === "window" ? "opacity-60" : "hover:opacity-80"}`}
+          className={`transition-opacity duration-100 ${draggingId === "window" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
         >
+          {highlighted && (
+            <rect
+              x={plan.window.x - 5}
+              y={plan.window.y - 5}
+              width={plan.window.w + 10}
+              height={plan.window.h + 10}
+              rx="5"
+              fill="none"
+              stroke="#0284c7"
+              strokeWidth="2.2"
+              strokeDasharray="5 4"
+              pointerEvents="none"
+            />
+          )}
           <rect
             x={plan.window.x}
             y={plan.window.y}
@@ -667,8 +781,22 @@ function Openings({ plan, onPointerDown, draggingId }: { plan: FloorPlan, onPoin
         <g
           onPointerDown={(e) => onPointerDown("door", plan.door!.wall, plan.door!.wall === "TOP" || plan.door!.wall === "BOTTOM" ? plan.door!.cx : plan.door!.cy, e)}
           style={{ cursor: (plan.door!.wall === "TOP" || plan.door!.wall === "BOTTOM") ? "ew-resize" : "ns-resize" }}
-          className={`transition-opacity duration-100 ${draggingId === "door" ? "opacity-60" : "hover:opacity-80"}`}
+          className={`transition-opacity duration-100 ${draggingId === "door" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
         >
+          {highlighted && (
+            <rect
+              x={plan.door.breakRect.x - 5}
+              y={plan.door.breakRect.y - 5}
+              width={plan.door.breakRect.w + 10}
+              height={plan.door.breakRect.h + 10}
+              rx="5"
+              fill="none"
+              stroke="#0284c7"
+              strokeWidth="2.2"
+              strokeDasharray="5 4"
+              pointerEvents="none"
+            />
+          )}
           <rect
             x={plan.door.breakRect.x}
             y={plan.door.breakRect.y}
