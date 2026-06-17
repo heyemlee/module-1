@@ -16,6 +16,9 @@ describe("generateRound1LayoutImage", () => {
       async generateLayoutBackground(input) {
         calls.push(input);
         return { model: "gpt-image-test", imageBase64: "base64-image" };
+      },
+      async generateConceptRendering() {
+        throw new Error("not used in this test");
       }
     };
 

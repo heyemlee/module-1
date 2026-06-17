@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState, useRef, useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { Cabinet, ConfirmationItem, Round1Normalized } from "@/domain/round1";
 import {
   allowedDragWallsForLayout,
@@ -27,6 +27,21 @@ type LayoutPreviewProps = {
   onPositionOverridesChange: Dispatch<SetStateAction<PositionOverrides>>;
   highlightDraggableItems: boolean;
   showPositionObjects: boolean;
+  /** Optional external ref to the rendered SVG (for client-side rasterization). */
+  svgRef?: RefObject<SVGSVGElement | null>;
+  /**
+   * Optional precomputed plan. When provided it is rendered as-is instead of
+   * recomputing from inputs — used to bind the AI reference image to the exact
+   * frozen `snapshot.floorPlan`.
+   */
+  plan?: FloorPlan;
+  /**
+   * Clean geometry-only render for the AI reference image: no header chrome, no
+   * MEP markers, no text labels, no drag/hover chrome. Appliance and opening
+   * geometry is still drawn (and always shown, regardless of
+   * `showPositionObjects`).
+   */
+  referenceMode?: boolean;
 };
 
 const INK = "#1f2937";
@@ -39,15 +54,25 @@ export function LayoutPreview({
   positionOverrides,
   onPositionOverridesChange,
   highlightDraggableItems,
-  showPositionObjects
+  showPositionObjects,
+  svgRef: externalSvgRef,
+  plan: planProp,
+  referenceMode = false
 }: LayoutPreviewProps) {
   const [showMep, setShowMep] = useState(false);
 
-  const svgRef = useRef<SVGSVGElement>(null);
-  const plan = useMemo(
+  const internalSvgRef = useRef<SVGSVGElement>(null);
+  const svgRef = externalSvgRef ?? internalSvgRef;
+  const computedPlan = useMemo(
     () => buildFloorPlan(normalized, cabinets, confirmationItems.length, positionOverrides),
     [cabinets, confirmationItems.length, normalized, positionOverrides]
   );
+  // A precomputed plan (the frozen snapshot geometry) takes precedence so the
+  // reference image is bound to exactly what was locked.
+  const plan = planProp ?? computedPlan;
+  // Appliances/openings are always drawn in referenceMode (a reference without
+  // them is useless); otherwise the caller controls visibility.
+  const showObjects = referenceMode || showPositionObjects;
 
   const getSvgPoint = useCallback((clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
@@ -132,6 +157,7 @@ export function LayoutPreview({
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white relative">
+      {!referenceMode && (
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
@@ -168,6 +194,7 @@ export function LayoutPreview({
           </button>
         </div>
       </div>
+      )}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${plan.canvas.w} ${plan.canvas.h}`}
@@ -179,7 +206,7 @@ export function LayoutPreview({
         onPointerLeave={handlePointerUp}
       >
         <Walls plan={plan} />
-        {plan.island && <Island rect={plan.island} />}
+        {plan.island && <Island rect={plan.island} referenceMode={referenceMode} />}
 
         {plan.corners.map((corner, index) => (
           <Corner key={`corner-${index}`} rect={corner} />
@@ -228,28 +255,30 @@ export function LayoutPreview({
           <WallCorner key={`wallcorner-${index}`} corner={corner} />
         ))}
 
-        <DragFeedback plan={plan} draggingId={dragInfo?.id} />
+        {!referenceMode && <DragFeedback plan={plan} draggingId={dragInfo?.id} />}
 
-        {showPositionObjects && plan.appliances.map((appliance) => (
-          <Appliance 
-            key={appliance.key} 
-            appliance={appliance} 
-            onPointerDown={handlePointerDown} 
-            dragging={dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range")} 
-            highlighted={highlightDraggableItems && isHighlightableAppliance(appliance.key)}
+        {showObjects && plan.appliances.map((appliance) => (
+          <Appliance
+            key={appliance.key}
+            appliance={appliance}
+            onPointerDown={handlePointerDown}
+            dragging={!referenceMode && (dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range"))}
+            highlighted={!referenceMode && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
+            referenceMode={referenceMode}
           />
         ))}
 
-        {showPositionObjects && (
-          <Openings 
-            plan={plan} 
-            onPointerDown={handlePointerDown} 
-            draggingId={dragInfo?.id} 
-            highlighted={highlightDraggableItems}
+        {showObjects && (
+          <Openings
+            plan={plan}
+            onPointerDown={handlePointerDown}
+            draggingId={dragInfo?.id}
+            highlighted={!referenceMode && highlightDraggableItems}
+            referenceMode={referenceMode}
           />
         )}
 
-        {showPositionObjects && showMep && plan.markers.map((marker, index) => (
+        {showObjects && showMep && !referenceMode && plan.markers.map((marker, index) => (
           <Marker
             key={`marker-${index}`}
             cx={marker.cx}
@@ -336,18 +365,40 @@ function Appliance({
   appliance,
   onPointerDown,
   dragging,
-  highlighted
+  highlighted,
+  referenceMode
 }: {
   appliance: ApplianceShape;
   onPointerDown: any;
   dragging?: boolean;
   highlighted?: boolean;
+  referenceMode?: boolean;
 }) {
   const cx = appliance.x + appliance.w / 2;
   const cy = appliance.y + appliance.h / 2;
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
   const currentVal = isHorizontal ? appliance.x : appliance.y;
   const isHood = appliance.symbol === "hood";
+
+  // Clean reference: just the body rect + symbol glyph, no chrome, no label.
+  if (referenceMode) {
+    return (
+      <g data-appliance-symbol={appliance.symbol}>
+        <rect
+          x={appliance.x}
+          y={appliance.y}
+          width={appliance.w}
+          height={appliance.h}
+          rx="2"
+          fill="#ffffff"
+          stroke={INK}
+          strokeWidth="1.3"
+        />
+        <ApplianceSymbol appliance={appliance} />
+      </g>
+    );
+  }
+
   return (
     <g
       onPointerDown={(e) => onPointerDown(isHood ? "range" : appliance.key, appliance.wall, currentVal, e)}
@@ -677,12 +728,14 @@ function Openings({
   plan,
   onPointerDown,
   draggingId,
-  highlighted
+  highlighted,
+  referenceMode
 }: {
   plan: FloorPlan;
   onPointerDown: any;
   draggingId?: string;
   highlighted?: boolean;
+  referenceMode?: boolean;
 }) {
   return (
     <g>
@@ -692,6 +745,7 @@ function Openings({
           style={{ cursor: draggingId === "window" ? "grabbing" : "grab" }}
           className={`transition-opacity duration-100 group ${draggingId === "window" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
         >
+          {!referenceMode && (
           <rect
             x={plan.window.x - 4}
             y={plan.window.y - 4}
@@ -704,6 +758,7 @@ function Openings({
             className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
             pointerEvents="none"
           />
+          )}
           {highlighted && (
             <rect
               x={plan.window.x - 5}
@@ -738,6 +793,7 @@ function Openings({
               <line x1={plan.window.x + plan.window.w} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1e3a8a" strokeWidth="1.2" />
             </g>
           )}
+          {!referenceMode && (
           <text
             x={plan.window.wall === "LEFT" ? plan.window.x - 6 : (plan.window.wall === "RIGHT" ? plan.window.x + plan.window.w + 6 : plan.window.x + plan.window.w / 2)}
             y={plan.window.wall === "TOP" ? plan.window.y - 5 : (plan.window.wall === "BOTTOM" ? plan.window.y + plan.window.h + 12 : plan.window.y + plan.window.h / 2)}
@@ -747,11 +803,14 @@ function Openings({
           >
             window
           </text>
+          )}
+          {!referenceMode && (
           <g className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
             <circle cx={plan.window.x + plan.window.w / 2 - 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
             <circle cx={plan.window.x + plan.window.w / 2} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
             <circle cx={plan.window.x + plan.window.w / 2 + 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
           </g>
+          )}
         </g>
       )}
       {plan.door && (
@@ -760,6 +819,7 @@ function Openings({
           style={{ cursor: draggingId === "door" ? "grabbing" : "grab" }}
           className={`transition-opacity duration-100 group ${draggingId === "door" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
         >
+          {!referenceMode && (
           <rect
             x={plan.door.breakRect.x - 4}
             y={plan.door.breakRect.y - 4}
@@ -772,6 +832,7 @@ function Openings({
             className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
             pointerEvents="none"
           />
+          )}
           {highlighted && (
             <rect
               x={plan.door.breakRect.x - 5}
@@ -803,6 +864,7 @@ function Openings({
             strokeWidth="1.5"
           />
           <path d={plan.door.swingPath} fill="none" stroke="#2563eb" strokeWidth="1.2" />
+          {!referenceMode && (
           <text
             x={plan.door.labelX}
             y={plan.door.labelY}
@@ -811,11 +873,14 @@ function Openings({
           >
             door
           </text>
+          )}
+          {!referenceMode && (
           <g className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
             <circle cx={plan.door.cx - 6} cy={plan.door.cy} r="1.5" fill="#334155" />
             <circle cx={plan.door.cx} cy={plan.door.cy} r="1.5" fill="#334155" />
             <circle cx={plan.door.cx + 6} cy={plan.door.cy} r="1.5" fill="#334155" />
           </g>
+          )}
         </g>
       )}
     </g>

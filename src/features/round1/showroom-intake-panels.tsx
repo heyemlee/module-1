@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   type PreliminaryCabinetEstimateSummary
 } from "@/domain/round1";
@@ -113,14 +112,108 @@ function CabinetSummaryMetric({
   );
 }
 
+function RenderingControls({
+  canRender,
+  busy,
+  error,
+  stale,
+  image,
+  onGenerate
+}: {
+  canRender: boolean;
+  busy: boolean;
+  error: string | null;
+  stale: boolean;
+  image: string | null;
+  onGenerate?: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={!canRender || busy}
+        className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy
+          ? "Generating Rendering…"
+          : image && stale
+            ? "Regenerate Rendering"
+            : "Generate Rendering"}
+      </button>
+      {!canRender ? (
+        <p className="text-xs leading-5 text-slate-500">
+          {image
+            ? "Regenerate cabinet fill, then re-run to refresh this preview."
+            : "Available after cabinet fill is generated."}
+        </p>
+      ) : (
+        <p className="text-xs leading-5 text-slate-500">
+          Sends a clean deterministic layout image plus a wall-by-wall
+          description of this locked snapshot to the image model. The result is a
+          concept preview only.
+        </p>
+      )}
+      {error && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+          Could not generate the rendering: {error}
+        </p>
+      )}
+      {image && (
+        <figure className="space-y-1">
+          {stale && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] font-bold leading-4 text-amber-800">
+              Outdated — this concept is based on an earlier snapshot. Regenerate
+              cabinet fill, then re-run Generate Rendering to refresh it.
+            </p>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image}
+            alt="Round 1 concept rendering"
+            className={`w-full rounded-md border border-slate-200 ${
+              stale ? "opacity-60" : ""
+            }`}
+          />
+          <figcaption className="text-[11px] leading-4 text-slate-500">
+            Concept preview only — never the source of truth for cabinet data,
+            dimensions, counts, geometry, or quotes.
+          </figcaption>
+        </figure>
+      )}
+    </div>
+  );
+}
+
 export function Round1SnapshotPanel({
   snapshot,
-  persistState = "idle"
+  persistState = "idle",
+  renderingBusy = false,
+  renderingImage = null,
+  renderingError = null,
+  renderingStale = false,
+  canRender = false,
+  onGenerateRendering
 }: {
   snapshot: Round1Snapshot | null;
   persistState?: SnapshotPersistState;
+  renderingBusy?: boolean;
+  renderingImage?: string | null;
+  renderingError?: string | null;
+  renderingStale?: boolean;
+  canRender?: boolean;
+  onGenerateRendering?: () => void;
 }) {
-  const [showRenderingNote, setShowRenderingNote] = useState(false);
+  const renderingControls = (
+    <RenderingControls
+      canRender={canRender}
+      busy={renderingBusy}
+      error={renderingError}
+      stale={renderingStale}
+      image={renderingImage}
+      onGenerate={onGenerateRendering}
+    />
+  );
 
   if (!snapshot) {
     return (
@@ -134,16 +227,7 @@ export function Round1SnapshotPanel({
             snapshot. Until then, form and position changes stay draft only.
           </p>
         </div>
-        <button
-          type="button"
-          disabled
-          className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Generate Rendering
-        </button>
-        <p className="text-xs leading-5 text-slate-500">
-          Available after cabinet fill is generated. Reserved for a later step.
-        </p>
+        {renderingControls}
       </div>
     );
   }
@@ -184,21 +268,7 @@ export function Round1SnapshotPanel({
         <SnapshotPersistStatus persistState={persistState} />
       </div>
 
-      <button
-        type="button"
-        onClick={() => setShowRenderingNote(true)}
-        className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-      >
-        Generate Rendering
-      </button>
-      {showRenderingNote && (
-        <p className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-          Rendering is reserved for a later step. It will send the deterministic
-          layout image plus a JSON summary of this snapshot to the image model.
-          The generated image is a concept preview only and never the source of
-          truth for cabinet data.
-        </p>
-      )}
+      {renderingControls}
 
       <details className="rounded-md border border-slate-200">
         <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">

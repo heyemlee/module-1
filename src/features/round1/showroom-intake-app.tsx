@@ -9,6 +9,7 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import { LayoutPreview } from "./layout-preview";
+import { rasterizeSvgElement } from "./rasterize-svg";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
@@ -63,6 +64,22 @@ export function ShowroomIntakeApp() {
   const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Concept rendering is a non-authoritative customer preview derived from the
+  // frozen snapshot. It is persisted separately (never part of the snapshot) so
+  // the last preview survives a reload. `renderingBasedOn` records which
+  // snapshot it was built from, so the UI can flag it stale once the snapshot
+  // changes; the image itself is kept (not cleared) across edits.
+  const floorPlanSvgRef = useRef<SVGSVGElement | null>(null);
+  // Hidden, clean render built from the frozen snapshot geometry. This — not the
+  // live editable preview — is what gets rasterized and sent to the image model,
+  // so the reference image and the JSON prompt come from the identical locked
+  // snapshot, with no labels/markers/chrome.
+  const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
+  const [renderingImage, setRenderingImage] = useState<string | null>(null);
+  const [renderingBasedOn, setRenderingBasedOn] = useState<string | null>(null);
+  const [renderingBusy, setRenderingBusy] = useState(false);
+  const [renderingError, setRenderingError] = useState<string | null>(null);
 
   // Any manual drag invalidates the confirmed positions and the generated
   // cabinet fill, so the frozen snapshot is cleared and must be regenerated.
@@ -187,12 +204,53 @@ export function ShowroomIntakeApp() {
     void persistSnapshot(snap);
   }, [form, persistSnapshot, positionOverrides, result]);
 
+  // Non-authoritative concept rendering. Rasterizes the hidden clean reference
+  // render (built from the locked snapshot) and POSTs it to the rendering route,
+  // which loads the authoritative snapshot server-side by id and builds the
+  // prompt — the client never sends snapshot data, only the reference image.
+  const handleGenerateRendering = useCallback(async () => {
+    const referenceSvg = referenceTopDownRef.current;
+    const projectId = projectIdRef.current;
+    if (!referenceSvg || !projectId || !snapshot) return;
+
+    setRenderingBusy(true);
+    setRenderingError(null);
+    try {
+      const referenceImagesBase64 = [await rasterizeSvgElement(referenceSvg)];
+      const response = await fetch(
+        `/api/round1/projects/${projectId}/rendering`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ referenceImagesBase64 })
+        }
+      );
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(
+          detail?.reason || detail?.error || `Request failed (${response.status})`
+        );
+      }
+      const json = await response.json();
+      setRenderingImage(`data:image/png;base64,${json.imageBase64}`);
+      setRenderingBasedOn(json.basedOnSnapshotGeneratedAt ?? null);
+    } catch (error) {
+      setRenderingError(
+        error instanceof Error ? error.message : "Rendering failed"
+      );
+    } finally {
+      setRenderingBusy(false);
+    }
+  }, [snapshot]);
+
   const handleResetPositions = useCallback(() => {
     setPositionOverrides({});
     setFixedPositionsConfirmed(false);
     setCabinetFillGenerated(false);
     setSnapshot(null);
     setPersistState("idle");
+    // Keep the last rendering visible; it will surface as stale.
+    setRenderingError(null);
   }, []);
 
   // On mount, restore the last persisted snapshot (if any) so a refresh keeps
@@ -224,6 +282,15 @@ export function ShowroomIntakeApp() {
         setCabinetFillGenerated(true);
         setSnapshot(saved);
         setPersistState("saved");
+        // Restore the last non-authoritative concept preview, if any. Staleness
+        // is derived from `basedOnSnapshotGeneratedAt` vs the restored snapshot.
+        const rendering = json.project?.latestRendering as
+          | { imageBase64?: string; basedOnSnapshotGeneratedAt?: string }
+          | undefined;
+        if (rendering?.imageBase64) {
+          setRenderingImage(`data:image/png;base64,${rendering.imageBase64}`);
+          setRenderingBasedOn(rendering.basedOnSnapshotGeneratedAt ?? null);
+        }
       } catch {
         // Ignore restore failures; the user can regenerate the snapshot.
       }
@@ -333,7 +400,39 @@ export function ShowroomIntakeApp() {
             onPositionOverridesChange={updatePositionOverrides}
             highlightDraggableItems={highlightDraggableItems}
             showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
+            svgRef={floorPlanSvgRef}
           />
+
+          {/*
+            Hidden, clean reference render bound to the frozen snapshot geometry.
+            This is the image rasterized for the AI rendering — same locked
+            source as the JSON prompt, with no labels/markers/drag chrome.
+          */}
+          {snapshot && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                width: 0,
+                height: 0,
+                overflow: "hidden",
+                pointerEvents: "none"
+              }}
+            >
+              <LayoutPreview
+                plan={snapshot.floorPlan}
+                referenceMode
+                normalized={snapshot.normalized}
+                cabinets={snapshot.preliminaryCabinets.cabinets}
+                confirmationItems={snapshot.confirmationItems}
+                positionOverrides={snapshot.positionOverrides}
+                onPositionOverridesChange={() => {}}
+                highlightDraggableItems={false}
+                showPositionObjects
+                svgRef={referenceTopDownRef}
+              />
+            </div>
+          )}
 
           <Panel title="Confirmation Required">
             <div className="max-h-48 space-y-2 overflow-auto pr-1">
@@ -359,7 +458,19 @@ export function ShowroomIntakeApp() {
           </Panel>
 
           <Panel title="Round 1 Snapshot">
-            <Round1SnapshotPanel snapshot={snapshot} persistState={persistState} />
+            <Round1SnapshotPanel
+              snapshot={snapshot}
+              persistState={persistState}
+              renderingBusy={renderingBusy}
+              renderingImage={renderingImage}
+              renderingError={renderingError}
+              renderingStale={
+                renderingImage !== null &&
+                (!snapshot || renderingBasedOn !== snapshot.generatedAt)
+              }
+              canRender={persistState === "saved"}
+              onGenerateRendering={handleGenerateRendering}
+            />
           </Panel>
         </aside>
       </div>

@@ -28,7 +28,7 @@ export function Walls({ plan }: { plan: FloorPlan }) {
   );
 }
 
-export function Island({ rect }: { rect: PlanRect }) {
+export function Island({ rect, referenceMode }: { rect: PlanRect; referenceMode?: boolean }) {
   return (
     <g>
       <rect
@@ -40,14 +40,16 @@ export function Island({ rect }: { rect: PlanRect }) {
         stroke={LINE}
         strokeWidth="1.2"
       />
-      <text
-        x={rect.x + rect.w / 2}
-        y={rect.y + rect.h / 2 + 4}
-        textAnchor="middle"
-        className="fill-slate-700 text-[12px] font-bold"
-      >
-        Island
-      </text>
+      {!referenceMode && (
+        <text
+          x={rect.x + rect.w / 2}
+          y={rect.y + rect.h / 2 + 4}
+          textAnchor="middle"
+          className="fill-slate-700 text-[12px] font-bold"
+        >
+          Island
+        </text>
+      )}
     </g>
   );
 }

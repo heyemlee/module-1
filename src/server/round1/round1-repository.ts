@@ -11,6 +11,27 @@ import {
 // pull any client code onto the server.
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 
+/**
+ * Non-authoritative concept rendering stored alongside a project.
+ *
+ * This is a customer-facing preview only and is deliberately kept OUT of
+ * `Round1Snapshot`: it never affects snapshot validity, readiness, or any
+ * cabinet/dimension/geometry/quote data. It is retained so the last preview
+ * survives a reload. `basedOnSnapshotGeneratedAt` lets the UI flag it as stale
+ * once the snapshot is later regenerated.
+ */
+export type Round1ProjectRendering = {
+  model: string;
+  imageBase64: string;
+  prompt: string;
+  size: string;
+  basedOnSnapshotGeneratedAt: string;
+  salesEstimateOnly: true;
+  notForProduction: true;
+  dimensionConfidence: "ROUGH";
+  createdAt: string;
+};
+
 export type Round1Project = {
   id: string;
   customerName: string;
@@ -18,6 +39,7 @@ export type Round1Project = {
   updatedAt: string;
   round1?: Round1NormalizationResult;
   snapshot?: Round1Snapshot;
+  latestRendering?: Round1ProjectRendering;
 };
 
 export type Round1Repository = {
@@ -29,6 +51,10 @@ export type Round1Repository = {
   saveSnapshot(
     projectId: string,
     snapshot: Round1Snapshot
+  ): Promise<Round1Project>;
+  saveRendering(
+    projectId: string,
+    rendering: Omit<Round1ProjectRendering, "createdAt">
   ): Promise<Round1Project>;
   getProject(projectId: string): Promise<Round1Project | null>;
 };
@@ -75,6 +101,18 @@ export function createInMemoryRound1Repository(
         ...project,
         updatedAt: now().toISOString(),
         snapshot
+      };
+      projects.set(projectId, updated);
+      return updated;
+    },
+
+    async saveRendering(projectId, rendering) {
+      const project = requireProject(projects.get(projectId));
+      const timestamp = now().toISOString();
+      const updated: Round1Project = {
+        ...project,
+        updatedAt: timestamp,
+        latestRendering: { ...rendering, createdAt: timestamp }
       };
       projects.set(projectId, updated);
       return updated;
@@ -153,6 +191,20 @@ export function createFileSystemRound1Repository(
         ...project,
         updatedAt: now().toISOString(),
         snapshot
+      };
+      projects[projectId] = updated;
+      await writeAll(projects);
+      return updated;
+    },
+
+    async saveRendering(projectId, rendering) {
+      const projects = await readAll();
+      const project = requireProject(projects[projectId]);
+      const timestamp = now().toISOString();
+      const updated: Round1Project = {
+        ...project,
+        updatedAt: timestamp,
+        latestRendering: { ...rendering, createdAt: timestamp }
       };
       projects[projectId] = updated;
       await writeAll(projects);
