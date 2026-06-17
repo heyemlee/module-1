@@ -3,7 +3,7 @@ import type { CabinetRun, Round1FormInput } from "@/domain/round1";
 export function createDefaultShowroomForm(): Round1FormInput {
   return {
     room: {
-      length: 144,
+      length: 180,
       width: 120,
       dimensionsKnown: true,
       ceilingHeight: null,
@@ -47,7 +47,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
 }
 
 export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
-  const mainRun = Math.max(60, Math.min(form.room.length ?? 120, 144) - 48);
+  const mainRun = Math.max(60, Math.min(form.room.length ?? 120, 180) - 48);
   const sideRun = Math.max(42, Math.min(form.room.width ?? 96, 120) - 48);
   const islandRun = Math.max(48, Math.min(mainRun, 72));
   const runs: CabinetRun[] = [];

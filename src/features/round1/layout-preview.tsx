@@ -20,6 +20,7 @@ type LayoutPreviewProps = {
   positionOverrides: PositionOverrides;
   onPositionOverridesChange: Dispatch<SetStateAction<PositionOverrides>>;
   highlightDraggableItems: boolean;
+  showPositionObjects: boolean;
 };
 
 const INK = "#1f2937";
@@ -34,7 +35,8 @@ export function LayoutPreview({
   confirmationItems,
   positionOverrides,
   onPositionOverridesChange,
-  highlightDraggableItems
+  highlightDraggableItems,
+  showPositionObjects
 }: LayoutPreviewProps) {
   const [showMep, setShowMep] = useState(false);
 
@@ -223,7 +225,7 @@ export function LayoutPreview({
           <WallCorner key={`wallcorner-${index}`} corner={corner} />
         ))}
 
-        {plan.appliances.map((appliance) => (
+        {showPositionObjects && plan.appliances.map((appliance) => (
           <Appliance 
             key={appliance.key} 
             appliance={appliance} 
@@ -233,14 +235,16 @@ export function LayoutPreview({
           />
         ))}
 
-        <Openings 
-          plan={plan} 
-          onPointerDown={handlePointerDown} 
-          draggingId={dragInfo?.id} 
-          highlighted={highlightDraggableItems}
-        />
+        {showPositionObjects && (
+          <Openings 
+            plan={plan} 
+            onPointerDown={handlePointerDown} 
+            draggingId={dragInfo?.id} 
+            highlighted={highlightDraggableItems}
+          />
+        )}
 
-        {showMep && plan.markers.map((marker, index) => (
+        {showPositionObjects && showMep && plan.markers.map((marker, index) => (
           <Marker
             key={`marker-${index}`}
             cx={marker.cx}
@@ -479,7 +483,7 @@ function Appliance({
 function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
   const { x, y, w, h, symbol, wall } = appliance;
   const cx = x + w / 2;
-  const cy = y + h * 0.4;
+  const cy = y + h / 2;
   if (symbol === "range") {
     let fw = w;
     let fh = h;
@@ -522,9 +526,9 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
     } else if (wall === "BOTTOM") {
       nx = 0; ny = -1; tx = -1; ty = 0; cbx = cx; cby = y + h; len = w; dep = h;
     } else if (wall === "LEFT") {
-      nx = 1; ny = 0; tx = 0; ty = 1; cbx = x; cby = cy; len = h; dep = w;
+      nx = 1; ny = 0; tx = 0; ty = -1; cbx = x; cby = cy; len = h; dep = w;
     } else if (wall === "RIGHT") {
-      nx = -1; ny = 0; tx = 0; ty = -1; cbx = x + w; cby = cy; len = h; dep = w;
+      nx = -1; ny = 0; tx = 0; ty = 1; cbx = x + w; cby = cy; len = h; dep = w;
     }
 
     const pt = (l: number, d: number) => [cbx + tx * l + nx * d, cby + ty * l + ny * d];
@@ -555,14 +559,25 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
           strokeWidth="1.1"
           rx="2"
         />
-        <line
-          x1={panelX}
-          y1={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
-          x2={panelX + panelW}
-          y2={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
-          stroke={LINE}
-          strokeWidth="0.9"
-        />
+        {wall === "TOP" || wall === "BOTTOM" ? (
+          <line
+            x1={panelX}
+            y1={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
+            x2={panelX + panelW}
+            y2={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
+            stroke={LINE}
+            strokeWidth="0.9"
+          />
+        ) : (
+          <line
+            x1={wall === "RIGHT" ? panelX + panelW * 0.26 : panelX + panelW * 0.74}
+            y1={panelY}
+            x2={wall === "RIGHT" ? panelX + panelW * 0.26 : panelX + panelW * 0.74}
+            y2={panelY + panelH}
+            stroke={LINE}
+            strokeWidth="0.9"
+          />
+        )}
         <rect
           x={Math.min(hTL[0], hBR[0])}
           y={Math.min(hTL[1], hBR[1])}
@@ -585,9 +600,9 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
     } else if (wall === "BOTTOM") {
       nx = 0; ny = -1; tx = -1; ty = 0; cbx = cx; cby = y + h; len = w; dep = h;
     } else if (wall === "LEFT") {
-      nx = 1; ny = 0; tx = 0; ty = 1; cbx = x; cby = cy; len = h; dep = w;
+      nx = 1; ny = 0; tx = 0; ty = -1; cbx = x; cby = cy; len = h; dep = w;
     } else if (wall === "RIGHT") {
-      nx = -1; ny = 0; tx = 0; ty = -1; cbx = x + w; cby = cy; len = h; dep = w;
+      nx = -1; ny = 0; tx = 0; ty = 1; cbx = x + w; cby = cy; len = h; dep = w;
     }
 
     const pt = (l: number, d: number) => [cbx + tx * l + nx * d, cby + ty * l + ny * d];
@@ -644,42 +659,53 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
     } else if (wall === "BOTTOM") {
       nx = 0; ny = -1; tx = -1; ty = 0; cbx = cx; cby = y + h; len = w; dep = h;
     } else if (wall === "LEFT") {
-      nx = 1; ny = 0; tx = 0; ty = 1; cbx = x; cby = cy; len = h; dep = w;
+      nx = 1; ny = 0; tx = 0; ty = -1; cbx = x; cby = cy; len = h; dep = w;
     } else if (wall === "RIGHT") {
-      nx = -1; ny = 0; tx = 0; ty = -1; cbx = x + w; cby = cy; len = h; dep = w;
+      nx = -1; ny = 0; tx = 0; ty = 1; cbx = x + w; cby = cy; len = h; dep = w;
     }
 
     const pt = (l: number, d: number) => [cbx + tx * l + nx * d, cby + ty * l + ny * d];
     
     const doorD = dep * 0.18;
     const gap = 1;
+    const inset = 1.5;
     
-    const dl_pts = [pt(-len/2, dep - doorD), pt(-gap, dep - doorD), pt(-gap, dep), pt(-len/2, dep)];
-    const dr_pts = [pt(gap, dep - doorD), pt(len/2, dep - doorD), pt(len/2, dep), pt(gap, dep)];
+    const dl_pts = [pt(-len/2 + inset, dep - doorD), pt(-gap, dep - doorD), pt(-gap, dep - inset), pt(-len/2 + inset, dep - inset)];
+    const dr_pts = [pt(gap, dep - doorD), pt(len/2 - inset, dep - doorD), pt(len/2 - inset, dep - inset), pt(gap, dep - inset)];
     
-    const h1_0 = pt(-len * 0.1, dep - doorD * 0.3);
-    const h1_1 = pt(-len * 0.1, dep + dep * 0.05);
-    const h2_0 = pt(len * 0.1, dep - doorD * 0.3);
-    const h2_1 = pt(len * 0.1, dep + dep * 0.05);
+    const h1_0 = pt(-len * 0.1, dep - doorD * 0.5);
+    const h1_1 = pt(-len * 0.1, dep - inset * 1.5);
+    const h2_0 = pt(len * 0.1, dep - doorD * 0.5);
+    const h2_1 = pt(len * 0.1, dep - inset * 1.5);
 
-    const back_line_1 = pt(-len/2, dep * 0.12);
-    const back_line_2 = pt(len/2, dep * 0.12);
+    const back_line_1 = pt(-len/2 + inset, dep * 0.12);
+    const back_line_2 = pt(len/2 - inset, dep * 0.12);
 
     return (
       <g>
         <line x1={back_line_1[0]} y1={back_line_1[1]} x2={back_line_2[0]} y2={back_line_2[1]} stroke={LINE} strokeWidth="1" />
-        <path d={`M ${dl_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#e2e8f0" stroke={INK} strokeWidth="1.2" />
-        <path d={`M ${dr_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#e2e8f0" stroke={INK} strokeWidth="1.2" />
+        <path d={`M ${dl_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#e2e8f0" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
+        <path d={`M ${dr_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#e2e8f0" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
         <line x1={h1_0[0]} y1={h1_0[1]} x2={h1_1[0]} y2={h1_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
         <line x1={h2_0[0]} y1={h2_0[1]} x2={h2_1[0]} y2={h2_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
       </g>
     );
   }
   if (symbol === "oven") {
+    const isHorizontal = wall === "TOP" || wall === "BOTTOM";
     return (
       <g fill="none" stroke={LINE} strokeWidth="1">
-        <line x1={x + 5} y1={y + h * 0.35} x2={x + w - 5} y2={y + h * 0.35} />
-        <line x1={x + 5} y1={y + h * 0.6} x2={x + w - 5} y2={y + h * 0.6} />
+        {isHorizontal ? (
+          <>
+            <line x1={x + 5} y1={y + h * 0.35} x2={x + w - 5} y2={y + h * 0.35} />
+            <line x1={x + 5} y1={y + h * 0.6} x2={x + w - 5} y2={y + h * 0.6} />
+          </>
+        ) : (
+          <>
+            <line x1={x + w * 0.35} y1={y + 5} x2={x + w * 0.35} y2={y + h - 5} />
+            <line x1={x + w * 0.6} y1={y + 5} x2={x + w * 0.6} y2={y + h - 5} />
+          </>
+        )}
       </g>
     );
   }

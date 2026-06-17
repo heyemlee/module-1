@@ -40,4 +40,12 @@ describe("showroom intake defaults", () => {
     expect(html).toContain("Confirm dragged door, window, and appliance positions before cabinet fill.");
     expect(html).not.toContain("Approximate only. The program fills standard cabinets");
   });
+
+  test("opens with an empty room shell before the adjust positions step", () => {
+    const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
+
+    expect(html).not.toContain('data-appliance-symbol="');
+    expect(html).not.toContain('data-opening-symbol="');
+    expect(html).not.toContain('data-dishwasher-panel="true"');
+  });
 });

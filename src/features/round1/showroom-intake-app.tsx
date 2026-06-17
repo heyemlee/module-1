@@ -247,6 +247,7 @@ export function ShowroomIntakeApp() {
             positionOverrides={positionOverrides}
             onPositionOverridesChange={setPositionOverrides}
             highlightDraggableItems={highlightDraggableItems}
+            showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
           />
 
           <Panel title="Confirmation Required">

@@ -140,16 +140,19 @@ Implemented and verified as of 2026-06-16:
 - Island layout estimates now include `ON_ISLAND` base cabinet entries.
 - Wall-aware drag overrides for sink, window, range, fridge, dishwasher, and door.
 - Draggable objects can switch between layout-allowed walls during SVG dragging.
+  - *Exception*: Doors and windows are exempt from `layoutPreference` restrictions and can be placed on any wall.
 - Sink/window center snapping when same-wall projected overlap is close enough.
 - Appliance position dropdowns are hidden from the first-phase form; rough placement is driven by layout defaults and manual SVG adjustment.
 - Dishwasher now renders as an integrated base-cabinet panel instead of a detached handle rectangle.
+- Fixed appliance SVGs (fridge, sink, range, dishwasher, oven) to correctly adapt, rotate, and center on vertical walls without deformation or mirroring.
+- Position-first preview gating: initial page load renders only the empty room shell; door/window/appliance symbols appear when entering `Adjust Positions`; preliminary cabinet fill appears only after `Generate Cabinet Fill` or advancing past `Adjust Positions`.
 
 Latest known verification:
 
-- `npm test`: 56 tests passing.
+- `npm test`: 58 tests passing.
 - `npx tsc --noEmit`: passing.
 - `npm run build`: passing.
-- Browser QA at `http://127.0.0.1:3000/`: layout shape dropdown updates the deterministic SVG and estimate live; cross-wall dragging, hidden appliance position questions, and integrated dishwasher panel rendering verified.
+- Browser QA at `http://127.0.0.1:3000/`: initial load shows an empty room shell with no appliance/opening/cabinet symbols; entering `Adjust Positions` reveals draggable door/window/appliance symbols; cabinet fill remains gated until position confirmation.
 
 Always re-run relevant verification after changing behavior.
 
@@ -190,7 +193,7 @@ Next drag UX polish scope:
   - show `Positions confirmed` after cabinet fill has been enabled
   - keep the status in `Adjust Positions`, not as noisy plan text
 - Preserve overrides across non-layout form edits.
-- Clear invalid overrides when `layoutPreference` changes and an override wall is no longer allowed for the new layout.
+- Clear invalid overrides when `layoutPreference` changes and an override wall is no longer allowed for the new layout (does not apply to doors/windows).
 - Keep the existing geometry contract:
   - dragging should not leave fixed objects overlapping
   - appliance/opening clearance zones remain no-fill cabinet zones

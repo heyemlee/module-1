@@ -21,6 +21,7 @@ describe("LayoutPreview", () => {
         positionOverrides={{ fridge: { wall: "TOP", position: 140 } }}
         onPositionOverridesChange={() => {}}
         highlightDraggableItems={false}
+        showPositionObjects={true}
       />
     );
 
@@ -40,6 +41,7 @@ describe("LayoutPreview", () => {
         positionOverrides={{}}
         onPositionOverridesChange={() => {}}
         highlightDraggableItems={false}
+        showPositionObjects={true}
       />
     );
 
