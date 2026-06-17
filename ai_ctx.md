@@ -217,11 +217,7 @@ Browser QA target:
 
 After drag UX polish:
 
-- Refine per-appliance deterministic default placement:
-  - dishwasher adjacent to sink
-  - fridge near a run end
-  - range near gas/vent
-  - avoid appliance overlap with corner blocks
+- Note: "Refine per-appliance deterministic default placement" (e.g. dishwasher adjacent to sink, fridge near a run end, range near gas/vent, avoid overlap with corners) depends on specific appliance and customer requirements. This will be deferred to the detailed data step (Module 2 or later).
 
 - Add optional detailed / Module 2 mode later:
   - dimension strings

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   applyCabinetReviewActions,
   buildRound1LayoutPrompt,
@@ -17,7 +17,7 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import { LayoutPreview } from "./layout-preview";
-import type { PositionOverrides } from "./floorplan/plan-geometry";
+import { allowedDragWallsForLayout, type PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
   createDefaultShowroomForm
@@ -204,7 +204,7 @@ export function ShowroomIntakeApp() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           {step === 0 && <RoomStep form={form} setForm={setForm} />}
           {step === 1 && <OpeningsStep form={form} setForm={setForm} />}
-          {step === 2 && <LayoutStep form={form} setForm={setForm} />}
+          {step === 2 && <LayoutStep form={form} setForm={setForm} setPositionOverrides={setPositionOverrides} />}
           {step === 3 && <AppliancesStep form={form} setForm={setForm} />}
           {step === 4 && (
             <AdjustPositionsStep
@@ -526,10 +526,12 @@ function MepStep({
 
 function LayoutStep({
   form,
-  setForm
+  setForm,
+  setPositionOverrides
 }: {
   form: Round1FormInput;
   setForm: (form: Round1FormInput) => void;
+  setPositionOverrides: Dispatch<SetStateAction<PositionOverrides>>;
 }) {
   return (
     <Step title="3. Layout Preference">
@@ -547,9 +549,20 @@ function LayoutStep({
           "U_SHAPE_ISLAND",
           "NO_PREFERENCE"
         ]}
-        onChange={(value) =>
-          setForm({ ...form, layoutPreference: value as Round1FormInput["layoutPreference"] })
-        }
+        onChange={(value) => {
+          const newLayout = value as Round1FormInput["layoutPreference"];
+          setForm({ ...form, layoutPreference: newLayout });
+          setPositionOverrides((prev) => {
+            const allowed = allowedDragWallsForLayout(newLayout);
+            const next: PositionOverrides = {};
+            for (const [k, v] of Object.entries(prev)) {
+              if (k === "door" || k === "window" || allowed.includes(v.wall)) {
+                next[k] = v;
+              }
+            }
+            return next;
+          });
+        }}
       />
     </Step>
   );
@@ -689,6 +702,19 @@ function AdjustPositionsStep({
 }) {
   return (
     <Step title="5. Adjust Positions">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {positionsConfirmed ? (
+            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
+              Positions confirmed
+            </span>
+          ) : hasOverrides ? (
+            <span className="rounded bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+              Adjusted manually
+            </span>
+          ) : null}
+        </div>
+      </div>
       <div className="flex flex-wrap gap-3">
         <button
           type="button"

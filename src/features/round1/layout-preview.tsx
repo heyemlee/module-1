@@ -225,6 +225,8 @@ export function LayoutPreview({
           <WallCorner key={`wallcorner-${index}`} corner={corner} />
         ))}
 
+        <DragFeedback plan={plan} draggingId={dragInfo?.id} />
+
         {showPositionObjects && plan.appliances.map((appliance) => (
           <Appliance 
             key={appliance.key} 
@@ -257,6 +259,30 @@ export function LayoutPreview({
         <Stamp plan={plan} />
       </svg>
     </div>
+  );
+}
+
+function DragFeedback({ plan, draggingId }: { plan: FloorPlan; draggingId?: string }) {
+  if (!draggingId) return null;
+  const { x, y, w, h, thickness } = plan.room;
+  let allowed: Wall[] = [];
+  if (draggingId === "door" || draggingId === "window") {
+    allowed = ["TOP", "BOTTOM", "LEFT", "RIGHT"];
+  } else {
+    allowed = allowedDragWallsForLayout(plan.layoutPreference);
+  }
+
+  const insets = thickness;
+  const strokeW = 6;
+  const color = "#0ea5e9";
+  
+  return (
+    <g pointerEvents="none" opacity="0.4">
+      {allowed.includes("TOP") && <rect x={x + insets} y={y + insets} width={w - insets*2} height={strokeW} fill={color} />}
+      {allowed.includes("BOTTOM") && <rect x={x + insets} y={y + h - insets - strokeW} width={w - insets*2} height={strokeW} fill={color} />}
+      {allowed.includes("LEFT") && <rect x={x + insets} y={y + insets} width={strokeW} height={h - insets*2} fill={color} />}
+      {allowed.includes("RIGHT") && <rect x={x + w - insets - strokeW} y={y + insets} width={strokeW} height={h - insets*2} fill={color} />}
+    </g>
   );
 }
 
@@ -437,10 +463,22 @@ function Appliance({
   return (
     <g
       onPointerDown={(e) => onPointerDown(appliance.key, appliance.wall, currentVal, e)}
-      style={{ cursor: isHorizontal ? "ew-resize" : "ns-resize" }}
-      className={`transition-opacity duration-100 ${dragging ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+      style={{ cursor: dragging ? "grabbing" : "grab" }}
+      className={`transition-opacity duration-100 group ${dragging ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
       data-appliance-symbol={appliance.symbol}
     >
+      <rect
+        x={appliance.x - 4}
+        y={appliance.y - 4}
+        width={appliance.w + 8}
+        height={appliance.h + 8}
+        rx="4"
+        fill="none"
+        stroke="#0ea5e9"
+        strokeWidth="2"
+        className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
+        pointerEvents="none"
+      />
       {highlighted && (
         <rect
           x={appliance.x - 5}
@@ -476,6 +514,11 @@ function Appliance({
           {appliance.label}
         </text>
       )}
+      <g className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
+        <circle cx={cx - 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
+        <circle cx={cx} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
+        <circle cx={cx + 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
+      </g>
     </g>
   );
 }
@@ -755,9 +798,21 @@ function Openings({
       {plan.window && (
         <g
           onPointerDown={(e) => onPointerDown("window", plan.window!.wall, plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM" ? plan.window!.x : plan.window!.y, e)}
-          style={{ cursor: (plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM") ? "ew-resize" : "ns-resize" }}
-          className={`transition-opacity duration-100 ${draggingId === "window" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+          style={{ cursor: draggingId === "window" ? "grabbing" : "grab" }}
+          className={`transition-opacity duration-100 group ${draggingId === "window" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
         >
+          <rect
+            x={plan.window.x - 4}
+            y={plan.window.y - 4}
+            width={plan.window.w + 8}
+            height={plan.window.h + 8}
+            rx="4"
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2"
+            className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
+            pointerEvents="none"
+          />
           {highlighted && (
             <rect
               x={plan.window.x - 5}
@@ -801,14 +856,31 @@ function Openings({
           >
             window
           </text>
+          <g className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
+            <circle cx={plan.window.x + plan.window.w / 2 - 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
+            <circle cx={plan.window.x + plan.window.w / 2} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
+            <circle cx={plan.window.x + plan.window.w / 2 + 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
+          </g>
         </g>
       )}
       {plan.door && (
         <g
           onPointerDown={(e) => onPointerDown("door", plan.door!.wall, plan.door!.wall === "TOP" || plan.door!.wall === "BOTTOM" ? plan.door!.cx : plan.door!.cy, e)}
-          style={{ cursor: (plan.door!.wall === "TOP" || plan.door!.wall === "BOTTOM") ? "ew-resize" : "ns-resize" }}
-          className={`transition-opacity duration-100 ${draggingId === "door" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+          style={{ cursor: draggingId === "door" ? "grabbing" : "grab" }}
+          className={`transition-opacity duration-100 group ${draggingId === "door" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
         >
+          <rect
+            x={plan.door.breakRect.x - 4}
+            y={plan.door.breakRect.y - 4}
+            width={plan.door.breakRect.w + 8}
+            height={plan.door.breakRect.h + 8}
+            rx="4"
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2"
+            className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
+            pointerEvents="none"
+          />
           {highlighted && (
             <rect
               x={plan.door.breakRect.x - 5}
@@ -848,6 +920,11 @@ function Openings({
           >
             door
           </text>
+          <g className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
+            <circle cx={plan.door.cx - 6} cy={plan.door.cy} r="1.5" fill="#334155" />
+            <circle cx={plan.door.cx} cy={plan.door.cy} r="1.5" fill="#334155" />
+            <circle cx={plan.door.cx + 6} cy={plan.door.cy} r="1.5" fill="#334155" />
+          </g>
         </g>
       )}
     </g>
