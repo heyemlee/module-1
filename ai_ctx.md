@@ -65,6 +65,13 @@ Current authoritative path:
 
 The existing OpenAI image route/client is retained only for a future optional realistic-render-from-SVG feature. It must never own cabinet data, dimensions, layout geometry, or production readiness.
 
+Future customer rendering flow:
+
+- The app may later expose a separate `Generate Rendering` button after rough cabinet fill is generated.
+- This button should use the deterministic layout image plus a summary of the complete Round 1 JSON snapshot as GPT Image input.
+- Do not use only JSON or only the layout image for customer rendering; use both so the image model gets spatial constraints and semantic/material context.
+- Generated renderings are customer-facing concept images only. They must not become the source of truth for cabinet data, dimensions, counts, geometry, quote data, or production readiness.
+
 Security note: an `OPENAI_API_KEY` was previously shared in chat/context. Rotate it if this project will continue using the image route.
 
 ## AI Boundary
@@ -128,7 +135,7 @@ Implemented and verified as of 2026-06-16:
 - OpenAI image adapter boundary and REST client, now decoupled from plan generation.
 - Rough cabinet estimate summary.
 - Up-to-3-inch filler allowance.
-- Advanced designer/sales manual cabinet review UI.
+- Advanced designer/sales manual cabinet review domain helpers exist, but the default Module 1 UI does not expose per-cabinet add/edit/remove.
 - Deterministic black-and-white/top-down SVG plan renderer v1.
 - Geometry tests for the plan renderer.
 - Global 2D obstacle avoidance to prevent corner collisions.
@@ -145,15 +152,17 @@ Implemented and verified as of 2026-06-16:
 - Appliance position dropdowns are hidden from the first-phase form; rough placement is driven by layout defaults and manual SVG adjustment.
 - Dishwasher now renders as an integrated base-cabinet panel instead of a detached handle rectangle.
 - Fixed appliance SVGs (fridge, sink, range, dishwasher, oven) to correctly adapt, rotate, and center on vertical walls without deformation or mirroring.
-- Position-first preview gating: initial page load renders only the empty room shell; door/window/appliance symbols appear when entering `Adjust Positions`; preliminary cabinet fill appears only after `Generate Cabinet Fill` or advancing past `Adjust Positions`.
+- Position-first preview gating: initial page load renders only the empty room shell; door/window/appliance symbols appear when entering `Adjust Positions`; advancing past `Adjust Positions` may mark fixed positions as confirmed, but preliminary cabinet fill appears only after the explicit `Generate Cabinet Fill` action.
 - Drag UX polish: added hover halos, grab handles, and wall-target highlighting during drag operations; improved manual-adjustment status UI; and added logic to automatically clear invalid wall overrides when the layout shape changes.
+- Simplified default Round 1 workflow: fill basic information, adjust approximate door/window/appliance positions, generate rough cabinet fill, and confirm the general direction with the customer. The default UI no longer exposes the internal layout prompt or detailed per-cabinet editing. Pricing/quote functionality is reserved for a later step.
+- Oven / microwave questions live with core appliances because they affect fixed-position layout. Detailed corner cabinet type selection is deferred to Module 2; L-shape and U-shape layouts automatically show generic corner cabinet areas in Round 1 without requiring `BLIND_CORNER`, `LAZY_SUSAN`, or other detailed corner choices.
 
 Latest known verification:
 
-- `npm test`: 58 tests passing.
+- `npm test`: 64 tests passing.
 - `npx tsc --noEmit`: passing.
 - `npm run build`: passing.
-- Browser QA at `http://127.0.0.1:3000/`: initial load shows an empty room shell with no appliance/opening/cabinet symbols; entering `Adjust Positions` reveals draggable door/window/appliance symbols; cabinet fill remains gated until position confirmation.
+- Browser QA at `http://127.0.0.1:3000/`: initial load shows an empty room shell with no appliance/opening/cabinet symbols; entering `Adjust Positions` reveals draggable door/window/appliance symbols; the first action confirms fixed positions without showing cabinet metrics, and the explicit `Generate Cabinet Fill` action is required before rough cabinet fill appears.
 
 Always re-run relevant verification after changing behavior.
 
@@ -169,11 +178,40 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 
 ## Active Work: Next Session
 
-Currently awaiting the next prioritization from the user. Options include:
+Current Module 1 priority:
 
-1. Add persistent repository implementation behind `Round1Repository`.
-2. Optional realistic-render-from-SVG (using deterministic SVG as reference).
-3. Detailed Mode / Module 2 preparation (dimension strings, cabinet codes).
+- Keep the first-step workflow simple:
+  1. Room.
+  2. Openings.
+  3. Layout.
+  4. Appliances.
+  5. Adjust Positions.
+- Do not keep a separate `Cabinets` form step in Module 1. `Adjust Positions` owns the final Round 1 actions: confirm fixed positions, then explicitly generate rough cabinet fill.
+- Do not add pricing/quote functionality yet; leave it reserved for a later step.
+- Keep first-round form questions layout-critical. Oven / microwave belongs in Appliances. Detailed corner cabinet type questions belong in Module 2.
+- Do not expose detailed per-cabinet editing, cabinet codes, production-style dimensions, or internal prompt/debug output in the default Round 1 UI.
+
+Next implementation TODO:
+
+- Add a complete Round 1 JSON snapshot that is generated only after `cabinetFillGenerated` becomes true.
+- Before `cabinetFillGenerated`, form values and drag state may exist as draft UI state, but they should not be treated as the complete Round 1 output.
+- The `Generate Cabinet Fill` action should become the authoritative snapshot point for Module 1 sales data.
+- Reserve a separate `Generate Rendering` button for later, but do not implement rendering yet.
+- The future rendering button should remain disabled or unavailable until `cabinetFillGenerated` is true and a complete Round 1 JSON snapshot exists.
+- Future rendering should send both the deterministic layout image and a JSON-derived rendering prompt/summary to GPT Image 2.
+- The generated snapshot should include:
+  - `showroomForm`
+  - normalized Round 1 data
+  - `positionOverrides` from manual SVG dragging
+  - `fixedPositionsConfirmed: true`
+  - `cabinetFillGenerated: true`
+  - preliminary cabinet list / rough cabinet fill
+  - deterministic floor plan geometry or enough data to rebuild it deterministically
+  - `confirmationItems`
+  - `readiness`
+  - metadata flags: `salesEstimateOnly: true`, `notForProduction: true`, and `dimensionConfidence: "ROUGH"`
+- If any door, window, appliance, or layout-critical form value changes after the snapshot is generated, mark the snapshot stale or clear `cabinetFillGenerated` so sales must regenerate the rough cabinet fill.
+- Keep this snapshot sales-confirmation-level only. Do not add Module 2 details yet, including exact corner cabinet type, final filler placement, production dimensions, install data, or detailed quote data.
 
 ## Later Work
 
@@ -245,6 +283,8 @@ Flag `Confirmation Required` when:
 ## Form Rules
 
 The showroom form should be layout-critical only.
+
+Oven / microwave belongs with Appliances in Round 1 because it can affect fixed positions. Corner cabinet type selection does not belong in Round 1; for `L_SHAPE`, `U_SHAPE`, `L_SHAPE_ISLAND`, and `U_SHAPE_ISLAND`, the deterministic plan should automatically render generic corner cabinet areas and leave exact corner type for detailed data / Module 2.
 
 Use status-first groups for conditional logic:
 

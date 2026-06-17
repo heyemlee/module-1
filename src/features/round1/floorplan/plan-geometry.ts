@@ -64,8 +64,8 @@ export type FloorPlan = {
 
 const CANVAS = { w: 760, h: 560 };
 const MARGIN = { top: 56, right: 88, bottom: 78, left: 80 };
-const DEFAULT_LENGTH_IN = 144;
-const DEFAULT_WIDTH_IN = 120;
+const DEFAULT_LENGTH_IN = 210;
+const DEFAULT_WIDTH_IN = 150;
 
 type Fixtures = {
   sink?: { size?: number | null; relation?: string };
@@ -707,7 +707,7 @@ function placeAppliances(
 
       occupied.push({ start: pos, end: pos + length });
       occupied.sort((a, b) => a.start - b.start);
-      cursor = pos + length + spacing;
+      cursor += length + spacing;
     });
   }
 

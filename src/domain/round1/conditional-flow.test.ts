@@ -99,4 +99,24 @@ describe("Round 1 conditional intake flow", () => {
     expect(codes).not.toContain("MISSING_WINDOW_WIDTH");
     expect(codes).not.toContain("UNKNOWN_MEP_MOVABILITY");
   });
+
+  test("does not require detailed corner cabinet selection for Round 1 corner layouts", () => {
+    const form = createDefaultShowroomForm();
+    const result = normalizeRound1Form({
+      ...form,
+      layoutPreference: "U_SHAPE_ISLAND",
+      layoutSensitiveCabinets: {
+        ...form.layoutSensitiveCabinets,
+        cornerCabinet: { preferredType: "NO_PREFERENCE" }
+      }
+    });
+
+    expect(result.confirmationItems.map((item) => item.code)).not.toContain(
+      "CORNER_CABINET_UNCONFIRMED"
+    );
+    expect(result.normalized.layoutSensitiveCabinets.cornerCabinet).toMatchObject({
+      preferredType: "NO_PREFERENCE",
+      confirmationRequired: false
+    });
+  });
 });

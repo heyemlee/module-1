@@ -232,7 +232,7 @@ export function LayoutPreview({
             key={appliance.key} 
             appliance={appliance} 
             onPointerDown={handlePointerDown} 
-            dragging={dragInfo?.id === appliance.key} 
+            dragging={dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range")} 
             highlighted={highlightDraggableItems && isHighlightableAppliance(appliance.key)}
           />
         ))}
@@ -326,7 +326,7 @@ function nearestAllowedWall(plan: FloorPlan, pt: { x: number; y: number }, id: s
 }
 
 function isHighlightableAppliance(key: string) {
-  return ["sink", "range", "fridge", "dishwasher"].includes(key);
+  return ["sink", "range", "fridge", "dishwasher", "hood"].includes(key);
 }
 
 function Walls({ plan }: { plan: FloorPlan }) {
@@ -462,10 +462,14 @@ function Appliance({
   const cy = appliance.y + appliance.h / 2;
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
   const currentVal = isHorizontal ? appliance.x : appliance.y;
+  const isHood = appliance.symbol === "hood";
   return (
     <g
-      onPointerDown={(e) => onPointerDown(appliance.key, appliance.wall, currentVal, e)}
-      style={{ cursor: dragging ? "grabbing" : "grab" }}
+      onPointerDown={(e) => onPointerDown(isHood ? "range" : appliance.key, appliance.wall, currentVal, e)}
+      style={{ 
+        cursor: dragging ? "grabbing" : "grab",
+        pointerEvents: "auto" 
+      }}
       className={`transition-opacity duration-100 group ${dragging ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
       data-appliance-symbol={appliance.symbol}
     >

@@ -88,22 +88,6 @@ export function normalizeRound1Form(
     }
   });
 
-  if (
-    isCornerLayout(form.layoutPreference) &&
-    ["NO_PREFERENCE", "UNKNOWN"].includes(
-      form.layoutSensitiveCabinets.cornerCabinet.preferredType
-    )
-  ) {
-    confirmationItems.push(
-      createConfirmationItem({
-        category: "CABINET",
-        code: "CORNER_CABINET_UNCONFIRMED",
-        message: "Corner cabinet choice must be confirmed for L-shape or U-shape layouts.",
-        path: "layoutSensitiveCabinets.cornerCabinet.preferredType"
-      })
-    );
-  }
-
   const normalizedFixtures = {
     ...form.fixtures,
     sink: {
@@ -161,9 +145,7 @@ export function normalizeRound1Form(
       ...form.layoutSensitiveCabinets,
       cornerCabinet: {
         ...form.layoutSensitiveCabinets.cornerCabinet,
-        confirmationRequired: confirmationItems.some(
-          (item) => item.code === "CORNER_CABINET_UNCONFIRMED"
-        )
+        confirmationRequired: false
       }
     },
     cabinetLayersToRender: [
@@ -187,13 +169,4 @@ function toDimension(value: number | null, confirmationRequired: boolean) {
     confidence: value === null ? ("UNKNOWN" as const) : ("ROUGH" as const),
     confirmationRequired: confirmationRequired || undefined
   };
-}
-
-function isCornerLayout(layoutPreference: Round1FormInput["layoutPreference"]) {
-  return [
-    "L_SHAPE",
-    "U_SHAPE",
-    "L_SHAPE_ISLAND",
-    "U_SHAPE_ISLAND"
-  ].includes(layoutPreference);
 }

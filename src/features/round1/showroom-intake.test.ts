@@ -28,10 +28,10 @@ describe("showroom intake defaults", () => {
       "Openings",
       "Layout",
       "Appliances",
-      "Adjust Positions",
-      "Cabinets"
+      "Adjust Positions"
     ]);
     expect(SHOWROOM_STEPS).not.toContain("MEP");
+    expect(SHOWROOM_STEPS).not.toContain("Cabinets");
   });
 
   test("does not fill cabinets before door window and appliance positions are confirmed", () => {
