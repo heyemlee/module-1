@@ -83,6 +83,40 @@ export function LayoutPreview({
     }
   }, [dragInfo]);
 
+  const handlePrint = useCallback(() => {
+    if (!svgRef.current) return;
+    const svgStr = new XMLSerializer().serializeToString(svgRef.current);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Floor Plan</title>
+            <style>
+              body { margin: 0; padding: 20px; display: flex; justify-content: center; font-family: sans-serif; }
+              svg { max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+              @media print {
+                @page { margin: 1cm; }
+                body { padding: 0; }
+                svg { border: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${svgStr}
+            <script>
+              window.onload = () => {
+                window.print();
+                window.onafterprint = () => window.close();
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  }, []);
+
   const plan = useMemo(
     () => buildFloorPlan(normalized, cabinets, confirmationItems.length, overrides),
     [cabinets, confirmationItems.length, normalized, overrides]
@@ -120,6 +154,18 @@ export function LayoutPreview({
           <span className="rounded bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
             Round 1
           </span>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 rounded bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 hover:bg-sky-100 transition-colors"
+            title="Print Floor Plan"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            Print
+          </button>
         </div>
       </div>
       <svg
@@ -686,29 +732,9 @@ function ConfirmationFlag({ plan }: { plan: FloorPlan }) {
 }
 
 function Legend({ plan }: { plan: FloorPlan }) {
-  const y = plan.canvas.h - 26;
-  return (
-    <g className="text-[11px] font-bold">
-      <rect x={24} y={y - 9} width={14} height={11} fill="#ffffff" stroke={INK} strokeWidth="1.2" />
-      <text x={44} y={y} className="fill-slate-600">base cabinet</text>
-      <rect x={124} y={y - 9} width={14} height={11} fill="none" stroke="#000000" strokeWidth="1.5" />
-      <rect x={126} y={y - 7} width={10} height={7} fill="none" stroke="#000000" strokeWidth="1.2" />
-      <text x={144} y={y} className="fill-slate-600">wall cabinet</text>
-      <rect x={226} y={y - 9} width={14} height={11} fill="#ffffff" stroke={INK} strokeWidth="1.2" />
-      <text x={246} y={y} className="fill-slate-600">appliance</text>
-    </g>
-  );
+  return null;
 }
 
 function Stamp({ plan }: { plan: FloorPlan }) {
-  return (
-    <g textAnchor="end">
-      <text x={plan.canvas.w - 24} y={plan.canvas.h - 26} className="fill-slate-900 text-[13px] font-black">
-        Round 1 · Sales Estimate Only
-      </text>
-      <text x={plan.canvas.w - 24} y={plan.canvas.h - 11} className="fill-slate-600 text-[11px] font-bold">
-        Not production data · positions approximate
-      </text>
-    </g>
-  );
+  return null;
 }
