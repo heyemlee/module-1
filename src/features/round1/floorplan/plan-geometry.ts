@@ -7,9 +7,10 @@ export type PlanRect = { x: number; y: number; w: number; h: number };
 export type CabinetShape = PlanRect & {
   code: string;
   confirmationRequired: boolean;
+  wall: Wall;
 };
 
-export type ApplianceSymbol = "sink" | "range" | "fridge" | "dishwasher" | "oven";
+export type ApplianceSymbol = "sink" | "range" | "fridge" | "dishwasher" | "oven" | "hood";
 
 export type ApplianceShape = PlanRect & {
   key: string;
@@ -22,7 +23,7 @@ export type MarkerLetter = "W" | "G" | "E" | "V";
 export type MarkerShape = { cx: number; cy: number; letter: MarkerLetter };
 
 export type WindowShape = PlanRect & { wall: Wall };
-export type DoorShape = { breakRect: PlanRect; swingPath: string; labelX: number; labelY: number };
+export type DoorShape = { breakRect: PlanRect; swingPath: string; leafRect: PlanRect; labelX: number; labelY: number; wall: Wall; cx: number; cy: number };
 
 export type DimShape = {
   orientation: "H" | "V";
@@ -35,12 +36,15 @@ export type DimShape = {
   ly: number;
 };
 
+export type WallCornerShape = PlanRect & { type: "TL" | "TR" | "BL" | "BR"; wallDepth: number };
+
 export type FloorPlan = {
   canvas: { w: number; h: number };
   room: PlanRect & { thickness: number };
   baseCabinets: CabinetShape[];
   wallCabinets: CabinetShape[];
   corners: PlanRect[];
+  wallCorners: WallCornerShape[];
   appliances: ApplianceShape[];
   island: PlanRect | null;
   window: WindowShape | null;
@@ -76,10 +80,13 @@ type LayoutSensitive = {
  * the same inputs always produce the same plan. The renderer (view) only draws
  * what this returns, so all positions/sizes stay testable and reproducible.
  */
+export type PositionOverrides = Record<string, number>;
+
 export function buildFloorPlan(
   normalized: Round1Normalized,
   cabinets: Cabinet[],
-  confirmationCount = 0
+  confirmationCount = 0,
+  overrides: PositionOverrides = {}
 ): FloorPlan {
   const fixtures = (normalized.fixtures ?? {}) as Fixtures;
   const layoutSensitive = (normalized.layoutSensitiveCabinets ?? {}) as LayoutSensitive;
@@ -126,6 +133,17 @@ export function buildFloorPlan(
   if (cornerBR)
     corners.push({ x: ix + iw - baseDepth, y: iy + ih - baseDepth, w: baseDepth, h: baseDepth });
 
+  const wallCornerTL = wallByWall.has("TOP") && wallByWall.has("LEFT");
+  const wallCornerTR = wallByWall.has("TOP") && wallByWall.has("RIGHT");
+  const wallCornerBL = wallByWall.has("BOTTOM") && wallByWall.has("LEFT");
+  const wallCornerBR = wallByWall.has("BOTTOM") && wallByWall.has("RIGHT");
+
+  const wallCorners: WallCornerShape[] = [];
+  if (wallCornerTL) wallCorners.push({ x: ix, y: iy, w: baseDepth, h: baseDepth, type: "TL", wallDepth });
+  if (wallCornerTR) wallCorners.push({ x: ix + iw - baseDepth, y: iy, w: baseDepth, h: baseDepth, type: "TR", wallDepth });
+  if (wallCornerBL) wallCorners.push({ x: ix, y: iy + ih - baseDepth, w: baseDepth, h: baseDepth, type: "BL", wallDepth });
+  if (wallCornerBR) wallCorners.push({ x: ix + iw - baseDepth, y: iy + ih - baseDepth, w: baseDepth, h: baseDepth, type: "BR", wallDepth });
+
   const startOffset: Record<Wall, number> = {
     TOP: cornerTL ? baseDepth : 0,
     LEFT: cornerTL ? baseDepth : 0,
@@ -133,15 +151,12 @@ export function buildFloorPlan(
     BOTTOM: cornerBL ? baseDepth : 0
   };
 
-  const geom = { ix, iy, iw, ih, scale };
-  const baseCabinets: CabinetShape[] = [];
-  const wallCabinets: CabinetShape[] = [];
-  for (const wall of ["TOP", "LEFT", "RIGHT", "BOTTOM"] as Wall[]) {
-    const base = baseByWall.get(wall);
-    if (base) baseCabinets.push(...layRun(wall, base, baseDepth, startOffset[wall], geom));
-    const wallc = wallByWall.get(wall);
-    if (wallc) wallCabinets.push(...layRun(wall, wallc, wallDepth, startOffset[wall], geom));
-  }
+  const endOffset: Record<Wall, number> = {
+    TOP: cornerTR ? baseDepth : 0,
+    LEFT: cornerBL ? baseDepth : 0,
+    RIGHT: cornerBR ? baseDepth : 0,
+    BOTTOM: cornerBR ? baseDepth : 0
+  };
 
   const appliances = placeAppliances(fixtures, layoutSensitive, normalized, {
     ix,
@@ -151,10 +166,60 @@ export function buildFloorPlan(
     scale,
     baseDepth,
     startOffset,
-    cornerTR,
-    cornerBR
+    endOffset,
+    overrides
   });
 
+  const door = placeDoor(normalized, { roomX, roomY, roomW, roomH, thickness, scale, overrides });
+
+  const baseObstacles: PlanRect[] = appliances.filter(a => a.symbol === "range" || a.symbol === "fridge" || a.symbol === "oven");
+  if (door) {
+    let dw = door.breakRect.w;
+    let dh = door.breakRect.h;
+    let dx = door.breakRect.x;
+    let dy = door.breakRect.y;
+    if (dw > dh) {
+      dy -= baseDepth; 
+      dh += baseDepth * 2;
+    } else {
+      dx -= baseDepth;
+      dw += baseDepth * 2;
+    }
+    baseObstacles.push({ x: dx, y: dy, w: dw, h: dh });
+  }
+  
+  const geom = { ix, iy, iw, ih, scale };
+  const baseCabinets: CabinetShape[] = [];
+  
+  // 1. Layout base cabinets
+  for (const wall of ["TOP", "LEFT", "RIGHT", "BOTTOM"] as Wall[]) {
+    const base = baseByWall.get(wall);
+    if (base) baseCabinets.push(...layRun(wall, base, baseDepth, startOffset[wall], endOffset[wall], geom, baseObstacles, true));
+  }
+
+  // 2. Snap sink and dishwasher to the base cabinet underneath so they visually align with cabinet boundaries
+  for (const sym of ["sink", "dishwasher"]) {
+    const app = appliances.find(a => a.symbol === sym);
+    if (app) {
+      const cx = app.x + app.w / 2;
+      const cy = app.y + app.h / 2;
+      const overlapping = baseCabinets.filter(c => 
+        cx >= c.x && cx <= c.x + c.w && cy >= c.y && cy <= c.y + c.h
+      );
+      if (overlapping.length > 0) {
+        const target = overlapping[0];
+        if (app.wall === "TOP" || app.wall === "BOTTOM") {
+          app.x = target.x;
+          app.w = target.w;
+        } else {
+          app.y = target.y;
+          app.h = target.h;
+        }
+      }
+    }
+  }
+
+  // 3. Place window based on final snapped sink position
   const window = placeWindow(normalized, fixtures, appliances, {
     roomX,
     roomY,
@@ -162,13 +227,64 @@ export function buildFloorPlan(
     roomH,
     thickness,
     ix,
+    iy,
     iw,
-    scale
+    ih,
+    scale,
+    overrides
   });
 
-  const door = placeDoor(normalized, { roomX, roomY, roomW, roomH, thickness, scale });
+  const wallObstacles: PlanRect[] = [...baseObstacles];
+  if (window) wallObstacles.push(window);
+
+  // 4. Layout wall cabinets
+  const wallCabinets: CabinetShape[] = [];
+  for (const wall of ["TOP", "LEFT", "RIGHT", "BOTTOM"] as Wall[]) {
+    const wallc = wallByWall.get(wall);
+    if (wallc) wallCabinets.push(...layRun(wall, wallc, wallDepth, startOffset[wall], endOffset[wall], geom, wallObstacles, false));
+  }
+
+  // 5. Post-process to ensure every wall cabinet has a base cabinet beneath it
+  for (const wc of wallCabinets) {
+    const horizontal = wc.wall === "TOP" || wc.wall === "BOTTOM";
+    
+    // Check if there is already a base cabinet or base obstacle intersecting this area
+    const hasBase = baseCabinets.some(bc => rectIntersect(bc, wc)) || 
+                    baseObstacles.some(o => rectIntersect(o, wc));
+
+    // If not, we generate a visual filler base cabinet
+    if (!hasBase) {
+      let bx = wc.x, by = wc.y, bw = wc.w, bh = wc.h;
+      if (wc.wall === "TOP") { bh = baseDepth; }
+      else if (wc.wall === "BOTTOM") { by = iy + ih - baseDepth; bh = baseDepth; }
+      else if (wc.wall === "LEFT") { bw = baseDepth; }
+      else if (wc.wall === "RIGHT") { bx = ix + iw - baseDepth; bw = baseDepth; }
+
+      baseCabinets.push({
+        x: bx, y: by, w: bw, h: bh, wall: wc.wall, code: "Visual Base", confirmationRequired: false
+      });
+    }
+  }
 
   const markers = placeMarkers(appliances, baseDepth);
+
+  const rangeAppliance = appliances.find(a => a.symbol === "range");
+  if (rangeAppliance) {
+    const wallDepth = baseDepth * 0.52;
+    let hoodRect: PlanRect;
+    if (rangeAppliance.wall === "TOP") hoodRect = { x: rangeAppliance.x, y: roomY + thickness, w: rangeAppliance.w, h: wallDepth };
+    else if (rangeAppliance.wall === "BOTTOM") hoodRect = { x: rangeAppliance.x, y: roomY + roomH - thickness - wallDepth, w: rangeAppliance.w, h: wallDepth };
+    else if (rangeAppliance.wall === "LEFT") hoodRect = { x: roomX + thickness, y: rangeAppliance.y, w: wallDepth, h: rangeAppliance.h };
+    else hoodRect = { x: roomX + roomW - thickness - wallDepth, y: rangeAppliance.y, w: wallDepth, h: rangeAppliance.h };
+    
+    appliances.push({
+      ...hoodRect,
+      key: "hood",
+      label: "",
+      symbol: "hood",
+      wall: rangeAppliance.wall
+    });
+  }
 
   const island =
     layoutSensitive.island?.requested || /ISLAND/.test(normalized.layoutPreference)
@@ -209,6 +325,7 @@ export function buildFloorPlan(
     baseCabinets,
     wallCabinets,
     corners,
+    wallCorners,
     appliances,
     island,
     window,
@@ -255,16 +372,73 @@ function layRun(
   cabinets: Cabinet[],
   depth: number,
   startOffset: number,
-  { ix, iy, iw, ih, scale }: Geom
+  endOffset: number,
+  { ix, iy, iw, ih, scale }: Geom,
+  obstacles: PlanRect[] = [],
+  snapObstacles: boolean = true
 ): CabinetShape[] {
   const shapes: CabinetShape[] = [];
   const horizontal = wall === "TOP" || wall === "BOTTOM";
   let cursor = (horizontal ? ix : iy) + startOffset;
-  const limit = horizontal ? ix + iw : iy + ih;
+  const limit = (horizontal ? ix + iw : iy + ih) - endOffset;
+
+  let trackRect: PlanRect;
+  if (wall === "TOP") trackRect = { x: ix, y: iy, w: iw, h: depth };
+  else if (wall === "BOTTOM") trackRect = { x: ix, y: iy + ih - depth, w: iw, h: depth };
+  else if (wall === "LEFT") trackRect = { x: ix, y: iy, w: depth, h: ih };
+  else trackRect = { x: ix + iw - depth, y: iy, w: depth, h: ih };
+
+  const wallObstacles = obstacles
+    .filter(o => rectIntersect(o, trackRect))
+    .map(o => ({
+      start: horizontal ? o.x : o.y,
+      end: horizontal ? o.x + o.w : o.y + o.h,
+      ref: o
+    }))
+    .sort((a, b) => a.start - b.start);
 
   for (const cabinet of cabinets) {
-    const length = Math.max(cabinet.width * scale, 6);
-    if (cursor + length > limit + 0.5) break;
+    let length = Math.max(cabinet.width * scale, 6);
+    
+    let placed = false;
+    let dropped = false;
+    while (!placed) {
+      if (cursor + length > limit + 0.5) {
+        if (limit - cursor >= 6) {
+          length = limit - cursor;
+        } else {
+          dropped = true;
+          break;
+        }
+      }
+      
+      const overlap = wallObstacles.find(o => 
+        cursor < o.end - 0.1 && cursor + length > o.start + 0.1
+      );
+
+      if (overlap) {
+        const gap = overlap.start - cursor;
+        if (gap >= 6) {
+          length = gap;
+          placed = true;
+        } else {
+          if (gap > 0.5 && snapObstacles && (overlap.ref as any).wall === wall) {
+            if (overlap.ref) {
+              if (horizontal) (overlap.ref as any).x -= gap;
+              else (overlap.ref as any).y -= gap;
+            }
+            overlap.start -= gap;
+            overlap.end -= gap;
+          }
+          cursor = Math.max(cursor, overlap.end);
+        }
+      } else {
+        placed = true;
+      }
+    }
+
+    if (dropped) continue;
+
     let rect: PlanRect;
     if (wall === "TOP") rect = { x: cursor, y: iy, w: length, h: depth };
     else if (wall === "BOTTOM") rect = { x: cursor, y: iy + ih - depth, w: length, h: depth };
@@ -273,6 +447,7 @@ function layRun(
 
     shapes.push({
       ...rect,
+      wall,
       code: cabinet.code,
       confirmationRequired: cabinet.confirmationRequired
     });
@@ -289,8 +464,8 @@ type PlaceCtx = {
   scale: number;
   baseDepth: number;
   startOffset: Record<Wall, number>;
-  cornerTR: boolean;
-  cornerBR: boolean;
+  endOffset: Record<Wall, number>;
+  overrides: PositionOverrides;
 };
 
 function relationToWall(relation: string | undefined, fallback: Wall): Wall {
@@ -361,7 +536,7 @@ function placeAppliances(
     symbol: "range",
     sizeIn: fixtures.range?.size ?? 30,
     wall: relationToWall(fixtures.range?.relation, "TOP"),
-    deep: false
+    deep: true
   });
 
   if (layoutSensitive.ovenMicrowave?.configuration === "WALL_OVEN_MICROWAVE_STACK") {
@@ -384,37 +559,55 @@ function placeAppliances(
     deep: true
   });
 
-  const { ix, iy, iw, ih, scale, baseDepth, startOffset, cornerTR, cornerBR } = ctx;
+  const { ix, iy, iw, ih, scale, baseDepth, startOffset, endOffset } = ctx;
   const shapes: ApplianceShape[] = [];
 
   for (const wall of ["TOP", "BOTTOM", "LEFT", "RIGHT"] as Wall[]) {
     const onWall = specs.filter((s) => s.wall === wall);
     if (onWall.length === 0) continue;
     const horizontal = wall === "TOP" || wall === "BOTTOM";
-    const endCorner =
-      wall === "TOP" ? cornerTR : wall === "BOTTOM" ? cornerBR : false;
     const runStart = (horizontal ? ix : iy) + startOffset[wall];
-    const runEnd = (horizontal ? ix + iw : iy + ih) - (endCorner ? baseDepth : 0);
+    const runEnd = (horizontal ? ix + iw : iy + ih) - endOffset[wall];
     const span = Math.max(runEnd - runStart, 1);
 
-    onWall.forEach((spec, index) => {
-      const center = runStart + (span * (index + 1)) / (onWall.length + 1);
-      const length = clamp(spec.sizeIn * scale, 18, span * 0.9);
-      const depth = spec.deep ? Math.min(36 * scale, baseDepth * 1.35) : baseDepth * 0.9;
+    const rawLengths = onWall.map(spec => clamp(spec.sizeIn * scale, 18, span * 0.9));
+    const totalApplianceWidth = rawLengths.reduce((sum, l) => sum + l, 0);
+    
+    // If appliances total width exceeds the wall, squish them so they don't break out of the room layout
+    const fitFactor = totalApplianceWidth > span ? (span * 0.95) / totalApplianceWidth : 1;
+    const rawSpacing = Math.max((span - totalApplianceWidth) / (onWall.length + 1), 0);
+    // Cap spacing so appliances stay clustered, allowing base cabinets to connect them
+    const spacing = Math.min(rawSpacing, 12 * scale);
+    let cursor = runStart + (totalApplianceWidth > span ? (span * 0.025) : spacing);
+
+    onWall.forEach((spec, idx) => {
+      const length = rawLengths[idx] * fitFactor;
+      const depth = (spec.symbol === "sink" || spec.symbol === "dishwasher") 
+        ? baseDepth 
+        : (spec.symbol === "range" ? baseDepth * 1.05 
+          : (spec.deep ? Math.min(32 * scale, baseDepth * 1.15) : baseDepth * 0.9));
+      
+      let pos = ctx.overrides[spec.key] ?? cursor;
+      const limitMin = horizontal ? ix + ctx.startOffset[wall] : iy + ctx.startOffset[wall];
+      const limitMax = horizontal ? ix + iw - ctx.endOffset[wall] - length : iy + ih - ctx.endOffset[wall] - length;
+      pos = clamp(pos, limitMin, limitMax);
+
       let rect: PlanRect;
-      if (wall === "TOP") rect = { x: center - length / 2, y: iy, w: length, h: depth };
+      if (wall === "TOP") rect = { x: pos, y: iy, w: length, h: depth };
       else if (wall === "BOTTOM")
-        rect = { x: center - length / 2, y: iy + ih - depth, w: length, h: depth };
-      else if (wall === "LEFT") rect = { x: ix, y: center - length / 2, w: depth, h: length };
-      else rect = { x: ix + iw - depth, y: center - length / 2, w: depth, h: length };
+        rect = { x: pos, y: iy + ih - depth, w: length, h: depth };
+      else if (wall === "LEFT") rect = { x: ix, y: pos, w: depth, h: length };
+      else rect = { x: ix + iw - depth, y: pos, w: depth, h: length };
 
       shapes.push({
         ...rect,
         key: spec.key,
         label: spec.label,
-        symbol: spec.symbol,
+        symbol: spec.symbol as ApplianceSymbol,
         wall
       });
+
+      cursor = pos + length + spacing;
     });
   }
 
@@ -432,23 +625,49 @@ function placeWindow(
     roomH: number;
     thickness: number;
     ix: number;
+    iy: number;
     iw: number;
+    ih: number;
     scale: number;
+    overrides: PositionOverrides;
   }
 ): WindowShape | null {
-  const windows = (normalized.openings as { windows?: { status?: string } }).windows;
+  const windows = (normalized.openings as { windows?: { status?: string; items?: Array<{ relation?: string }> } }).windows;
   if (windows?.status !== "YES") return null;
 
+  const relation = windows?.items?.[0]?.relation;
   const sink = appliances.find((a) => a.key === "sink");
-  const sinkUnderWindow =
-    fixtures.sink?.relation === "UNDER_WINDOW" && sink?.wall === "TOP";
+  const sinkUnderWindow = fixtures.sink?.relation === "UNDER_WINDOW" || relation === "BEHIND_SINK";
 
-  const length = clamp(36 * ctx.scale, 40, ctx.iw * 0.5);
-  const centerX =
-    sinkUnderWindow && sink ? sink.x + sink.w / 2 : ctx.roomX + ctx.roomW / 2;
-  const x = clamp(centerX - length / 2, ctx.ix, ctx.ix + ctx.iw - length);
+  let wall = relationToWall(relation, "TOP");
+  if (sinkUnderWindow && sink) {
+    wall = sink.wall;
+  }
 
-  return { x, y: ctx.roomY, w: length, h: ctx.thickness, wall: "TOP" };
+  const length = clamp(36 * ctx.scale, 40, (wall === "TOP" || wall === "BOTTOM" ? ctx.iw : ctx.ih) * 0.5);
+
+  let x = 0;
+  let y = 0;
+  let w = 0;
+  let h = 0;
+
+  if (wall === "TOP" || wall === "BOTTOM") {
+    w = length;
+    h = ctx.thickness;
+    const centerX = (sinkUnderWindow && sink && sink.wall === wall) ? sink.x + sink.w / 2 : ctx.roomX + ctx.roomW / 2;
+    const defaultX = clamp(centerX - length / 2, ctx.ix, ctx.ix + ctx.iw - length);
+    x = ctx.overrides["window"] !== undefined ? clamp(ctx.overrides["window"], ctx.ix, ctx.ix + ctx.iw - length) : defaultX;
+    y = wall === "TOP" ? ctx.roomY : ctx.roomY + ctx.roomH - ctx.thickness;
+  } else {
+    w = ctx.thickness;
+    h = length;
+    const centerY = (sinkUnderWindow && sink && sink.wall === wall) ? sink.y + sink.h / 2 : ctx.roomY + ctx.roomH / 2;
+    const defaultY = clamp(centerY - length / 2, ctx.iy, ctx.iy + ctx.ih - length);
+    y = ctx.overrides["window"] !== undefined ? clamp(ctx.overrides["window"], ctx.iy, ctx.iy + ctx.ih - length) : defaultY;
+    x = wall === "LEFT" ? ctx.roomX : ctx.roomX + ctx.roomW - ctx.thickness;
+  }
+
+  return { x, y, w, h, wall };
 }
 
 function placeDoor(
@@ -460,6 +679,7 @@ function placeDoor(
     roomH: number;
     thickness: number;
     scale: number;
+    overrides: PositionOverrides;
   }
 ): DoorShape | null {
   const doors = (normalized.openings as {
@@ -473,40 +693,67 @@ function placeDoor(
   const { roomX, roomY, roomW, roomH, thickness } = ctx;
 
   if (wall === "TOP" || wall === "BOTTOM") {
-    const cx = clamp(
+    const defaultCx = clamp(
       roomX + roomW * 0.74,
       roomX + thickness + opening / 2,
       roomX + roomW - thickness - opening / 2
     );
+    const cx = ctx.overrides["door"] !== undefined ? clamp(ctx.overrides["door"], roomX + thickness + opening / 2, roomX + roomW - thickness - opening / 2) : defaultCx;
     const wy = wall === "TOP" ? roomY : roomY + roomH - thickness;
     const hingeX = cx + opening / 2;
     const dir = wall === "TOP" ? 1 : -1;
     const tipY = wall === "TOP" ? roomY + thickness : roomY + roomH - thickness;
     const leafEndY = tipY + dir * opening;
-    const sweep = wall === "TOP" ? 1 : 1;
+    const sweep = wall === "TOP" ? 1 : 0;
+    
+    let leafRect: PlanRect;
+    if (wall === "TOP") {
+      leafRect = { x: hingeX - 3.5, y: tipY, w: 3.5, h: opening };
+    } else {
+      leafRect = { x: hingeX - 3.5, y: tipY - opening, w: 3.5, h: opening };
+    }
+
     return {
       breakRect: { x: cx - opening / 2, y: wy, w: opening, h: thickness },
       swingPath: `M${hingeX},${leafEndY} A${opening},${opening} 0 0 ${sweep} ${cx - opening / 2},${tipY}`,
+      leafRect,
       labelX: cx,
-      labelY: wall === "TOP" ? roomY - 6 : roomY + roomH + 16
+      labelY: wall === "TOP" ? roomY - 6 : roomY + roomH + 16,
+      wall,
+      cx,
+      cy: wy
     };
   }
 
-  const cy = clamp(
+  const defaultCy = clamp(
     roomY + roomH * 0.72,
     roomY + thickness + opening / 2,
     roomY + roomH - thickness - opening / 2
   );
+  const cy = ctx.overrides["door"] !== undefined ? clamp(ctx.overrides["door"], roomY + thickness + opening / 2, roomY + roomH - thickness - opening / 2) : defaultCy;
   const wx = wall === "LEFT" ? roomX : roomX + roomW - thickness;
   const tipX = wall === "LEFT" ? roomX + thickness : roomX + roomW - thickness;
   const dir = wall === "LEFT" ? 1 : -1;
   const hingeY = cy + opening / 2;
   const leafEndX = tipX + dir * opening;
+  const sweep = wall === "LEFT" ? 0 : 1;
+  
+  let leafRect: PlanRect;
+  if (wall === "LEFT") {
+    leafRect = { x: tipX, y: hingeY - 3.5, w: opening, h: 3.5 };
+  } else {
+    leafRect = { x: tipX - opening, y: hingeY - 3.5, w: opening, h: 3.5 };
+  }
+
   return {
     breakRect: { x: wx, y: cy - opening / 2, w: thickness, h: opening },
-    swingPath: `M${leafEndX},${hingeY} A${opening},${opening} 0 0 0 ${tipX},${cy - opening / 2}`,
-    labelX: wall === "LEFT" ? roomX - 6 : roomX + roomW + 6,
-    labelY: cy
+    swingPath: `M${leafEndX},${hingeY} A${opening},${opening} 0 0 ${sweep} ${tipX},${cy - opening / 2}`,
+    leafRect,
+    labelX: wall === "LEFT" ? roomX - 16 : roomX + roomW + 16,
+    labelY: cy,
+    wall,
+    cx: wx,
+    cy
   };
 }
 
@@ -535,4 +782,13 @@ function placeMarkers(appliances: ApplianceShape[], baseDepth: number): MarkerSh
 function clamp(value: number, min: number, max: number): number {
   if (max < min) return min;
   return Math.min(Math.max(value, min), max);
+}
+
+function rectIntersect(r1: PlanRect, r2: PlanRect): boolean {
+  return (
+    r1.x < r2.x + r2.w - 0.1 &&
+    r1.x + r1.w > r2.x + 0.1 &&
+    r1.y < r2.y + r2.h - 0.1 &&
+    r1.y + r1.h > r2.y + 0.1
+  );
 }
