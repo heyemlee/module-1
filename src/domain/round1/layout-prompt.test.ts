@@ -46,6 +46,12 @@ describe("Round 1 layout prompt generation", () => {
           configuration: "RANGE_INCLUDES_OVEN",
           relation: "NEAR_RANGE"
         },
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+          microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
+        },
         island: { requested: false, functions: [] }
       }
     });
@@ -101,6 +107,12 @@ describe("Round 1 layout prompt generation", () => {
       layoutSensitiveCabinets: {
         cornerCabinet: { preferredType: "NO_PREFERENCE" },
         ovenMicrowave: { configuration: "RANGE_INCLUDES_OVEN", relation: "ON_MAIN_RUN" },
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+          microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
+        },
         island: { requested: false, functions: [] }
       }
     });

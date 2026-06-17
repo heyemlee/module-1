@@ -42,6 +42,24 @@ function formForLayout(layoutPreference: Round1FormInput["layoutPreference"]): R
   };
 }
 
+function formWithSinkUnderWindow(): Round1FormInput {
+  const form = createDefaultShowroomForm();
+  return {
+    ...form,
+    openings: {
+      ...form.openings,
+      windows: {
+        status: "YES",
+        items: [{ relation: "BEHIND_SINK", width: null }]
+      }
+    },
+    fixtures: {
+      ...form.fixtures,
+      sink: { ...form.fixtures.sink, relation: "UNDER_WINDOW" }
+    }
+  };
+}
+
 function intersects(a: PlanRect, b: PlanRect) {
   return (
     a.x < b.x + b.w - 0.1 &&
@@ -49,6 +67,18 @@ function intersects(a: PlanRect, b: PlanRect) {
     a.y < b.y + b.h - 0.1 &&
     a.y + a.h > b.y + 0.1
   );
+}
+
+function applianceRect(plan: ReturnType<typeof buildFloorPlan>, key: string) {
+  const appliance = plan.appliances.find((item) => item.key === key);
+  expect(appliance, `${key} exists`).toBeDefined();
+  return {
+    x: appliance!.x,
+    y: appliance!.y,
+    w: appliance!.w,
+    h: appliance!.h,
+    wall: appliance!.wall
+  };
 }
 
 describe("buildFloorPlan", () => {
@@ -95,8 +125,68 @@ describe("buildFloorPlan", () => {
     expect(letters).toEqual(["E", "G", "V", "W"]);
   });
 
-  test("draws a window over the sink when the sink is under a window", () => {
+  test("cabinet fill does not move or resize fixed appliances", () => {
+    const form = createDefaultShowroomForm();
+    const { normalized } = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+    const beforeFill = buildFloorPlan(normalized, [], 3, {});
+    const afterFill = buildFloorPlan(normalized, estimate.cabinets, 3, {});
+
+    for (const key of ["sink", "dishwasher", "range", "fridge"]) {
+      expect(applianceRect(afterFill, key)).toEqual(applianceRect(beforeFill, key));
+    }
+  });
+
+  test("cabinet fill keeps sink and dishwasher footprints clear", () => {
     const { plan } = planFromForm(createDefaultShowroomForm());
+    const plumbingAppliances = plan.appliances.filter((item) =>
+      ["sink", "dishwasher"].includes(item.key)
+    );
+
+    for (const appliance of plumbingAppliances) {
+      for (const cabinet of plan.baseCabinets) {
+        expect(
+          intersects(cabinet, appliance),
+          `${cabinet.code} overlaps ${appliance.key}`
+        ).toBe(false);
+      }
+    }
+  });
+
+  test("uses rough cooking appliance presence fields instead of always drawing range", () => {
+    const form: Round1FormInput = {
+      ...createDefaultShowroomForm(),
+      fixtures: {
+        ...createDefaultShowroomForm().fixtures,
+        range: {
+          size: null,
+          fuel: "UNKNOWN",
+          fixedLocation: "UNKNOWN",
+          relation: "BACK_SIDE"
+        }
+      },
+      layoutSensitiveCabinets: {
+        ...createDefaultShowroomForm().layoutSensitiveCabinets,
+        cookingAppliances: {
+          range: { status: "NO", relation: "NOT_APPLICABLE" },
+          cooktop: { status: "YES", relation: "BACK_SIDE" },
+          wallOven: { status: "YES", relation: "LEFT_SIDE" },
+          microwaveOvenCombo: { status: "YES", relation: "RIGHT_SIDE" }
+        }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    const keys = plan.appliances.map((item) => item.key);
+
+    expect(keys).not.toContain("range");
+    expect(keys).toContain("cooktop");
+    expect(keys).toContain("wallOven");
+    expect(keys).toContain("microwaveOvenCombo");
+  });
+
+  test("draws a window over the sink when the sink is under a window", () => {
+    const { plan } = planFromForm(formWithSinkUnderWindow());
     const sink = plan.appliances.find((a) => a.key === "sink");
 
     expect(plan.window).not.toBeNull();
@@ -200,6 +290,28 @@ describe("buildFloorPlan", () => {
     }
   });
 
+  test("coarsely fills visible cabinet gaps around fixed appliances for Round 1", () => {
+    const form: Round1FormInput = {
+      ...createDefaultShowroomForm(),
+      layoutPreference: "U_SHAPE",
+      fixtures: {
+        ...createDefaultShowroomForm().fixtures,
+        fridge: { size: 36, type: "UNKNOWN", relation: "RIGHT_SIDE" }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    const genericBase = plan.baseCabinets.filter((cabinet) =>
+      cabinet.code.startsWith("ROUND1_GENERIC_BASE")
+    );
+    const genericWall = plan.wallCabinets.filter((cabinet) =>
+      cabinet.code.startsWith("ROUND1_GENERIC_WALL")
+    );
+
+    expect(genericBase.length).toBeGreaterThan(0);
+    expect(genericWall.length).toBeGreaterThan(0);
+  });
+
   test("maps galley layouts to top and bottom base cabinet runs", () => {
     const { plan } = planFromForm(formForLayout("GALLEY"));
 
@@ -249,7 +361,7 @@ describe("buildFloorPlan", () => {
   });
 
   test("snaps sink and window centers together when their overlap is near aligned", () => {
-    const form = createDefaultShowroomForm();
+    const form = formWithSinkUnderWindow();
     const initial = planFromForm(form).plan;
     const window = initial.window!;
 

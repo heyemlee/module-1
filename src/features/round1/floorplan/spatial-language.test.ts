@@ -27,6 +27,23 @@ function planFor(form: Round1FormInput): FloorPlan {
 }
 
 const defaultPlan = planFor(createDefaultShowroomForm());
+const sinkUnderWindowPlan = planFor({
+  ...createDefaultShowroomForm(),
+  openings: {
+    ...createDefaultShowroomForm().openings,
+    windows: {
+      status: "YES",
+      items: [{ relation: "BEHIND_SINK", width: null }]
+    }
+  },
+  fixtures: {
+    ...createDefaultShowroomForm().fixtures,
+    sink: {
+      ...createDefaultShowroomForm().fixtures.sink,
+      relation: "UNDER_WINDOW"
+    }
+  }
+});
 const uShapePlan = planFor({
   ...createDefaultShowroomForm(),
   layoutPreference: "U_SHAPE"
@@ -101,10 +118,16 @@ describe("describeCorners", () => {
 });
 
 describe("describeWindow", () => {
-  test("places the window on the back wall above the sink", () => {
+  test("places the default window on its wall without forcing sink alignment", () => {
     const phrase = describeWindow(defaultPlan);
     expect(phrase).not.toBeNull();
     expect(phrase!).toContain("the back wall");
+    expect(phrase!).not.toContain("above the sink");
+  });
+
+  test("keeps legacy sink-under-window wording when explicitly provided", () => {
+    const phrase = describeWindow(sinkUnderWindowPlan);
+    expect(phrase).not.toBeNull();
     expect(phrase!).toContain("above the sink");
   });
 });

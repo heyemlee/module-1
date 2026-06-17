@@ -16,7 +16,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
       },
       windows: {
         status: "YES",
-        items: [{ relation: "BEHIND_SINK", width: null }]
+        items: [{ relation: "BACK_SIDE", width: null }]
       }
     },
     mep: {
@@ -27,13 +27,13 @@ export function createDefaultShowroomForm(): Round1FormInput {
     },
     layoutPreference: "L_SHAPE",
     fixtures: {
-      sink: { size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
-    range: {
-      size: 30,
-      fuel: "GAS",
-      fixedLocation: "UNKNOWN",
-      relation: "NEAR_RANGE"
-    },
+      sink: { size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+      range: {
+        size: null,
+        fuel: "GAS",
+        fixedLocation: "UNKNOWN",
+        relation: "BACK_SIDE"
+      },
       fridge: { size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
       dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
       hood: { relation: "ABOVE_RANGE" }
@@ -41,6 +41,12 @@ export function createDefaultShowroomForm(): Round1FormInput {
     layoutSensitiveCabinets: {
       cornerCabinet: { preferredType: "NO_PREFERENCE" },
       ovenMicrowave: { configuration: "UNKNOWN", relation: "NEAR_RANGE" },
+      cookingAppliances: {
+        range: { status: "YES", relation: "BACK_SIDE" },
+        cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+        wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+        microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
+      },
       island: { requested: false, functions: [] }
     }
   };

@@ -69,6 +69,9 @@ export function normalizeRound1Form(
   }
 
   Object.entries(form.fixtures).forEach(([key, value]) => {
+    if (key === "range") {
+      return;
+    }
     if (
       key === "dishwasher" &&
       "status" in value &&

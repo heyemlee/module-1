@@ -5,6 +5,7 @@ import {
   buildFloorPlan,
   type ApplianceShape,
   type FloorPlan,
+  type PlanRect,
   type PositionOverrides,
   type PositionOverride,
   type Wall
@@ -36,6 +37,11 @@ type LayoutPreviewProps = {
    */
   plan?: FloorPlan;
   /**
+   * Controls which intake-stage data is visible in the customer preview.
+   * Defaults preserve the older boolean behavior for existing callers.
+   */
+  previewStage?: PreviewStage;
+  /**
    * Clean geometry-only render for the AI reference image: no header chrome, no
    * MEP markers, no text labels, no drag/hover chrome. Appliance and opening
    * geometry is still drawn (and always shown, regardless of
@@ -43,6 +49,8 @@ type LayoutPreviewProps = {
    */
   referenceMode?: boolean;
 };
+
+type PreviewStage = "room" | "openings" | "layout" | "appliances" | "adjust";
 
 const INK = "#1f2937";
 const LINE = "#334155";
@@ -57,6 +65,7 @@ export function LayoutPreview({
   showPositionObjects,
   svgRef: externalSvgRef,
   plan: planProp,
+  previewStage,
   referenceMode = false
 }: LayoutPreviewProps) {
   const [showMep, setShowMep] = useState(false);
@@ -70,9 +79,18 @@ export function LayoutPreview({
   // A precomputed plan (the frozen snapshot geometry) takes precedence so the
   // reference image is bound to exactly what was locked.
   const plan = planProp ?? computedPlan;
-  // Appliances/openings are always drawn in referenceMode (a reference without
-  // them is useless); otherwise the caller controls visibility.
-  const showObjects = referenceMode || showPositionObjects;
+  const resolvedStage: PreviewStage = referenceMode
+    ? "adjust"
+    : previewStage ?? (showPositionObjects ? "adjust" : "room");
+  const hasCabinetFill = cabinets.length > 0;
+  const showCabinetFill = referenceMode || (resolvedStage === "adjust" && hasCabinetFill);
+  const showOpenings = stageAtLeast(resolvedStage, "openings");
+  const showLayoutGuide =
+    stageAtLeast(resolvedStage, "layout") &&
+    !showCabinetFill &&
+    plan.layoutPreference !== "NO_PREFERENCE";
+  const showAppliances = stageAtLeast(resolvedStage, "appliances");
+  const enablePositionDragging = !referenceMode && resolvedStage === "adjust";
 
   const getSvgPoint = useCallback((clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
@@ -163,9 +181,6 @@ export function LayoutPreview({
           <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
             Top-Down Layout Plan
           </p>
-          <p className="text-sm text-slate-500">
-            Approximate positions
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
@@ -206,15 +221,18 @@ export function LayoutPreview({
         onPointerLeave={handlePointerUp}
       >
         <Walls plan={plan} />
-        {plan.island && <Island rect={plan.island} referenceMode={referenceMode} />}
+        {showCabinetFill && plan.island && <Island rect={plan.island} referenceMode={referenceMode} />}
 
-        {plan.corners.map((corner, index) => (
+        {showCabinetFill && plan.corners.map((corner, index) => (
           <Corner key={`corner-${index}`} rect={corner} />
         ))}
 
-        {plan.baseCabinets.map((cabinet, index) => (
+        {showLayoutGuide && <LayoutGuide plan={plan} />}
+
+        {showCabinetFill && plan.baseCabinets.map((cabinet, index) => (
           <rect
             key={`base-${index}`}
+            data-base-cabinet={cabinet.code}
             x={cabinet.x}
             y={cabinet.y}
             width={cabinet.w}
@@ -225,11 +243,12 @@ export function LayoutPreview({
           />
         ))}
 
-        {plan.wallCabinets.map((cabinet, index) => {
+        {showCabinetFill && plan.wallCabinets.map((cabinet, index) => {
           const inset = 2.5;
           return (
             <g key={`wall-${index}`}>
               <rect
+                data-wall-cabinet={cabinet.code}
                 x={cabinet.x}
                 y={cabinet.y}
                 width={cabinet.w}
@@ -251,34 +270,36 @@ export function LayoutPreview({
           );
         })}
 
-        {plan.wallCorners?.map((corner, index) => (
+        {showCabinetFill && plan.wallCorners?.map((corner, index) => (
           <WallCorner key={`wallcorner-${index}`} corner={corner} />
         ))}
 
-        {!referenceMode && <DragFeedback plan={plan} draggingId={dragInfo?.id} />}
+        {enablePositionDragging && <DragFeedback plan={plan} draggingId={dragInfo?.id} />}
 
-        {showObjects && plan.appliances.map((appliance) => (
+        {showAppliances && plan.appliances.map((appliance) => (
           <Appliance
             key={appliance.key}
             appliance={appliance}
-            onPointerDown={handlePointerDown}
+            onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
             dragging={!referenceMode && (dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range"))}
-            highlighted={!referenceMode && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
+            highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
             referenceMode={referenceMode}
+            interactive={enablePositionDragging}
           />
         ))}
 
-        {showObjects && (
+        {showOpenings && (
           <Openings
             plan={plan}
-            onPointerDown={handlePointerDown}
+            onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
             draggingId={dragInfo?.id}
-            highlighted={!referenceMode && highlightDraggableItems}
+            highlighted={enablePositionDragging && highlightDraggableItems}
             referenceMode={referenceMode}
+            interactive={enablePositionDragging}
           />
         )}
 
-        {showObjects && showMep && !referenceMode && plan.markers.map((marker, index) => (
+        {showAppliances && showMep && !referenceMode && plan.markers.map((marker, index) => (
           <Marker
             key={`marker-${index}`}
             cx={marker.cx}
@@ -291,6 +312,109 @@ export function LayoutPreview({
         <Stamp plan={plan} />
       </svg>
     </div>
+  );
+}
+
+const PREVIEW_STAGE_ORDER: Record<PreviewStage, number> = {
+  room: 0,
+  openings: 1,
+  layout: 2,
+  appliances: 3,
+  adjust: 4
+};
+
+function stageAtLeast(stage: PreviewStage, minimum: PreviewStage) {
+  return PREVIEW_STAGE_ORDER[stage] >= PREVIEW_STAGE_ORDER[minimum];
+}
+
+function LayoutGuide({ plan }: { plan: FloorPlan }) {
+  const walls =
+    plan.layoutPreference === "NO_PREFERENCE"
+      ? []
+      : allowedDragWallsForLayout(plan.layoutPreference);
+  const { x, y, w, h, thickness } = plan.room;
+  const inset = thickness + 6;
+  const guideDepth = 22;
+  const color = "#bae6fd";
+  const stroke = "#0284c7";
+
+  const wallRects: Record<Wall, PlanRect> = {
+    TOP: {
+      x: x + inset,
+      y: y + thickness + 8,
+      w: w - inset * 2,
+      h: guideDepth
+    },
+    BOTTOM: {
+      x: x + inset,
+      y: y + h - thickness - 8 - guideDepth,
+      w: w - inset * 2,
+      h: guideDepth
+    },
+    LEFT: {
+      x: x + thickness + 8,
+      y: y + inset,
+      w: guideDepth,
+      h: h - inset * 2
+    },
+    RIGHT: {
+      x: x + w - thickness - 8 - guideDepth,
+      y: y + inset,
+      w: guideDepth,
+      h: h - inset * 2
+    }
+  };
+
+  return (
+    <g pointerEvents="none" opacity="0.72">
+      {walls.map((wall) => {
+        const rect = wallRects[wall];
+        return (
+          <rect
+            key={wall}
+            data-layout-guide="wall"
+            data-layout-wall={wall}
+            x={rect.x}
+            y={rect.y}
+            width={rect.w}
+            height={rect.h}
+            rx="4"
+            fill={color}
+            stroke={stroke}
+            strokeWidth="1.4"
+            strokeDasharray="8 5"
+          />
+        );
+      })}
+      {plan.island && (
+        <rect
+          data-layout-guide="island"
+          x={plan.island.x}
+          y={plan.island.y}
+          width={plan.island.w}
+          height={plan.island.h}
+          rx="5"
+          fill="#f8fafc"
+          stroke={stroke}
+          strokeWidth="1.5"
+          strokeDasharray="7 5"
+        />
+      )}
+      {plan.layoutPreference === "PENINSULA" && (
+        <rect
+          data-layout-guide="peninsula"
+          x={x + thickness + 8}
+          y={y + h - thickness - 110}
+          width={guideDepth}
+          height="96"
+          rx="4"
+          fill="#f8fafc"
+          stroke={stroke}
+          strokeWidth="1.5"
+          strokeDasharray="7 5"
+        />
+      )}
+    </g>
   );
 }
 
@@ -366,13 +490,15 @@ function Appliance({
   onPointerDown,
   dragging,
   highlighted,
-  referenceMode
+  referenceMode,
+  interactive
 }: {
   appliance: ApplianceShape;
-  onPointerDown: any;
+  onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
   dragging?: boolean;
   highlighted?: boolean;
   referenceMode?: boolean;
+  interactive?: boolean;
 }) {
   const cx = appliance.x + appliance.w / 2;
   const cy = appliance.y + appliance.h / 2;
@@ -401,14 +527,19 @@ function Appliance({
 
   return (
     <g
-      onPointerDown={(e) => onPointerDown(isHood ? "range" : appliance.key, appliance.wall, currentVal, e)}
+      onPointerDown={
+        interactive && onPointerDown
+          ? (e) => onPointerDown(isHood ? "range" : appliance.key, appliance.wall, currentVal, e)
+          : undefined
+      }
       style={{ 
-        cursor: dragging ? "grabbing" : "grab",
+        cursor: interactive ? (dragging ? "grabbing" : "grab") : "default",
         pointerEvents: "auto" 
       }}
-      className={`transition-opacity duration-100 group ${dragging ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+      className={`transition-opacity duration-100 ${interactive ? "group" : ""} ${dragging ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
       data-appliance-symbol={appliance.symbol}
     >
+      {interactive && (
       <rect
         x={appliance.x - 4}
         y={appliance.y - 4}
@@ -421,6 +552,7 @@ function Appliance({
         className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
         pointerEvents="none"
       />
+      )}
       {highlighted && (
         <rect
           x={appliance.x - 5}
@@ -456,11 +588,13 @@ function Appliance({
           {appliance.label}
         </text>
       )}
+      {interactive && (
       <g className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
         <circle cx={cx - 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
         <circle cx={cx} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
         <circle cx={cx + 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
       </g>
+      )}
     </g>
   );
 }
@@ -729,23 +863,30 @@ function Openings({
   onPointerDown,
   draggingId,
   highlighted,
-  referenceMode
+  referenceMode,
+  interactive
 }: {
   plan: FloorPlan;
-  onPointerDown: any;
+  onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
   draggingId?: string;
   highlighted?: boolean;
   referenceMode?: boolean;
+  interactive?: boolean;
 }) {
   return (
     <g>
       {plan.window && (
         <g
-          onPointerDown={(e) => onPointerDown("window", plan.window!.wall, plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM" ? plan.window!.x : plan.window!.y, e)}
-          style={{ cursor: draggingId === "window" ? "grabbing" : "grab" }}
-          className={`transition-opacity duration-100 group ${draggingId === "window" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+          data-opening-symbol="window"
+          onPointerDown={
+            interactive && onPointerDown
+              ? (e) => onPointerDown("window", plan.window!.wall, plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM" ? plan.window!.x : plan.window!.y, e)
+              : undefined
+          }
+          style={{ cursor: interactive ? (draggingId === "window" ? "grabbing" : "grab") : "default" }}
+          className={`transition-opacity duration-100 ${interactive ? "group" : ""} ${draggingId === "window" ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
         >
-          {!referenceMode && (
+          {!referenceMode && interactive && (
           <rect
             x={plan.window.x - 4}
             y={plan.window.y - 4}
@@ -804,7 +945,7 @@ function Openings({
             window
           </text>
           )}
-          {!referenceMode && (
+          {!referenceMode && interactive && (
           <g className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
             <circle cx={plan.window.x + plan.window.w / 2 - 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
             <circle cx={plan.window.x + plan.window.w / 2} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
@@ -815,11 +956,16 @@ function Openings({
       )}
       {plan.door && (
         <g
-          onPointerDown={(e) => onPointerDown("door", plan.door!.wall, plan.door!.wall === "TOP" || plan.door!.wall === "BOTTOM" ? plan.door!.cx : plan.door!.cy, e)}
-          style={{ cursor: draggingId === "door" ? "grabbing" : "grab" }}
-          className={`transition-opacity duration-100 group ${draggingId === "door" ? "opacity-60" : "hover:opacity-80"} ${highlighted ? "animate-pulse" : ""}`}
+          data-opening-symbol="door"
+          onPointerDown={
+            interactive && onPointerDown
+              ? (e) => onPointerDown("door", plan.door!.wall, plan.door!.wall === "TOP" || plan.door!.wall === "BOTTOM" ? plan.door!.cx : plan.door!.cy, e)
+              : undefined
+          }
+          style={{ cursor: interactive ? (draggingId === "door" ? "grabbing" : "grab") : "default" }}
+          className={`transition-opacity duration-100 ${interactive ? "group" : ""} ${draggingId === "door" ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
         >
-          {!referenceMode && (
+          {!referenceMode && interactive && (
           <rect
             x={plan.door.breakRect.x - 4}
             y={plan.door.breakRect.y - 4}
@@ -874,7 +1020,7 @@ function Openings({
             door
           </text>
           )}
-          {!referenceMode && (
+          {!referenceMode && interactive && (
           <g className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
             <circle cx={plan.door.cx - 6} cy={plan.door.cy} r="1.5" fill="#334155" />
             <circle cx={plan.door.cx} cy={plan.door.cy} r="1.5" fill="#334155" />

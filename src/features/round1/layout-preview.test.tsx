@@ -8,6 +8,78 @@ import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-
 import { LayoutPreview } from "./layout-preview";
 
 describe("LayoutPreview", () => {
+  function renderPreview({
+    cabinets,
+    previewStage
+  }: {
+    cabinets?: ReturnType<typeof generatePreliminaryCabinetList>["cabinets"];
+    previewStage?: "room" | "openings" | "layout" | "appliances" | "adjust";
+  } = {}) {
+    const form = createDefaultShowroomForm();
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+
+    return renderToStaticMarkup(
+      <LayoutPreview
+        normalized={result.normalized}
+        cabinets={cabinets ?? estimate.cabinets}
+        confirmationItems={result.confirmationItems}
+        positionOverrides={{}}
+        onPositionOverridesChange={() => {}}
+        highlightDraggableItems={false}
+        showPositionObjects={true}
+        previewStage={previewStage}
+      />
+    );
+  }
+
+  test("room stage shows only the room shell", () => {
+    const html = renderPreview({ previewStage: "room" });
+
+    expect(html).not.toContain('data-opening-symbol="');
+    expect(html).not.toContain('data-layout-guide="');
+    expect(html).not.toContain('data-appliance-symbol="');
+    expect(html).not.toContain('data-base-cabinet="');
+    expect(html).not.toContain('data-wall-cabinet="');
+  });
+
+  test("openings stage shows door and window without appliances or cabinets", () => {
+    const html = renderPreview({ previewStage: "openings" });
+
+    expect(html).toContain('data-opening-symbol="window"');
+    expect(html).toContain('data-opening-symbol="door"');
+    expect(html).not.toContain('data-layout-guide="');
+    expect(html).not.toContain('data-appliance-symbol="');
+    expect(html).not.toContain('data-base-cabinet="');
+  });
+
+  test("layout stage shows layout guides without appliances or cabinets", () => {
+    const html = renderPreview({ previewStage: "layout" });
+
+    expect(html).toContain('data-opening-symbol="window"');
+    expect(html).toContain('data-opening-symbol="door"');
+    expect(html).toContain('data-layout-guide="wall"');
+    expect(html).not.toContain('data-appliance-symbol="');
+    expect(html).not.toContain('data-base-cabinet="');
+  });
+
+  test("appliances stage adds appliances but still hides cabinets", () => {
+    const html = renderPreview({ previewStage: "appliances" });
+
+    expect(html).toContain('data-opening-symbol="window"');
+    expect(html).toContain('data-appliance-symbol="sink"');
+    expect(html).not.toContain('data-base-cabinet="');
+    expect(html).not.toContain('data-wall-cabinet="');
+  });
+
+  test("cabinet shapes render only when cabinet data is generated", () => {
+    const html = renderPreview({ cabinets: [], previewStage: "adjust" });
+
+    expect(html).toContain('data-appliance-symbol="sink"');
+    expect(html).not.toContain('data-base-cabinet="');
+    expect(html).not.toContain('data-wall-cabinet="');
+  });
+
   test("accepts parent-owned position overrides and change handler props", () => {
     const form = createDefaultShowroomForm();
     const result = normalizeRound1Form(form);

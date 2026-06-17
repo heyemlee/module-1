@@ -77,6 +77,12 @@ type Fixtures = {
 
 type LayoutSensitive = {
   ovenMicrowave?: { configuration?: string; relation?: string };
+  cookingAppliances?: {
+    range?: { status?: string; relation?: string };
+    cooktop?: { status?: string; relation?: string };
+    wallOven?: { status?: string; relation?: string };
+    microwaveOvenCombo?: { status?: string; relation?: string };
+  };
   island?: { requested?: boolean };
 };
 
@@ -128,6 +134,7 @@ export function buildFloorPlan(
   const baseByWall = groupByWall(cabinets.filter((c) => c.kind === "BASE"));
   const wallByWall = groupByWall(cabinets.filter((c) => c.kind === "WALL"));
   const occupiedWalls = new Set<Wall>([
+    ...allowedDragWallsForLayout(normalized.layoutPreference),
     ...baseByWall.keys(),
     ...wallByWall.keys()
   ]);
@@ -201,8 +208,10 @@ export function buildFloorPlan(
     baseDepth
   });
 
-  const baseObstacles: PlanRect[] = appliances.filter(a => a.symbol === "range" || a.symbol === "fridge" || a.symbol === "oven");
-  baseObstacles.push(...clearanceZones);
+  const sharedCabinetObstacles: PlanRect[] = appliances.filter(
+    (a) => a.key === "range" || a.symbol === "fridge" || a.symbol === "oven"
+  );
+  sharedCabinetObstacles.push(...clearanceZones);
   if (door) {
     let dw = door.breakRect.w;
     let dh = door.breakRect.h;
@@ -215,8 +224,12 @@ export function buildFloorPlan(
       dx -= baseDepth;
       dw += baseDepth * 2;
     }
-    baseObstacles.push({ x: dx, y: dy, w: dw, h: dh });
+    sharedCabinetObstacles.push({ x: dx, y: dy, w: dw, h: dh });
   }
+  const baseObstacles: PlanRect[] = [
+    ...sharedCabinetObstacles,
+    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher")
+  ];
   
   const geom = { ix, iy, iw, ih, scale };
   const baseCabinets: CabinetShape[] = [];
@@ -224,32 +237,25 @@ export function buildFloorPlan(
   // 1. Layout base cabinets
   for (const wall of ["TOP", "LEFT", "RIGHT", "BOTTOM"] as Wall[]) {
     const base = baseByWall.get(wall);
-    if (base) baseCabinets.push(...layRun(wall, base, baseDepth, startOffset[wall], endOffset[wall], geom, baseObstacles, true));
-  }
-
-  // 2. Snap sink and dishwasher to the base cabinet underneath so they visually align with cabinet boundaries
-  for (const sym of ["sink", "dishwasher"]) {
-    const app = appliances.find(a => a.symbol === sym);
-    if (app) {
-      const cx = app.x + app.w / 2;
-      const cy = app.y + app.h / 2;
-      const overlapping = baseCabinets.filter(c => 
-        cx >= c.x && cx <= c.x + c.w && cy >= c.y && cy <= c.y + c.h
+    if (base) {
+      baseCabinets.push(...layRun(wall, base, baseDepth, startOffset[wall], endOffset[wall], geom, baseObstacles, true));
+      baseCabinets.push(
+        ...fillGenericCabinetGaps(
+          wall,
+          baseCabinets,
+          baseDepth,
+          startOffset[wall],
+          endOffset[wall],
+          geom,
+          baseObstacles,
+          "ROUND1_GENERIC_BASE"
+        )
       );
-      if (overlapping.length > 0) {
-        const target = overlapping[0];
-        if (app.wall === "TOP" || app.wall === "BOTTOM") {
-          app.x = target.x;
-          app.w = target.w;
-        } else {
-          app.y = target.y;
-          app.h = target.h;
-        }
-      }
     }
   }
 
-  // 3. Place window based on final snapped sink position
+  // 2. Place window from fixed appliance positions. Cabinet fill must not move
+  // or resize fixed appliances; Round 1 cabinets adapt around them instead.
   const window = placeWindow(normalized, fixtures, appliances, {
     roomX,
     roomY,
@@ -264,14 +270,28 @@ export function buildFloorPlan(
     overrides
   });
 
-  const wallObstacles: PlanRect[] = [...baseObstacles];
+  const wallObstacles: PlanRect[] = [...sharedCabinetObstacles];
   if (window) wallObstacles.push(window);
 
   // 4. Layout wall cabinets
   const wallCabinets: CabinetShape[] = [];
   for (const wall of ["TOP", "LEFT", "RIGHT", "BOTTOM"] as Wall[]) {
     const wallc = wallByWall.get(wall);
-    if (wallc) wallCabinets.push(...layRun(wall, wallc, wallDepth, startOffset[wall], endOffset[wall], geom, wallObstacles, false));
+    if (wallc) {
+      wallCabinets.push(...layRun(wall, wallc, wallDepth, startOffset[wall], endOffset[wall], geom, wallObstacles, false));
+      wallCabinets.push(
+        ...fillGenericCabinetGaps(
+          wall,
+          wallCabinets,
+          wallDepth,
+          startOffset[wall],
+          endOffset[wall],
+          geom,
+          wallObstacles,
+          "ROUND1_GENERIC_WALL"
+        )
+      );
+    }
   }
 
   // 5. Post-process to ensure every wall cabinet has a base cabinet beneath it
@@ -451,14 +471,6 @@ function layRun(
           length = gap;
           placed = true;
         } else {
-          if (gap > 0.5 && snapObstacles && (overlap.ref as any).wall === wall && !("ownerKey" in overlap.ref)) {
-            if (overlap.ref) {
-              if (horizontal) (overlap.ref as any).x -= gap;
-              else (overlap.ref as any).y -= gap;
-            }
-            overlap.start -= gap;
-            overlap.end -= gap;
-          }
           cursor = Math.max(cursor, overlap.end);
         }
       } else {
@@ -483,6 +495,95 @@ function layRun(
     cursor += length;
   }
   return shapes;
+}
+
+function fillGenericCabinetGaps(
+  wall: Wall,
+  existing: CabinetShape[],
+  depth: number,
+  startOffset: number,
+  endOffset: number,
+  { ix, iy, iw, ih }: Geom,
+  obstacles: PlanRect[] = [],
+  codePrefix: string
+): CabinetShape[] {
+  const horizontal = wall === "TOP" || wall === "BOTTOM";
+  const start = (horizontal ? ix : iy) + startOffset;
+  const limit = (horizontal ? ix + iw : iy + ih) - endOffset;
+  const minGap = 8;
+
+  let trackRect: PlanRect;
+  if (wall === "TOP") trackRect = { x: ix, y: iy, w: iw, h: depth };
+  else if (wall === "BOTTOM") trackRect = { x: ix, y: iy + ih - depth, w: iw, h: depth };
+  else if (wall === "LEFT") trackRect = { x: ix, y: iy, w: depth, h: ih };
+  else trackRect = { x: ix + iw - depth, y: iy, w: depth, h: ih };
+
+  const occupied = [
+    ...existing
+      .filter((cabinet) => cabinet.wall === wall)
+      .map((cabinet) => ({
+        start: horizontal ? cabinet.x : cabinet.y,
+        end: horizontal ? cabinet.x + cabinet.w : cabinet.y + cabinet.h
+      })),
+    ...obstacles
+      .filter((obstacle) => rectIntersect(obstacle, trackRect))
+      .map((obstacle) => ({
+        start: horizontal ? obstacle.x : obstacle.y,
+        end: horizontal ? obstacle.x + obstacle.w : obstacle.y + obstacle.h
+      }))
+  ]
+    .map((interval) => ({
+      start: clamp(interval.start, start, limit),
+      end: clamp(interval.end, start, limit)
+    }))
+    .filter((interval) => interval.end - interval.start > 0.5)
+    .sort((a, b) => a.start - b.start);
+
+  const shapes: CabinetShape[] = [];
+  let cursor = start;
+  occupied.forEach((interval, index) => {
+    if (interval.start - cursor >= minGap) {
+      shapes.push(
+        makeGenericCabinet(wall, cursor, interval.start - cursor, depth, {
+          ix,
+          iy,
+          iw,
+          ih
+        }, `${codePrefix}_${wall}_${index}`)
+      );
+    }
+    cursor = Math.max(cursor, interval.end);
+  });
+
+  if (limit - cursor >= minGap) {
+    shapes.push(
+      makeGenericCabinet(wall, cursor, limit - cursor, depth, { ix, iy, iw, ih }, `${codePrefix}_${wall}_END`)
+    );
+  }
+
+  return shapes;
+}
+
+function makeGenericCabinet(
+  wall: Wall,
+  axisStart: number,
+  axisLength: number,
+  depth: number,
+  { ix, iy, ih, iw }: { ix: number; iy: number; iw: number; ih: number },
+  code: string
+): CabinetShape {
+  let rect: PlanRect;
+  if (wall === "TOP") rect = { x: axisStart, y: iy, w: axisLength, h: depth };
+  else if (wall === "BOTTOM") rect = { x: axisStart, y: iy + ih - depth, w: axisLength, h: depth };
+  else if (wall === "LEFT") rect = { x: ix, y: axisStart, w: depth, h: axisLength };
+  else rect = { x: ix + iw - depth, y: axisStart, w: depth, h: axisLength };
+
+  return {
+    ...rect,
+    wall,
+    code,
+    confirmationRequired: false
+  };
 }
 
 type PlaceCtx = {
@@ -575,6 +676,7 @@ function placeAppliances(
     deep: boolean;
   };
   const specs: Spec[] = [];
+  const cooking = layoutSensitive.cookingAppliances;
 
   const sinkFallbackWall: Wall = sinkUnderWindow ? "TOP" : relationToWall(fixtures.sink?.relation, "TOP");
   const sinkWall = overrideWall(ctx.overrides, "sink", sinkFallbackWall, normalized.layoutPreference);
@@ -608,32 +710,66 @@ function placeAppliances(
     });
   }
 
-  const rangeWall = overrideWall(
-    ctx.overrides,
-    "range",
-    relationToWall(fixtures.range?.relation, "TOP"),
-    normalized.layoutPreference
-  );
+  if (cooking?.range?.status !== "NO") {
+    const rangeWall = overrideWall(
+      ctx.overrides,
+      "range",
+      relationToWall(cooking?.range?.relation ?? fixtures.range?.relation, "TOP"),
+      normalized.layoutPreference
+    );
 
-  specs.push({
-    key: "range",
-    label: "Range",
-    symbol: "range",
-    sizeIn: fixtures.range?.size ?? 30,
-    wall: rangeWall,
-    deep: true
-  });
-
-  if (layoutSensitive.ovenMicrowave?.configuration === "WALL_OVEN_MICROWAVE_STACK") {
     specs.push({
-      key: "oven",
-      label: "Oven",
+      key: "range",
+      label: "Range",
+      symbol: "range",
+      sizeIn: fixtures.range?.size ?? 30,
+      wall: rangeWall,
+      deep: true
+    });
+  }
+
+  if (cooking?.cooktop?.status === "YES") {
+    specs.push({
+      key: "cooktop",
+      label: "Cooktop",
+      symbol: "range",
+      sizeIn: 30,
+      wall: overrideWall(
+        ctx.overrides,
+        "cooktop",
+        relationToWall(cooking.cooktop.relation, "TOP"),
+        normalized.layoutPreference
+      ),
+      deep: false
+    });
+  }
+
+  if (cooking?.wallOven?.status === "YES") {
+    specs.push({
+      key: "wallOven",
+      label: "Wall oven",
       symbol: "oven",
       sizeIn: 30,
       wall: overrideWall(
         ctx.overrides,
-        "oven",
-        relationToWall(layoutSensitive.ovenMicrowave?.relation, "TOP"),
+        "wallOven",
+        relationToWall(cooking.wallOven.relation, "TOP"),
+        normalized.layoutPreference
+      ),
+      deep: true
+    });
+  }
+
+  if (cooking?.microwaveOvenCombo?.status === "YES") {
+    specs.push({
+      key: "microwaveOvenCombo",
+      label: "Microwave / oven combo",
+      symbol: "oven",
+      sizeIn: 30,
+      wall: overrideWall(
+        ctx.overrides,
+        "microwaveOvenCombo",
+        relationToWall(cooking.microwaveOvenCombo.relation, "TOP"),
         normalized.layoutPreference
       ),
       deep: true

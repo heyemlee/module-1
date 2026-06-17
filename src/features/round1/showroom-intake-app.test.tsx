@@ -43,27 +43,37 @@ describe("OpeningsStep", () => {
     expect(html).not.toContain("Door width if known");
     expect(html).not.toContain("Window width if known");
   });
+
+  test("keeps window relation to wall-level positions only", () => {
+    const html = renderToStaticMarkup(
+      <OpeningsStep form={createDefaultShowroomForm()} setForm={() => {}} />
+    );
+
+    expect(html).toContain("Window approximate relation");
+    expect(html).toContain("BACK_SIDE");
+    expect(html).toContain("LEFT_SIDE");
+    expect(html).toContain("RIGHT_SIDE");
+    expect(html).toContain("FRONT_SIDE");
+    expect(html).not.toContain("BEHIND_SINK");
+    expect(html).not.toContain("UNDER_WINDOW");
+  });
 });
 
 describe("AppliancesStep", () => {
-  test("does not render appliance rough-position dropdowns", () => {
+  test("asks only rough presence and wall for cooking appliances", () => {
     const html = renderToStaticMarkup(
       <AppliancesStep form={createDefaultShowroomForm()} setForm={() => {}} />
     );
 
-    expect(html).not.toContain("Sink position");
-    expect(html).not.toContain("Range / cooktop position");
-    expect(html).not.toContain("Fridge position");
-    expect(html).not.toContain("Dishwasher position");
-  });
-
-  test("renders oven and microwave questions with core appliances", () => {
-    const html = renderToStaticMarkup(
-      <AppliancesStep form={createDefaultShowroomForm()} setForm={() => {}} />
-    );
-
-    expect(html).toContain("Oven / microwave");
-    expect(html).toContain("Oven / microwave position");
+    expect(html).toContain("Range included?");
+    expect(html).toContain("Range approximate wall");
+    expect(html).toContain("Cooktop included?");
+    expect(html).toContain("Wall oven included?");
+    expect(html).toContain("Microwave / oven combo included?");
+    expect(html).not.toContain("Range size");
+    expect(html).not.toContain("Cooktop size");
+    expect(html).not.toContain("Oven / microwave");
+    expect(html).not.toContain("Oven / microwave position");
   });
 });
 
@@ -81,6 +91,17 @@ describe("ShowroomIntakeApp", () => {
     expect(html).not.toContain("Cabinets 6");
     expect(html).not.toContain("6. Layout-Sensitive Cabinet Choices");
     expect(html).not.toContain("Detailed cabinet choices are reserved for the next round.");
+  });
+
+  test("opens with future workflow steps disabled so users advance sequentially", () => {
+    const html = renderToStaticMarkup(<ShowroomIntakeApp />);
+
+    expect(html).toContain("Openings");
+    expect(html).toContain("disabled");
+    expect(html).not.toContain("Round 1 Sales Estimate Only");
+    expect(html).not.toContain("Dimension Confidence: ROUGH");
+    expect(html).not.toContain("Ready To Generate");
+    expect(html).not.toContain("The top-down layout plan updates live as you fill the form.");
   });
 });
 
@@ -133,6 +154,7 @@ describe("CabinetFillSummaryPanel", () => {
     expect(html).not.toContain("Add Cabinet");
     expect(html).not.toContain("Remove");
     expect(html).not.toContain("sales estimate");
+    expect(html).not.toContain("Approximate only");
   });
 });
 
@@ -147,18 +169,17 @@ describe("Round1SnapshotPanel", () => {
     expect(html).not.toContain("View snapshot JSON");
   });
 
-  test("shows snapshot status, sales-only flags and the snapshot JSON once generated", () => {
+  test("shows snapshot status and the snapshot JSON once generated", () => {
     const html = renderToStaticMarkup(
       <Round1SnapshotPanel snapshot={buildFixtureSnapshot()} />
     );
 
     expect(html).toContain("Snapshot ready");
-    expect(html).toContain("Not production");
-    expect(html).toContain("ROUGH");
-    expect(html).toContain("Sales estimate only");
     expect(html).toContain("View snapshot JSON");
     expect(html).toContain("cabinetFillGenerated");
     expect(html).toContain("schemaVersion");
+    expect(html).not.toContain("Not production");
+    expect(html).not.toContain("Sales estimate only");
   });
 });
 

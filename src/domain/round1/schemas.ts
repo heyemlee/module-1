@@ -23,6 +23,20 @@ const relationSchema = z.enum([
 
 const nullableNumberSchema = z.number().positive().nullable();
 const statusSchema = z.enum(["YES", "NO", "UNKNOWN"]);
+const roughApplianceSchema = z.object({
+  status: statusSchema,
+  relation: relationSchema.default("UNKNOWN")
+});
+
+const defaultCookingAppliances = {
+  range: { status: "YES" as const, relation: "BACK_SIDE" as const },
+  cooktop: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+  wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+  microwaveOvenCombo: {
+    status: "UNKNOWN" as const,
+    relation: "UNKNOWN" as const
+  }
+};
 
 const doorSchema = z.object({
   location: relationSchema,
@@ -156,6 +170,14 @@ export const round1FormSchema = z.object({
       ]),
       relation: relationSchema.default("UNKNOWN")
     }),
+    cookingAppliances: z
+      .object({
+        range: roughApplianceSchema,
+        cooktop: roughApplianceSchema,
+        wallOven: roughApplianceSchema,
+        microwaveOvenCombo: roughApplianceSchema
+      })
+      .default(defaultCookingAppliances),
     island: z.object({
       requested: z.boolean(),
       functions: z.array(z.string())

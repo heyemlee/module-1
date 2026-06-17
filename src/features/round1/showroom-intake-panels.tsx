@@ -75,10 +75,6 @@ export function CabinetFillSummaryPanel({
             <p className="text-xs font-bold text-slate-500">allowance</p>
           </div>
         </div>
-        <p className="mt-3 text-xs leading-5 text-slate-600">
-          Approximate only. The plan fills standard cabinets from rough room
-          runs so sales and the customer can confirm the general direction.
-        </p>
         <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-white px-3 py-2">
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
             Pricing reserved
@@ -252,17 +248,6 @@ export function Round1SnapshotPanel({
           </span>
           <span className="rounded bg-white px-2 py-1 text-slate-700">
             ~{summary.estimatedFillerWidth}&quot; filler
-          </span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
-          <span className="rounded bg-red-50 px-2 py-0.5 text-red-700">
-            Not production
-          </span>
-          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-800">
-            ROUGH
-          </span>
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">
-            Sales estimate only
           </span>
         </div>
         <SnapshotPersistStatus persistState={persistState} />

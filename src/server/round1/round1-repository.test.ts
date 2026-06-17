@@ -80,6 +80,12 @@ const formInput = {
       configuration: "RANGE_INCLUDES_OVEN" as const,
       relation: "NEAR_RANGE" as const
     },
+    cookingAppliances: {
+      range: { status: "YES" as const, relation: "BACK_SIDE" as const },
+      cooktop: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+      wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+      microwaveOvenCombo: { status: "UNKNOWN" as const, relation: "UNKNOWN" as const }
+    },
     island: { requested: false, functions: [] }
   }
 };

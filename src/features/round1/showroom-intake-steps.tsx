@@ -11,18 +11,20 @@ import {
   parseNullableSize
 } from "./showroom-intake-controls";
 
-const appliancePositionOptions = [
-  "UNDER_WINDOW",
-  "ON_MAIN_RUN",
-  "FRONT_SIDE",
+const wallPositionOptions = [
+  "BACK_SIDE",
   "LEFT_SIDE",
   "RIGHT_SIDE",
+  "FRONT_SIDE",
+  "UNKNOWN"
+] as const;
+
+const applianceWallOptions = [
   "BACK_SIDE",
-  "NEAR_SINK",
-  "NEAR_RANGE",
-  "NEAR_FRIDGE",
+  "LEFT_SIDE",
+  "RIGHT_SIDE",
+  "FRONT_SIDE",
   "ON_ISLAND",
-  "NO_PREFERENCE",
   "UNKNOWN"
 ] as const;
 
@@ -74,7 +76,7 @@ export function OpeningsStep({
     width: null
   };
   const window = form.openings.windows.items[0] ?? {
-    relation: "BEHIND_SINK" as const,
+    relation: "BACK_SIDE" as const,
     width: null
   };
   const setDoorStatus = (status: Round1FormInput["openings"]["doors"]["status"]) => {
@@ -130,7 +132,7 @@ export function OpeningsStep({
             <SelectField
               label="Door / opening wall"
               value={door.location}
-              options={["FRONT_SIDE", "LEFT_SIDE", "RIGHT_SIDE", "BACK_SIDE", "UNKNOWN"]}
+              options={wallPositionOptions}
               onChange={(value) =>
                 setForm({
                   ...form,
@@ -157,7 +159,7 @@ export function OpeningsStep({
             <SelectField
               label="Window approximate relation"
               value={window.relation}
-              options={["BEHIND_SINK", "UNDER_WINDOW", "BACK_SIDE", "LEFT_SIDE", "RIGHT_SIDE", "UNKNOWN"]}
+              options={wallPositionOptions}
               onChange={(value) =>
                 setForm({
                   ...form,
@@ -261,6 +263,42 @@ export function AppliancesStep({
   form: Round1FormInput;
   setForm: (form: Round1FormInput) => void;
 }) {
+  const cooking = form.layoutSensitiveCabinets.cookingAppliances;
+  const setCookingAppliance = (
+    key: keyof Round1FormInput["layoutSensitiveCabinets"]["cookingAppliances"],
+    update: Partial<
+      Round1FormInput["layoutSensitiveCabinets"]["cookingAppliances"][typeof key]
+    >
+  ) => {
+    setForm({
+      ...form,
+      layoutSensitiveCabinets: {
+        ...form.layoutSensitiveCabinets,
+        cookingAppliances: {
+          ...cooking,
+          [key]: {
+            ...cooking[key],
+            ...update
+          }
+        }
+      }
+    });
+  };
+  const setCookingStatus = (
+    key: keyof Round1FormInput["layoutSensitiveCabinets"]["cookingAppliances"],
+    status: "YES" | "NO" | "UNKNOWN"
+  ) => {
+    setCookingAppliance(key, {
+      status,
+      relation:
+        status === "NO"
+          ? "NOT_APPLICABLE"
+          : cooking[key].relation === "NOT_APPLICABLE"
+            ? "UNKNOWN"
+            : cooking[key].relation
+    });
+  };
+
   return (
     <Step title="4. Core Appliances And Fixtures">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -278,35 +316,38 @@ export function AppliancesStep({
             })
           }
         />
-        <SelectField
-          label="Range size"
-          value={String(form.fixtures.range.size ?? "UNKNOWN")}
-          options={["30", "36", "48", "UNKNOWN"]}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              fixtures: {
-                ...form.fixtures,
-                range: { ...form.fixtures.range, size: parseNullableSize(value) as 30 | 36 | 48 | null }
-              }
-            })
+        <RoughApplianceFields
+          label="Range"
+          value={cooking.range}
+          onStatusChange={(status) => setCookingStatus("range", status)}
+          onRelationChange={(relation) =>
+            setCookingAppliance("range", { relation })
           }
         />
-        <SelectField
-          label="Range fixed location?"
-          value={form.fixtures.range.fixedLocation}
-          options={["UNKNOWN", "YES", "NO"]}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              fixtures: {
-                ...form.fixtures,
-                range: {
-                  ...form.fixtures.range,
-                  fixedLocation: value as "YES" | "NO" | "UNKNOWN"
-                }
-              }
-            })
+        <RoughApplianceFields
+          label="Cooktop"
+          value={cooking.cooktop}
+          onStatusChange={(status) => setCookingStatus("cooktop", status)}
+          onRelationChange={(relation) =>
+            setCookingAppliance("cooktop", { relation })
+          }
+        />
+        <RoughApplianceFields
+          label="Wall oven"
+          value={cooking.wallOven}
+          onStatusChange={(status) => setCookingStatus("wallOven", status)}
+          onRelationChange={(relation) =>
+            setCookingAppliance("wallOven", { relation })
+          }
+        />
+        <RoughApplianceFields
+          label="Microwave / oven combo"
+          value={cooking.microwaveOvenCombo}
+          onStatusChange={(status) =>
+            setCookingStatus("microwaveOvenCombo", status)
+          }
+          onRelationChange={(relation) =>
+            setCookingAppliance("microwaveOvenCombo", { relation })
           }
         />
         <SelectField
@@ -368,51 +409,43 @@ export function AppliancesStep({
             />
           </>
         )}
-        <SelectField
-          label="Oven / microwave"
-          value={form.layoutSensitiveCabinets.ovenMicrowave.configuration}
-          options={[
-            "RANGE_INCLUDES_OVEN",
-            "WALL_OVEN_MICROWAVE_STACK",
-            "MICROWAVE_DRAWER",
-            "UPPER_CABINET_MICROWAVE",
-            "COUNTERTOP_MICROWAVE",
-            "NO_MICROWAVE",
-            "NO_OVEN",
-            "UNKNOWN"
-          ]}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              layoutSensitiveCabinets: {
-                ...form.layoutSensitiveCabinets,
-                ovenMicrowave: {
-                  ...form.layoutSensitiveCabinets.ovenMicrowave,
-                  configuration: value as Round1FormInput["layoutSensitiveCabinets"]["ovenMicrowave"]["configuration"]
-                }
-              }
-            })
-          }
-        />
-        <SelectField
-          label="Oven / microwave position"
-          value={form.layoutSensitiveCabinets.ovenMicrowave.relation}
-          options={appliancePositionOptions}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              layoutSensitiveCabinets: {
-                ...form.layoutSensitiveCabinets,
-                ovenMicrowave: {
-                  ...form.layoutSensitiveCabinets.ovenMicrowave,
-                  relation: value
-                }
-              }
-            })
-          }
-        />
       </div>
     </Step>
+  );
+}
+
+function RoughApplianceFields({
+  label,
+  value,
+  onStatusChange,
+  onRelationChange
+}: {
+  label: string;
+  value: { status: "YES" | "NO" | "UNKNOWN"; relation: string };
+  onStatusChange: (status: "YES" | "NO" | "UNKNOWN") => void;
+  onRelationChange: (relation: (typeof applianceWallOptions)[number]) => void;
+}) {
+  return (
+    <>
+      <SelectField
+        label={`${label} included?`}
+        value={value.status}
+        options={["YES", "NO", "UNKNOWN"]}
+        onChange={onStatusChange}
+      />
+      {value.status === "YES" && (
+        <SelectField
+          label={`${label} approximate wall`}
+          value={
+            value.relation === "NOT_APPLICABLE"
+              ? "UNKNOWN"
+              : (value.relation as (typeof applianceWallOptions)[number])
+          }
+          options={applianceWallOptions}
+          onChange={onRelationChange}
+        />
+      )}
+    </>
   );
 }
 

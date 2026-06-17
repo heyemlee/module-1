@@ -77,6 +77,23 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("a range/cooktop with a hood above it");
   });
 
+  test("summarizes rough cooking appliance presence for concept rendering", () => {
+    const snapshot = buildSnapshot();
+    snapshot.showroomForm.layoutSensitiveCabinets.cookingAppliances = {
+      range: { status: "NO", relation: "NOT_APPLICABLE" },
+      cooktop: { status: "YES", relation: "BACK_SIDE" },
+      wallOven: { status: "YES", relation: "LEFT_SIDE" },
+      microwaveOvenCombo: { status: "YES", relation: "RIGHT_SIDE" }
+    };
+
+    const prompt = buildRound1RenderingPrompt(snapshot);
+
+    expect(prompt).toContain("Cooking appliances:");
+    expect(prompt).toContain("cooktop on the back wall");
+    expect(prompt).toContain("wall oven on the left wall");
+    expect(prompt).toContain("microwave / oven combo on the right wall");
+  });
+
   test("names the corner cabinet and forbids dropping it", () => {
     const prompt = buildRound1RenderingPrompt(buildSnapshot());
 

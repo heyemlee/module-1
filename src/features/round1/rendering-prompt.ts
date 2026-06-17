@@ -126,6 +126,13 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
     lines.push(`Oven / microwave: ${ovenPhrase}.`);
   }
 
+  const cookingPhrase = describeRoughCookingAppliances(
+    showroomForm.layoutSensitiveCabinets.cookingAppliances
+  );
+  if (cookingPhrase) {
+    lines.push(`Cooking appliances: ${cookingPhrase}.`);
+  }
+
   const fuel = showroomForm.fixtures.range.fuel.trim();
   if (fuel && fuel.toUpperCase() !== "UNKNOWN") {
     lines.push(`The range is ${fuel.toLowerCase()}.`);
@@ -144,4 +151,47 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
   );
 
   return lines.join("\n");
+}
+
+function describeRoughCookingAppliances(
+  cooking:
+    | {
+        range?: { status?: string; relation?: string };
+        cooktop?: { status?: string; relation?: string };
+        wallOven?: { status?: string; relation?: string };
+        microwaveOvenCombo?: { status?: string; relation?: string };
+      }
+    | undefined
+) {
+  if (!cooking) return "";
+  const items = [
+    describeRoughAppliance("range", cooking.range),
+    describeRoughAppliance("cooktop", cooking.cooktop),
+    describeRoughAppliance("wall oven", cooking.wallOven),
+    describeRoughAppliance(
+      "microwave / oven combo",
+      cooking.microwaveOvenCombo
+    )
+  ].filter(Boolean);
+  return items.join("; ");
+}
+
+function describeRoughAppliance(
+  label: string,
+  value: { status?: string; relation?: string } | undefined
+) {
+  if (!value || value.status !== "YES") return "";
+  return `${label} on ${relationPhrase(value.relation)}`;
+}
+
+function relationPhrase(relation: string | undefined) {
+  const phrases: Record<string, string> = {
+    BACK_SIDE: "the back wall",
+    FRONT_SIDE: "the front wall",
+    LEFT_SIDE: "the left wall",
+    RIGHT_SIDE: "the right wall",
+    ON_ISLAND: "the island",
+    UNKNOWN: "an unconfirmed wall"
+  };
+  return phrases[relation ?? "UNKNOWN"] ?? "an unconfirmed wall";
 }

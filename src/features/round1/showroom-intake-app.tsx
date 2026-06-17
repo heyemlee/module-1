@@ -16,7 +16,7 @@ import {
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
-import { Panel, StatusPill } from "./showroom-intake-controls";
+import { Panel } from "./showroom-intake-controls";
 import {
   AdjustPositionsStep,
   AppliancesStep,
@@ -39,6 +39,13 @@ export const SHOWROOM_STEPS = [
 ] as const;
 
 const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
+const PREVIEW_STAGES = [
+  "room",
+  "openings",
+  "layout",
+  "appliances",
+  "adjust"
+] as const;
 
 const EMPTY_PRELIMINARY_CABINET_ESTIMATE: PreliminaryCabinetEstimate = {
   cabinets: [],
@@ -54,6 +61,7 @@ const DEFAULT_PROJECT_CUSTOMER_NAME = "Showroom Round 1";
 export function ShowroomIntakeApp() {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
+  const [maxAccessibleStep, setMaxAccessibleStep] = useState(0);
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
   const [fixedPositionsConfirmed, setFixedPositionsConfirmed] = useState(false);
   const [cabinetFillGenerated, setCabinetFillGenerated] = useState(false);
@@ -181,6 +189,7 @@ export function ShowroomIntakeApp() {
     () => [...result.confirmationItems, ...preliminaryEstimate.confirmationItems],
     [preliminaryEstimate.confirmationItems, result.confirmationItems]
   );
+  const previewStage = PREVIEW_STAGES[step] ?? "room";
 
   // `Generate Cabinet Fill` is the authoritative snapshot point for Module 1.
   // The estimate is computed inline (not read from the gated memo, which is
@@ -282,6 +291,7 @@ export function ShowroomIntakeApp() {
         setCabinetFillGenerated(true);
         setSnapshot(saved);
         setPersistState("saved");
+        setMaxAccessibleStep(SHOWROOM_STEPS.length - 1);
         // Restore the last non-authoritative concept preview, if any. Staleness
         // is derived from `basedOnSnapshotGeneratedAt` vs the restored snapshot.
         const rendering = json.project?.latestRendering as
@@ -305,32 +315,24 @@ export function ShowroomIntakeApp() {
     if (step === ADJUST_POSITIONS_STEP_INDEX && !fixedPositionsConfirmed) {
       setFixedPositionsConfirmed(true);
     }
-    setStep(Math.min(SHOWROOM_STEPS.length - 1, step + 1));
+    const nextStep = Math.min(SHOWROOM_STEPS.length - 1, step + 1);
+    setStep(nextStep);
+    setMaxAccessibleStep((current) => Math.max(current, nextStep));
   }, [fixedPositionsConfirmed, step]);
+
+  const goToStep = useCallback((index: number) => {
+    if (index > maxAccessibleStep) return;
+    setStep(index);
+  }, [maxAccessibleStep]);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="border-b border-slate-200 bg-white px-6 py-5">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
-              Round 1 Sales Estimate Only
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-normal">
+            <h1 className="text-2xl font-black tracking-normal">
               Showroom Intake + Layout Preview
             </h1>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs font-bold">
-            <StatusPill label="Not Production Data" tone="red" />
-            <StatusPill label="Dimension Confidence: ROUGH" tone="amber" />
-            <StatusPill
-              label={
-                result.readiness.canGenerateRound1Layout
-                  ? "Ready To Generate"
-                  : "Needs Intake"
-              }
-              tone="green"
-            />
           </div>
         </div>
       </header>
@@ -341,20 +343,20 @@ export function ShowroomIntakeApp() {
             <button
               key={label}
               type="button"
-              onClick={() => setStep(index)}
+              onClick={() => goToStep(index)}
+              disabled={index > maxAccessibleStep}
               className={`mb-2 flex w-full items-center justify-between rounded-md px-3 py-3 text-left text-sm font-bold ${
                 step === index
                   ? "bg-sky-700 text-white"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                  : index > maxAccessibleStep
+                    ? "cursor-not-allowed bg-slate-50 text-slate-300"
+                    : "bg-slate-50 text-slate-700 hover:bg-slate-100"
               }`}
             >
               <span>{label}</span>
               <span>{index + 1}</span>
             </button>
           ))}
-          <p className="mt-3 rounded-md bg-slate-50 px-3 py-3 text-xs font-bold leading-5 text-slate-500">
-            The top-down layout plan updates live as you fill the form.
-          </p>
         </aside>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -377,14 +379,16 @@ export function ShowroomIntakeApp() {
             <button
               type="button"
               onClick={() => setStep(Math.max(0, step - 1))}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold"
+              disabled={step === 0}
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
             <button
               type="button"
               onClick={goToNextStep}
-              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+              disabled={step === SHOWROOM_STEPS.length - 1}
+              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>
@@ -400,6 +404,7 @@ export function ShowroomIntakeApp() {
             onPositionOverridesChange={updatePositionOverrides}
             highlightDraggableItems={highlightDraggableItems}
             showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
+            previewStage={previewStage}
             svgRef={floorPlanSvgRef}
           />
 
