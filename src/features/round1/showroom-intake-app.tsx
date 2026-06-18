@@ -9,6 +9,7 @@ import {
   type PreliminaryCabinetEstimate,
   type Round1FormInput
 } from "@/domain/round1";
+import { AgentChatPanel } from "./agent-chat-panel";
 import { LayoutPreview } from "./layout-preview";
 import { rasterizeSvgElement } from "./rasterize-svg";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
@@ -500,6 +501,14 @@ export function ShowroomIntakeApp() {
               persistState={persistState}
             />
           </Panel>
+
+          {/*
+            Optional conversational intake assistant. It edits the live form via
+            the same `updateForm` path manual edits use, so the deterministic
+            preview updates in place and snapshot staleness rules still apply. It
+            has no snapshot-freeze authority — that stays on Generate Cabinet Fill.
+          */}
+          <AgentChatPanel form={form} onFormUpdate={updateForm} />
         </aside>
       </div>
 
