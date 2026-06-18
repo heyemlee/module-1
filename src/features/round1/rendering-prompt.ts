@@ -43,7 +43,8 @@ const LAYOUT_PHRASES: Record<string, string> = {
 
 const OVEN_MICROWAVE_PHRASES: Record<string, string> = {
   RANGE_INCLUDES_OVEN: "the oven is built into the lower half of the freestanding range (the oven door must be clearly visible under the cooktop; DO NOT draw a separate wall oven)",
-  WALL_OVEN_MICROWAVE_STACK: "a stacked wall-oven and microwave tower",
+  WALL_OVEN_MICROWAVE_STACK: "a stacked wall oven and microwave tower in one tall appliance cabinet",
+  SEPARATE_WALL_OVEN_AND_MICROWAVE: "a wall oven and a separate microwave location",
   MICROWAVE_DRAWER: "a microwave drawer",
   UPPER_CABINET_MICROWAVE: "a microwave in an upper cabinet",
   COUNTERTOP_MICROWAVE: "a countertop microwave",
@@ -124,16 +125,18 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
     lines.push(behindCamera);
   }
 
+  const ovenMicrowaveConfiguration =
+    showroomForm.layoutSensitiveCabinets?.ovenMicrowave?.configuration ??
+    "UNKNOWN";
   const ovenPhrase =
-    OVEN_MICROWAVE_PHRASES[
-      showroomForm.layoutSensitiveCabinets?.ovenMicrowave?.configuration || "UNKNOWN"
-    ];
+    OVEN_MICROWAVE_PHRASES[ovenMicrowaveConfiguration];
   if (ovenPhrase) {
     lines.push(`Oven / microwave: ${ovenPhrase}.`);
   }
 
   const cookingPhrase = describeRoughCookingAppliances(
-    showroomForm.layoutSensitiveCabinets?.cookingAppliances
+    showroomForm.layoutSensitiveCabinets?.cookingAppliances,
+    ovenMicrowaveConfiguration
   );
   if (cookingPhrase) {
     lines.push(`Cooking appliances: ${cookingPhrase}.`);
@@ -167,17 +170,25 @@ function describeRoughCookingAppliances(
         wallOven?: { status?: string; relation?: string };
         microwaveOvenCombo?: { status?: string; relation?: string };
       }
-    | undefined
+    | undefined,
+  ovenMicrowaveConfiguration: string
 ) {
   if (!cooking) return "";
+  const suppressExplicitOvenMicrowave =
+    ovenMicrowaveConfiguration === "WALL_OVEN_MICROWAVE_STACK" ||
+    ovenMicrowaveConfiguration === "SEPARATE_WALL_OVEN_AND_MICROWAVE";
   const items = [
     describeRoughAppliance("freestanding range (with visible oven door underneath)", cooking.range),
     describeRoughAppliance("built-in cooktop (burners only, no oven — DO NOT draw an oven door under it)", cooking.cooktop),
-    describeRoughAppliance("wall oven", cooking.wallOven),
-    describeRoughAppliance(
-      "microwave / oven combo",
-      cooking.microwaveOvenCombo
-    )
+    suppressExplicitOvenMicrowave
+      ? ""
+      : describeRoughAppliance("wall oven", cooking.wallOven),
+    suppressExplicitOvenMicrowave
+      ? ""
+      : describeRoughAppliance(
+          "microwave / oven combo",
+          cooking.microwaveOvenCombo
+        )
   ].filter(Boolean);
   return items.join("; ");
 }

@@ -7,6 +7,7 @@ import {
 import { buildFloorPlan, type FloorPlan } from "./plan-geometry";
 import {
   alongAxisValue,
+  applianceNoun,
   describeBehindCameraAppliances,
   describeCorners,
   describeDoor,
@@ -79,6 +80,16 @@ describe("alongAxisValue", () => {
 });
 
 describe("describeWall", () => {
+  test("names a stacked wall oven and microwave tower", () => {
+    expect(
+      applianceNoun({
+        key: "ovenMicrowaveStack",
+        label: "Wall oven + microwave stack",
+        symbol: "oven"
+      })
+    ).toBe("a stacked wall oven and microwave tower");
+  });
+
   test("orders back-wall appliances sink -> dishwasher -> range and folds in the hood", () => {
     const desc = describeWall(defaultPlan, "TOP");
     expect(desc).not.toBeNull();
