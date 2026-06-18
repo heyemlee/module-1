@@ -70,6 +70,96 @@ describe("executeRound1AgentTool", () => {
     expect(
       ctx.updatedForm?.layoutSensitiveCabinets.ovenMicrowave.configuration
     ).toBe("SEPARATE_WALL_OVEN_AND_MICROWAVE");
+    expect(
+      ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances.wallOven
+    ).toEqual({ status: "YES", relation: "UNKNOWN" });
+    expect(
+      ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances
+        .microwaveOvenCombo
+    ).toEqual({ status: "YES", relation: "UNKNOWN" });
+  });
+
+  test.each([
+    ["WALL_OVEN_MICROWAVE_STACK", "YES", "UNKNOWN", "YES", "UNKNOWN"],
+    [
+      "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+      "YES",
+      "UNKNOWN",
+      "YES",
+      "UNKNOWN"
+    ],
+    ["NO_MICROWAVE", "YES", "UNKNOWN", "NO", "NOT_APPLICABLE"],
+    ["NO_OVEN", "NO", "NOT_APPLICABLE", "YES", "UNKNOWN"]
+  ])(
+    "agent tool syncs appliance statuses for %s arrangement",
+    async (
+      configuration,
+      wallOvenStatus,
+      wallOvenRelation,
+      microwaveStatus,
+      microwaveRelation
+    ) => {
+      const ctx = createRound1AgentContext(createDefaultShowroomForm());
+
+      const result = await executeRound1AgentTool(
+        "update_intake",
+        {
+          layoutSensitiveCabinets: {
+            ovenMicrowave: { configuration }
+          }
+        },
+        ctx
+      );
+
+      expect(result).not.toHaveProperty("error");
+      expect(
+        ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances.wallOven
+      ).toEqual({ status: wallOvenStatus, relation: wallOvenRelation });
+      expect(
+        ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances
+          .microwaveOvenCombo
+      ).toEqual({ status: microwaveStatus, relation: microwaveRelation });
+    }
+  );
+
+  test("agent tool preserves appliance statuses when arrangement becomes unknown", async () => {
+    const form = createDefaultShowroomForm();
+    form.layoutSensitiveCabinets.ovenMicrowave = {
+      configuration: "WALL_OVEN_MICROWAVE_STACK",
+      relation: "LEFT_SIDE"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.wallOven = {
+      status: "YES",
+      relation: "LEFT_SIDE"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+      status: "YES",
+      relation: "LEFT_SIDE"
+    };
+    const ctx = createRound1AgentContext(form);
+
+    const result = await executeRound1AgentTool(
+      "update_intake",
+      {
+        layoutSensitiveCabinets: {
+          ovenMicrowave: { configuration: "UNKNOWN" }
+        }
+      },
+      ctx
+    );
+
+    expect(result).not.toHaveProperty("error");
+    expect(ctx.updatedForm?.layoutSensitiveCabinets.ovenMicrowave).toEqual({
+      configuration: "UNKNOWN",
+      relation: "UNKNOWN"
+    });
+    expect(
+      ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances.wallOven
+    ).toEqual({ status: "YES", relation: "LEFT_SIDE" });
+    expect(
+      ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances
+        .microwaveOvenCombo
+    ).toEqual({ status: "YES", relation: "LEFT_SIDE" });
   });
 
   test("update_intake tool schema advertises separate wall oven and microwave arrangement", () => {
