@@ -75,7 +75,11 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
   ).length;
 
   const lines: string[] = [
-    "Create a warm, photorealistic customer concept rendering of a residential kitchen for a Round 1 sales preview.",
+    "Create a warm, photorealistic customer concept rendering of a residential kitchen for a Round 1 sales preview in a California Bay Area single-family house.",
+    "",
+    "Design style: modern frameless European-style cabinetry (flat slab doors, clean reveals, minimal or integrated pulls), medium-tone wood grain cabinet fronts, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the wood.",
+    "",
+    "Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home, such as a stainless or panel-ready American-size refrigerator, range/cooktop, hood, dishwasher, oven, and microwave where shown. Do not use compact European appliance proportions unless the reference layout explicitly requires them.",
     "",
     "Camera and viewpoint: render in one-point perspective as if standing at the front of the room looking straight at the back wall. The back wall is straight ahead; the left wall recedes on the left; the right wall recedes on the right; the front wall is behind the camera and is not shown. Do not change this viewpoint.",
     "",
@@ -143,7 +147,7 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
       baseCount === 1 ? "" : "s"
     } and ${wallCount} wall cabinet${
       wallCount === 1 ? "" : "s"
-    }, in a clean modern shaker style with a light, neutral palette and simple hardware.`,
+    }, using modern frameless European-style cabinetry with flat medium-tone wood grain fronts and simple integrated or low-profile hardware.`,
     "",
     "This is a sales-estimate concept image only, not a production drawing. All dimensions are approximate and subject to confirmation.",
     "Do not draw dimension lines, measurements, cabinet codes, labels, numbers, legends, or any text annotations on the image.",

@@ -10,8 +10,12 @@ import {
 } from "./showroom-intake-data";
 import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
 
-function buildSnapshot(): Round1Snapshot {
-  const form = createDefaultShowroomForm();
+function buildSnapshot(
+  layoutPreference: ReturnType<
+    typeof createDefaultShowroomForm
+  >["layoutPreference"] = "L_SHAPE"
+): Round1Snapshot {
+  const form = { ...createDefaultShowroomForm(), layoutPreference };
   const { normalized, confirmationItems, readiness } =
     normalizeRound1Form(form);
   const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
@@ -43,6 +47,16 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain(
       "Do not draw dimension lines, measurements, cabinet codes, labels"
     );
+  });
+
+  test("anchors the rendering style to Bay Area single-family homes with modern frameless wood cabinetry", () => {
+    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+
+    expect(prompt).toContain("California Bay Area");
+    expect(prompt).toContain("single-family house");
+    expect(prompt).toContain("modern frameless European-style cabinetry");
+    expect(prompt).toContain("medium-tone wood grain");
+    expect(prompt).toContain("American residential appliances");
   });
 
   test("relays the deterministic cabinet counts instead of inventing them", () => {
@@ -102,13 +116,17 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("Do not omit the corner cabinet");
   });
 
-  test("constrains the door to its wall and keeps the front-wall fridge behind the camera", () => {
+  test("constrains the front-wall door behind the camera", () => {
     const prompt = buildRound1RenderingPrompt(buildSnapshot());
 
     // Default door is on the front wall (behind the camera).
     expect(prompt).toContain("The entry door is on the front wall behind the camera");
     expect(prompt).toContain("must NOT appear on the back, left, or right walls");
-    // Default fridge is on the front wall too.
+  });
+
+  test("keeps a front-wall fridge behind the camera", () => {
+    // A galley puts the default front-side fridge on the front (BOTTOM) wall.
+    const prompt = buildRound1RenderingPrompt(buildSnapshot("GALLEY"));
     expect(prompt).toContain("behind the viewpoint");
   });
 

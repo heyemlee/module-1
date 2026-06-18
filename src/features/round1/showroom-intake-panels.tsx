@@ -108,7 +108,7 @@ function CabinetSummaryMetric({
   );
 }
 
-function RenderingControls({
+export function RenderingControls({
   canRender,
   busy,
   error,
@@ -124,7 +124,7 @@ function RenderingControls({
   onGenerate?: () => void;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 mt-4">
       <button
         type="button"
         onClick={onGenerate}
@@ -156,7 +156,7 @@ function RenderingControls({
         </p>
       )}
       {image && (
-        <figure className="space-y-1">
+        <figure className="space-y-1 mt-3">
           {stale && (
             <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] font-bold leading-4 text-amber-800">
               Outdated — this concept is based on an earlier snapshot. Regenerate
@@ -183,34 +183,11 @@ function RenderingControls({
 
 export function Round1SnapshotPanel({
   snapshot,
-  persistState = "idle",
-  renderingBusy = false,
-  renderingImage = null,
-  renderingError = null,
-  renderingStale = false,
-  canRender = false,
-  onGenerateRendering
+  persistState = "idle"
 }: {
   snapshot: Round1Snapshot | null;
   persistState?: SnapshotPersistState;
-  renderingBusy?: boolean;
-  renderingImage?: string | null;
-  renderingError?: string | null;
-  renderingStale?: boolean;
-  canRender?: boolean;
-  onGenerateRendering?: () => void;
 }) {
-  const renderingControls = (
-    <RenderingControls
-      canRender={canRender}
-      busy={renderingBusy}
-      error={renderingError}
-      stale={renderingStale}
-      image={renderingImage}
-      onGenerate={onGenerateRendering}
-    />
-  );
-
   if (!snapshot) {
     return (
       <div className="space-y-3">
@@ -223,7 +200,6 @@ export function Round1SnapshotPanel({
             snapshot. Until then, form and position changes stay draft only.
           </p>
         </div>
-        {renderingControls}
       </div>
     );
   }
@@ -252,8 +228,6 @@ export function Round1SnapshotPanel({
         </div>
         <SnapshotPersistStatus persistState={persistState} />
       </div>
-
-      {renderingControls}
 
       <details className="rounded-md border border-slate-200">
         <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">

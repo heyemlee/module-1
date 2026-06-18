@@ -27,6 +27,7 @@ import {
 import {
   CabinetFillSummaryPanel,
   Round1SnapshotPanel,
+  RenderingControls,
   type SnapshotPersistState
 } from "./showroom-intake-panels";
 
@@ -408,6 +409,18 @@ export function ShowroomIntakeApp() {
             svgRef={floorPlanSvgRef}
           />
 
+          <RenderingControls
+            canRender={persistState === "saved"}
+            busy={renderingBusy}
+            error={renderingError}
+            stale={
+              renderingImage !== null &&
+              (!snapshot || renderingBasedOn !== snapshot.generatedAt)
+            }
+            image={renderingImage}
+            onGenerate={handleGenerateRendering}
+          />
+
           {/*
             Hidden, clean reference render bound to the frozen snapshot geometry.
             This is the image rasterized for the AI rendering — same locked
@@ -466,15 +479,6 @@ export function ShowroomIntakeApp() {
             <Round1SnapshotPanel
               snapshot={snapshot}
               persistState={persistState}
-              renderingBusy={renderingBusy}
-              renderingImage={renderingImage}
-              renderingError={renderingError}
-              renderingStale={
-                renderingImage !== null &&
-                (!snapshot || renderingBasedOn !== snapshot.generatedAt)
-              }
-              canRender={persistState === "saved"}
-              onGenerateRendering={handleGenerateRendering}
             />
           </Panel>
         </aside>
@@ -493,14 +497,7 @@ export function ShowroomIntakeApp() {
               Drag these rough positions first, then confirm them to generate
               the preliminary cabinet fill around those constraints.
             </p>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowAdjustPositionsModal(false)}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
-              >
-                Skip For Now
-              </button>
+            <div className="mt-5 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -509,7 +506,7 @@ export function ShowroomIntakeApp() {
                 }}
                 className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
               >
-                Start Adjusting
+                Got It
               </button>
             </div>
           </div>

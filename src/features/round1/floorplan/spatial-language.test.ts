@@ -48,6 +48,12 @@ const uShapePlan = planFor({
   ...createDefaultShowroomForm(),
   layoutPreference: "U_SHAPE"
 });
+// In a galley the front (BOTTOM) wall is a real run, so the default
+// front-side fridge legitimately sits behind the camera there.
+const galleyPlan = planFor({
+  ...createDefaultShowroomForm(),
+  layoutPreference: "GALLEY"
+});
 
 describe("wallToCamera", () => {
   test("maps internal walls to the fixed camera convention", () => {
@@ -94,8 +100,10 @@ describe("describeWall", () => {
     expect(desc!.hasCabinetRun).toBe(true);
   });
 
-  test("describes the left wall as a cabinet-only run", () => {
-    const desc = describeWall(defaultPlan, "LEFT");
+  test("describes a cabinet-only run with no appliances", () => {
+    // The default L-shape now parks the fridge on the left leg, so use the
+    // U-shape right wall, which is a pure cabinet run.
+    const desc = describeWall(uShapePlan, "RIGHT");
     expect(desc).not.toBeNull();
     expect(desc!.appliances).toHaveLength(0);
     expect(desc!.hasCabinetRun).toBe(true);
@@ -141,11 +149,16 @@ describe("describeDoor", () => {
 });
 
 describe("describeBehindCameraAppliances", () => {
-  test("notes the front-wall refrigerator is behind the viewpoint", () => {
-    const phrase = describeBehindCameraAppliances(defaultPlan);
+  test("notes a front-wall refrigerator is behind the viewpoint", () => {
+    const phrase = describeBehindCameraAppliances(galleyPlan);
     expect(phrase).not.toBeNull();
     expect(phrase!).toContain("refrigerator");
     expect(phrase!).toContain("behind the viewpoint");
+  });
+
+  test("returns null when no appliance sits on the front wall", () => {
+    // The default L-shape keeps every appliance within the L (back/left walls).
+    expect(describeBehindCameraAppliances(defaultPlan)).toBeNull();
   });
 });
 

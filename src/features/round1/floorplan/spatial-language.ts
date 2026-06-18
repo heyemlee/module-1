@@ -195,8 +195,10 @@ export function describeDoor(plan: FloorPlan): string {
 
 /**
  * Note for appliances that sit on the front wall (behind the camera) so the
- * model does not relocate them onto a visible wall. Directly addresses the
- * "fridge drifted to a side wall" failure for the default L-shape.
+ * model does not relocate them onto a visible wall — e.g. a galley fridge on
+ * the front run, or any appliance the user dragged to the front wall. Returns
+ * null when nothing sits on the front wall (as in the default L-shape, whose
+ * appliances all stay within the L).
  */
 export function describeBehindCameraAppliances(plan: FloorPlan): string | null {
   const front = plan.appliances.filter(

@@ -226,10 +226,7 @@ export function buildFloorPlan(
     }
     sharedCabinetObstacles.push({ x: dx, y: dy, w: dw, h: dh });
   }
-  const baseObstacles: PlanRect[] = [
-    ...sharedCabinetObstacles,
-    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher")
-  ];
+  const baseObstacles: PlanRect[] = [...sharedCabinetObstacles];
   
   const geom = { ix, iy, iw, ih, scale };
   const baseCabinets: CabinetShape[] = [];
@@ -270,8 +267,18 @@ export function buildFloorPlan(
     overrides
   });
 
-  const wallObstacles: PlanRect[] = [...sharedCabinetObstacles];
-  if (window) wallObstacles.push(window);
+  const wallObstacles: PlanRect[] = [
+    ...sharedCabinetObstacles,
+    ...appliances.filter((a) => a.symbol === "sink")
+  ];
+  if (window) {
+    let wx = window.x, wy = window.y, ww = window.w, wh = window.h;
+    if (window.wall === "TOP") { wh += wallDepth; }
+    else if (window.wall === "BOTTOM") { wy -= wallDepth; wh += wallDepth; }
+    else if (window.wall === "LEFT") { ww += wallDepth; }
+    else if (window.wall === "RIGHT") { wx -= wallDepth; ww += wallDepth; }
+    wallObstacles.push({ x: wx, y: wy, w: ww, h: wh });
+  }
 
   // 4. Layout wall cabinets
   const wallCabinets: CabinetShape[] = [];
@@ -448,6 +455,7 @@ function layRun(
 
   for (const cabinet of cabinets) {
     let length = Math.max(cabinet.width * scale, 6);
+    const minimumStandaloneWallLength = 12 * scale;
     
     let placed = false;
     let dropped = false;
@@ -468,6 +476,10 @@ function layRun(
       if (overlap) {
         const gap = overlap.start - cursor;
         if (gap >= 6) {
+          if (!snapObstacles && gap < minimumStandaloneWallLength) {
+            cursor = Math.max(cursor, overlap.end);
+            continue;
+          }
           length = gap;
           placed = true;
         } else {
@@ -511,6 +523,7 @@ function fillGenericCabinetGaps(
   const start = (horizontal ? ix : iy) + startOffset;
   const limit = (horizontal ? ix + iw : iy + ih) - endOffset;
   const minGap = 8;
+  const minStandaloneLength = codePrefix.includes("_WALL") ? depth : minGap;
 
   let trackRect: PlanRect;
   if (wall === "TOP") trackRect = { x: ix, y: iy, w: iw, h: depth };
@@ -542,7 +555,7 @@ function fillGenericCabinetGaps(
   const shapes: CabinetShape[] = [];
   let cursor = start;
   occupied.forEach((interval, index) => {
-    if (interval.start - cursor >= minGap) {
+    if (interval.start - cursor >= minStandaloneLength) {
       shapes.push(
         makeGenericCabinet(wall, cursor, interval.start - cursor, depth, {
           ix,
@@ -555,7 +568,7 @@ function fillGenericCabinetGaps(
     cursor = Math.max(cursor, interval.end);
   });
 
-  if (limit - cursor >= minGap) {
+  if (limit - cursor >= minStandaloneLength) {
     shapes.push(
       makeGenericCabinet(wall, cursor, limit - cursor, depth, { ix, iy, iw, ih }, `${codePrefix}_${wall}_END`)
     );
@@ -638,15 +651,47 @@ function wallAllowed(wall: Wall, layoutPreference: string): boolean {
   return allowedDragWallsForLayout(layoutPreference).includes(wall);
 }
 
+const WALL_ADJACENCY: Record<Wall, Wall[]> = {
+  TOP: ["LEFT", "RIGHT"],
+  BOTTOM: ["LEFT", "RIGHT"],
+  LEFT: ["TOP", "BOTTOM"],
+  RIGHT: ["TOP", "BOTTOM"]
+};
+
+const WALL_OPPOSITE: Record<Wall, Wall> = {
+  TOP: "BOTTOM",
+  BOTTOM: "TOP",
+  LEFT: "RIGHT",
+  RIGHT: "LEFT"
+};
+
+/**
+ * Snaps a desired wall to one the layout actually occupies. A relation such as
+ * "front side" maps to BOTTOM, but in an L-shape (TOP/LEFT only) BOTTOM has no
+ * run, so an appliance defaulted there would float outside the L. Prefer an
+ * adjacent allowed wall, then the opposite, then any allowed wall.
+ */
+function clampWallToLayout(wall: Wall, layoutPreference: string): Wall {
+  const allowed = allowedDragWallsForLayout(layoutPreference);
+  if (allowed.length === 0 || allowed.includes(wall)) return wall;
+  const adjacent = WALL_ADJACENCY[wall].find((candidate) => allowed.includes(candidate));
+  if (adjacent) return adjacent;
+  if (allowed.includes(WALL_OPPOSITE[wall])) return WALL_OPPOSITE[wall];
+  return allowed[0];
+}
+
 function overrideWall(
   overrides: PositionOverrides,
   key: string,
   fallback: Wall,
   layoutPreference?: string
 ): Wall {
+  const resolvedFallback = layoutPreference
+    ? clampWallToLayout(fallback, layoutPreference)
+    : fallback;
   const override = overrides[key];
-  if (!override) return fallback;
-  if (layoutPreference && !wallAllowed(override.wall, layoutPreference)) return fallback;
+  if (!override) return resolvedFallback;
+  if (layoutPreference && !wallAllowed(override.wall, layoutPreference)) return resolvedFallback;
   return override.wall;
 }
 
@@ -811,11 +856,21 @@ function placeAppliances(
     const rawSpacing = Math.max((span - totalApplianceWidth) / (onWall.length + 1), 0);
     // Cap spacing so appliances stay clustered, allowing base cabinets to connect them
     const spacing = Math.min(rawSpacing, 12 * scale);
+
+    // Sort appliances by their intended position so dragging them reorders them naturally
+    const targets = onWall.map((spec, idx) => {
+      const roughDefault = runStart + spacing + idx * ((span - spacing) / Math.max(1, onWall.length));
+      return { spec, target: overridePosition(ctx.overrides, spec.key) ?? roughDefault };
+    });
+    targets.sort((a, b) => a.target - b.target);
+    const sortedOnWall = targets.map(t => t.spec);
+
     let cursor = runStart + (totalApplianceWidth > span ? (span * 0.025) : spacing);
     const occupied: AxisInterval[] = [];
 
-    onWall.forEach((spec, idx) => {
-      const length = rawLengths[idx] * fitFactor;
+    sortedOnWall.forEach((spec) => {
+      const originalIdx = onWall.indexOf(spec);
+      const length = rawLengths[originalIdx] * fitFactor;
       const depth = (spec.symbol === "sink" || spec.symbol === "dishwasher") 
         ? baseDepth 
         : (spec.symbol === "range" ? baseDepth * 1.05 

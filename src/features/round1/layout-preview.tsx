@@ -243,6 +243,34 @@ export function LayoutPreview({
           />
         ))}
 
+
+
+        {showCabinetFill && plan.wallCorners?.map((corner, index) => (
+          <WallCorner key={`wallcorner-${index}`} corner={corner} />
+        ))}
+
+        {enablePositionDragging && <DragFeedback plan={plan} draggingId={dragInfo?.id} />}
+
+        {showAppliances && [...plan.appliances]
+          .sort((a, b) => {
+            const isDraggingA = !referenceMode && (dragInfo?.id === a.key || (a.key === "hood" && dragInfo?.id === "range"));
+            const isDraggingB = !referenceMode && (dragInfo?.id === b.key || (b.key === "hood" && dragInfo?.id === "range"));
+            if (isDraggingA && !isDraggingB) return 1;
+            if (!isDraggingA && isDraggingB) return -1;
+            return 0;
+          })
+          .map((appliance) => (
+          <Appliance
+            key={appliance.key}
+            appliance={appliance}
+            onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
+            dragging={!referenceMode && (dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range"))}
+            highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
+            referenceMode={referenceMode}
+            interactive={enablePositionDragging}
+          />
+        ))}
+
         {showCabinetFill && plan.wallCabinets.map((cabinet, index) => {
           const inset = 2.5;
           return (
@@ -269,24 +297,6 @@ export function LayoutPreview({
             </g>
           );
         })}
-
-        {showCabinetFill && plan.wallCorners?.map((corner, index) => (
-          <WallCorner key={`wallcorner-${index}`} corner={corner} />
-        ))}
-
-        {enablePositionDragging && <DragFeedback plan={plan} draggingId={dragInfo?.id} />}
-
-        {showAppliances && plan.appliances.map((appliance) => (
-          <Appliance
-            key={appliance.key}
-            appliance={appliance}
-            onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
-            dragging={!referenceMode && (dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range"))}
-            highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
-            referenceMode={referenceMode}
-            interactive={enablePositionDragging}
-          />
-        ))}
 
         {showOpenings && (
           <Openings

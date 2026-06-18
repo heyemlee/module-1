@@ -103,10 +103,17 @@ describe("buildFloorPlan", () => {
 
     const baseCount = estimate.cabinets.filter((c) => c.kind === "BASE").length;
     const wallCount = estimate.cabinets.filter((c) => c.kind === "WALL").length;
-    expect(plan.baseCabinets.length).toBeGreaterThan(0);
-    expect(plan.baseCabinets.length).toBeLessThanOrEqual(baseCount);
-    expect(plan.wallCabinets.length).toBeGreaterThan(0);
-    expect(plan.wallCabinets.length).toBeLessThanOrEqual(wallCount);
+    // Generic visual fillers wrap around fixed appliances (e.g. the fridge on
+    // the L's left leg), so compare only the real estimated cabinets against
+    // the estimate count; the renderer never fabricates extra real cabinets.
+    const isReal = (c: { code: string }) =>
+      !c.code.startsWith("ROUND1_GENERIC") && c.code !== "Visual Base";
+    const realBase = plan.baseCabinets.filter(isReal);
+    const realWall = plan.wallCabinets.filter(isReal);
+    expect(realBase.length).toBeGreaterThan(0);
+    expect(realBase.length).toBeLessThanOrEqual(baseCount);
+    expect(realWall.length).toBeGreaterThan(0);
+    expect(realWall.length).toBeLessThanOrEqual(wallCount);
 
     // Default L-shape has a main (top) run and a left run -> one top-left corner.
     expect(plan.corners.length).toBe(1);
@@ -137,20 +144,31 @@ describe("buildFloorPlan", () => {
     }
   });
 
-  test("cabinet fill keeps sink and dishwasher footprints clear", () => {
+  test("cabinet fill keeps sink and dishwasher integrated into base cabinets", () => {
     const { plan } = planFromForm(createDefaultShowroomForm());
     const plumbingAppliances = plan.appliances.filter((item) =>
       ["sink", "dishwasher"].includes(item.key)
     );
 
     for (const appliance of plumbingAppliances) {
-      for (const cabinet of plan.baseCabinets) {
-        expect(
-          intersects(cabinet, appliance),
-          `${cabinet.code} overlaps ${appliance.key}`
-        ).toBe(false);
-      }
+      expect(
+        plan.baseCabinets.some((cabinet) => intersects(cabinet, appliance)),
+        `${appliance.key} sits inside a base cabinet footprint`
+      ).toBe(true);
     }
+  });
+
+  test("does not render narrow clipped wall-cabinet fragments around the sink", () => {
+    const form = createDefaultShowroomForm();
+    const { plan } = planFromForm(form);
+    const scale = plan.room.w / (form.room.length as number);
+    const minimumStandaloneWallCabinet = 12 * scale;
+
+    const narrowTopWallCabinets = plan.wallCabinets.filter(
+      (cabinet) => cabinet.wall === "TOP" && cabinet.w < minimumStandaloneWallCabinet
+    );
+
+    expect(narrowTopWallCabinets).toHaveLength(0);
   });
 
   test("uses rough cooking appliance presence fields instead of always drawing range", () => {
