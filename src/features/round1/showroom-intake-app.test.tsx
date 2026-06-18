@@ -78,7 +78,7 @@ describe("AppliancesStep", () => {
     expect(html).not.toContain("Oven / microwave position");
   });
 
-  test("drops the approximate-wall question for cooktop and microwave/oven combo", () => {
+  test("drops the approximate-wall question for cooktop, wall oven, and microwave/oven combo", () => {
     const form = createDefaultShowroomForm();
     const cooking = form.layoutSensitiveCabinets.cookingAppliances;
     const html = renderToStaticMarkup(
@@ -100,12 +100,57 @@ describe("AppliancesStep", () => {
       />
     );
 
-    // Range and wall oven still ask for an approximate wall.
+    // Range still asks for an approximate wall.
     expect(html).toContain("Range approximate wall");
-    expect(html).toContain("Wall oven approximate wall");
-    // Cooktop and microwave/oven combo no longer do — the auto-layout places them.
+    // Cooktop, wall oven, and microwave/oven combo no longer do — the auto-layout places them.
     expect(html).not.toContain("Cooktop approximate wall");
+    expect(html).not.toContain("Wall oven approximate wall");
     expect(html).not.toContain("Microwave / oven combo approximate wall");
+  });
+
+  test("shows oven and microwave arrangement only when wall oven or microwave is included", () => {
+    const form = createDefaultShowroomForm();
+    const cooking = form.layoutSensitiveCabinets.cookingAppliances;
+    const hiddenHtml = renderToStaticMarkup(
+      <AppliancesStep
+        form={{
+          ...form,
+          layoutSensitiveCabinets: {
+            ...form.layoutSensitiveCabinets,
+            cookingAppliances: {
+              ...cooking,
+              wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+              microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+            }
+          }
+        }}
+        setForm={() => {}}
+      />
+    );
+    const visibleHtml = renderToStaticMarkup(
+      <AppliancesStep
+        form={{
+          ...form,
+          layoutSensitiveCabinets: {
+            ...form.layoutSensitiveCabinets,
+            cookingAppliances: {
+              ...cooking,
+              wallOven: { status: "YES", relation: "UNKNOWN" },
+              microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+            }
+          }
+        }}
+        setForm={() => {}}
+      />
+    );
+
+    expect(hiddenHtml).not.toContain("Oven and microwave arrangement?");
+    expect(visibleHtml).toContain("Oven and microwave arrangement?");
+    expect(visibleHtml).toContain("WALL_OVEN_MICROWAVE_STACK");
+    expect(visibleHtml).toContain("SEPARATE_WALL_OVEN_AND_MICROWAVE");
+    expect(visibleHtml).toContain("NO_MICROWAVE");
+    expect(visibleHtml).toContain("NO_OVEN");
+    expect(visibleHtml).toContain("UNKNOWN");
   });
 });
 

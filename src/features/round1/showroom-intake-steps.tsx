@@ -38,6 +38,17 @@ const layoutPreferenceOptions = [
   "NO_PREFERENCE"
 ] as const;
 
+const ovenMicrowaveArrangementOptions = [
+  "WALL_OVEN_MICROWAVE_STACK",
+  "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+  "NO_MICROWAVE",
+  "NO_OVEN",
+  "UNKNOWN"
+] as const;
+
+type OvenMicrowaveArrangement =
+  (typeof ovenMicrowaveArrangementOptions)[number];
+
 function displayLayoutPreference(
   layoutPreference: Round1FormInput["layoutPreference"]
 ): (typeof layoutPreferenceOptions)[number] {
@@ -51,6 +62,16 @@ function displayLayoutPreference(
     return "NO_PREFERENCE";
   }
   return layoutPreference as (typeof layoutPreferenceOptions)[number];
+}
+
+function displayOvenMicrowaveArrangement(
+  configuration: Round1FormInput["layoutSensitiveCabinets"]["ovenMicrowave"]["configuration"]
+): OvenMicrowaveArrangement {
+  return ovenMicrowaveArrangementOptions.includes(
+    configuration as OvenMicrowaveArrangement
+  )
+    ? (configuration as OvenMicrowaveArrangement)
+    : "UNKNOWN";
 }
 
 function islandStatusForForm(
@@ -389,6 +410,66 @@ export function AppliancesStep({
       }
     });
   };
+  const setOvenMicrowaveArrangement = (
+    configuration: OvenMicrowaveArrangement
+  ) => {
+    const arrangementCooking = {
+      WALL_OVEN_MICROWAVE_STACK: {
+        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+        microwaveOvenCombo: {
+          status: "YES" as const,
+          relation: "UNKNOWN" as const
+        }
+      },
+      SEPARATE_WALL_OVEN_AND_MICROWAVE: {
+        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+        microwaveOvenCombo: {
+          status: "YES" as const,
+          relation: "UNKNOWN" as const
+        }
+      },
+      NO_MICROWAVE: {
+        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+        microwaveOvenCombo: {
+          status: "NO" as const,
+          relation: "NOT_APPLICABLE" as const
+        }
+      },
+      NO_OVEN: {
+        wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+        microwaveOvenCombo: {
+          status: "YES" as const,
+          relation: "UNKNOWN" as const
+        }
+      },
+      UNKNOWN: {
+        wallOven: cooking.wallOven,
+        microwaveOvenCombo: cooking.microwaveOvenCombo
+      }
+    } satisfies Record<
+      OvenMicrowaveArrangement,
+      Pick<typeof cooking, "wallOven" | "microwaveOvenCombo">
+    >;
+
+    setForm({
+      ...form,
+      layoutSensitiveCabinets: {
+        ...form.layoutSensitiveCabinets,
+        ovenMicrowave: {
+          ...form.layoutSensitiveCabinets.ovenMicrowave,
+          configuration,
+          relation: "UNKNOWN"
+        },
+        cookingAppliances: {
+          ...cooking,
+          ...arrangementCooking[configuration]
+        }
+      }
+    });
+  };
+  const showOvenMicrowaveArrangement =
+    cooking.wallOven.status === "YES" ||
+    cooking.microwaveOvenCombo.status === "YES";
 
   return (
     <Step title="4. Core Appliances And Fixtures">
@@ -427,6 +508,7 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Wall oven"
           value={cooking.wallOven}
+          showWall={false}
           onStatusChange={(status) => setCookingStatus("wallOven", status)}
           onRelationChange={(relation) =>
             setCookingAppliance("wallOven", { relation })
@@ -443,6 +525,16 @@ export function AppliancesStep({
             setCookingAppliance("microwaveOvenCombo", { relation })
           }
         />
+        {showOvenMicrowaveArrangement && (
+          <SelectField
+            label="Oven and microwave arrangement?"
+            value={displayOvenMicrowaveArrangement(
+              form.layoutSensitiveCabinets.ovenMicrowave.configuration
+            )}
+            options={ovenMicrowaveArrangementOptions}
+            onChange={setOvenMicrowaveArrangement}
+          />
+        )}
         <SelectField
           label="Fridge size"
           value={String(form.fixtures.fridge.size ?? "UNKNOWN")}
