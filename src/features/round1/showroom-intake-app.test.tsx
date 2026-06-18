@@ -37,6 +37,27 @@ function buildFixtureSnapshot() {
   });
 }
 
+type ElementWithChildrenProps = {
+  children?: ReactNode;
+};
+
+type SelectChangeEvent = {
+  target: { value: string };
+};
+
+type SelectElementProps = ElementWithChildrenProps & {
+  onChange: (event: SelectChangeEvent) => void;
+};
+
+function childrenOf(element: ReactElement): ReactNode {
+  return (element as ReactElement<ElementWithChildrenProps>).props.children;
+}
+
+function renderFunctionElement(element: ReactElement): ReactNode {
+  const Component = element.type as (props: unknown) => ReactNode;
+  return Component(element.props);
+}
+
 function textFromReactNode(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === "boolean") {
     return "";
@@ -49,10 +70,9 @@ function textFromReactNode(node: ReactNode): string {
   }
   if (isValidElement(node)) {
     if (typeof node.type === "function") {
-      const Component = node.type as (props: unknown) => ReactNode;
-      return textFromReactNode(Component(node.props));
+      return textFromReactNode(renderFunctionElement(node));
     }
-    return textFromReactNode(node.props.children);
+    return textFromReactNode(childrenOf(node));
   }
   return "";
 }
@@ -60,7 +80,7 @@ function textFromReactNode(node: ReactNode): string {
 function findFirstElementByType(
   node: ReactNode,
   type: string
-): ReactElement | null {
+): ReactElement<ElementWithChildrenProps> | null {
   if (node === null || node === undefined || typeof node === "boolean") {
     return null;
   }
@@ -73,36 +93,46 @@ function findFirstElementByType(
   }
   if (!isValidElement(node)) return null;
   if (typeof node.type === "function") {
-    const Component = node.type as (props: unknown) => ReactNode;
-    return findFirstElementByType(Component(node.props), type);
+    return findFirstElementByType(renderFunctionElement(node), type);
   }
-  if (node.type === type) return node;
-  return findFirstElementByType(node.props.children, type);
+  if (node.type === type) {
+    return node as ReactElement<ElementWithChildrenProps>;
+  }
+  return findFirstElementByType(childrenOf(node), type);
 }
 
-function findSelectByLabel(node: ReactNode, label: string) {
+function findSelectByLabel(
+  node: ReactNode,
+  label: string
+): ReactElement<SelectElementProps> | null {
   if (node === null || node === undefined || typeof node === "boolean") {
     return null;
   }
   if (Array.isArray(node)) {
     for (const child of node) {
-      const found = findSelectByLabel(child, label);
+      const found: ReactElement<SelectElementProps> | null =
+        findSelectByLabel(child, label);
       if (found) return found;
     }
     return null;
   }
   if (!isValidElement(node)) return null;
   if (typeof node.type === "function") {
-    const Component = node.type as (props: unknown) => ReactNode;
-    return findSelectByLabel(Component(node.props), label);
+    return findSelectByLabel(renderFunctionElement(node), label);
   }
   if (node.type === "label" && textFromReactNode(node).includes(label)) {
-    return findFirstElementByType(node, "select");
+    return findFirstElementByType(
+      node,
+      "select"
+    ) as ReactElement<SelectElementProps> | null;
   }
-  return findSelectByLabel(node.props.children, label);
+  return findSelectByLabel(childrenOf(node), label);
 }
 
-function changeSelect(select: ReactElement, value: string) {
+function changeSelect(
+  select: ReactElement<SelectElementProps>,
+  value: string
+): void {
   select.props.onChange({ target: { value } });
 }
 
