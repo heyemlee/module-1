@@ -269,7 +269,7 @@ export function buildFloorPlan(
 
   const wallObstacles: PlanRect[] = [
     ...sharedCabinetObstacles,
-    ...appliances.filter((a) => a.symbol === "sink")
+    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher")
   ];
   if (window) {
     let wx = window.x, wy = window.y, ww = window.w, wh = window.h;
@@ -298,6 +298,25 @@ export function buildFloorPlan(
           "ROUND1_GENERIC_WALL"
         )
       );
+
+      const dw = appliances.find((a) => a.symbol === "dishwasher" && a.wall === wall);
+      if (dw) {
+        let dwx = dw.x, dwy = dw.y, dww = dw.w, dwh = dw.h;
+        if (wall === "TOP") { dwh = wallDepth; }
+        else if (wall === "BOTTOM") { dwy = iy + ih - wallDepth; dwh = wallDepth; }
+        else if (wall === "LEFT") { dww = wallDepth; }
+        else if (wall === "RIGHT") { dwx = ix + iw - wallDepth; dww = wallDepth; }
+
+        wallCabinets.push({
+          x: dwx,
+          y: dwy,
+          w: dww,
+          h: dwh,
+          wall,
+          code: "ROUND1_GENERIC_WALL",
+          confirmationRequired: false
+        });
+      }
     }
   }
 

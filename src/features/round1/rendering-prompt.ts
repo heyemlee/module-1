@@ -124,14 +124,14 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
 
   const ovenPhrase =
     OVEN_MICROWAVE_PHRASES[
-      showroomForm.layoutSensitiveCabinets.ovenMicrowave.configuration
+      showroomForm.layoutSensitiveCabinets?.ovenMicrowave?.configuration || "UNKNOWN"
     ];
   if (ovenPhrase) {
     lines.push(`Oven / microwave: ${ovenPhrase}.`);
   }
 
   const cookingPhrase = describeRoughCookingAppliances(
-    showroomForm.layoutSensitiveCabinets.cookingAppliances
+    showroomForm.layoutSensitiveCabinets?.cookingAppliances
   );
   if (cookingPhrase) {
     lines.push(`Cooking appliances: ${cookingPhrase}.`);

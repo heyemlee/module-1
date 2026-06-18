@@ -13,7 +13,8 @@ import { ShowroomIntakeApp } from "./showroom-intake-app";
 import { AppliancesStep, OpeningsStep } from "./showroom-intake-steps";
 import {
   CabinetFillSummaryPanel,
-  Round1SnapshotPanel
+  Round1SnapshotPanel,
+  RenderingControls
 } from "./showroom-intake-panels";
 
 function buildFixtureSnapshot() {
@@ -160,7 +161,18 @@ describe("CabinetFillSummaryPanel", () => {
 
 describe("Round1SnapshotPanel", () => {
   test("gates the rendering action and hides the JSON until a snapshot exists", () => {
-    const html = renderToStaticMarkup(<Round1SnapshotPanel snapshot={null} />);
+    const html = renderToStaticMarkup(
+      <>
+        <RenderingControls
+          canRender={false}
+          busy={false}
+          error={null}
+          stale={false}
+          image={null}
+        />
+        <Round1SnapshotPanel snapshot={null} />
+      </>
+    );
 
     expect(html).toContain("No snapshot yet");
     expect(html).toContain("Generate Rendering");

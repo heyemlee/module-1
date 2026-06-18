@@ -5,6 +5,7 @@ import {
   generatePreliminaryCabinetList,
   summarizePreliminaryCabinetEstimate,
   normalizeRound1Form,
+  round1FormSchema,
   type PreliminaryCabinetEstimate,
   type Round1FormInput
 } from "@/domain/round1";
@@ -286,7 +287,26 @@ export function ShowroomIntakeApp() {
         const json = await response.json();
         const saved = json.project?.snapshot as Round1Snapshot | undefined;
         if (cancelled || !saved) return;
-        setForm(saved.showroomForm);
+        
+        // Parse the showroom form using round1FormSchema to ensure all defaults are populated
+        try {
+          setForm(round1FormSchema.parse(saved.showroomForm));
+        } catch (e) {
+          console.warn("Failed to parse saved showroomForm with round1FormSchema, attempting partial recovery", e);
+          // Defensive fallback: merge defaults with whatever was saved
+          setForm({
+            ...createDefaultShowroomForm(),
+            ...saved.showroomForm,
+            layoutSensitiveCabinets: {
+              ...createDefaultShowroomForm().layoutSensitiveCabinets,
+              ...(saved.showroomForm.layoutSensitiveCabinets || {}),
+              cookingAppliances: {
+                ...createDefaultShowroomForm().layoutSensitiveCabinets.cookingAppliances,
+                ...(saved.showroomForm.layoutSensitiveCabinets?.cookingAppliances || {})
+              }
+            }
+          });
+        }
         setPositionOverrides(saved.positionOverrides);
         setFixedPositionsConfirmed(true);
         setCabinetFillGenerated(true);
@@ -367,7 +387,6 @@ export function ShowroomIntakeApp() {
           {step === 3 && <AppliancesStep form={form} setForm={updateForm} />}
           {step === 4 && (
             <AdjustPositionsStep
-              onHighlight={startDraggableHighlightCue}
               onReset={handleResetPositions}
               onConfirmPositions={() => setFixedPositionsConfirmed(true)}
               onGenerateCabinetFill={handleGenerateCabinetFill}

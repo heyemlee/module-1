@@ -263,7 +263,12 @@ export function AppliancesStep({
   form: Round1FormInput;
   setForm: (form: Round1FormInput) => void;
 }) {
-  const cooking = form.layoutSensitiveCabinets.cookingAppliances;
+  const cooking = form.layoutSensitiveCabinets.cookingAppliances || {
+    range: { status: "YES" as const, relation: "BACK_SIDE" as const },
+    cooktop: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+    wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+    microwaveOvenCombo: { status: "UNKNOWN" as const, relation: "UNKNOWN" as const }
+  };
   const setCookingAppliance = (
     key: keyof Round1FormInput["layoutSensitiveCabinets"]["cookingAppliances"],
     update: Partial<
@@ -450,7 +455,6 @@ function RoughApplianceFields({
 }
 
 export function AdjustPositionsStep({
-  onHighlight,
   onReset,
   onConfirmPositions,
   onGenerateCabinetFill,
@@ -458,7 +462,6 @@ export function AdjustPositionsStep({
   fixedPositionsConfirmed,
   cabinetFillGenerated
 }: {
-  onHighlight: () => void;
   onReset: () => void;
   onConfirmPositions: () => void;
   onGenerateCabinetFill: () => void;
@@ -495,13 +498,6 @@ export function AdjustPositionsStep({
         </div>
       </div>
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onHighlight}
-          className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
-        >
-          Highlight Draggable Items
-        </button>
         <button
           type="button"
           onClick={onReset}
