@@ -420,6 +420,8 @@ function synchronizeOvenMicrowaveArrangement(
       return merged;
   }
 
+  ovenMicrowave.relation = "UNKNOWN";
+
   return {
     ...merged,
     layoutSensitiveCabinets: {

@@ -70,6 +70,9 @@ describe("executeRound1AgentTool", () => {
     expect(
       ctx.updatedForm?.layoutSensitiveCabinets.ovenMicrowave.configuration
     ).toBe("SEPARATE_WALL_OVEN_AND_MICROWAVE");
+    expect(ctx.updatedForm?.layoutSensitiveCabinets.ovenMicrowave.relation).toBe(
+      "UNKNOWN"
+    );
     expect(
       ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances.wallOven
     ).toEqual({ status: "YES", relation: "UNKNOWN" });
@@ -112,6 +115,10 @@ describe("executeRound1AgentTool", () => {
       );
 
       expect(result).not.toHaveProperty("error");
+      expect(ctx.updatedForm?.layoutSensitiveCabinets.ovenMicrowave).toEqual({
+        configuration,
+        relation: "UNKNOWN"
+      });
       expect(
         ctx.updatedForm?.layoutSensitiveCabinets.cookingAppliances.wallOven
       ).toEqual({ status: wallOvenStatus, relation: wallOvenRelation });
