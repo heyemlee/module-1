@@ -68,7 +68,8 @@ describe("buildElevationScene", () => {
     expect(back?.items.some((item) => item.kind === "appliance" && item.symbol === "hood")).toBe(true);
     expect(back?.items.some((item) => item.kind === "opening" && item.symbol === "window")).toBe(true);
     expect(left?.items.some((item) => item.kind === "appliance" && item.symbol === "fridge")).toBe(true);
-    expect(front?.items.some((item) => item.symbol === "door")).not.toBe(true);
+    expect(front?.title).toBe("Front Wall");
+    expect(front?.items.some((item) => item.kind === "opening" && item.symbol === "door")).toBe(true);
   });
 
   test("includes the front wall when a visible Round 1 object exists there", () => {

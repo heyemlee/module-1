@@ -86,12 +86,11 @@ function buildWallScene(plan: FloorPlan, wall: Wall): WallElevationScene | null 
     ...wallCabinetItems(plan, wall),
     ...cornerItems(plan, wall),
     ...applianceItems(plan, wall),
-    ...windowItems(plan, wall)
+    ...windowItems(plan, wall),
+    ...doorItems(plan, wall)
   ];
 
   if (items.length === 0) return null;
-
-  items.push(...doorItems(plan, wall));
 
   return {
     wall,
