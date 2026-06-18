@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent
+} from "react";
 import type { Round1FormInput } from "@/domain/round1";
 import { Panel } from "./showroom-intake-controls";
+import { useSpeechToText, type SttLang } from "./use-speech-to-text";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -31,9 +38,45 @@ export function AgentChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [sttLang, setSttLang] = useState<SttLang>("zh-CN");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Text typed before a dictation session starts; the transcript is appended to
+  // it so speech adds to (rather than replaces) what the rep already typed.
+  const baseInputRef = useRef("");
+
+  // Default dictation language to the browser locale, then let the user toggle.
+  useEffect(() => {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.language?.toLowerCase().startsWith("en")
+    ) {
+      setSttLang("en-US");
+    }
+  }, []);
+
+  const stt = useSpeechToText({
+    lang: sttLang,
+    onResult: (transcript) => {
+      const base = baseInputRef.current;
+      const joined = base && transcript ? `${base} ${transcript}` : base + transcript;
+      setInput(joined.slice(0, MAX_INPUT_LENGTH));
+    }
+  });
+  const { recording: sttRecording, stop: sttStop } = stt;
+
+  const handleMicClick = useCallback(() => {
+    if (sttRecording) {
+      sttStop();
+      return;
+    }
+    baseInputRef.current = input;
+    stt.start();
+  }, [input, stt, sttRecording, sttStop]);
 
   const send = useCallback(async () => {
+    if (sttRecording) {
+      sttStop();
+    }
     const text = input.trim();
     if (!text || isLoading) {
       return;
@@ -81,7 +124,7 @@ export function AgentChatPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [form, input, isLoading, messages, onFormUpdate]);
+  }, [form, input, isLoading, messages, onFormUpdate, sttRecording, sttStop]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -163,9 +206,9 @@ export function AgentChatPanel({
                 )}
               </div>
 
-              {error && (
+              {(error || stt.error) && (
                 <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">
-                  {error}
+                  {error ?? stt.error}
                 </p>
               )}
 
@@ -176,27 +219,92 @@ export function AgentChatPanel({
                 }
                 onKeyDown={handleKeyDown}
                 rows={3}
-                placeholder="Describe the kitchen… (Enter to send, Shift+Enter for a new line)"
+                placeholder={
+                  sttRecording
+                    ? "Listening… speak now"
+                    : "Describe the kitchen… (Enter to send, Shift+Enter for a new line)"
+                }
                 disabled={isLoading}
                 className="w-full resize-none rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-700 disabled:bg-slate-50"
               />
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">
-                  {input.length}/{MAX_INPUT_LENGTH}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void send()}
-                  disabled={isLoading || input.trim().length === 0}
-                  className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Send
-                </button>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  {stt.supported && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleMicClick}
+                        disabled={isLoading}
+                        aria-label={sttRecording ? "Stop dictation" : "Start voice dictation"}
+                        title={sttRecording ? "Stop dictation" : "Dictate by voice"}
+                        className={`flex h-9 w-9 items-center justify-center rounded-md border disabled:cursor-not-allowed disabled:opacity-50 ${
+                          sttRecording
+                            ? "animate-pulse border-red-300 bg-red-50 text-red-600"
+                            : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <MicIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSttLang((value) =>
+                            value === "zh-CN" ? "en-US" : "zh-CN"
+                          )
+                        }
+                        disabled={isLoading || sttRecording}
+                        title="Dictation language"
+                        className="rounded-md border border-slate-300 px-2 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {sttLang === "zh-CN" ? "中文" : "EN"}
+                      </button>
+                      {sttRecording && (
+                        <span className="text-xs font-bold text-red-600">
+                          ● Recording
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400">
+                    {input.length}/{MAX_INPUT_LENGTH}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void send()}
+                    disabled={isLoading || input.trim().length === 0}
+                    className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
             </>
           )}
         </div>
       )}
     </Panel>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
   );
 }
