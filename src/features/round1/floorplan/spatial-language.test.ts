@@ -90,6 +90,16 @@ describe("describeWall", () => {
     ).toBe("a stacked wall oven and microwave tower");
   });
 
+  test("names a microwave oven combo distinctly from a wall oven", () => {
+    expect(
+      applianceNoun({
+        key: "microwaveOvenCombo",
+        label: "Microwave / oven combo",
+        symbol: "oven"
+      })
+    ).toBe("a microwave / oven combo");
+  });
+
   test("orders back-wall appliances sink -> dishwasher -> range and folds in the hood", () => {
     const desc = describeWall(defaultPlan, "TOP");
     expect(desc).not.toBeNull();

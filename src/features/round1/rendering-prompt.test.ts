@@ -156,6 +156,14 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain(
       "Oven / microwave: a wall oven and a separate microwave location."
     );
+    const wallWalkthrough = prompt
+      .split("\n")
+      .filter((line) => line.startsWith("On the "))
+      .join(" ");
+    expect(wallWalkthrough).toContain("a wall oven");
+    expect(wallWalkthrough).toContain("a microwave / oven combo");
+    expect(wallWalkthrough.match(/a wall oven/g) ?? []).toHaveLength(1);
+    expect(wallWalkthrough).not.toContain("a wall oven and a wall oven");
     expect(prompt).not.toContain("wall oven on an unconfirmed wall");
     expect(prompt).not.toContain(
       "microwave / oven combo on an unconfirmed wall"
