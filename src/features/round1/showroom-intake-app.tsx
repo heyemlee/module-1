@@ -10,8 +10,9 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import { AgentChatPanel } from "./agent-chat-panel";
+import { ElevationPreview } from "./elevations/elevation-preview";
 import { LayoutPreview } from "./layout-preview";
-import { rasterizeSvgElement } from "./rasterize-svg";
+import { rasterizeRenderingReferences } from "./rendering-references";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
@@ -87,6 +88,7 @@ export function ShowroomIntakeApp() {
   // so the reference image and the JSON prompt come from the identical locked
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
+  const referenceElevationRef = useRef<SVGSVGElement | null>(null);
   const [renderingImage, setRenderingImage] = useState<string | null>(null);
   const [renderingBasedOn, setRenderingBasedOn] = useState<string | null>(null);
   const [renderingBusy, setRenderingBusy] = useState(false);
@@ -221,14 +223,18 @@ export function ShowroomIntakeApp() {
   // which loads the authoritative snapshot server-side by id and builds the
   // prompt — the client never sends snapshot data, only the reference image.
   const handleGenerateRendering = useCallback(async () => {
-    const referenceSvg = referenceTopDownRef.current;
+    const referenceTopDownSvg = referenceTopDownRef.current;
+    const referenceElevationSvg = referenceElevationRef.current;
     const projectId = projectIdRef.current;
-    if (!referenceSvg || !projectId || !snapshot) return;
+    if (!referenceTopDownSvg || !projectId || !snapshot) return;
 
     setRenderingBusy(true);
     setRenderingError(null);
     try {
-      const referenceImagesBase64 = [await rasterizeSvgElement(referenceSvg)];
+      const referenceImagesBase64 = await rasterizeRenderingReferences([
+        referenceTopDownSvg,
+        referenceElevationSvg
+      ]);
       const response = await fetch(
         `/api/round1/projects/${projectId}/rendering`,
         {
@@ -429,6 +435,8 @@ export function ShowroomIntakeApp() {
             svgRef={floorPlanSvgRef}
           />
 
+          {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
+
           <RenderingControls
             canRender={persistState === "saved"}
             busy={renderingBusy}
@@ -468,6 +476,10 @@ export function ShowroomIntakeApp() {
                 highlightDraggableItems={false}
                 showPositionObjects
                 svgRef={referenceTopDownRef}
+              />
+              <ElevationPreview
+                plan={snapshot.floorPlan}
+                svgRef={referenceElevationRef}
               />
             </div>
           )}

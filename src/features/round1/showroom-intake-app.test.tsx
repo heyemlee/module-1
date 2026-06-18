@@ -203,4 +203,11 @@ describe("ShowroomIntakeApp snapshot gating", () => {
     expect(html).not.toContain("Snapshot ready");
     expect(html).not.toContain("View snapshot JSON");
   });
+
+  test("hides rough elevations before cabinet fill is generated", () => {
+    const html = renderToStaticMarkup(<ShowroomIntakeApp />);
+
+    expect(html).not.toContain("Rough Wall Elevations");
+    expect(html).not.toContain("Round 1 rough elevation - not for production");
+  });
 });
