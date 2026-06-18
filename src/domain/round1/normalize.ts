@@ -54,6 +54,17 @@ export function normalizeRound1Form(
     );
   }
 
+  if (form.layoutSensitiveCabinets.island.status === "UNKNOWN") {
+    confirmationItems.push(
+      createConfirmationItem({
+        category: "CABINET",
+        code: "UNKNOWN_ISLAND_STATUS",
+        message: "Island requirement is unknown.",
+        path: "layoutSensitiveCabinets.island.status"
+      })
+    );
+  }
+
   if (
     form.openings.windows.status === "NO" &&
     form.fixtures.sink.relation === "UNDER_WINDOW"
@@ -146,6 +157,9 @@ export function normalizeRound1Form(
     fixtures: normalizedFixtures,
     layoutSensitiveCabinets: {
       ...form.layoutSensitiveCabinets,
+      cookingAppliances: enforceCookingExclusivity(
+        form.layoutSensitiveCabinets.cookingAppliances
+      ),
       cornerCabinet: {
         ...form.layoutSensitiveCabinets.cornerCabinet,
         confirmationRequired: false
@@ -163,6 +177,26 @@ export function normalizeRound1Form(
     confirmationItems,
     readiness: evaluateRound1Readiness(form, normalized, confirmationItems)
   };
+}
+
+type ParsedForm = ReturnType<typeof round1FormSchema.parse>;
+type CookingAppliances = ParsedForm["layoutSensitiveCabinets"]["cookingAppliances"];
+
+/**
+ * Range and cooktop are mutually exclusive primary cooking surfaces (range =
+ * burners + oven; cooktop = burners only). The form UI prevents picking both,
+ * but this is the deterministic safety net for other writers (e.g. the AI
+ * intake agent): if both are YES, keep the range and drop the cooktop so the
+ * plan/JSON never shows them coexisting.
+ */
+function enforceCookingExclusivity(cooking: CookingAppliances): CookingAppliances {
+  if (cooking.range.status === "YES" && cooking.cooktop.status === "YES") {
+    return {
+      ...cooking,
+      cooktop: { ...cooking.cooktop, status: "NO", relation: "NOT_APPLICABLE" }
+    };
+  }
+  return cooking;
 }
 
 function toDimension(value: number | null, confirmationRequired: boolean) {

@@ -10,12 +10,13 @@ import {
 } from "./showroom-intake-data";
 import { buildRound1Snapshot } from "./snapshot";
 import { ShowroomIntakeApp } from "./showroom-intake-app";
-import { AppliancesStep, OpeningsStep } from "./showroom-intake-steps";
+import { AppliancesStep, LayoutStep, OpeningsStep } from "./showroom-intake-steps";
 import {
   CabinetFillSummaryPanel,
   Round1SnapshotPanel,
   RenderingControls
 } from "./showroom-intake-panels";
+import { shouldApplySnapshotRestore } from "./showroom-intake-app";
 
 function buildFixtureSnapshot() {
   const form = createDefaultShowroomForm();
@@ -75,6 +76,65 @@ describe("AppliancesStep", () => {
     expect(html).not.toContain("Cooktop size");
     expect(html).not.toContain("Oven / microwave");
     expect(html).not.toContain("Oven / microwave position");
+  });
+
+  test("drops the approximate-wall question for cooktop and microwave/oven combo", () => {
+    const form = createDefaultShowroomForm();
+    const cooking = form.layoutSensitiveCabinets.cookingAppliances;
+    const html = renderToStaticMarkup(
+      <AppliancesStep
+        form={{
+          ...form,
+          layoutSensitiveCabinets: {
+            ...form.layoutSensitiveCabinets,
+            cookingAppliances: {
+              ...cooking,
+              range: { status: "YES", relation: "BACK_SIDE" },
+              cooktop: { status: "YES", relation: "UNKNOWN" },
+              wallOven: { status: "YES", relation: "UNKNOWN" },
+              microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+            }
+          }
+        }}
+        setForm={() => {}}
+      />
+    );
+
+    // Range and wall oven still ask for an approximate wall.
+    expect(html).toContain("Range approximate wall");
+    expect(html).toContain("Wall oven approximate wall");
+    // Cooktop and microwave/oven combo no longer do — the auto-layout places them.
+    expect(html).not.toContain("Cooktop approximate wall");
+    expect(html).not.toContain("Microwave / oven combo approximate wall");
+  });
+});
+
+describe("LayoutStep", () => {
+  test("offers left/right L-shapes first and moves island to a separate three-state field", () => {
+    const html = renderToStaticMarkup(
+      <LayoutStep
+        form={createDefaultShowroomForm()}
+        setForm={() => {}}
+        setPositionOverrides={() => {}}
+      />
+    );
+
+    const leftIndex = html.indexOf("LEFT_L_SHAPE");
+    const rightIndex = html.indexOf("RIGHT_L_SHAPE");
+    const uIndex = html.indexOf("U_SHAPE");
+    const oneWallIndex = html.indexOf("ONE_WALL");
+
+    expect(leftIndex).toBeGreaterThan(-1);
+    expect(rightIndex).toBeGreaterThan(leftIndex);
+    expect(uIndex).toBeGreaterThan(rightIndex);
+    expect(oneWallIndex).toBeGreaterThan(uIndex);
+    expect(html).toContain("Need island?");
+    expect(html).toContain("YES");
+    expect(html).toContain("NO");
+    expect(html).toContain("UNKNOWN");
+    expect(html).not.toContain("L_SHAPE_ISLAND");
+    expect(html).not.toContain("U_SHAPE_ISLAND");
+    expect(html).not.toContain(">ISLAND<");
   });
 });
 
@@ -209,5 +269,27 @@ describe("ShowroomIntakeApp snapshot gating", () => {
 
     expect(html).not.toContain("Rough Wall Elevations");
     expect(html).not.toContain("Round 1 rough elevation - not for production");
+  });
+});
+
+describe("snapshot restore guard", () => {
+  test("does not apply a late saved snapshot after the current form has changed", () => {
+    expect(
+      shouldApplySnapshotRestore({
+        cancelled: false,
+        hasSavedSnapshot: true,
+        localSessionChanged: true
+      })
+    ).toBe(false);
+  });
+
+  test("applies a saved snapshot only to an untouched active session", () => {
+    expect(
+      shouldApplySnapshotRestore({
+        cancelled: false,
+        hasSavedSnapshot: true,
+        localSessionChanged: false
+      })
+    ).toBe(true);
   });
 });

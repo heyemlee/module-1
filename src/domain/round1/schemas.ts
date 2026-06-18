@@ -27,6 +27,29 @@ const roughApplianceSchema = z.object({
   status: statusSchema,
   relation: relationSchema.default("UNKNOWN")
 });
+const islandSchema = z.preprocess(
+  (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+    const island = value as {
+      status?: z.infer<typeof statusSchema>;
+      requested?: boolean;
+      functions?: string[];
+    };
+    const status = island.status ?? (island.requested ? "YES" : "NO");
+    return {
+      status,
+      requested: status === "YES",
+      functions: island.functions ?? []
+    };
+  },
+  z.object({
+    status: statusSchema,
+    requested: z.boolean(),
+    functions: z.array(z.string())
+  })
+);
 
 const defaultCookingAppliances = {
   range: { status: "YES" as const, relation: "BACK_SIDE" as const },
@@ -102,6 +125,8 @@ export const round1FormSchema = z.object({
   }),
   layoutPreference: z.enum([
     "ONE_WALL",
+    "LEFT_L_SHAPE",
+    "RIGHT_L_SHAPE",
     "L_SHAPE",
     "U_SHAPE",
     "GALLEY",
@@ -178,10 +203,7 @@ export const round1FormSchema = z.object({
         microwaveOvenCombo: roughApplianceSchema
       })
       .default(defaultCookingAppliances),
-    island: z.object({
-      requested: z.boolean(),
-      functions: z.array(z.string())
-    })
+    island: islandSchema
   })
 });
 

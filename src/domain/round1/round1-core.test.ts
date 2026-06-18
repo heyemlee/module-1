@@ -154,7 +154,7 @@ describe("Round 1 normalization and readiness", () => {
           wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
           microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
         },
-        island: { requested: false, functions: [] }
+        island: { status: "NO", requested: false, functions: [] }
       }
     });
 
@@ -227,7 +227,7 @@ describe("Round 1 normalization and readiness", () => {
           wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
           microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
         },
-        island: { requested: false, functions: [] }
+        island: { status: "NO", requested: false, functions: [] }
       }
     });
 
@@ -279,7 +279,7 @@ describe("Round 1 normalization and readiness", () => {
           wallOven: { status: "YES", relation: "LEFT_SIDE" },
           microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
         },
-        island: { requested: false, functions: [] }
+        island: { status: "NO", requested: false, functions: [] }
       }
     });
 

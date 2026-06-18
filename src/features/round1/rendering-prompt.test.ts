@@ -88,7 +88,7 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("On the back wall, from left to right:");
     // Sink and range are clustered on the back run in the default L-shape.
     expect(prompt).toContain("a sink");
-    expect(prompt).toContain("a range/cooktop with a hood above it");
+    expect(prompt).toContain("a freestanding range (burners with an oven below) with a hood above it");
   });
 
   test("summarizes rough cooking appliance presence for concept rendering", () => {
@@ -103,7 +103,8 @@ describe("buildRound1RenderingPrompt", () => {
     const prompt = buildRound1RenderingPrompt(snapshot);
 
     expect(prompt).toContain("Cooking appliances:");
-    expect(prompt).toContain("cooktop on the back wall");
+    expect(prompt).toContain("built-in cooktop (burners only, no oven");
+    expect(prompt).toContain("no oven — DO NOT draw an oven door under it) on the back wall");
     expect(prompt).toContain("wall oven on the left wall");
     expect(prompt).toContain("microwave / oven combo on the right wall");
   });

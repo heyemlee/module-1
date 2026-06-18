@@ -30,7 +30,7 @@ const showroomForm = {
   layoutSensitiveCabinets: {
     cornerCabinet: { preferredType: "NO_PREFERENCE" },
     ovenMicrowave: { configuration: "UNKNOWN" },
-    island: { requested: false, functions: [] }
+    island: { status: "NO", requested: false, functions: [] }
   }
 };
 

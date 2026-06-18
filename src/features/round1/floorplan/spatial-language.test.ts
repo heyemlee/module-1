@@ -86,7 +86,7 @@ describe("describeWall", () => {
 
     const sinkIndex = items.findIndex((item) => item.includes("sink"));
     const dishwasherIndex = items.findIndex((item) => item.includes("dishwasher"));
-    const rangeIndex = items.findIndex((item) => item.includes("range/cooktop"));
+    const rangeIndex = items.findIndex((item) => item.includes("range"));
 
     expect(sinkIndex).toBeGreaterThanOrEqual(0);
     expect(dishwasherIndex).toBeGreaterThanOrEqual(0);

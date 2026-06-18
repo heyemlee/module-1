@@ -130,10 +130,26 @@ function ElevationShape({ item }: { item: ElevationItem }) {
 }
 
 function CabinetShape({ item }: { item: ElevationItem }) {
-  const innerInset = item.kind === "wallCabinet" ? 4 : 3;
+  const isBase = item.kind === "baseCabinet";
+  const isBaseLevel = item.y > 100;
+  const hasToeKick = isBase || (item.symbol === "corner" && isBaseLevel);
+  
+  const toeKickH = 12;
+  const isFiller = item.w < 14;
 
   return (
     <g data-elevation-item={item.symbol}>
+      {hasToeKick && (
+        <rect
+          x={item.x}
+          y={item.y + item.h}
+          width={item.w}
+          height={toeKickH}
+          fill="#ffffff"
+          stroke={INK}
+          strokeWidth="1"
+        />
+      )}
       <rect
         x={item.x}
         y={item.y}
@@ -141,27 +157,56 @@ function CabinetShape({ item }: { item: ElevationItem }) {
         height={item.h}
         fill="#ffffff"
         stroke={INK}
-        strokeWidth="1.2"
+        strokeWidth="1"
       />
-      {item.w > 24 && item.h > 18 && (
-        <rect
-          x={item.x + innerInset}
-          y={item.y + innerInset}
-          width={Math.max(4, item.w - innerInset * 2)}
-          height={Math.max(4, item.h - innerInset * 2)}
-          fill="none"
-          stroke={INK}
-          strokeWidth="0.8"
-        />
-      )}
-      {item.symbol === "corner" && (
-        <path
-          d={`M ${item.x} ${item.y + item.h} L ${item.x + item.w} ${item.y}`}
-          fill="none"
-          stroke={INK}
-          strokeWidth="0.9"
-        />
-      )}
+      {item.symbol === "corner" ? (
+        <>
+          <path
+            d={`M ${item.x} ${item.y + item.h} L ${item.x + item.w} ${item.y}`}
+            fill="none"
+            stroke={INK}
+            strokeWidth="0.8"
+          />
+          <path
+            d={`M ${item.x} ${item.y} L ${item.x + item.w} ${item.y + item.h}`}
+            fill="none"
+            stroke={INK}
+            strokeWidth="0.8"
+          />
+        </>
+      ) : !isFiller ? (
+        <>
+          {isBase && item.h > 20 && (
+            <>
+              <line
+                x1={item.x}
+                y1={item.y + 12}
+                x2={item.x + item.w}
+                y2={item.y + 12}
+                stroke={INK}
+                strokeWidth="1"
+              />
+              <line x1={item.x + item.w / 2 - 5} y1={item.y + 6} x2={item.x + item.w / 2 + 5} y2={item.y + 6} stroke={INK} strokeWidth="1" />
+            </>
+          )}
+          {item.w > 20 ? (
+            <>
+              <line
+                x1={item.x + item.w / 2}
+                y1={isBase ? item.y + 12 : item.y}
+                x2={item.x + item.w / 2}
+                y2={item.y + item.h}
+                stroke={INK}
+                strokeWidth="1"
+              />
+              <line x1={item.x + item.w / 2 - 6} y1={isBase ? item.y + 20 : item.y + item.h - 20} x2={item.x + item.w / 2 - 6} y2={isBase ? item.y + 30 : item.y + item.h - 10} stroke={INK} strokeWidth="1" />
+              <line x1={item.x + item.w / 2 + 6} y1={isBase ? item.y + 20 : item.y + item.h - 20} x2={item.x + item.w / 2 + 6} y2={isBase ? item.y + 30 : item.y + item.h - 10} stroke={INK} strokeWidth="1" />
+            </>
+          ) : (
+            <line x1={item.x + item.w - 6} y1={isBase ? item.y + 20 : item.y + item.h - 20} x2={item.x + item.w - 6} y2={isBase ? item.y + 30 : item.y + item.h - 10} stroke={INK} strokeWidth="1" />
+          )}
+        </>
+      ) : null}
     </g>
   );
 }
@@ -176,26 +221,49 @@ function OpeningShape({ item }: { item: ElevationItem }) {
         height={item.h}
         fill="#f0f9ff"
         stroke={OPENING}
-        strokeWidth="1.6"
+        strokeWidth="1"
       />
       {item.symbol === "window" && (
         <>
-          <line
-            x1={item.x + item.w / 2}
-            y1={item.y}
-            x2={item.x + item.w / 2}
-            y2={item.y + item.h}
+          <rect
+            x={item.x + 3}
+            y={item.y + 3}
+            width={item.w - 6}
+            height={item.h - 6}
+            fill="none"
             stroke={OPENING}
             strokeWidth="1"
           />
           <line
-            x1={item.x}
+            x1={item.x + item.w / 2}
+            y1={item.y + 3}
+            x2={item.x + item.w / 2}
+            y2={item.y + item.h - 3}
+            stroke={OPENING}
+            strokeWidth="1"
+          />
+          <line
+            x1={item.x + 3}
             y1={item.y + item.h / 2}
-            x2={item.x + item.w}
+            x2={item.x + item.w - 3}
             y2={item.y + item.h / 2}
             stroke={OPENING}
             strokeWidth="1"
           />
+        </>
+      )}
+      {item.symbol === "door" && (
+        <>
+          <rect
+            x={item.x + 3}
+            y={item.y + 3}
+            width={item.w - 6}
+            height={item.h - 3}
+            fill="none"
+            stroke={OPENING}
+            strokeWidth="1"
+          />
+          <circle cx={item.x + item.w - 8} cy={item.y + item.h / 2} r={2} stroke={OPENING} fill="none" />
         </>
       )}
     </g>
@@ -203,16 +271,41 @@ function OpeningShape({ item }: { item: ElevationItem }) {
 }
 
 function ApplianceShape({ item }: { item: ElevationItem }) {
+  if (item.symbol === "sink" || item.symbol === "hood") {
+    return (
+      <g data-elevation-appliance={item.symbol}>
+        {renderApplianceSymbol(item)}
+      </g>
+    );
+  }
+
+  const needsToeKick = ["dishwasher", "fridge", "oven", "cooktop"].includes(item.symbol);
+  const toeKickH = 12;
+  const toeKickInset = 3;
+  const isRange = item.symbol === "range";
+  const mainH = isRange ? item.h + 12 : item.h;
+
   return (
     <g data-elevation-appliance={item.symbol}>
+      {needsToeKick && (
+        <rect
+          x={item.x + toeKickInset}
+          y={item.y + item.h}
+          width={Math.max(1, item.w - toeKickInset * 2)}
+          height={toeKickH}
+          fill="#ffffff"
+          stroke={INK}
+          strokeWidth="1"
+        />
+      )}
       <rect
         x={item.x}
         y={item.y}
         width={item.w}
-        height={item.h}
+        height={mainH}
         fill="#ffffff"
         stroke={INK}
-        strokeWidth="1.4"
+        strokeWidth="1"
       />
       {renderApplianceSymbol(item)}
     </g>
@@ -220,74 +313,129 @@ function ApplianceShape({ item }: { item: ElevationItem }) {
 }
 
 function renderApplianceSymbol(item: ElevationItem) {
-  const cx = item.x + item.w / 2;
-  const cy = item.y + item.h / 2;
-
   if (item.symbol === "sink") {
+    const cx = item.x + item.w / 2;
+    const counterY = item.y;
+    const toeKickH = 12;
+    const toeKickInset = 3;
+    
     return (
-      <ellipse
-        cx={cx}
-        cy={cy}
-        rx={Math.max(7, item.w * 0.28)}
-        ry={Math.max(5, item.h * 0.18)}
-        fill="none"
-        stroke={INK}
-        strokeWidth="1"
-      />
+      <g stroke={INK} strokeWidth="1" fill="none">
+        <rect
+          x={item.x + toeKickInset}
+          y={item.y + item.h}
+          width={Math.max(1, item.w - toeKickInset * 2)}
+          height={toeKickH}
+          fill="#ffffff"
+          stroke={INK}
+        />
+        <rect
+          x={item.x}
+          y={item.y}
+          width={item.w}
+          height={item.h}
+          fill="#ffffff"
+          stroke={INK}
+        />
+        <line x1={cx} y1={item.y + 16} x2={cx} y2={item.y + item.h} />
+        <line x1={cx - 6} y1={item.y + 24} x2={cx - 6} y2={item.y + 34} />
+        <line x1={cx + 6} y1={item.y + 24} x2={cx + 6} y2={item.y + 34} />
+
+        <rect x={item.x + 4} y={counterY} width={item.w - 8} height={16} fill="#ffffff" stroke={INK} />
+        <rect x={cx - 3} y={counterY - 4} width={6} height={4} fill="#ffffff" />
+        <path d={`M ${cx} ${counterY - 4} L ${cx} ${counterY - 18} A 6 6 0 0 1 ${cx + 12} ${counterY - 18} L ${cx + 12} ${counterY - 12}`} />
+        <line x1={cx + 3} y1={counterY - 8} x2={cx + 8} y2={counterY - 10} />
+      </g>
     );
   }
 
   if (item.symbol === "range") {
-    const burnerR = Math.max(2.5, Math.min(5, item.w * 0.06));
+    const y = item.y;
+    const w = item.w;
+    const h = item.h + 12;
     return (
-      <>
-        <circle cx={item.x + item.w * 0.36} cy={cy - 6} r={burnerR} fill="none" stroke={INK} strokeWidth="1" />
-        <circle cx={item.x + item.w * 0.64} cy={cy - 6} r={burnerR} fill="none" stroke={INK} strokeWidth="1" />
-        <circle cx={item.x + item.w * 0.36} cy={cy + 7} r={burnerR} fill="none" stroke={INK} strokeWidth="1" />
-        <circle cx={item.x + item.w * 0.64} cy={cy + 7} r={burnerR} fill="none" stroke={INK} strokeWidth="1" />
-      </>
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <rect x={item.x - 2} y={y} width={w + 4} height={4} fill="#ffffff" />
+        <rect x={item.x} y={y + 4} width={w} height={10} />
+        <circle cx={item.x + w * 0.2} cy={y + 9} r={2} />
+        <circle cx={item.x + w * 0.35} cy={y + 9} r={2} />
+        <circle cx={item.x + w * 0.65} cy={y + 9} r={2} />
+        <circle cx={item.x + w * 0.8} cy={y + 9} r={2} />
+        <rect x={item.x + 4} y={y + 18} width={w - 8} height={h - 26} />
+        <rect x={item.x + 10} y={y + 24} width={w - 20} height={16} />
+        <line x1={item.x + 8} y1={y + 20} x2={item.x + w - 8} y2={y + 20} strokeWidth="1.5" />
+      </g>
+    );
+  }
+
+  if (item.symbol === "cooktop") {
+    // Reuses the range burner surface but draws a base cabinet front below
+    // instead of an oven door: cooktop = burners only, no oven.
+    const y = item.y;
+    const w = item.w;
+    return (
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <rect x={item.x - 2} y={y} width={w + 4} height={4} fill="#ffffff" />
+        <rect x={item.x} y={y + 4} width={w} height={10} />
+        <circle cx={item.x + w * 0.2} cy={y + 9} r={2} />
+        <circle cx={item.x + w * 0.35} cy={y + 9} r={2} />
+        <circle cx={item.x + w * 0.65} cy={y + 9} r={2} />
+        <circle cx={item.x + w * 0.8} cy={y + 9} r={2} />
+        <line x1={item.x + 3} y1={y + 22} x2={item.x + w - 3} y2={y + 22} />
+      </g>
     );
   }
 
   if (item.symbol === "fridge") {
+    const splitY = item.y + item.h * 0.65;
+    const cx = item.x + item.w / 2;
     return (
-      <>
-        <line
-          x1={item.x}
-          y1={item.y + item.h * 0.42}
-          x2={item.x + item.w}
-          y2={item.y + item.h * 0.42}
-          stroke={INK}
-          strokeWidth="1"
-        />
-        <line
-          x1={item.x + item.w * 0.82}
-          y1={item.y + 10}
-          x2={item.x + item.w * 0.82}
-          y2={item.y + item.h * 0.35}
-          stroke={INK}
-          strokeWidth="1"
-        />
-        <line
-          x1={item.x + item.w * 0.82}
-          y1={item.y + item.h * 0.5}
-          x2={item.x + item.w * 0.82}
-          y2={item.y + item.h - 10}
-          stroke={INK}
-          strokeWidth="1"
-        />
-      </>
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <line x1={item.x} y1={splitY} x2={item.x + item.w} y2={splitY} />
+        <line x1={cx} y1={item.y} x2={cx} y2={splitY} />
+        <line x1={cx - 4} y1={splitY - 30} x2={cx - 4} y2={splitY - 10} strokeWidth="1.5" />
+        <line x1={cx + 4} y1={splitY - 30} x2={cx + 4} y2={splitY - 10} strokeWidth="1.5" />
+        <line x1={item.x + item.w * 0.3} y1={splitY + 8} x2={item.x + item.w * 0.7} y2={splitY + 8} strokeWidth="1.5" />
+      </g>
+    );
+  }
+
+  if (item.symbol === "dishwasher") {
+    const w = item.w;
+    return (
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <rect x={item.x} y={item.y} width={w} height={10} />
+        <line x1={item.x + w * 0.2} y1={item.y + 16} x2={item.x + w * 0.8} y2={item.y + 16} strokeWidth="1.5" />
+      </g>
+    );
+  }
+
+  if (item.symbol === "oven") {
+    const ovenY = item.y + item.h * 0.4;
+    const ovenH = 40;
+    return (
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <rect x={item.x} y={item.y} width={item.w} height={item.h * 0.4} />
+        <rect x={item.x + 4} y={ovenY} width={item.w - 8} height={ovenH} />
+        <rect x={item.x + 8} y={ovenY + 8} width={item.w - 16} height={ovenH - 16} />
+        <line x1={item.x + 10} y1={ovenY + 5} x2={item.x + item.w - 10} y2={ovenY + 5} strokeWidth="1.5" />
+        <rect x={item.x} y={ovenY + ovenH} width={item.w} height={item.h - (ovenY + ovenH - item.y)} />
+      </g>
     );
   }
 
   if (item.symbol === "hood") {
+    const cx = item.x + item.w / 2;
+    const chimneyW = Math.min(20, item.w * 0.4);
     return (
-      <path
-        d={`M ${item.x + item.w * 0.2} ${item.y + item.h * 0.75} L ${item.x + item.w * 0.8} ${item.y + item.h * 0.75} L ${item.x + item.w * 0.62} ${item.y + item.h * 0.25} L ${item.x + item.w * 0.38} ${item.y + item.h * 0.25} Z`}
-        fill="none"
-        stroke={INK}
-        strokeWidth="1"
-      />
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <rect x={cx - chimneyW / 2} y={0} width={chimneyW} height={item.y} fill="#ffffff" />
+        <path
+          d={`M ${item.x} ${item.y + item.h} L ${item.x + item.w} ${item.y + item.h} L ${item.x + item.w * 0.8} ${item.y} L ${item.x + item.w * 0.2} ${item.y} Z`}
+          fill="#ffffff"
+        />
+        <rect x={item.x} y={item.y + item.h - 6} width={item.w} height={6} />
+      </g>
     );
   }
 

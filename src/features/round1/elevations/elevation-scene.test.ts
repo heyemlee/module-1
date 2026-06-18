@@ -72,6 +72,27 @@ describe("buildElevationScene", () => {
     expect(front?.items.some((item) => item.kind === "opening" && item.symbol === "door")).toBe(true);
   });
 
+  test("renders a selected cooktop as a distinct cooktop symbol, not a range", () => {
+    const base = createDefaultShowroomForm();
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        cookingAppliances: {
+          ...base.layoutSensitiveCabinets.cookingAppliances,
+          range: { status: "NO", relation: "NOT_APPLICABLE" },
+          cooktop: { status: "YES", relation: "BACK_SIDE" }
+        }
+      }
+    };
+    const scene = buildElevationScene(planFor(form));
+    const back = scene.find((wall) => wall.wall === "TOP");
+
+    expect(back?.items.some((item) => item.kind === "appliance" && item.symbol === "cooktop")).toBe(true);
+    // A cooktop has no oven, so it must not reuse the range elevation symbol.
+    expect(back?.items.some((item) => item.kind === "appliance" && item.symbol === "range")).toBe(false);
+  });
+
   test("includes the front wall when a visible Round 1 object exists there", () => {
     const form = {
       ...createDefaultShowroomForm(),

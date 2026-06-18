@@ -11,8 +11,7 @@ import {
 import { buildFloorPlan } from "../floorplan/plan-geometry";
 import { ElevationPreview } from "./elevation-preview";
 
-function renderElevation() {
-  const form = createDefaultShowroomForm();
+function renderElevation(form = createDefaultShowroomForm()) {
   const result = normalizeRound1Form(form);
   const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
   const plan = buildFloorPlan(
@@ -54,5 +53,23 @@ describe("ElevationPreview", () => {
     expect(html).not.toContain('data-wall-cabinet="');
     expect(html).not.toContain("34 1/2");
     expect(html).not.toContain("14 1/4");
+  });
+
+  test("draws a selected cooktop as a cooktop, not a range with an oven", () => {
+    const base = createDefaultShowroomForm();
+    const html = renderElevation({
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        cookingAppliances: {
+          ...base.layoutSensitiveCabinets.cookingAppliances,
+          range: { status: "NO", relation: "NOT_APPLICABLE" },
+          cooktop: { status: "YES", relation: "BACK_SIDE" }
+        }
+      }
+    });
+
+    expect(html).toContain('data-elevation-appliance="cooktop"');
+    expect(html).not.toContain('data-elevation-appliance="range"');
   });
 });

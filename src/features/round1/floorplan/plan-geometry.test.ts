@@ -8,7 +8,11 @@ import {
   createDefaultCabinetRuns,
   createDefaultShowroomForm
 } from "../showroom-intake-data";
-import { buildFloorPlan, type PlanRect } from "./plan-geometry";
+import {
+  allowedDragWallsForLayout,
+  buildFloorPlan,
+  type PlanRect
+} from "./plan-geometry";
 
 function planFromForm(form: Round1FormInput, overrides = {}) {
   const { normalized } = normalizeRound1Form(form);
@@ -203,6 +207,25 @@ describe("buildFloorPlan", () => {
     expect(keys).toContain("microwaveOvenCombo");
   });
 
+  test("never lets a range and a cooktop coexist (keeps the range, drops the cooktop)", () => {
+    const base = createDefaultShowroomForm();
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        cookingAppliances: {
+          ...base.layoutSensitiveCabinets.cookingAppliances,
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "YES", relation: "BACK_SIDE" }
+        }
+      }
+    };
+    const { plan } = planFromForm(form);
+    const keys = plan.appliances.map((item) => item.key);
+    expect(keys).toContain("range");
+    expect(keys).not.toContain("cooktop");
+  });
+
   test("draws a window over the sink when the sink is under a window", () => {
     const { plan } = planFromForm(formWithSinkUnderWindow());
     const sink = plan.appliances.find((a) => a.key === "sink");
@@ -285,7 +308,7 @@ describe("buildFloorPlan", () => {
       layoutPreference: "U_SHAPE_ISLAND" as const,
       layoutSensitiveCabinets: {
         ...createDefaultShowroomForm().layoutSensitiveCabinets,
-        island: { requested: true, functions: [] }
+        island: { status: "YES" as const, requested: true, functions: [] }
       }
     };
 
@@ -347,6 +370,11 @@ describe("buildFloorPlan", () => {
     expect(plan.corners).toHaveLength(2);
   });
 
+  test("maps explicit left and right L-shapes to their matching wall legs", () => {
+    expect(allowedDragWallsForLayout("LEFT_L_SHAPE")).toEqual(["TOP", "LEFT"]);
+    expect(allowedDragWallsForLayout("RIGHT_L_SHAPE")).toEqual(["TOP", "RIGHT"]);
+  });
+
   test("island layouts produce an island and island cabinet estimate entries", () => {
     const { plan, estimate } = planFromForm(formForLayout("L_SHAPE_ISLAND"));
 
@@ -376,6 +404,82 @@ describe("buildFloorPlan", () => {
     expect(plan.appliances.find((item) => item.key === "fridge")?.wall).not.toBe(
       "RIGHT"
     );
+  });
+
+  test("auto-distributes no-preference cooking appliances across walls", () => {
+    const base = formForLayout("L_SHAPE");
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "YES", relation: "UNKNOWN" },
+          microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+        }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    const autoWalls = plan.appliances
+      .filter((a) => a.key === "wallOven" || a.key === "microwaveOvenCombo")
+      .map((a) => a.wall);
+
+    // L-shape only occupies TOP and LEFT; the wall oven and microwave must land
+    // on a layout wall and must not all pile onto the (already busy) main run.
+    expect(autoWalls.length).toBe(2);
+    for (const wall of autoWalls) {
+      expect(allowedDragWallsForLayout("L_SHAPE")).toContain(wall);
+    }
+    expect(autoWalls).toContain("LEFT");
+  });
+
+  test("keeps an auto-placed cooktop on the main run beside the sink", () => {
+    const base = formForLayout("L_SHAPE");
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        cookingAppliances: {
+          range: { status: "NO", relation: "NOT_APPLICABLE" },
+          cooktop: { status: "YES", relation: "UNKNOWN" },
+          wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+          microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+        }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    const cooktop = plan.appliances.find((a) => a.key === "cooktop");
+    const sink = plan.appliances.find((a) => a.key === "sink");
+
+    expect(cooktop?.wall).toBe("TOP");
+    expect(sink?.wall).toBe("TOP");
+  });
+
+  test("still honors a dragged override for a no-wall-question appliance", () => {
+    const base = formForLayout("L_SHAPE");
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+          microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+        }
+      }
+    };
+
+    const { plan } = planFromForm(form, {
+      microwaveOvenCombo: { wall: "LEFT", position: 170 }
+    });
+
+    expect(
+      plan.appliances.find((a) => a.key === "microwaveOvenCombo")?.wall
+    ).toBe("LEFT");
   });
 
   test("snaps sink and window centers together when their overlap is near aligned", () => {

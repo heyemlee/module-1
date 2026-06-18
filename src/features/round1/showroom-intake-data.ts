@@ -25,7 +25,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
       electric: { relation: "NEAR_FRIDGE", movable: "UNKNOWN" },
       vent: { relation: "ABOVE_RANGE", movable: "UNKNOWN" }
     },
-    layoutPreference: "L_SHAPE",
+    layoutPreference: "LEFT_L_SHAPE",
     fixtures: {
       sink: { size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
       range: {
@@ -47,7 +47,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
         wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
         microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
       },
-      island: { requested: false, functions: [] }
+      island: { status: "NO", requested: false, functions: [] }
     }
   };
 }
@@ -56,6 +56,9 @@ export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
   const mainRun = Math.max(60, Math.min(form.room.length ?? 120, 180) - 48);
   const sideRun = Math.max(42, Math.min(form.room.width ?? 96, 120) - 48);
   const islandRun = Math.max(48, Math.min(mainRun, 72));
+  const islandStatus =
+    form.layoutSensitiveCabinets.island.status ??
+    (form.layoutSensitiveCabinets.island.requested ? "YES" : "NO");
   const runs: CabinetRun[] = [];
 
   const addWallRun = (
@@ -92,6 +95,7 @@ export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
 
   if (
     [
+      "LEFT_L_SHAPE",
       "L_SHAPE",
       "PENINSULA",
       "U_SHAPE",
@@ -107,7 +111,7 @@ export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
     addWallRun("bottom", "FRONT_SIDE", mainRun);
   }
 
-  if (["U_SHAPE", "U_SHAPE_ISLAND"].includes(form.layoutPreference)) {
+  if (["RIGHT_L_SHAPE", "U_SHAPE", "U_SHAPE_ISLAND"].includes(form.layoutPreference)) {
     addWallRun("right", "RIGHT_SIDE", sideRun);
   }
 
@@ -124,7 +128,7 @@ export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
     ["ISLAND", "L_SHAPE_ISLAND", "U_SHAPE_ISLAND"].includes(
       form.layoutPreference
     ) ||
-    form.layoutSensitiveCabinets.island.requested
+    islandStatus === "YES"
   ) {
     addIslandRun();
   }

@@ -29,6 +29,8 @@ import {
  */
 const LAYOUT_PHRASES: Record<string, string> = {
   ONE_WALL: "single-wall (one-wall) kitchen",
+  LEFT_L_SHAPE: "left L-shaped kitchen",
+  RIGHT_L_SHAPE: "right L-shaped kitchen",
   L_SHAPE: "L-shaped kitchen",
   U_SHAPE: "U-shaped kitchen",
   GALLEY: "galley kitchen with two parallel runs",
@@ -40,13 +42,13 @@ const LAYOUT_PHRASES: Record<string, string> = {
 };
 
 const OVEN_MICROWAVE_PHRASES: Record<string, string> = {
-  RANGE_INCLUDES_OVEN: "the oven is built into the range",
+  RANGE_INCLUDES_OVEN: "the oven is built into the lower half of the freestanding range (the oven door must be clearly visible under the cooktop; DO NOT draw a separate wall oven)",
   WALL_OVEN_MICROWAVE_STACK: "a stacked wall-oven and microwave tower",
   MICROWAVE_DRAWER: "a microwave drawer",
   UPPER_CABINET_MICROWAVE: "a microwave in an upper cabinet",
   COUNTERTOP_MICROWAVE: "a countertop microwave",
-  NO_MICROWAVE: "no microwave",
-  NO_OVEN: "no separate wall oven",
+  NO_MICROWAVE: "DO NOT draw a microwave",
+  NO_OVEN: "DO NOT draw a separate wall oven",
   UNKNOWN: ""
 };
 
@@ -75,13 +77,13 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
   ).length;
 
   const lines: string[] = [
-    "Create a warm, photorealistic customer concept rendering of a residential kitchen for a Round 1 sales preview in a California Bay Area single-family house.",
+    "Create a warm, spacious, and photorealistic customer concept rendering of a high-end residential kitchen for a Round 1 sales preview in a luxury California Bay Area single-family house. Ensure the room features high ceilings and an airy, open-concept feel to maximize the perceived size of the space.",
     "",
-    "Design style: modern frameless European-style cabinetry (flat slab doors, clean reveals, minimal or integrated pulls), medium-tone wood grain cabinet fronts, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the wood.",
+    "Design style: modern frameless European-style cabinetry (flat slab doors, full-height single panel doors with no splits, handleless press-to-open design, clean reveals, continuous toe kicks, NO crown molding, NO top fascia board, NO soffit, NO top trim), medium-tone wood grain cabinet fronts, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the wood.",
     "",
-    "Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home, such as a stainless or panel-ready American-size refrigerator, range/cooktop, hood, dishwasher, oven, and microwave where shown. Do not use compact European appliance proportions unless the reference layout explicitly requires them.",
+    "Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions. CRITICAL: ONLY draw the exact appliances explicitly listed in this prompt. DO NOT hallucinate or add any extra appliances (like wall ovens or microwaves) that are not explicitly requested.",
     "",
-    "Camera and viewpoint: render in one-point perspective as if standing at the front of the room looking straight at the back wall. The back wall is straight ahead; the left wall recedes on the left; the right wall recedes on the right; the front wall is behind the camera and is not shown. Do not change this viewpoint.",
+    "Camera and viewpoint: use a wide-angle architectural lens to make the space feel expansive, grand, and highly spacious. Render in one-point perspective as if standing at the front of the room looking straight at the back wall. The back wall is straight ahead; the left wall recedes on the left; the right wall recedes on the right; the front wall is behind the camera and is not shown. Do not change this viewpoint.",
     "",
     "Use the provided reference image as the authoritative spatial reference. Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the reference places them. Do not rearrange, mirror, or move anything to a different wall.",
     "",
@@ -147,7 +149,7 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
       baseCount === 1 ? "" : "s"
     } and ${wallCount} wall cabinet${
       wallCount === 1 ? "" : "s"
-    }, using modern frameless European-style cabinetry with flat medium-tone wood grain fronts and simple integrated or low-profile hardware.`,
+    }, using modern frameless European-style cabinetry with flat medium-tone wood grain fronts, true handleless press-to-open design (no visible hardware), and continuous recessed toe kicks.`,
     "",
     "This is a sales-estimate concept image only, not a production drawing. All dimensions are approximate and subject to confirmation.",
     "Do not draw dimension lines, measurements, cabinet codes, labels, numbers, legends, or any text annotations on the image.",
@@ -169,8 +171,8 @@ function describeRoughCookingAppliances(
 ) {
   if (!cooking) return "";
   const items = [
-    describeRoughAppliance("range", cooking.range),
-    describeRoughAppliance("cooktop", cooking.cooktop),
+    describeRoughAppliance("freestanding range (with visible oven door underneath)", cooking.range),
+    describeRoughAppliance("built-in cooktop (burners only, no oven — DO NOT draw an oven door under it)", cooking.cooktop),
     describeRoughAppliance("wall oven", cooking.wallOven),
     describeRoughAppliance(
       "microwave / oven combo",

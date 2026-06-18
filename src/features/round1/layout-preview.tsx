@@ -588,7 +588,7 @@ function Appliance({
         strokeWidth="1.3"
       />
       <ApplianceSymbol appliance={appliance} />
-      {appliance.symbol !== "range" && appliance.symbol !== "sink" && appliance.symbol !== "hood" && appliance.symbol !== "dishwasher" && appliance.symbol !== "fridge" && appliance.label && (
+      {appliance.symbol !== "range" && appliance.symbol !== "sink" && appliance.symbol !== "hood" && appliance.symbol !== "dishwasher" && appliance.symbol !== "fridge" && appliance.key !== "microwaveOvenCombo" && appliance.label && (
         <text
           x={cx}
           y={cy + appliance.h / 2 - 6}
