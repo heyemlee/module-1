@@ -179,7 +179,7 @@ describe("LayoutPreview", () => {
     expect(html).toContain('stroke="#0ea5e9"');
   });
 
-  test("excludes microwave/oven combo label but shows wall oven label", () => {
+  test("excludes microwave/oven combo and wall oven labels", () => {
     const form = createDefaultShowroomForm();
     form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = { status: "YES", relation: "RIGHT_SIDE" };
     form.layoutSensitiveCabinets.cookingAppliances.wallOven = { status: "YES", relation: "LEFT_SIDE" };
@@ -199,7 +199,7 @@ describe("LayoutPreview", () => {
     );
 
     expect(html).not.toContain("Microwave / oven combo");
-    expect(html).toContain("Wall oven");
+    expect(html).not.toContain("Wall oven");
   });
 
   test("excludes stacked wall oven and microwave label", () => {

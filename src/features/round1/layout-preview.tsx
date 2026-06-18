@@ -63,7 +63,8 @@ const UNLABELED_APPLIANCE_SYMBOLS = new Set([
 ]);
 const UNLABELED_APPLIANCE_KEYS = new Set([
   "microwaveOvenCombo",
-  "ovenMicrowaveStack"
+  "ovenMicrowaveStack",
+  "wallOven"
 ]);
 
 export function LayoutPreview({
