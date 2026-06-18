@@ -435,6 +435,61 @@ describe("buildFloorPlan", () => {
     expect(autoWalls).toContain("LEFT");
   });
 
+  test("renders one appliance symbol for stacked wall oven and microwave", () => {
+    const base = formForLayout("L_SHAPE");
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        ovenMicrowave: {
+          configuration: "WALL_OVEN_MICROWAVE_STACK",
+          relation: "UNKNOWN"
+        },
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "YES", relation: "UNKNOWN" },
+          microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+        }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    const ovenKeys = plan.appliances
+      .filter((item) => item.symbol === "oven")
+      .map((item) => item.key);
+
+    expect(ovenKeys).toEqual(["ovenMicrowaveStack"]);
+  });
+
+  test("renders separate symbols for separate wall oven and microwave", () => {
+    const base = formForLayout("L_SHAPE");
+    const form: Round1FormInput = {
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        ovenMicrowave: {
+          configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+          relation: "UNKNOWN"
+        },
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "YES", relation: "UNKNOWN" },
+          microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+        }
+      }
+    };
+
+    const { plan } = planFromForm(form);
+    const ovenKeys = plan.appliances
+      .filter((item) => item.symbol === "oven")
+      .map((item) => item.key);
+
+    expect(ovenKeys).toContain("wallOven");
+    expect(ovenKeys).toContain("microwaveOvenCombo");
+  });
+
   test("keeps an auto-placed cooktop on the main run beside the sink", () => {
     const base = formForLayout("L_SHAPE");
     const form: Round1FormInput = {

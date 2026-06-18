@@ -820,6 +820,7 @@ function placeAppliances(
   };
   const specs: Spec[] = [];
   const cooking = layoutSensitive.cookingAppliances;
+  const ovenMicrowaveConfiguration = layoutSensitive.ovenMicrowave?.configuration;
   const layoutPreference = normalized.layoutPreference;
 
   // --- Fixed-wall appliances (explicit relation or drag override) ---
@@ -877,6 +878,20 @@ function placeAppliances(
         layoutPreference
       )
     : undefined;
+  const stackedOvenMicrowave =
+    ovenMicrowaveConfiguration === "WALL_OVEN_MICROWAVE_STACK" &&
+    wallOvenPresent &&
+    microwavePresent;
+  const stackWall = stackedOvenMicrowave
+    ? (resolveApplianceWall(
+        ctx.overrides,
+        "ovenMicrowaveStack",
+        layoutSensitive.ovenMicrowave?.relation,
+        layoutPreference
+      ) ??
+      wallOvenWall ??
+      microwaveWall)
+    : undefined;
 
   // --- Intelligent auto-layout: spread no-preference appliances across walls ---
   // Each appliance with no chosen wall is dropped onto the wall that still has
@@ -900,8 +915,12 @@ function placeAppliances(
   addLoad(rangeWall, fixtures.range?.size ?? 30);
   addLoad(fridgeWall, fixtures.fridge?.size ?? 36);
   addLoad(cooktopWall, 30);
-  addLoad(wallOvenWall, 30);
-  addLoad(microwaveWall, 30);
+  if (stackedOvenMicrowave) {
+    addLoad(stackWall, 30);
+  } else {
+    addLoad(wallOvenWall, 30);
+    addLoad(microwaveWall, 30);
+  }
 
   const pickAutoWall = (preferMainRun: boolean): Wall => {
     if (availableWalls.length === 0) return "TOP";
@@ -926,14 +945,19 @@ function placeAppliances(
   }
   // Wall oven / microwave are tall units -> drop them on the least-crowded wall.
   let wallOvenFinalWall: Wall | undefined;
-  if (wallOvenPresent) {
+  if (wallOvenPresent && !stackedOvenMicrowave) {
     wallOvenFinalWall = wallOvenWall ?? pickAutoWall(false);
     if (!wallOvenWall) addLoad(wallOvenFinalWall, 30);
   }
   let microwaveFinalWall: Wall | undefined;
-  if (microwavePresent) {
+  if (microwavePresent && !stackedOvenMicrowave) {
     microwaveFinalWall = microwaveWall ?? pickAutoWall(false);
     if (!microwaveWall) addLoad(microwaveFinalWall, 30);
+  }
+  let stackFinalWall: Wall | undefined;
+  if (stackedOvenMicrowave) {
+    stackFinalWall = stackWall ?? pickAutoWall(false);
+    if (!stackWall) addLoad(stackFinalWall, 30);
   }
 
   // --- Push specs in a stable order so per-wall positioning is deterministic ---
@@ -973,6 +997,16 @@ function placeAppliances(
       sizeIn: 30,
       wall: cooktopFinalWall,
       deep: false
+    });
+  }
+  if (stackedOvenMicrowave && stackFinalWall) {
+    specs.push({
+      key: "ovenMicrowaveStack",
+      label: "Wall oven + microwave stack",
+      symbol: "oven",
+      sizeIn: 30,
+      wall: stackFinalWall,
+      deep: true
     });
   }
   if (wallOvenPresent && wallOvenFinalWall) {
