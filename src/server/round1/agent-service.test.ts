@@ -2,10 +2,35 @@ import { describe, expect, test } from "vitest";
 import { createDefaultShowroomForm } from "@/features/round1/showroom-intake-data";
 import type { LLMProvider } from "@/server/llm/provider";
 import {
+  ROUND1_AGENT_TOOLS,
   createRound1AgentContext,
   executeRound1AgentTool,
   runRound1AgentTurn
 } from "./agent-service";
+
+function getUpdateIntakeOvenMicrowaveConfigurationEnum(): string[] {
+  const updateIntakeTool = ROUND1_AGENT_TOOLS.find(
+    (tool) => tool.name === "update_intake"
+  );
+  const parameters = updateIntakeTool?.parameters as {
+    properties?: {
+      layoutSensitiveCabinets?: {
+        properties?: {
+          ovenMicrowave?: {
+            properties?: {
+              configuration?: { enum?: string[] };
+            };
+          };
+        };
+      };
+    };
+  };
+
+  return (
+    parameters.properties?.layoutSensitiveCabinets?.properties?.ovenMicrowave
+      ?.properties?.configuration?.enum ?? []
+  );
+}
 
 describe("executeRound1AgentTool", () => {
   test("update_intake merges a valid nested patch and exposes the updated form", async () => {
@@ -23,6 +48,34 @@ describe("executeRound1AgentTool", () => {
     expect(ctx.updatedForm?.layoutPreference).toBe("U_SHAPE");
     // Untouched fields are preserved by the deep merge.
     expect(ctx.updatedForm?.fixtures.sink.size).toBe(33);
+  });
+
+  test("agent tool accepts separate wall oven and microwave arrangement", async () => {
+    const form = createDefaultShowroomForm();
+    const ctx = createRound1AgentContext(form);
+
+    const result = await executeRound1AgentTool(
+      "update_intake",
+      {
+        layoutSensitiveCabinets: {
+          ovenMicrowave: {
+            configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE"
+          }
+        }
+      },
+      ctx
+    );
+
+    expect(result).not.toHaveProperty("error");
+    expect(
+      ctx.updatedForm?.layoutSensitiveCabinets.ovenMicrowave.configuration
+    ).toBe("SEPARATE_WALL_OVEN_AND_MICROWAVE");
+  });
+
+  test("update_intake tool schema advertises separate wall oven and microwave arrangement", () => {
+    expect(getUpdateIntakeOvenMicrowaveConfigurationEnum()).toContain(
+      "SEPARATE_WALL_OVEN_AND_MICROWAVE"
+    );
   });
 
   test("update_intake rejects an invalid value without mutating the form", async () => {

@@ -143,6 +143,7 @@ const UPDATE_INTAKE_PARAMETERS: Record<string, unknown> = {
               enum: [
                 "RANGE_INCLUDES_OVEN",
                 "WALL_OVEN_MICROWAVE_STACK",
+                "SEPARATE_WALL_OVEN_AND_MICROWAVE",
                 "MICROWAVE_DRAWER",
                 "UPPER_CABINET_MICROWAVE",
                 "COUNTERTOP_MICROWAVE",
@@ -206,6 +207,9 @@ Language:
 
 Cooking appliances:
 - A range (炉灶/燃气灶, burners + oven in one unit) and a cooktop (炉头/灶台, burners only, NO oven) are mutually exclusive primary cooking surfaces. Set exactly one of them to YES, never both. A separate wall oven or microwave/oven combo can coexist with either.
+- If the customer says the microwave is above the wall oven, stacked with the wall oven, or in the same tall appliance cabinet, set layoutSensitiveCabinets.ovenMicrowave.configuration = "WALL_OVEN_MICROWAVE_STACK". When confident, also set layoutSensitiveCabinets.cookingAppliances.wallOven.status = "YES" and layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo.status = "YES".
+- If the customer says the wall oven and microwave are separate, set layoutSensitiveCabinets.ovenMicrowave.configuration = "SEPARATE_WALL_OVEN_AND_MICROWAVE".
+- If the wall oven/microwave arrangement is unclear, leave layoutSensitiveCabinets.ovenMicrowave.configuration = "UNKNOWN".
 
 Island:
 - For L-shaped kitchens, choose LEFT_L_SHAPE or RIGHT_L_SHAPE when the customer specifies direction; use LEFT_L_SHAPE when they simply say L-shape without direction.
