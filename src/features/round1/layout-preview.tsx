@@ -54,6 +54,17 @@ type PreviewStage = "room" | "openings" | "layout" | "appliances" | "adjust";
 
 const INK = "#1f2937";
 const LINE = "#334155";
+const UNLABELED_APPLIANCE_SYMBOLS = new Set([
+  "range",
+  "sink",
+  "hood",
+  "dishwasher",
+  "fridge"
+]);
+const UNLABELED_APPLIANCE_KEYS = new Set([
+  "microwaveOvenCombo",
+  "ovenMicrowaveStack"
+]);
 
 export function LayoutPreview({
   normalized,
@@ -588,7 +599,7 @@ function Appliance({
         strokeWidth="1.3"
       />
       <ApplianceSymbol appliance={appliance} />
-      {appliance.symbol !== "range" && appliance.symbol !== "sink" && appliance.symbol !== "hood" && appliance.symbol !== "dishwasher" && appliance.symbol !== "fridge" && appliance.key !== "microwaveOvenCombo" && appliance.label && (
+      {shouldShowApplianceLabel(appliance) && (
         <text
           x={cx}
           y={cy + appliance.h / 2 - 6}
@@ -606,6 +617,14 @@ function Appliance({
       </g>
       )}
     </g>
+  );
+}
+
+function shouldShowApplianceLabel(appliance: ApplianceShape): boolean {
+  return (
+    Boolean(appliance.label) &&
+    !UNLABELED_APPLIANCE_SYMBOLS.has(appliance.symbol) &&
+    !UNLABELED_APPLIANCE_KEYS.has(appliance.key)
   );
 }
 

@@ -486,8 +486,7 @@ describe("buildFloorPlan", () => {
       .filter((item) => item.symbol === "oven")
       .map((item) => item.key);
 
-    expect(ovenKeys).toContain("wallOven");
-    expect(ovenKeys).toContain("microwaveOvenCombo");
+    expect(ovenKeys).toEqual(["wallOven", "microwaveOvenCombo"]);
   });
 
   test("keeps an auto-placed cooktop on the main run beside the sink", () => {

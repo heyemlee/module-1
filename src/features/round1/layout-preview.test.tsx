@@ -201,4 +201,37 @@ describe("LayoutPreview", () => {
     expect(html).not.toContain("Microwave / oven combo");
     expect(html).toContain("Wall oven");
   });
+
+  test("excludes stacked wall oven and microwave label", () => {
+    const form = createDefaultShowroomForm();
+    form.layoutSensitiveCabinets.ovenMicrowave = {
+      configuration: "WALL_OVEN_MICROWAVE_STACK",
+      relation: "UNKNOWN"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.wallOven = {
+      status: "YES",
+      relation: "UNKNOWN"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+      status: "YES",
+      relation: "UNKNOWN"
+    };
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+
+    const html = renderToStaticMarkup(
+      <LayoutPreview
+        normalized={result.normalized}
+        cabinets={estimate.cabinets}
+        confirmationItems={result.confirmationItems}
+        positionOverrides={{}}
+        onPositionOverridesChange={() => {}}
+        highlightDraggableItems={false}
+        showPositionObjects={true}
+      />
+    );
+
+    expect(html).toContain('data-appliance-symbol="oven"');
+    expect(html).not.toContain("Wall oven + microwave stack");
+  });
 });
