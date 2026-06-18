@@ -307,15 +307,58 @@ export function buildFloorPlan(
         else if (wall === "LEFT") { dww = wallDepth; }
         else if (wall === "RIGHT") { dwx = ix + iw - wallDepth; dww = wallDepth; }
 
-        wallCabinets.push({
-          x: dwx,
-          y: dwy,
-          w: dww,
-          h: dwh,
-          wall,
-          code: "ROUND1_GENERIC_WALL",
-          confirmationRequired: false
-        });
+        let dwc: PlanRect = { x: dwx, y: dwy, w: dww, h: dwh };
+        let isValid = true;
+        const horizontal = wall === "TOP" || wall === "BOTTOM";
+
+        for (const obs of sharedCabinetObstacles) {
+          if (rectIntersect(dwc, obs)) {
+             isValid = false;
+          }
+        }
+        
+        if (window) {
+          let wx = window.x, wy = window.y, ww = window.w, wh = window.h;
+          if (window.wall === "TOP") { wh += wallDepth; }
+          else if (window.wall === "BOTTOM") { wy -= wallDepth; wh += wallDepth; }
+          else if (window.wall === "LEFT") { ww += wallDepth; }
+          else if (window.wall === "RIGHT") { wx -= wallDepth; ww += wallDepth; }
+          const wObs = { x: wx, y: wy, w: ww, h: wh };
+          
+          if (rectIntersect(dwc, wObs)) {
+            if (horizontal) {
+              if (wObs.x <= dwc.x && wObs.x + wObs.w >= dwc.x + dwc.w) isValid = false;
+              else if (wObs.x > dwc.x && wObs.x < dwc.x + dwc.w) {
+                dwc.w = wObs.x - dwc.x;
+              } else if (wObs.x + wObs.w > dwc.x && wObs.x + wObs.w < dwc.x + dwc.w) {
+                const diff = (wObs.x + wObs.w) - dwc.x;
+                dwc.x += diff;
+                dwc.w -= diff;
+              }
+            } else {
+              if (wObs.y <= dwc.y && wObs.y + wObs.h >= dwc.y + dwc.h) isValid = false;
+              else if (wObs.y > dwc.y && wObs.y < dwc.y + dwc.h) {
+                dwc.h = wObs.y - dwc.y;
+              } else if (wObs.y + wObs.h > dwc.y && wObs.y + wObs.h < dwc.y + dwc.h) {
+                const diff = (wObs.y + wObs.h) - dwc.y;
+                dwc.y += diff;
+                dwc.h -= diff;
+              }
+            }
+          }
+        }
+
+        if (isValid && dwc.w >= 6 && dwc.h >= 6) {
+          wallCabinets.push({
+            x: dwc.x,
+            y: dwc.y,
+            w: dwc.w,
+            h: dwc.h,
+            wall,
+            code: "ROUND1_GENERIC_WALL",
+            confirmationRequired: false
+          });
+        }
       }
     }
   }
@@ -651,10 +694,13 @@ export function allowedDragWallsForLayout(layoutPreference: string): Wall[] {
   switch (layoutPreference) {
     case "GALLEY":
       return ["TOP", "BOTTOM"];
+    case "LEFT_L_SHAPE":
     case "L_SHAPE":
     case "PENINSULA":
     case "L_SHAPE_ISLAND":
       return ["TOP", "LEFT"];
+    case "RIGHT_L_SHAPE":
+      return ["TOP", "RIGHT"];
     case "U_SHAPE":
     case "U_SHAPE_ISLAND":
       return ["TOP", "LEFT", "RIGHT"];
@@ -721,6 +767,39 @@ function overridePosition(
   return overrides[key]?.position;
 }
 
+function isUnspecifiedRelation(relation: string | undefined): boolean {
+  return (
+    relation == null ||
+    relation === "UNKNOWN" ||
+    relation === "NOT_APPLICABLE" ||
+    relation === "NO_PREFERENCE"
+  );
+}
+
+/**
+ * Resolves an appliance's wall into either a fixed wall — an explicit drag
+ * override, or a wall the customer deliberately chose — or `null`, meaning
+ * "no preference". Appliances that resolve to `null` are positioned by the
+ * intelligent auto-layout in {@link placeAppliances}, which spreads them across
+ * the available walls. Drag overrides and explicit relations always win over
+ * auto-layout.
+ */
+function resolveApplianceWall(
+  overrides: PositionOverrides,
+  key: string,
+  relation: string | undefined,
+  layoutPreference: string
+): Wall | null {
+  const override = overrides[key];
+  if (override && wallAllowed(override.wall, layoutPreference)) {
+    return override.wall;
+  }
+  if (!isUnspecifiedRelation(relation)) {
+    return clampWallToLayout(relationToWall(relation, "TOP"), layoutPreference);
+  }
+  return null;
+}
+
 function placeAppliances(
   fixtures: Fixtures,
   layoutSensitive: LayoutSensitive,
@@ -741,9 +820,123 @@ function placeAppliances(
   };
   const specs: Spec[] = [];
   const cooking = layoutSensitive.cookingAppliances;
+  const layoutPreference = normalized.layoutPreference;
 
-  const sinkFallbackWall: Wall = sinkUnderWindow ? "TOP" : relationToWall(fixtures.sink?.relation, "TOP");
-  const sinkWall = overrideWall(ctx.overrides, "sink", sinkFallbackWall, normalized.layoutPreference);
+  // --- Fixed-wall appliances (explicit relation or drag override) ---
+  let sinkFallbackWall: Wall = relationToWall(fixtures.sink?.relation, "TOP");
+  if (sinkUnderWindow) {
+    const windowRelation = (normalized.openings as any)?.windows?.items?.[0]?.relation;
+    sinkFallbackWall = relationToWall(windowRelation, "TOP");
+  }
+  const sinkWall = overrideWall(ctx.overrides, "sink", sinkFallbackWall, layoutPreference);
+
+  const dishwasherPresent = fixtures.dishwasher?.status !== "NONE";
+  const dwFallbackWall =
+    fixtures.dishwasher?.relation === "NEAR_SINK"
+      ? sinkWall
+      : relationToWall(fixtures.dishwasher?.relation, sinkWall);
+  const dishwasherWall = dishwasherPresent
+    ? overrideWall(ctx.overrides, "dishwasher", dwFallbackWall, layoutPreference)
+    : null;
+
+  const rangePresent = cooking?.range?.status !== "NO";
+  const rangeWall = rangePresent
+    ? overrideWall(
+        ctx.overrides,
+        "range",
+        relationToWall(cooking?.range?.relation ?? fixtures.range?.relation, "TOP"),
+        layoutPreference
+      )
+    : null;
+
+  const fridgeWall = overrideWall(
+    ctx.overrides,
+    "fridge",
+    relationToWall(fixtures.fridge?.relation, "TOP"),
+    layoutPreference
+  );
+
+  // Appliances that may have no chosen wall. Cooktop and microwave/oven combo no
+  // longer ask for a wall, and a wall oven may be left "unknown"; these resolve
+  // to null and are placed by the intelligent auto-layout below. A drag override
+  // or an explicit relation still pins them.
+  const cooktopPresent = cooking?.cooktop?.status === "YES";
+  const cooktopWall = cooktopPresent
+    ? resolveApplianceWall(ctx.overrides, "cooktop", cooking?.cooktop?.relation, layoutPreference)
+    : undefined;
+  const wallOvenPresent = cooking?.wallOven?.status === "YES";
+  const wallOvenWall = wallOvenPresent
+    ? resolveApplianceWall(ctx.overrides, "wallOven", cooking?.wallOven?.relation, layoutPreference)
+    : undefined;
+  const microwavePresent = cooking?.microwaveOvenCombo?.status === "YES";
+  const microwaveWall = microwavePresent
+    ? resolveApplianceWall(
+        ctx.overrides,
+        "microwaveOvenCombo",
+        cooking?.microwaveOvenCombo?.relation,
+        layoutPreference
+      )
+    : undefined;
+
+  // --- Intelligent auto-layout: spread no-preference appliances across walls ---
+  // Each appliance with no chosen wall is dropped onto the wall that still has
+  // the most free linear space (accounting for the appliances already committed),
+  // so they form a sensible spread instead of all piling onto the main run. The
+  // customer can then fine-tune by dragging.
+  const availableWalls = allowedDragWallsForLayout(layoutPreference);
+  const loadPx = new Map<Wall, number>();
+  for (const wall of availableWalls) loadPx.set(wall, 0);
+  const addLoad = (wall: Wall | null | undefined, sizeIn: number) => {
+    if (wall && loadPx.has(wall)) {
+      loadPx.set(wall, (loadPx.get(wall) ?? 0) + sizeIn * ctx.scale);
+    }
+  };
+  const wallSpanPx = (wall: Wall): number => {
+    const horizontal = wall === "TOP" || wall === "BOTTOM";
+    return (horizontal ? ctx.iw : ctx.ih) - ctx.startOffset[wall] - ctx.endOffset[wall];
+  };
+  addLoad(sinkWall, fixtures.sink?.size ?? 30);
+  addLoad(dishwasherWall, fixtures.dishwasher?.size ?? 24);
+  addLoad(rangeWall, fixtures.range?.size ?? 30);
+  addLoad(fridgeWall, fixtures.fridge?.size ?? 36);
+  addLoad(cooktopWall, 30);
+  addLoad(wallOvenWall, 30);
+  addLoad(microwaveWall, 30);
+
+  const pickAutoWall = (preferMainRun: boolean): Wall => {
+    if (availableWalls.length === 0) return "TOP";
+    if (preferMainRun && availableWalls.includes("TOP")) return "TOP";
+    let best = availableWalls[0];
+    let bestRemaining = wallSpanPx(best) - (loadPx.get(best) ?? 0);
+    for (const wall of availableWalls) {
+      const remaining = wallSpanPx(wall) - (loadPx.get(wall) ?? 0);
+      if (remaining > bestRemaining + 0.1) {
+        best = wall;
+        bestRemaining = remaining;
+      }
+    }
+    return best;
+  };
+
+  // Cooktop is a primary cooking surface -> keep it on the main run near the sink.
+  let cooktopFinalWall: Wall | undefined;
+  if (cooktopPresent) {
+    cooktopFinalWall = cooktopWall ?? pickAutoWall(true);
+    if (!cooktopWall) addLoad(cooktopFinalWall, 30);
+  }
+  // Wall oven / microwave are tall units -> drop them on the least-crowded wall.
+  let wallOvenFinalWall: Wall | undefined;
+  if (wallOvenPresent) {
+    wallOvenFinalWall = wallOvenWall ?? pickAutoWall(false);
+    if (!wallOvenWall) addLoad(wallOvenFinalWall, 30);
+  }
+  let microwaveFinalWall: Wall | undefined;
+  if (microwavePresent) {
+    microwaveFinalWall = microwaveWall ?? pickAutoWall(false);
+    if (!microwaveWall) addLoad(microwaveFinalWall, 30);
+  }
+
+  // --- Push specs in a stable order so per-wall positioning is deterministic ---
   specs.push({
     key: "sink",
     label: "Sink",
@@ -752,18 +945,7 @@ function placeAppliances(
     wall: sinkWall,
     deep: false
   });
-
-  if (fixtures.dishwasher?.status !== "NONE") {
-    const dwWall =
-      fixtures.dishwasher?.relation === "NEAR_SINK"
-        ? sinkWall
-        : relationToWall(fixtures.dishwasher?.relation, sinkWall);
-    const dishwasherWall = overrideWall(
-      ctx.overrides,
-      "dishwasher",
-      dwWall,
-      normalized.layoutPreference
-    );
+  if (dishwasherPresent && dishwasherWall) {
     specs.push({
       key: "dishwasher",
       label: "Dishwasher",
@@ -773,15 +955,7 @@ function placeAppliances(
       deep: false
     });
   }
-
-  if (cooking?.range?.status !== "NO") {
-    const rangeWall = overrideWall(
-      ctx.overrides,
-      "range",
-      relationToWall(cooking?.range?.relation ?? fixtures.range?.relation, "TOP"),
-      normalized.layoutPreference
-    );
-
+  if (rangePresent && rangeWall) {
     specs.push({
       key: "range",
       label: "Range",
@@ -791,62 +965,36 @@ function placeAppliances(
       deep: true
     });
   }
-
-  if (cooking?.cooktop?.status === "YES") {
+  if (cooktopPresent && cooktopFinalWall) {
     specs.push({
       key: "cooktop",
       label: "Cooktop",
       symbol: "range",
       sizeIn: 30,
-      wall: overrideWall(
-        ctx.overrides,
-        "cooktop",
-        relationToWall(cooking.cooktop.relation, "TOP"),
-        normalized.layoutPreference
-      ),
+      wall: cooktopFinalWall,
       deep: false
     });
   }
-
-  if (cooking?.wallOven?.status === "YES") {
+  if (wallOvenPresent && wallOvenFinalWall) {
     specs.push({
       key: "wallOven",
       label: "Wall oven",
       symbol: "oven",
       sizeIn: 30,
-      wall: overrideWall(
-        ctx.overrides,
-        "wallOven",
-        relationToWall(cooking.wallOven.relation, "TOP"),
-        normalized.layoutPreference
-      ),
+      wall: wallOvenFinalWall,
       deep: true
     });
   }
-
-  if (cooking?.microwaveOvenCombo?.status === "YES") {
+  if (microwavePresent && microwaveFinalWall) {
     specs.push({
       key: "microwaveOvenCombo",
       label: "Microwave / oven combo",
       symbol: "oven",
       sizeIn: 30,
-      wall: overrideWall(
-        ctx.overrides,
-        "microwaveOvenCombo",
-        relationToWall(cooking.microwaveOvenCombo.relation, "TOP"),
-        normalized.layoutPreference
-      ),
+      wall: microwaveFinalWall,
       deep: true
     });
   }
-
-  const fridgeWall = overrideWall(
-    ctx.overrides,
-    "fridge",
-    relationToWall(fixtures.fridge?.relation, "TOP"),
-    normalized.layoutPreference
-  );
-
   specs.push({
     key: "fridge",
     label: "Fridge",
@@ -943,6 +1091,39 @@ function placeAppliances(
       occupied.sort((a, b) => a.start - b.start);
       cursor += length + spacing;
     });
+
+    const onWallShapes = shapes.filter(s => s.wall === wall);
+    let iterations = 0;
+    while (iterations++ < 20) {
+      let overlaps = false;
+      onWallShapes.sort((a, b) => horizontal ? a.x - b.x : a.y - b.y);
+      for (let i = 0; i < onWallShapes.length - 1; i++) {
+        const a = onWallShapes[i];
+        const b = onWallShapes[i + 1];
+        const aEnd = (horizontal ? a.x : a.y) + (horizontal ? a.w : a.h);
+        const bStart = horizontal ? b.x : b.y;
+        
+        if (aEnd > bStart + 0.1) {
+          overlaps = true;
+          const overlap = aEnd - bStart;
+          if (horizontal) {
+            a.x -= overlap / 2;
+            b.x += overlap / 2;
+          } else {
+            a.y -= overlap / 2;
+            b.y += overlap / 2;
+          }
+        }
+      }
+      for (const shape of onWallShapes) {
+        if (horizontal) {
+          shape.x = clamp(shape.x, ix + ctx.startOffset[wall], ix + iw - ctx.endOffset[wall] - shape.w);
+        } else {
+          shape.y = clamp(shape.y, iy + ctx.startOffset[wall], iy + ih - ctx.endOffset[wall] - shape.h);
+        }
+      }
+      if (!overlaps) break;
+    }
   }
 
   return shapes;
@@ -974,9 +1155,6 @@ function placeWindow(
   const sinkUnderWindow = fixtures.sink?.relation === "UNDER_WINDOW" || relation === "BEHIND_SINK";
 
   let wall = overrideWall(ctx.overrides, "window", relationToWall(relation, "TOP"));
-  if (sinkUnderWindow && sink) {
-    wall = overrideWall(ctx.overrides, "window", sink.wall);
-  }
 
   const length = clamp(36 * ctx.scale, 40, (wall === "TOP" || wall === "BOTTOM" ? ctx.iw : ctx.ih) * 0.5);
 

@@ -143,13 +143,7 @@ export function RenderingControls({
             ? "Regenerate cabinet fill, then re-run to refresh this preview."
             : "Available after cabinet fill is generated."}
         </p>
-      ) : (
-        <p className="text-xs leading-5 text-slate-500">
-          Sends a clean deterministic layout image plus a wall-by-wall
-          description of this locked snapshot to the image model. The result is a
-          concept preview only.
-        </p>
-      )}
+      ) : null}
       {error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
           Could not generate the rendering: {error}
@@ -159,8 +153,7 @@ export function RenderingControls({
         <figure className="space-y-1 mt-3">
           {stale && (
             <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] font-bold leading-4 text-amber-800">
-              Outdated — this concept is based on an earlier snapshot. Regenerate
-              cabinet fill, then re-run Generate Rendering to refresh it.
+              Outdated — please regenerate rendering to update.
             </p>
           )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -171,10 +164,6 @@ export function RenderingControls({
               stale ? "opacity-60" : ""
             }`}
           />
-          <figcaption className="text-[11px] leading-4 text-slate-500">
-            Concept preview only — never the source of truth for cabinet data,
-            dimensions, counts, geometry, or quotes.
-          </figcaption>
         </figure>
       )}
     </div>

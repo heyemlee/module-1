@@ -19,12 +19,28 @@ export type CameraSurface = "back" | "left" | "right" | "front";
 
 export const APPLIANCE_NOUNS: Record<string, string> = {
   sink: "a sink",
-  range: "a range/cooktop",
+  range: "a freestanding range (burners with an oven below)",
   fridge: "a refrigerator",
   dishwasher: "a dishwasher",
   oven: "a wall oven",
   hood: "a range hood"
 };
+
+/**
+ * Noun for an appliance, distinguishing a cooktop from a range. Both share the
+ * top-down `range` symbol (identical footprint), but a cooktop has burners only
+ * and NO oven, so it must read differently in the rendering prompt.
+ */
+export function applianceNoun(appliance: {
+  key: string;
+  symbol: string;
+  label: string;
+}): string {
+  if (appliance.key === "cooktop") {
+    return "a cooktop (burners only, no oven below)";
+  }
+  return APPLIANCE_NOUNS[appliance.symbol] ?? appliance.label;
+}
 
 const WALL_TO_CAMERA: Record<Wall, CameraSurface> = {
   TOP: "back",
@@ -91,10 +107,11 @@ export function describeWall(plan: FloorPlan, wall: Wall): WallDescription | nul
   );
 
   const appliances = onWall.map((appliance) => {
+    const noun = applianceNoun(appliance);
     if (appliance.symbol === "range" && hasHood) {
-      return "a range/cooktop with a hood above it";
+      return `${noun} with a hood above it`;
     }
-    return APPLIANCE_NOUNS[appliance.symbol] ?? appliance.label;
+    return noun;
   });
 
   const hasCabinetRun =
@@ -206,9 +223,7 @@ export function describeBehindCameraAppliances(plan: FloorPlan): string | null {
   );
   if (front.length === 0) return null;
 
-  const nouns = Array.from(
-    new Set(front.map((appliance) => APPLIANCE_NOUNS[appliance.symbol] ?? appliance.label))
-  );
+  const nouns = Array.from(new Set(front.map((appliance) => applianceNoun(appliance))));
   const isPlural = front.length > 1;
   return `Note: ${joinList(nouns)} ${isPlural ? "are" : "is"} on the front wall behind the viewpoint, so ${
     isPlural ? "they are" : "it is"

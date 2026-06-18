@@ -22,6 +22,31 @@ describe("showroom intake defaults", () => {
     expect(estimate.salesEstimateOnly).toBe(true);
   });
 
+  test("maps explicit L-shape direction and island status into cabinet runs", () => {
+    const base = createDefaultShowroomForm();
+    const leftRuns = createDefaultCabinetRuns({
+      ...base,
+      layoutPreference: "LEFT_L_SHAPE" as typeof base.layoutPreference
+    });
+    const rightRuns = createDefaultCabinetRuns({
+      ...base,
+      layoutPreference: "RIGHT_L_SHAPE" as typeof base.layoutPreference
+    });
+    const islandRuns = createDefaultCabinetRuns({
+      ...base,
+      layoutSensitiveCabinets: {
+        ...base.layoutSensitiveCabinets,
+        island: { status: "YES", requested: true, functions: [] }
+      }
+    });
+
+    expect(leftRuns.some((run) => run.location === "LEFT_SIDE")).toBe(true);
+    expect(leftRuns.some((run) => run.location === "RIGHT_SIDE")).toBe(false);
+    expect(rightRuns.some((run) => run.location === "RIGHT_SIDE")).toBe(true);
+    expect(rightRuns.some((run) => run.location === "LEFT_SIDE")).toBe(false);
+    expect(islandRuns.some((run) => run.location === "ON_ISLAND")).toBe(true);
+  });
+
   test("uses the approved adjust-position step order without first-phase MEP", () => {
     expect(SHOWROOM_STEPS).toEqual([
       "Room",

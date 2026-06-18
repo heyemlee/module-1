@@ -68,13 +68,11 @@ const UPDATE_INTAKE_PARAMETERS: Record<string, unknown> = {
       type: "string",
       enum: [
         "ONE_WALL",
-        "L_SHAPE",
+        "LEFT_L_SHAPE",
+        "RIGHT_L_SHAPE",
         "U_SHAPE",
         "GALLEY",
         "PENINSULA",
-        "ISLAND",
-        "L_SHAPE_ISLAND",
-        "U_SHAPE_ISLAND",
         "NO_PREFERENCE"
       ]
     },
@@ -132,7 +130,10 @@ const UPDATE_INTAKE_PARAMETERS: Record<string, unknown> = {
       properties: {
         island: {
           type: "object",
-          properties: { requested: { type: "boolean" } }
+          properties: {
+            status: { type: "string", enum: ["YES", "NO", "UNKNOWN"] },
+            requested: { type: "boolean" }
+          }
         },
         ovenMicrowave: {
           type: "object",
@@ -203,8 +204,12 @@ Language:
 - Reply in the SAME language the user wrote in — Chinese, English, or mixed Chinese/English — and match their phrasing.
 - Parse requirements stated in any of those languages, or mixed, and map them to the correct form fields with the same precision regardless of language.
 
+Cooking appliances:
+- A range (炉灶/燃气灶, burners + oven in one unit) and a cooktop (炉头/灶台, burners only, NO oven) are mutually exclusive primary cooking surfaces. Set exactly one of them to YES, never both. A separate wall oven or microwave/oven combo can coexist with either.
+
 Island:
-- When the customer wants an island, set layoutSensitiveCabinets.island.requested = true. If the kitchen shape allows it, also choose an island layout (ISLAND, L_SHAPE_ISLAND, or U_SHAPE_ISLAND).
+- For L-shaped kitchens, choose LEFT_L_SHAPE or RIGHT_L_SHAPE when the customer specifies direction; use LEFT_L_SHAPE when they simply say L-shape without direction.
+- When the customer wants an island, set layoutSensitiveCabinets.island.status = "YES" and requested = true. If they do not want one, set status = "NO" and requested = false. If unclear, set status = "UNKNOWN" and requested = false. Do not choose island-specific layoutPreference values.
 
 Be concise and practical. After updating fields, briefly confirm what you changed and mention any important Confirmation Required items.`;
 

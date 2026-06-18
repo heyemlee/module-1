@@ -28,6 +28,41 @@ const applianceWallOptions = [
   "UNKNOWN"
 ] as const;
 
+const layoutPreferenceOptions = [
+  "LEFT_L_SHAPE",
+  "RIGHT_L_SHAPE",
+  "U_SHAPE",
+  "ONE_WALL",
+  "GALLEY",
+  "PENINSULA",
+  "NO_PREFERENCE"
+] as const;
+
+function displayLayoutPreference(
+  layoutPreference: Round1FormInput["layoutPreference"]
+): (typeof layoutPreferenceOptions)[number] {
+  if (layoutPreference === "L_SHAPE" || layoutPreference === "L_SHAPE_ISLAND") {
+    return "LEFT_L_SHAPE";
+  }
+  if (layoutPreference === "U_SHAPE_ISLAND") {
+    return "U_SHAPE";
+  }
+  if (layoutPreference === "ISLAND") {
+    return "NO_PREFERENCE";
+  }
+  return layoutPreference as (typeof layoutPreferenceOptions)[number];
+}
+
+function islandStatusForForm(
+  form: Round1FormInput
+): "YES" | "NO" | "UNKNOWN" {
+  if (/ISLAND/.test(form.layoutPreference)) return "YES";
+  return (
+    form.layoutSensitiveCabinets.island.status ??
+    (form.layoutSensitiveCabinets.island.requested ? "YES" : "NO")
+  );
+}
+
 export function RoomStep({
   form,
   setForm
@@ -66,10 +101,12 @@ export function RoomStep({
 
 export function OpeningsStep({
   form,
-  setForm
+  setForm,
+  setPositionOverrides
 }: {
   form: Round1FormInput;
   setForm: (form: Round1FormInput) => void;
+  setPositionOverrides?: Dispatch<SetStateAction<PositionOverrides>>;
 }) {
   const door = form.openings.doors.items[0] ?? {
     location: "FRONT_SIDE" as const,
@@ -133,7 +170,7 @@ export function OpeningsStep({
               label="Door / opening wall"
               value={door.location}
               options={wallPositionOptions}
-              onChange={(value) =>
+              onChange={(value) => {
                 setForm({
                   ...form,
                   openings: {
@@ -143,8 +180,13 @@ export function OpeningsStep({
                       items: [{ ...door, location: value }]
                     }
                   }
-                })
-              }
+                });
+                setPositionOverrides?.((prev) => {
+                  const next = { ...prev };
+                  delete next["door"];
+                  return next;
+                });
+              }}
             />
           </>
         )}
@@ -160,7 +202,7 @@ export function OpeningsStep({
               label="Window approximate relation"
               value={window.relation}
               options={wallPositionOptions}
-              onChange={(value) =>
+              onChange={(value) => {
                 setForm({
                   ...form,
                   openings: {
@@ -170,8 +212,13 @@ export function OpeningsStep({
                       items: [{ ...window, relation: value }]
                     }
                   }
-                })
-              }
+                });
+                setPositionOverrides?.((prev) => {
+                  const next = { ...prev };
+                  delete next["window"];
+                  return next;
+                });
+              }}
             />
           </>
         )}
@@ -223,35 +270,57 @@ export function LayoutStep({
 }) {
   return (
     <Step title="3. Layout Preference">
-      <SelectField
-        label="Kitchen shape"
-        value={form.layoutPreference}
-        options={[
-          "ONE_WALL",
-          "L_SHAPE",
-          "U_SHAPE",
-          "GALLEY",
-          "PENINSULA",
-          "ISLAND",
-          "L_SHAPE_ISLAND",
-          "U_SHAPE_ISLAND",
-          "NO_PREFERENCE"
-        ]}
-        onChange={(value) => {
-          const newLayout = value as Round1FormInput["layoutPreference"];
-          setForm({ ...form, layoutPreference: newLayout });
-          setPositionOverrides((prev) => {
-            const allowed = allowedDragWallsForLayout(newLayout);
-            const next: PositionOverrides = {};
-            for (const [k, v] of Object.entries(prev)) {
-              if (k === "door" || k === "window" || allowed.includes(v.wall)) {
-                next[k] = v;
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SelectField
+          label="Kitchen shape"
+          value={displayLayoutPreference(form.layoutPreference)}
+          options={layoutPreferenceOptions}
+          onChange={(value) => {
+            const newLayout = value as Round1FormInput["layoutPreference"];
+            const currentIslandStatus = islandStatusForForm(form);
+            setForm({
+              ...form,
+              layoutPreference: newLayout,
+              layoutSensitiveCabinets: {
+                ...form.layoutSensitiveCabinets,
+                island: {
+                  ...form.layoutSensitiveCabinets.island,
+                  status: currentIslandStatus,
+                  requested: currentIslandStatus === "YES"
+                }
               }
-            }
-            return next;
-          });
-        }}
-      />
+            });
+            setPositionOverrides((prev) => {
+              const allowed = allowedDragWallsForLayout(newLayout);
+              const next: PositionOverrides = {};
+              for (const [k, v] of Object.entries(prev)) {
+                if (k === "door" || k === "window" || allowed.includes(v.wall)) {
+                  next[k] = v;
+                }
+              }
+              return next;
+            });
+          }}
+        />
+        <SelectField
+          label="Need island?"
+          value={islandStatusForForm(form)}
+          options={["YES", "NO", "UNKNOWN"] as const}
+          onChange={(status) =>
+            setForm({
+              ...form,
+              layoutSensitiveCabinets: {
+                ...form.layoutSensitiveCabinets,
+                island: {
+                  ...form.layoutSensitiveCabinets.island,
+                  status,
+                  requested: status === "YES"
+                }
+              }
+            })
+          }
+        />
+      </div>
     </Step>
   );
 }
@@ -293,14 +362,31 @@ export function AppliancesStep({
     key: keyof Round1FormInput["layoutSensitiveCabinets"]["cookingAppliances"],
     status: "YES" | "NO" | "UNKNOWN"
   ) => {
-    setCookingAppliance(key, {
-      status,
-      relation:
-        status === "NO"
-          ? "NOT_APPLICABLE"
-          : cooking[key].relation === "NOT_APPLICABLE"
-            ? "UNKNOWN"
-            : cooking[key].relation
+    const relation =
+      status === "NO"
+        ? "NOT_APPLICABLE"
+        : cooking[key].relation === "NOT_APPLICABLE"
+          ? "UNKNOWN"
+          : cooking[key].relation;
+    let nextCooking = {
+      ...cooking,
+      [key]: { ...cooking[key], status, relation }
+    };
+    // Range and cooktop are mutually exclusive primary cooking surfaces: a range
+    // is burners + oven, a cooktop is burners only. Choosing one clears the other.
+    if (status === "YES" && (key === "range" || key === "cooktop")) {
+      const other = key === "range" ? "cooktop" : "range";
+      nextCooking = {
+        ...nextCooking,
+        [other]: { ...cooking[other], status: "NO", relation: "NOT_APPLICABLE" }
+      };
+    }
+    setForm({
+      ...form,
+      layoutSensitiveCabinets: {
+        ...form.layoutSensitiveCabinets,
+        cookingAppliances: nextCooking
+      }
     });
   };
 
@@ -332,6 +418,7 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Cooktop"
           value={cooking.cooktop}
+          showWall={false}
           onStatusChange={(status) => setCookingStatus("cooktop", status)}
           onRelationChange={(relation) =>
             setCookingAppliance("cooktop", { relation })
@@ -348,6 +435,7 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Microwave / oven combo"
           value={cooking.microwaveOvenCombo}
+          showWall={false}
           onStatusChange={(status) =>
             setCookingStatus("microwaveOvenCombo", status)
           }
@@ -422,11 +510,13 @@ export function AppliancesStep({
 function RoughApplianceFields({
   label,
   value,
+  showWall = true,
   onStatusChange,
   onRelationChange
 }: {
   label: string;
   value: { status: "YES" | "NO" | "UNKNOWN"; relation: string };
+  showWall?: boolean;
   onStatusChange: (status: "YES" | "NO" | "UNKNOWN") => void;
   onRelationChange: (relation: (typeof applianceWallOptions)[number]) => void;
 }) {
@@ -438,7 +528,7 @@ function RoughApplianceFields({
         options={["YES", "NO", "UNKNOWN"]}
         onChange={onStatusChange}
       />
-      {value.status === "YES" && (
+      {value.status === "YES" && showWall && (
         <SelectField
           label={`${label} approximate wall`}
           value={

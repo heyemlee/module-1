@@ -178,4 +178,27 @@ describe("LayoutPreview", () => {
     expect(html).toContain(">door<");
     expect(html).toContain('stroke="#0ea5e9"');
   });
+
+  test("excludes microwave/oven combo label but shows wall oven label", () => {
+    const form = createDefaultShowroomForm();
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = { status: "YES", relation: "RIGHT_SIDE" };
+    form.layoutSensitiveCabinets.cookingAppliances.wallOven = { status: "YES", relation: "LEFT_SIDE" };
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+
+    const html = renderToStaticMarkup(
+      <LayoutPreview
+        normalized={result.normalized}
+        cabinets={estimate.cabinets}
+        confirmationItems={result.confirmationItems}
+        positionOverrides={{}}
+        onPositionOverridesChange={() => {}}
+        highlightDraggableItems={false}
+        showPositionObjects={true}
+      />
+    );
+
+    expect(html).not.toContain("Microwave / oven combo");
+    expect(html).toContain("Wall oven");
+  });
 });

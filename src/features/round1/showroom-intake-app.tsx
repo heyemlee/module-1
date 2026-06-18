@@ -10,8 +10,9 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import { AgentChatPanel } from "./agent-chat-panel";
+import { ElevationPreview } from "./elevations/elevation-preview";
 import { LayoutPreview } from "./layout-preview";
-import { rasterizeSvgElement } from "./rasterize-svg";
+import { rasterizeRenderingReferences } from "./rendering-references";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
@@ -61,6 +62,18 @@ const EMPTY_PRELIMINARY_CABINET_ESTIMATE: PreliminaryCabinetEstimate = {
 const PROJECT_ID_STORAGE_KEY = "round1ProjectId";
 const DEFAULT_PROJECT_CUSTOMER_NAME = "Showroom Round 1";
 
+export function shouldApplySnapshotRestore({
+  cancelled,
+  hasSavedSnapshot,
+  localSessionChanged
+}: {
+  cancelled: boolean;
+  hasSavedSnapshot: boolean;
+  localSessionChanged: boolean;
+}) {
+  return !cancelled && hasSavedSnapshot && !localSessionChanged;
+}
+
 export function ShowroomIntakeApp() {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
@@ -75,6 +88,7 @@ export function ShowroomIntakeApp() {
   const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localSessionChangedRef = useRef(false);
 
   // Concept rendering is a non-authoritative customer preview derived from the
   // frozen snapshot. It is persisted separately (never part of the snapshot) so
@@ -87,6 +101,7 @@ export function ShowroomIntakeApp() {
   // so the reference image and the JSON prompt come from the identical locked
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
+  const referenceElevationRef = useRef<SVGSVGElement | null>(null);
   const [renderingImage, setRenderingImage] = useState<string | null>(null);
   const [renderingBasedOn, setRenderingBasedOn] = useState<string | null>(null);
   const [renderingBusy, setRenderingBusy] = useState(false);
@@ -96,6 +111,7 @@ export function ShowroomIntakeApp() {
   // cabinet fill, so the frozen snapshot is cleared and must be regenerated.
   const updatePositionOverrides = useCallback<Dispatch<SetStateAction<PositionOverrides>>>(
     (update) => {
+      localSessionChangedRef.current = true;
       setPositionOverrides(update);
       setFixedPositionsConfirmed(false);
       setCabinetFillGenerated(false);
@@ -109,6 +125,7 @@ export function ShowroomIntakeApp() {
   // snapshot exists makes the rough cabinet fill stale, so it must be
   // regenerated before the snapshot is valid again.
   const updateForm = useCallback((next: Round1FormInput) => {
+    localSessionChangedRef.current = true;
     setForm(next);
     setCabinetFillGenerated(false);
     setSnapshot(null);
@@ -198,6 +215,7 @@ export function ShowroomIntakeApp() {
   // The estimate is computed inline (not read from the gated memo, which is
   // still empty at click time) so the snapshot freezes the exact rough fill.
   const handleGenerateCabinetFill = useCallback(() => {
+    localSessionChangedRef.current = true;
     const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
     const snapshotConfirmationItems = [
       ...result.confirmationItems,
@@ -221,14 +239,18 @@ export function ShowroomIntakeApp() {
   // which loads the authoritative snapshot server-side by id and builds the
   // prompt — the client never sends snapshot data, only the reference image.
   const handleGenerateRendering = useCallback(async () => {
-    const referenceSvg = referenceTopDownRef.current;
+    const referenceTopDownSvg = referenceTopDownRef.current;
+    const referenceElevationSvg = referenceElevationRef.current;
     const projectId = projectIdRef.current;
-    if (!referenceSvg || !projectId || !snapshot) return;
+    if (!referenceTopDownSvg || !projectId || !snapshot) return;
 
     setRenderingBusy(true);
     setRenderingError(null);
     try {
-      const referenceImagesBase64 = [await rasterizeSvgElement(referenceSvg)];
+      const referenceImagesBase64 = await rasterizeRenderingReferences([
+        referenceTopDownSvg,
+        referenceElevationSvg
+      ]);
       const response = await fetch(
         `/api/round1/projects/${projectId}/rendering`,
         {
@@ -256,6 +278,7 @@ export function ShowroomIntakeApp() {
   }, [snapshot]);
 
   const handleResetPositions = useCallback(() => {
+    localSessionChangedRef.current = true;
     setPositionOverrides({});
     setFixedPositionsConfirmed(false);
     setCabinetFillGenerated(false);
@@ -287,7 +310,16 @@ export function ShowroomIntakeApp() {
         }
         const json = await response.json();
         const saved = json.project?.snapshot as Round1Snapshot | undefined;
-        if (cancelled || !saved) return;
+        if (!saved) return;
+        if (
+          !shouldApplySnapshotRestore({
+            cancelled,
+            hasSavedSnapshot: true,
+            localSessionChanged: localSessionChangedRef.current
+          })
+        ) {
+          return;
+        }
         
         // Parse the showroom form using round1FormSchema to ensure all defaults are populated
         try {
@@ -334,6 +366,7 @@ export function ShowroomIntakeApp() {
   }, []);
 
   const goToNextStep = useCallback(() => {
+    localSessionChangedRef.current = true;
     if (step === ADJUST_POSITIONS_STEP_INDEX && !fixedPositionsConfirmed) {
       setFixedPositionsConfirmed(true);
     }
@@ -344,6 +377,7 @@ export function ShowroomIntakeApp() {
 
   const goToStep = useCallback((index: number) => {
     if (index > maxAccessibleStep) return;
+    localSessionChangedRef.current = true;
     setStep(index);
   }, [maxAccessibleStep]);
 
@@ -383,7 +417,7 @@ export function ShowroomIntakeApp() {
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           {step === 0 && <RoomStep form={form} setForm={updateForm} />}
-          {step === 1 && <OpeningsStep form={form} setForm={updateForm} />}
+          {step === 1 && <OpeningsStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 2 && <LayoutStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 3 && <AppliancesStep form={form} setForm={updateForm} />}
           {step === 4 && (
@@ -399,7 +433,10 @@ export function ShowroomIntakeApp() {
           <div className="mt-6 flex justify-between border-t border-slate-200 pt-4">
             <button
               type="button"
-              onClick={() => setStep(Math.max(0, step - 1))}
+              onClick={() => {
+                localSessionChangedRef.current = true;
+                setStep(Math.max(0, step - 1));
+              }}
               disabled={step === 0}
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -428,6 +465,8 @@ export function ShowroomIntakeApp() {
             previewStage={previewStage}
             svgRef={floorPlanSvgRef}
           />
+
+          {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
 
           <RenderingControls
             canRender={persistState === "saved"}
@@ -468,6 +507,10 @@ export function ShowroomIntakeApp() {
                 highlightDraggableItems={false}
                 showPositionObjects
                 svgRef={referenceTopDownRef}
+              />
+              <ElevationPreview
+                plan={snapshot.floorPlan}
+                svgRef={referenceElevationRef}
               />
             </div>
           )}
