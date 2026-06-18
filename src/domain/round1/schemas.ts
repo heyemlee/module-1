@@ -138,6 +138,7 @@ export const round1FormSchema = z.object({
   ]),
   fixtures: z.object({
     sink: z.object({
+      status: z.enum(["YES", "NO", "UNKNOWN"]).default("YES"),
       size: z.union([z.literal(30), z.literal(33), z.literal(36)]).nullable(),
       type: z.string(),
       relation: relationSchema
@@ -149,6 +150,7 @@ export const round1FormSchema = z.object({
       relation: relationSchema.default("UNKNOWN")
     }),
     fridge: z.object({
+      status: z.enum(["YES", "NO", "UNKNOWN"]).default("YES"),
       size: z
         .union([
           z.literal(30),

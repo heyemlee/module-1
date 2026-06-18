@@ -162,13 +162,12 @@ describe("OpeningsStep", () => {
 });
 
 describe("AppliancesStep", () => {
-  test("asks only rough presence and wall for cooking appliances", () => {
+  test("asks only rough presence for cooking appliances", () => {
     const html = renderToStaticMarkup(
       <AppliancesStep form={createDefaultShowroomForm()} setForm={() => {}} />
     );
 
     expect(html).toContain("Range included?");
-    expect(html).toContain("Range approximate wall");
     expect(html).toContain("Cooktop included?");
     expect(html).toContain("Wall oven included?");
     expect(html).toContain("Microwave / oven combo included?");
@@ -178,35 +177,6 @@ describe("AppliancesStep", () => {
     expect(html).not.toContain("Oven / microwave position");
   });
 
-  test("drops the approximate-wall question for cooktop, wall oven, and microwave/oven combo", () => {
-    const form = createDefaultShowroomForm();
-    const cooking = form.layoutSensitiveCabinets.cookingAppliances;
-    const html = renderToStaticMarkup(
-      <AppliancesStep
-        form={{
-          ...form,
-          layoutSensitiveCabinets: {
-            ...form.layoutSensitiveCabinets,
-            cookingAppliances: {
-              ...cooking,
-              range: { status: "YES", relation: "BACK_SIDE" },
-              cooktop: { status: "YES", relation: "UNKNOWN" },
-              wallOven: { status: "YES", relation: "UNKNOWN" },
-              microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
-            }
-          }
-        }}
-        setForm={() => {}}
-      />
-    );
-
-    // Range still asks for an approximate wall.
-    expect(html).toContain("Range approximate wall");
-    // Cooktop, wall oven, and microwave/oven combo no longer do — the auto-layout places them.
-    expect(html).not.toContain("Cooktop approximate wall");
-    expect(html).not.toContain("Wall oven approximate wall");
-    expect(html).not.toContain("Microwave / oven combo approximate wall");
-  });
 
   test("shows oven and microwave arrangement only when wall oven or microwave is included", () => {
     const form = createDefaultShowroomForm();

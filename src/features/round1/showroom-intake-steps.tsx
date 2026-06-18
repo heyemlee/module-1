@@ -484,15 +484,15 @@ export function AppliancesStep({
     <Step title="4. Core Appliances And Fixtures">
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
-          label="Sink size"
-          value={String(form.fixtures.sink.size ?? "UNKNOWN")}
-          options={["30", "33", "36", "UNKNOWN"]}
+          label="Sink included?"
+          value={form.fixtures.sink.status}
+          options={["YES", "NO", "UNKNOWN"]}
           onChange={(value) =>
             setForm({
               ...form,
               fixtures: {
                 ...form.fixtures,
-                sink: { ...form.fixtures.sink, size: parseNullableSize(value) as 30 | 33 | 36 | null }
+                sink: { ...form.fixtures.sink, status: value as "YES" | "NO" | "UNKNOWN" }
               }
             })
           }
@@ -508,7 +508,6 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Cooktop"
           value={cooking.cooktop}
-          showWall={false}
           onStatusChange={(status) => setCookingStatus("cooktop", status)}
           onRelationChange={(relation) =>
             setCookingAppliance("cooktop", { relation })
@@ -517,7 +516,6 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Wall oven"
           value={cooking.wallOven}
-          showWall={false}
           onStatusChange={(status) => setCookingStatus("wallOven", status)}
           onRelationChange={(relation) =>
             setCookingAppliance("wallOven", { relation })
@@ -526,7 +524,6 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Microwave / oven combo"
           value={cooking.microwaveOvenCombo}
-          showWall={false}
           onStatusChange={(status) =>
             setCookingStatus("microwaveOvenCombo", status)
           }
@@ -545,21 +542,21 @@ export function AppliancesStep({
           />
         )}
         <SelectField
-          label="Fridge size"
-          value={String(form.fixtures.fridge.size ?? "UNKNOWN")}
-          options={["30", "33", "36", "42", "48", "UNKNOWN"]}
+          label="Fridge included?"
+          value={form.fixtures.fridge.status}
+          options={["YES", "NO", "UNKNOWN"]}
           onChange={(value) =>
             setForm({
               ...form,
               fixtures: {
                 ...form.fixtures,
-                fridge: { ...form.fixtures.fridge, size: parseNullableSize(value) as 30 | 33 | 36 | 42 | 48 | null }
+                fridge: { ...form.fixtures.fridge, status: value as "YES" | "NO" | "UNKNOWN" }
               }
             })
           }
         />
         <SelectField
-          label="Dishwasher status"
+          label="Dishwasher included?"
           value={form.fixtures.dishwasher.status}
           options={["YES", "NONE", "UNKNOWN"]}
           onChange={(value) =>
@@ -582,27 +579,6 @@ export function AppliancesStep({
             })
           }
         />
-        {form.fixtures.dishwasher.status !== "NONE" && (
-          <>
-            <SelectField
-              label="Dishwasher size"
-              value={String(form.fixtures.dishwasher.size ?? "UNKNOWN")}
-              options={["18", "24", "UNKNOWN"]}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  fixtures: {
-                    ...form.fixtures,
-                    dishwasher: {
-                      ...form.fixtures.dishwasher,
-                      size: parseNullableSize(value) as 18 | 24 | null
-                    }
-                  }
-                })
-              }
-            />
-          </>
-        )}
       </div>
     </Step>
   );
@@ -611,37 +587,21 @@ export function AppliancesStep({
 function RoughApplianceFields({
   label,
   value,
-  showWall = true,
   onStatusChange,
   onRelationChange
 }: {
   label: string;
   value: { status: "YES" | "NO" | "UNKNOWN"; relation: string };
-  showWall?: boolean;
   onStatusChange: (status: "YES" | "NO" | "UNKNOWN") => void;
   onRelationChange: (relation: (typeof applianceWallOptions)[number]) => void;
 }) {
   return (
-    <>
-      <SelectField
-        label={`${label} included?`}
-        value={value.status}
-        options={["YES", "NO", "UNKNOWN"]}
-        onChange={onStatusChange}
-      />
-      {value.status === "YES" && showWall && (
-        <SelectField
-          label={`${label} approximate wall`}
-          value={
-            value.relation === "NOT_APPLICABLE"
-              ? "UNKNOWN"
-              : (value.relation as (typeof applianceWallOptions)[number])
-          }
-          options={applianceWallOptions}
-          onChange={onRelationChange}
-        />
-      )}
-    </>
+    <SelectField
+      label={`${label} included?`}
+      value={value.status}
+      options={["YES", "NO", "UNKNOWN"]}
+      onChange={onStatusChange}
+    />
   );
 }
 
