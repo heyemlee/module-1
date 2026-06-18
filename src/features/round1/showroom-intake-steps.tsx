@@ -402,10 +402,19 @@ export function AppliancesStep({
         [other]: { ...cooking[other], status: "NO", relation: "NOT_APPLICABLE" }
       };
     }
+    const ovenMicrowave =
+      key === "wallOven" || key === "microwaveOvenCombo"
+        ? {
+            ...form.layoutSensitiveCabinets.ovenMicrowave,
+            configuration: "UNKNOWN" as const,
+            relation: "UNKNOWN" as const
+          }
+        : form.layoutSensitiveCabinets.ovenMicrowave;
     setForm({
       ...form,
       layoutSensitiveCabinets: {
         ...form.layoutSensitiveCabinets,
+        ovenMicrowave,
         cookingAppliances: nextCooking
       }
     });
