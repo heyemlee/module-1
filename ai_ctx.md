@@ -75,7 +75,7 @@ Future customer rendering flow:
 - Do not use only JSON or only the layout image for customer rendering; use both so the image model gets spatial constraints and semantic/material context.
 - Generated renderings are customer-facing concept images only. They must not become the source of truth for cabinet data, dimensions, counts, geometry, quote data, or production readiness.
 
-Security note: an `OPENAI_API_KEY` was previously shared in chat/context. Rotate it if this project will continue using the image route.
+Security note: an `OPENAI_API_KEY` was previously leaked (shared in chat/context). It has since been rotated (2026-06-18); the old key is no longer valid. Never paste API keys into chat, context files, or commits — keep them in `.env.local` only.
 
 ## AI Boundary
 
@@ -238,11 +238,12 @@ Done (2026-06-17): L-shape fridge-outside-the-L bug fix. The default fridge rela
 
 Done (2026-06-17): sink-side cabinet continuity and rough-wall-cabinet cleanup. Root cause: the geometry layer treated sink/dishwasher as base-cabinet obstacles, so the base run could be cut away at the sink; wall-cabinet gap filling could also create narrow clipped upper-cabinet fragments that looked like extra cabinets or exact filler. Fix: sink/dishwasher no longer break the base-cabinet run; they render as integrated fixtures over base-cabinet footprints. Wall-cabinet clipping/generic filling now suppresses tiny fragments below the standalone wall-cabinet threshold, keeping the Round 1 preview coarse and readable. Exact filler placement and precise cabinet-by-cabinet design remain V2 / Module 2 work. Verified: `npm test` (132) and live browser QA at `http://localhost:3000/` (base cabinets present under sink/dishwasher; no narrow wall-cabinet fragments around the sink; no app console errors beyond dev Fast Refresh notices). See `plan-geometry.ts` and `plan-geometry.test.ts`.
 
+Done (2026-06-18): Round 1 rough wall elevations are implemented as the Phase 2 SVG-first reference upgrade. A deterministic elevation scene builder (`src/features/round1/elevations/elevation-scene.ts`) maps `snapshot.floorPlan` into coarse Back/Left/Right/Front wall views, and `ElevationPreview` renders visible CAD-like rough elevations below the top-down plan only after `Generate Cabinet Fill`. The elevations stay Module 1 only: rough, not editable, no cabinet codes, no production dimensions, no filler schedule, and stamped not-for-production. The concept rendering flow now rasterizes both the clean top-down reference and the rough elevation reference when available via `referenceImagesBase64`, with top-down-only fallback if the elevation ref is unavailable. Verified: `npm test` (155), `npx tsc --noEmit`, `npm run build`, and browser QA at `http://127.0.0.1:3002/` (initial load hides elevations; after cabinet fill, Rough Wall Elevations appear below the top-down plan with wall/opening/appliance SVG data; live `Generate Rendering` returned a concept PNG and no relevant console errors).
+
 Next implementation TODO:
 
-- Optional Phase 2 — deterministic perspective ("SVG-first") reference image: build a one-point-perspective (or folded-elevation) SVG from `snapshot.floorPlan` (proposed `src/features/round1/perspective/perspective-scene.ts` pure builder + `perspective-preview.tsx` renderer, internal-only), reusing `wallToCamera`/`alongAxisValue` from `spatial-language.ts`. The `referenceImagesBase64: string[]` plumbing already carries it — add a second hidden reference ref in `showroom-intake-app.tsx` with no API change. Gate on a visual check; this is the structural fix if drift persists after the Phase 1 prompt + clean reference.
-- Otherwise no outstanding Module 1 rendering work. The optional conversational Round 1 agent is now implemented (see the dedicated Done entry above); `src/server/llm/` and `POST /api/round1/agent` exist.
-- Note: the previously-leaked `OPENAI_API_KEY` should still be rotated as a security hygiene step (see "Architecture Decision" security note); the key in `.env.local` is currently working for rendering.
+- No outstanding Module 1 rendering work. The optional conversational Round 1 agent is now implemented (see the dedicated Done entry above); `src/server/llm/` and `POST /api/round1/agent` exist.
+- Note: the previously-leaked `OPENAI_API_KEY` has now been rotated (2026-06-18); the old key is invalid and the new key in `.env.local` is working for rendering. See the "Architecture Decision" security note. No further rotation action outstanding.
 
 ## Later Work
 
