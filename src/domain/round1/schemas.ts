@@ -186,6 +186,7 @@ export const round1FormSchema = z.object({
       configuration: z.enum([
         "RANGE_INCLUDES_OVEN",
         "WALL_OVEN_MICROWAVE_STACK",
+        "SEPARATE_WALL_OVEN_AND_MICROWAVE",
         "MICROWAVE_DRAWER",
         "UPPER_CABINET_MICROWAVE",
         "COUNTERTOP_MICROWAVE",
