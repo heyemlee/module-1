@@ -242,7 +242,8 @@ export async function executeRound1AgentTool(
 ): Promise<unknown> {
   switch (name) {
     case "update_intake": {
-      const patch = (args ?? {}) as Record<string, unknown>;
+      const rawPatch = isPlainObject(args) ? args : {};
+      const patch = sanitizePatchForUpdateIntake(rawPatch);
       const merged = synchronizeOvenMicrowaveArrangement(
         deepMergeForm(ctx.form as unknown as Record<string, unknown>, patch),
         patch
@@ -351,6 +352,41 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
+function sanitizePatchForUpdateIntake(
+  patch: Record<string, unknown>
+): Record<string, unknown> {
+  return sanitizePatchBySchema(patch, UPDATE_INTAKE_PARAMETERS);
+}
+
+function sanitizePatchBySchema(
+  patch: Record<string, unknown>,
+  schema: unknown
+): Record<string, unknown> {
+  if (!isPlainObject(schema) || !isPlainObject(schema.properties)) {
+    return {};
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const childSchema = schema.properties[key];
+    if (!isPlainObject(childSchema)) {
+      continue;
+    }
+
+    if (isPlainObject(patchValue) && isPlainObject(childSchema.properties)) {
+      const childPatch = sanitizePatchBySchema(patchValue, childSchema);
+      if (Object.keys(childPatch).length > 0) {
+        sanitized[key] = childPatch;
+      }
+      continue;
+    }
+
+    sanitized[key] = patchValue;
+  }
+
+  return sanitized;
+}
+
 function getPatchOvenMicrowaveConfiguration(
   patch: Record<string, unknown>
 ): string | null {
@@ -388,9 +424,31 @@ function synchronizeOvenMicrowaveArrangement(
     : {};
 
   switch (configuration) {
+    case "RANGE_INCLUDES_OVEN":
+      cookingAppliances.wallOven = {
+        status: "NO",
+        relation: "NOT_APPLICABLE"
+      };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "UNKNOWN",
+        relation: "UNKNOWN"
+      };
+      break;
     case "WALL_OVEN_MICROWAVE_STACK":
     case "SEPARATE_WALL_OVEN_AND_MICROWAVE":
       cookingAppliances.wallOven = { status: "YES", relation: "UNKNOWN" };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "YES",
+        relation: "UNKNOWN"
+      };
+      break;
+    case "MICROWAVE_DRAWER":
+    case "UPPER_CABINET_MICROWAVE":
+    case "COUNTERTOP_MICROWAVE":
+      cookingAppliances.wallOven = {
+        status: "UNKNOWN",
+        relation: "UNKNOWN"
+      };
       cookingAppliances.microwaveOvenCombo = {
         status: "YES",
         relation: "UNKNOWN"
