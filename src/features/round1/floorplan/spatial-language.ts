@@ -40,7 +40,7 @@ export function applianceNoun(appliance: {
     return "a stacked wall oven and microwave tower";
   }
   if (appliance.key === "microwaveOvenCombo") {
-    return "a microwave / oven combo";
+    return "a microwave";
   }
   if (appliance.key === "cooktop") {
     return "a cooktop (burners only, no oven below)";

@@ -186,7 +186,7 @@ function describeRoughCookingAppliances(
     suppressExplicitOvenMicrowave
       ? ""
       : describeRoughAppliance(
-          "microwave / oven combo",
+          "microwave",
           cooking.microwaveOvenCombo
         )
   ].filter(Boolean);

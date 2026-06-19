@@ -185,7 +185,7 @@ describe("AppliancesStep", () => {
     expect(html).toContain("Range included?");
     expect(html).toContain("Cooktop included?");
     expect(html).toContain("Wall oven included?");
-    expect(html).toContain("Microwave / oven combo included?");
+    expect(html).toContain("Built-in microwave included?");
     expect(html).not.toContain("Range size");
     expect(html).not.toContain("Cooktop size");
     expect(html).not.toContain("Oven / microwave");
@@ -193,7 +193,7 @@ describe("AppliancesStep", () => {
   });
 
 
-  test("shows oven and microwave arrangement only when wall oven or microwave is included", () => {
+  test("shows oven and microwave arrangement only when both wall oven and microwave are included", () => {
     const form = createDefaultShowroomForm();
     const cooking = form.layoutSensitiveCabinets.cookingAppliances;
     const hiddenHtml = renderToStaticMarkup(
@@ -205,7 +205,7 @@ describe("AppliancesStep", () => {
             cookingAppliances: {
               ...cooking,
               wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
-              microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+              microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
             }
           }
         }}
@@ -233,8 +233,6 @@ describe("AppliancesStep", () => {
     expect(visibleHtml).toContain("Oven and microwave arrangement?");
     expect(visibleHtml).toContain("WALL_OVEN_MICROWAVE_STACK");
     expect(visibleHtml).toContain("SEPARATE_WALL_OVEN_AND_MICROWAVE");
-    expect(visibleHtml).toContain("NO_MICROWAVE");
-    expect(visibleHtml).toContain("NO_OVEN");
     expect(visibleHtml).toContain("UNKNOWN");
   });
 
@@ -251,19 +249,9 @@ describe("AppliancesStep", () => {
         microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
       },
       {
-        configuration: "NO_MICROWAVE",
-        wallOven: { status: "YES", relation: "UNKNOWN" },
-        microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
-      },
-      {
-        configuration: "NO_OVEN",
-        wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
-        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
-      },
-      {
         configuration: "UNKNOWN",
         wallOven: { status: "YES", relation: "LEFT_SIDE" },
-        microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
       }
     ] as const;
 
@@ -284,8 +272,8 @@ describe("AppliancesStep", () => {
                 ...form.layoutSensitiveCabinets.cookingAppliances,
                 wallOven: { status: "YES", relation: "LEFT_SIDE" },
                 microwaveOvenCombo: {
-                  status: "NO",
-                  relation: "NOT_APPLICABLE"
+                  status: "YES",
+                  relation: "UNKNOWN"
                 }
               }
             }
@@ -342,7 +330,7 @@ describe("AppliancesStep", () => {
           nextForm = updatedForm;
         }}
       />,
-      "Microwave / oven combo included?"
+      "Built-in microwave included?"
     );
 
     expect(select).not.toBeNull();
@@ -381,7 +369,7 @@ describe("AppliancesStep", () => {
           nextForm = updatedForm;
         }}
       />,
-      "Microwave / oven combo included?"
+      "Built-in microwave included?"
     );
 
     expect(select).not.toBeNull();

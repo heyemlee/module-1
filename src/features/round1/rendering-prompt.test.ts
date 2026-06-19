@@ -109,7 +109,7 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("built-in cooktop (burners only, no oven");
     expect(prompt).toContain("no oven — DO NOT draw an oven door under it) on the back wall");
     expect(prompt).toContain("wall oven on the left wall");
-    expect(prompt).toContain("microwave / oven combo on the right wall");
+    expect(prompt).toContain("microwave on the right wall");
   });
 
   test("describes a stacked wall oven and microwave tower without conflicting rough placement", () => {
@@ -133,7 +133,7 @@ describe("buildRound1RenderingPrompt", () => {
     );
     expect(prompt).not.toContain("wall oven on an unconfirmed wall");
     expect(prompt).not.toContain(
-      "microwave / oven combo on an unconfirmed wall"
+      "microwave on an unconfirmed wall"
     );
   });
 
@@ -161,12 +161,12 @@ describe("buildRound1RenderingPrompt", () => {
       .filter((line) => line.startsWith("On the "))
       .join(" ");
     expect(wallWalkthrough).toContain("a wall oven");
-    expect(wallWalkthrough).toContain("a microwave / oven combo");
+    expect(wallWalkthrough).toContain("a microwave");
     expect(wallWalkthrough.match(/a wall oven/g) ?? []).toHaveLength(1);
     expect(wallWalkthrough).not.toContain("a wall oven and a wall oven");
     expect(prompt).not.toContain("wall oven on an unconfirmed wall");
     expect(prompt).not.toContain(
-      "microwave / oven combo on an unconfirmed wall"
+      "microwave on an unconfirmed wall"
     );
   });
 

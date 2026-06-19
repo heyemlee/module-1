@@ -43,8 +43,6 @@ const layoutPreferenceOptions = [
 const ovenMicrowaveArrangementOptions = [
   "WALL_OVEN_MICROWAVE_STACK",
   "SEPARATE_WALL_OVEN_AND_MICROWAVE",
-  "NO_MICROWAVE",
-  "NO_OVEN",
   "UNKNOWN"
 ] as const;
 
@@ -437,10 +435,6 @@ export function AppliancesStep({
         ) {
           newConfig = "UNKNOWN";
         }
-      } else if (wStatus === "YES" && mStatus === "NO") {
-        newConfig = "NO_MICROWAVE";
-      } else if (wStatus === "NO" && mStatus === "YES") {
-        newConfig = "NO_OVEN";
       } else {
         newConfig = "UNKNOWN";
       }
@@ -478,20 +472,6 @@ export function AppliancesStep({
           relation: "UNKNOWN" as const
         }
       },
-      NO_MICROWAVE: {
-        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
-        microwaveOvenCombo: {
-          status: "NO" as const,
-          relation: "NOT_APPLICABLE" as const
-        }
-      },
-      NO_OVEN: {
-        wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
-        microwaveOvenCombo: {
-          status: "YES" as const,
-          relation: "UNKNOWN" as const
-        }
-      },
       UNKNOWN: {
         wallOven: cooking.wallOven,
         microwaveOvenCombo: cooking.microwaveOvenCombo
@@ -518,7 +498,7 @@ export function AppliancesStep({
     });
   };
   const showOvenMicrowaveArrangement =
-    cooking.wallOven.status === "YES" ||
+    cooking.wallOven.status === "YES" &&
     cooking.microwaveOvenCombo.status === "YES";
 
   return (
@@ -563,7 +543,7 @@ export function AppliancesStep({
           }
         />
         <RoughApplianceFields
-          label="Microwave / oven combo"
+          label="Built-in microwave"
           value={cooking.microwaveOvenCombo}
           onStatusChange={(status) =>
             setCookingStatus("microwaveOvenCombo", status)
