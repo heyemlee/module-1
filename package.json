@@ -8,6 +8,7 @@
     "start": "next start",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs",
+    "db:seed-user": "node scripts/seed-user.mjs",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest"
