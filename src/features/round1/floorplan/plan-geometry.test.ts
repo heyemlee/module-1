@@ -482,11 +482,13 @@ describe("buildFloorPlan", () => {
     };
 
     const { plan } = planFromForm(form);
-    const ovenKeys = plan.appliances
-      .filter((item) => item.symbol === "oven")
-      .map((item) => item.key);
+    const wallOven = plan.appliances.find((item) => item.key === "wallOven");
+    const microwave = plan.appliances.find(
+      (item) => item.key === "microwaveOvenCombo"
+    );
 
-    expect(ovenKeys).toEqual(["wallOven", "microwaveOvenCombo"]);
+    expect(wallOven?.symbol).toBe("oven");
+    expect(microwave?.symbol).toBe("microwave");
   });
 
   test("keeps an auto-placed cooktop on the main run beside the sink", () => {

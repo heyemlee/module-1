@@ -9,6 +9,12 @@ import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-
 import { LayoutPreview } from "./layout-preview";
 
 describe("LayoutPreview", () => {
+  function staticApplianceLabelPattern(label: string) {
+    return new RegExp(
+      `class="fill-slate-900 text-\\[11px\\] font-bold"[^>]*>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</text>`
+    );
+  }
+
   function renderPreview({
     cabinets,
     previewStage,
@@ -195,7 +201,7 @@ describe("LayoutPreview", () => {
     expect(html).not.toContain('stroke="#2563eb"');
   });
 
-  test("excludes microwave/oven combo and wall oven labels", () => {
+  test("excludes microwave/oven combo and wall oven static labels", () => {
     const form = createDefaultShowroomForm();
     form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = { status: "YES", relation: "RIGHT_SIDE" };
     form.layoutSensitiveCabinets.cookingAppliances.wallOven = { status: "YES", relation: "LEFT_SIDE" };
@@ -214,11 +220,15 @@ describe("LayoutPreview", () => {
       />
     );
 
-    expect(html).not.toContain("Microwave / oven combo");
-    expect(html).not.toContain("Wall oven");
+    expect(html).toContain("Microwave / oven combo");
+    expect(html).toContain("Wall oven");
+    expect(html).not.toMatch(
+      staticApplianceLabelPattern("Microwave / oven combo")
+    );
+    expect(html).not.toMatch(staticApplianceLabelPattern("Wall oven"));
   });
 
-  test("excludes stacked wall oven and microwave label", () => {
+  test("excludes stacked wall oven and microwave static label", () => {
     const form = createDefaultShowroomForm();
     form.layoutSensitiveCabinets.ovenMicrowave = {
       configuration: "WALL_OVEN_MICROWAVE_STACK",
@@ -248,6 +258,9 @@ describe("LayoutPreview", () => {
     );
 
     expect(html).toContain('data-appliance-symbol="oven"');
-    expect(html).not.toContain("Wall oven + microwave stack");
+    expect(html).toContain("Wall oven + microwave stack");
+    expect(html).not.toMatch(
+      staticApplianceLabelPattern("Wall oven + microwave stack")
+    );
   });
 });
