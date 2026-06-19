@@ -1,5 +1,7 @@
-import { ShowroomIntakeApp } from "@/features/round1/showroom-intake-app";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/server/platform/auth-service";
 
-export default function Home() {
-  return <ShowroomIntakeApp />;
+export default async function Home() {
+  const user = await getCurrentUser();
+  redirect(user ? "/projects" : "/login");
 }

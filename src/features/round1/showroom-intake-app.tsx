@@ -74,7 +74,7 @@ export function shouldApplySnapshotRestore({
   return !cancelled && hasSavedSnapshot && !localSessionChanged;
 }
 
-export function ShowroomIntakeApp() {
+export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
   const [maxAccessibleStep, setMaxAccessibleStep] = useState(0);
@@ -137,6 +137,34 @@ export function ShowroomIntakeApp() {
   const persistSnapshot = useCallback(async (snap: Round1Snapshot) => {
     setPersistState("saving");
     try {
+      if (projectId) {
+        // Authenticated project-scoped persistence. Save the editable Round 1
+        // state and the frozen snapshot under the project. The server loads the
+        // authoritative snapshot back by project id and never trusts
+        // client-posted plan data for rendering.
+        projectIdRef.current = projectId;
+        const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showroomForm: snap.showroomForm,
+            positionOverrides: snap.positionOverrides,
+            fixedPositionsConfirmed: true,
+            cabinetFillGenerated: true
+          })
+        });
+        if (!savedState.ok) throw new Error("Unable to save Round 1 state");
+        const saved = await fetch(`/api/projects/${projectId}/round1/snapshot`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(snap)
+        });
+        if (!saved.ok) throw new Error("Unable to save snapshot");
+        setPersistState("saved");
+        return;
+      }
+
+      // Legacy localStorage-scoped path for the standalone dev workflow.
       let id = projectIdRef.current;
       if (!id) {
         const created = await fetch("/api/round1/projects", {
@@ -164,7 +192,7 @@ export function ShowroomIntakeApp() {
       // next generation. Surface a non-blocking error in the panel.
       setPersistState("error");
     }
-  }, []);
+  }, [projectId]);
 
   const startDraggableHighlightCue = useCallback(() => {
     if (highlightTimerRef.current) {
@@ -241,8 +269,8 @@ export function ShowroomIntakeApp() {
   const handleGenerateRendering = useCallback(async () => {
     const referenceTopDownSvg = referenceTopDownRef.current;
     const referenceElevationSvg = referenceElevationRef.current;
-    const projectId = projectIdRef.current;
-    if (!referenceTopDownSvg || !projectId || !snapshot) return;
+    const resolvedProjectId = projectId ?? projectIdRef.current;
+    if (!referenceTopDownSvg || !resolvedProjectId || !snapshot) return;
 
     setRenderingBusy(true);
     setRenderingError(null);
@@ -252,7 +280,9 @@ export function ShowroomIntakeApp() {
         referenceElevationSvg
       ]);
       const response = await fetch(
-        `/api/round1/projects/${projectId}/rendering`,
+        projectId
+          ? `/api/projects/${resolvedProjectId}/round1/renderings`
+          : `/api/round1/projects/${resolvedProjectId}/rendering`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -275,7 +305,7 @@ export function ShowroomIntakeApp() {
     } finally {
       setRenderingBusy(false);
     }
-  }, [snapshot]);
+  }, [projectId, snapshot]);
 
   const handleResetPositions = useCallback(() => {
     localSessionChangedRef.current = true;
@@ -288,10 +318,56 @@ export function ShowroomIntakeApp() {
     setRenderingError(null);
   }, []);
 
+  // Authenticated project-scoped restore. When rendered under a project route,
+  // rehydrate the editable Round 1 state and the latest frozen snapshot from the
+  // server (Postgres-backed) instead of localStorage.
+  useEffect(() => {
+    if (!projectId) return;
+    projectIdRef.current = projectId;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch(`/api/projects/${projectId}/round1/state`);
+        if (!response.ok || cancelled || localSessionChangedRef.current) return;
+        const json = await response.json();
+        const savedState = json.state as
+          | {
+              showroomForm: Round1FormInput;
+              positionOverrides: PositionOverrides;
+              fixedPositionsConfirmed: boolean;
+              cabinetFillGenerated: boolean;
+            }
+          | null;
+        const latestSnapshot = json.latestSnapshot?.snapshot as Round1Snapshot | undefined;
+
+        if (savedState) {
+          setForm(round1FormSchema.parse(savedState.showroomForm));
+          setPositionOverrides(savedState.positionOverrides);
+          setFixedPositionsConfirmed(savedState.fixedPositionsConfirmed);
+          setCabinetFillGenerated(savedState.cabinetFillGenerated);
+        }
+        if (latestSnapshot) {
+          setSnapshot(latestSnapshot);
+          setPersistState("saved");
+          setMaxAccessibleStep(SHOWROOM_STEPS.length - 1);
+        }
+      } catch {
+        setPersistState("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   // On mount, restore the last persisted snapshot (if any) so a refresh keeps
   // the frozen Round 1 result. The snapshot carries everything needed to
-  // rehydrate the editing session consistently.
+  // rehydrate the editing session consistently. Standalone dev workflow only;
+  // the project-scoped effect above owns restore when a projectId is present.
   useEffect(() => {
+    if (projectId) return;
     if (typeof window === "undefined") return;
     const storedId = window.localStorage.getItem(PROJECT_ID_STORAGE_KEY);
     if (!storedId) return;
@@ -363,7 +439,7 @@ export function ShowroomIntakeApp() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [projectId]);
 
   const goToNextStep = useCallback(() => {
     localSessionChangedRef.current = true;
