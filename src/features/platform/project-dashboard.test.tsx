@@ -25,6 +25,7 @@ describe("ProjectDashboard", () => {
     expect(html).toContain("Projects");
     expect(html).toContain("Search customer, address, or project");
     expect(html).toContain("New customer project");
+    expect(html).toContain("Sign out");
     expect(html).toContain("Chen Family");
   });
 });

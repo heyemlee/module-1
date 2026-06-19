@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { AuthUser } from "@/server/platform/types";
 import type { ProjectSummary } from "@/server/platform/project-repository";
+import { LogoutButton } from "./logout-button";
 
 export function ProjectDashboard({
   user,
@@ -17,9 +18,12 @@ export function ProjectDashboard({
             <h1 className="text-2xl font-semibold">Projects</h1>
             <p className="text-sm text-stone-600">{user.name} · {user.role}</p>
           </div>
-          <Link href="/projects/new" className="rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white">
-            New customer project
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/projects/new" className="rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white">
+              New customer project
+            </Link>
+            <LogoutButton />
+          </div>
         </header>
         <form className="mt-6">
           <label className="block text-sm font-medium text-stone-700">
