@@ -59,14 +59,14 @@ const formInput = {
   },
   layoutPreference: "L_SHAPE" as const,
   fixtures: {
-    sink: { size: 33 as const, type: "UNKNOWN", relation: "UNDER_WINDOW" as const },
+    sink: { status: "YES" as const, size: 33 as const, type: "UNKNOWN", relation: "UNDER_WINDOW" as const },
     range: {
       size: 30 as const,
       fuel: "GAS",
       fixedLocation: "UNKNOWN" as const,
       relation: "NEAR_RANGE" as const
     },
-    fridge: { size: 36 as const, type: "UNKNOWN", relation: "NEAR_ENTRANCE" as const },
+    fridge: { status: "YES" as const, size: 36 as const, type: "UNKNOWN", relation: "NEAR_ENTRANCE" as const },
     dishwasher: {
       status: "YES" as const,
       size: 24 as const,

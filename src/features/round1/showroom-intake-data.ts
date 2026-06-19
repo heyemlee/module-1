@@ -12,7 +12,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
     openings: {
       doors: {
         status: "YES",
-        items: [{ location: "FRONT_SIDE", width: null }]
+        items: [{ location: "FRONT_SIDE", kind: "DOOR", width: null }]
       },
       windows: {
         status: "YES",
@@ -27,14 +27,14 @@ export function createDefaultShowroomForm(): Round1FormInput {
     },
     layoutPreference: "LEFT_L_SHAPE",
     fixtures: {
-      sink: { size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+      sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
       range: {
         size: null,
         fuel: "GAS",
         fixedLocation: "UNKNOWN",
         relation: "BACK_SIDE"
       },
-      fridge: { size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
+      fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
       dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
       hood: { relation: "ABOVE_RANGE" }
     },

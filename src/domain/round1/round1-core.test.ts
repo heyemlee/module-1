@@ -6,9 +6,56 @@ import {
   generatePreliminaryCabinetList,
   summarizePreliminaryCabinetEstimate,
   normalizeRound1Form,
+  type Round1FormInput,
   round1NormalizedSchema,
   splitCabinetRun
 } from "./index";
+
+function createValidRound1Form(): Round1FormInput {
+  return {
+    room: {
+      length: 144,
+      width: 120,
+      dimensionsKnown: true,
+      ceilingHeight: 96,
+      obstacles: []
+    },
+    openings: {
+      doors: { status: "NO", items: [] },
+      windows: { status: "NO", items: [] }
+    },
+    mep: {
+      water: { relation: "NEAR_SINK", movable: "UNKNOWN" },
+      gas: { relation: "NEAR_RANGE", movable: "UNKNOWN" },
+      electric: { relation: "NEAR_FRIDGE", movable: "UNKNOWN" },
+      vent: { relation: "ABOVE_RANGE", movable: "UNKNOWN" }
+    },
+    layoutPreference: "ONE_WALL",
+    fixtures: {
+      sink: { status: "YES", size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+      range: {
+        size: null,
+        fuel: "UNKNOWN",
+        fixedLocation: "UNKNOWN",
+        relation: "BACK_SIDE"
+      },
+      fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
+      dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
+      hood: { relation: "ABOVE_RANGE" }
+    },
+    layoutSensitiveCabinets: {
+      cornerCabinet: { preferredType: "NO_PREFERENCE" },
+      ovenMicrowave: { configuration: "UNKNOWN", relation: "UNKNOWN" },
+      cookingAppliances: {
+        range: { status: "YES", relation: "BACK_SIDE" },
+        cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+        wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+        microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
+      },
+      island: { status: "NO", requested: false, functions: [] }
+    }
+  };
+}
 
 describe("Round 1 cabinet code helpers", () => {
   test("generates wall and base cabinet codes with base actual height rounded for code height", () => {
@@ -134,14 +181,14 @@ describe("Round 1 normalization and readiness", () => {
       },
       layoutPreference: "L_SHAPE",
       fixtures: {
-        sink: { size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
+        sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "UNKNOWN",
           relation: "NEAR_RANGE"
         },
-        fridge: { size: null, type: "UNKNOWN", relation: "NEAR_ENTRANCE" },
+        fridge: { status: "UNKNOWN", size: null, type: "UNKNOWN", relation: "NEAR_ENTRANCE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },
@@ -204,14 +251,14 @@ describe("Round 1 normalization and readiness", () => {
       },
       layoutPreference: "ONE_WALL",
       fixtures: {
-        sink: { size: 30, type: "SINGLE", relation: "ON_MAIN_RUN" },
+        sink: { status: "YES", size: 30, type: "SINGLE", relation: "ON_MAIN_RUN" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "YES",
           relation: "NEAR_RANGE"
         },
-        fridge: { size: 36, type: "FRENCH_DOOR", relation: "NEAR_ENTRANCE" },
+        fridge: { status: "YES", size: 36, type: "FRENCH_DOOR", relation: "NEAR_ENTRANCE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },
@@ -259,14 +306,14 @@ describe("Round 1 normalization and readiness", () => {
       },
       layoutPreference: "ONE_WALL",
       fixtures: {
-        sink: { size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        sink: { status: "YES", size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
         range: {
           size: null,
           fuel: "UNKNOWN",
           fixedLocation: "UNKNOWN",
           relation: "BACK_SIDE"
         },
-        fridge: { size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },
@@ -293,6 +340,37 @@ describe("Round 1 normalization and readiness", () => {
       cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
       wallOven: { status: "YES", relation: "LEFT_SIDE" },
       microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
+    });
+  });
+
+  test("normalizes a separate wall oven and microwave arrangement", () => {
+    const form = {
+      ...createValidRound1Form(),
+      layoutSensitiveCabinets: {
+        ...createValidRound1Form().layoutSensitiveCabinets,
+        ovenMicrowave: {
+          configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE" as const,
+          relation: "UNKNOWN" as const
+        },
+        cookingAppliances: {
+          range: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+          cooktop: { status: "YES" as const, relation: "UNKNOWN" as const },
+          wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+          microwaveOvenCombo: {
+            status: "YES" as const,
+            relation: "UNKNOWN" as const
+          }
+        }
+      }
+    };
+
+    const result = normalizeRound1Form(form);
+
+    expect(
+      result.normalized.layoutSensitiveCabinets.ovenMicrowave
+    ).toMatchObject({
+      configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+      relation: "UNKNOWN"
     });
   });
 });

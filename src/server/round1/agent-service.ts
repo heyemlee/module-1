@@ -143,6 +143,7 @@ const UPDATE_INTAKE_PARAMETERS: Record<string, unknown> = {
               enum: [
                 "RANGE_INCLUDES_OVEN",
                 "WALL_OVEN_MICROWAVE_STACK",
+                "SEPARATE_WALL_OVEN_AND_MICROWAVE",
                 "MICROWAVE_DRAWER",
                 "UPPER_CABINET_MICROWAVE",
                 "COUNTERTOP_MICROWAVE",
@@ -206,6 +207,9 @@ Language:
 
 Cooking appliances:
 - A range (炉灶/燃气灶, burners + oven in one unit) and a cooktop (炉头/灶台, burners only, NO oven) are mutually exclusive primary cooking surfaces. Set exactly one of them to YES, never both. A separate wall oven or microwave/oven combo can coexist with either.
+- If the customer says the microwave is above the wall oven, stacked with the wall oven, or in the same tall appliance cabinet, set layoutSensitiveCabinets.ovenMicrowave.configuration = "WALL_OVEN_MICROWAVE_STACK"; the update_intake tool will keep the appliance statuses consistent.
+- If the customer says the wall oven and microwave are separate, set layoutSensitiveCabinets.ovenMicrowave.configuration = "SEPARATE_WALL_OVEN_AND_MICROWAVE"; the update_intake tool will keep the appliance statuses consistent.
+- If the wall oven/microwave arrangement is unclear, leave layoutSensitiveCabinets.ovenMicrowave.configuration = "UNKNOWN".
 
 Island:
 - For L-shaped kitchens, choose LEFT_L_SHAPE or RIGHT_L_SHAPE when the customer specifies direction; use LEFT_L_SHAPE when they simply say L-shape without direction.
@@ -238,9 +242,11 @@ export async function executeRound1AgentTool(
 ): Promise<unknown> {
   switch (name) {
     case "update_intake": {
-      const merged = deepMergeForm(
-        ctx.form as unknown as Record<string, unknown>,
-        (args ?? {}) as Record<string, unknown>
+      const rawPatch = isPlainObject(args) ? args : {};
+      const patch = sanitizePatchForUpdateIntake(rawPatch);
+      const merged = synchronizeOvenMicrowaveArrangement(
+        deepMergeForm(ctx.form as unknown as Record<string, unknown>, patch),
+        patch
       );
       // Zod both validates AND strips any field outside the form schema, so the
       // agent cannot introduce snapshot/readiness/control fields even if it tries.
@@ -344,6 +350,144 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     value !== null &&
     !Array.isArray(value)
   );
+}
+
+function sanitizePatchForUpdateIntake(
+  patch: Record<string, unknown>
+): Record<string, unknown> {
+  return sanitizePatchBySchema(patch, UPDATE_INTAKE_PARAMETERS);
+}
+
+function sanitizePatchBySchema(
+  patch: Record<string, unknown>,
+  schema: unknown
+): Record<string, unknown> {
+  if (!isPlainObject(schema) || !isPlainObject(schema.properties)) {
+    return {};
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const childSchema = schema.properties[key];
+    if (!isPlainObject(childSchema)) {
+      continue;
+    }
+
+    if (isPlainObject(patchValue) && isPlainObject(childSchema.properties)) {
+      const childPatch = sanitizePatchBySchema(patchValue, childSchema);
+      if (Object.keys(childPatch).length > 0) {
+        sanitized[key] = childPatch;
+      }
+      continue;
+    }
+
+    sanitized[key] = patchValue;
+  }
+
+  return sanitized;
+}
+
+function getPatchOvenMicrowaveConfiguration(
+  patch: Record<string, unknown>
+): string | null {
+  const layoutSensitivePatch = patch.layoutSensitiveCabinets;
+  if (!isPlainObject(layoutSensitivePatch)) {
+    return null;
+  }
+
+  const ovenMicrowavePatch = layoutSensitivePatch.ovenMicrowave;
+  if (!isPlainObject(ovenMicrowavePatch)) {
+    return null;
+  }
+
+  const configuration = ovenMicrowavePatch.configuration;
+  return typeof configuration === "string" ? configuration : null;
+}
+
+function synchronizeOvenMicrowaveArrangement(
+  merged: Record<string, unknown>,
+  patch: Record<string, unknown>
+): Record<string, unknown> {
+  const configuration = getPatchOvenMicrowaveConfiguration(patch);
+  if (configuration === null) {
+    return merged;
+  }
+
+  const layoutSensitive = isPlainObject(merged.layoutSensitiveCabinets)
+    ? { ...merged.layoutSensitiveCabinets }
+    : {};
+  const ovenMicrowave = isPlainObject(layoutSensitive.ovenMicrowave)
+    ? { ...layoutSensitive.ovenMicrowave }
+    : {};
+  const cookingAppliances = isPlainObject(layoutSensitive.cookingAppliances)
+    ? { ...layoutSensitive.cookingAppliances }
+    : {};
+
+  switch (configuration) {
+    case "RANGE_INCLUDES_OVEN":
+      cookingAppliances.wallOven = {
+        status: "NO",
+        relation: "NOT_APPLICABLE"
+      };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "UNKNOWN",
+        relation: "UNKNOWN"
+      };
+      break;
+    case "WALL_OVEN_MICROWAVE_STACK":
+    case "SEPARATE_WALL_OVEN_AND_MICROWAVE":
+      cookingAppliances.wallOven = { status: "YES", relation: "UNKNOWN" };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "YES",
+        relation: "UNKNOWN"
+      };
+      break;
+    case "MICROWAVE_DRAWER":
+    case "UPPER_CABINET_MICROWAVE":
+    case "COUNTERTOP_MICROWAVE":
+      cookingAppliances.wallOven = {
+        status: "UNKNOWN",
+        relation: "UNKNOWN"
+      };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "YES",
+        relation: "UNKNOWN"
+      };
+      break;
+    case "NO_MICROWAVE":
+      cookingAppliances.wallOven = { status: "YES", relation: "UNKNOWN" };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "NO",
+        relation: "NOT_APPLICABLE"
+      };
+      break;
+    case "NO_OVEN":
+      cookingAppliances.wallOven = {
+        status: "NO",
+        relation: "NOT_APPLICABLE"
+      };
+      cookingAppliances.microwaveOvenCombo = {
+        status: "YES",
+        relation: "UNKNOWN"
+      };
+      break;
+    case "UNKNOWN":
+      ovenMicrowave.relation = "UNKNOWN";
+      break;
+    default:
+      return merged;
+  }
+
+  ovenMicrowave.relation = "UNKNOWN";
+
+  return {
+    ...merged,
+    layoutSensitiveCabinets: {
+      ...layoutSensitive,
+      ovenMicrowave,
+      cookingAppliances
+    }
+  };
 }
 
 /**

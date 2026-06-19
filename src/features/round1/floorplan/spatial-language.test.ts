@@ -7,6 +7,7 @@ import {
 import { buildFloorPlan, type FloorPlan } from "./plan-geometry";
 import {
   alongAxisValue,
+  applianceNoun,
   describeBehindCameraAppliances,
   describeCorners,
   describeDoor,
@@ -79,6 +80,26 @@ describe("alongAxisValue", () => {
 });
 
 describe("describeWall", () => {
+  test("names a stacked wall oven and microwave tower", () => {
+    expect(
+      applianceNoun({
+        key: "ovenMicrowaveStack",
+        label: "Wall oven + microwave stack",
+        symbol: "oven"
+      })
+    ).toBe("a stacked wall oven and microwave tower");
+  });
+
+  test("names a microwave oven combo distinctly from a wall oven", () => {
+    expect(
+      applianceNoun({
+        key: "microwaveOvenCombo",
+        label: "Microwave / oven combo",
+        symbol: "oven"
+      })
+    ).toBe("a microwave / oven combo");
+  });
+
   test("orders back-wall appliances sink -> dishwasher -> range and folds in the hood", () => {
     const desc = describeWall(defaultPlan, "TOP");
     expect(desc).not.toBeNull();
@@ -145,6 +166,28 @@ describe("describeDoor", () => {
     const phrase = describeDoor(defaultPlan);
     expect(phrase).toContain("the front wall");
     expect(phrase).toContain("must NOT");
+  });
+
+  test("describes an open passage as a cased opening with no door leaf", () => {
+    const base = createDefaultShowroomForm();
+    const passagePlan = planFor({
+      ...base,
+      layoutPreference: "U_SHAPE",
+      openings: {
+        ...base.openings,
+        doors: {
+          status: "YES",
+          items: [{ location: "LEFT_SIDE", kind: "OPEN_PASSAGE", width: null }]
+        }
+      }
+    });
+
+    const phrase = describeDoor(passagePlan);
+    expect(phrase).toContain("open passage");
+    expect(phrase).toContain("no door leaf");
+    expect(phrase).toContain("the left wall");
+    // It must not be described as a plain swinging door.
+    expect(phrase).not.toContain("entry door");
   });
 });
 

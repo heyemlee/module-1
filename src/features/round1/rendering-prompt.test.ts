@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   generatePreliminaryCabinetList,
-  normalizeRound1Form
+  normalizeRound1Form,
+  type Round1FormInput
 } from "@/domain/round1";
 import { buildRound1RenderingPrompt } from "./rendering-prompt";
 import {
@@ -13,9 +14,11 @@ import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
 function buildSnapshot(
   layoutPreference: ReturnType<
     typeof createDefaultShowroomForm
-  >["layoutPreference"] = "L_SHAPE"
+  >["layoutPreference"] = "L_SHAPE",
+  configureForm?: (form: Round1FormInput) => void
 ): Round1Snapshot {
   const form = { ...createDefaultShowroomForm(), layoutPreference };
+  configureForm?.(form);
   const { normalized, confirmationItems, readiness } =
     normalizeRound1Form(form);
   const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
@@ -109,6 +112,64 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("microwave / oven combo on the right wall");
   });
 
+  test("describes a stacked wall oven and microwave tower without conflicting rough placement", () => {
+    const snapshot = buildSnapshot("L_SHAPE", (form) => {
+      form.layoutSensitiveCabinets.ovenMicrowave = {
+        configuration: "WALL_OVEN_MICROWAVE_STACK",
+        relation: "UNKNOWN"
+      };
+      form.layoutSensitiveCabinets.cookingAppliances = {
+        range: { status: "YES", relation: "BACK_SIDE" },
+        cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+        wallOven: { status: "YES", relation: "UNKNOWN" },
+        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+      };
+    });
+
+    const prompt = buildRound1RenderingPrompt(snapshot);
+
+    expect(prompt).toContain(
+      "Oven / microwave: a stacked wall oven and microwave tower in one tall appliance cabinet."
+    );
+    expect(prompt).not.toContain("wall oven on an unconfirmed wall");
+    expect(prompt).not.toContain(
+      "microwave / oven combo on an unconfirmed wall"
+    );
+  });
+
+  test("describes separate wall oven and microwave locations without conflicting rough placement", () => {
+    const snapshot = buildSnapshot("L_SHAPE", (form) => {
+      form.layoutSensitiveCabinets.ovenMicrowave = {
+        configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+        relation: "UNKNOWN"
+      };
+      form.layoutSensitiveCabinets.cookingAppliances = {
+        range: { status: "YES", relation: "BACK_SIDE" },
+        cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+        wallOven: { status: "YES", relation: "UNKNOWN" },
+        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+      };
+    });
+
+    const prompt = buildRound1RenderingPrompt(snapshot);
+
+    expect(prompt).toContain(
+      "Oven / microwave: a wall oven and a separate microwave location."
+    );
+    const wallWalkthrough = prompt
+      .split("\n")
+      .filter((line) => line.startsWith("On the "))
+      .join(" ");
+    expect(wallWalkthrough).toContain("a wall oven");
+    expect(wallWalkthrough).toContain("a microwave / oven combo");
+    expect(wallWalkthrough.match(/a wall oven/g) ?? []).toHaveLength(1);
+    expect(wallWalkthrough).not.toContain("a wall oven and a wall oven");
+    expect(prompt).not.toContain("wall oven on an unconfirmed wall");
+    expect(prompt).not.toContain(
+      "microwave / oven combo on an unconfirmed wall"
+    );
+  });
+
   test("names the corner cabinet and forbids dropping it", () => {
     const prompt = buildRound1RenderingPrompt(buildSnapshot());
 
@@ -123,6 +184,20 @@ describe("buildRound1RenderingPrompt", () => {
     // Default door is on the front wall (behind the camera).
     expect(prompt).toContain("The entry door is on the front wall behind the camera");
     expect(prompt).toContain("must NOT appear on the back, left, or right walls");
+  });
+
+  test("renders an open passage as a cased opening, not a swinging door", () => {
+    const prompt = buildRound1RenderingPrompt(
+      buildSnapshot("U_SHAPE", (form) => {
+        form.openings.doors = {
+          status: "YES",
+          items: [{ location: "LEFT_SIDE", kind: "OPEN_PASSAGE", width: null }]
+        };
+      })
+    );
+
+    expect(prompt).toContain("open passage");
+    expect(prompt).toContain("no swinging door leaf");
   });
 
   test("keeps a front-wall fridge behind the camera", () => {

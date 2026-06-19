@@ -19,6 +19,8 @@ const wallPositionOptions = [
   "UNKNOWN"
 ] as const;
 
+const doorKindOptions = ["DOOR", "OPEN_PASSAGE"] as const;
+
 const applianceWallOptions = [
   "BACK_SIDE",
   "LEFT_SIDE",
@@ -38,6 +40,17 @@ const layoutPreferenceOptions = [
   "NO_PREFERENCE"
 ] as const;
 
+const ovenMicrowaveArrangementOptions = [
+  "WALL_OVEN_MICROWAVE_STACK",
+  "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+  "NO_MICROWAVE",
+  "NO_OVEN",
+  "UNKNOWN"
+] as const;
+
+type OvenMicrowaveArrangement =
+  (typeof ovenMicrowaveArrangementOptions)[number];
+
 function displayLayoutPreference(
   layoutPreference: Round1FormInput["layoutPreference"]
 ): (typeof layoutPreferenceOptions)[number] {
@@ -51,6 +64,16 @@ function displayLayoutPreference(
     return "NO_PREFERENCE";
   }
   return layoutPreference as (typeof layoutPreferenceOptions)[number];
+}
+
+function displayOvenMicrowaveArrangement(
+  configuration: Round1FormInput["layoutSensitiveCabinets"]["ovenMicrowave"]["configuration"]
+): OvenMicrowaveArrangement {
+  return ovenMicrowaveArrangementOptions.includes(
+    configuration as OvenMicrowaveArrangement
+  )
+    ? (configuration as OvenMicrowaveArrangement)
+    : "UNKNOWN";
 }
 
 function islandStatusForForm(
@@ -110,6 +133,7 @@ export function OpeningsStep({
 }) {
   const door = form.openings.doors.items[0] ?? {
     location: "FRONT_SIDE" as const,
+    kind: "DOOR" as const,
     width: null
   };
   const window = form.openings.windows.items[0] ?? {
@@ -166,6 +190,23 @@ export function OpeningsStep({
         />
         {form.openings.doors.status !== "NO" && (
           <>
+            <SelectField
+              label="Door or open passage?"
+              value={door.kind ?? "DOOR"}
+              options={doorKindOptions}
+              onChange={(value) => {
+                setForm({
+                  ...form,
+                  openings: {
+                    ...form.openings,
+                    doors: {
+                      ...form.openings.doors,
+                      items: [{ ...door, kind: value }]
+                    }
+                  }
+                });
+              }}
+            />
             <SelectField
               label="Door / opening wall"
               value={door.location}
@@ -381,28 +422,118 @@ export function AppliancesStep({
         [other]: { ...cooking[other], status: "NO", relation: "NOT_APPLICABLE" }
       };
     }
+    let ovenMicrowave = form.layoutSensitiveCabinets.ovenMicrowave;
+    if (key === "wallOven" || key === "microwaveOvenCombo") {
+      const wStatus = key === "wallOven" ? status : cooking.wallOven.status;
+      const mStatus =
+        key === "microwaveOvenCombo" ? status : cooking.microwaveOvenCombo.status;
+
+      let newConfig = ovenMicrowave.configuration;
+
+      if (wStatus === "YES" && mStatus === "YES") {
+        if (
+          newConfig !== "WALL_OVEN_MICROWAVE_STACK" &&
+          newConfig !== "SEPARATE_WALL_OVEN_AND_MICROWAVE"
+        ) {
+          newConfig = "UNKNOWN";
+        }
+      } else if (wStatus === "YES" && mStatus === "NO") {
+        newConfig = "NO_MICROWAVE";
+      } else if (wStatus === "NO" && mStatus === "YES") {
+        newConfig = "NO_OVEN";
+      } else {
+        newConfig = "UNKNOWN";
+      }
+
+      ovenMicrowave = {
+        ...ovenMicrowave,
+        configuration: newConfig,
+        relation: "UNKNOWN" as const
+      };
+    }
     setForm({
       ...form,
       layoutSensitiveCabinets: {
         ...form.layoutSensitiveCabinets,
+        ovenMicrowave,
         cookingAppliances: nextCooking
       }
     });
   };
+  const setOvenMicrowaveArrangement = (
+    configuration: OvenMicrowaveArrangement
+  ) => {
+    const arrangementCooking = {
+      WALL_OVEN_MICROWAVE_STACK: {
+        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+        microwaveOvenCombo: {
+          status: "YES" as const,
+          relation: "UNKNOWN" as const
+        }
+      },
+      SEPARATE_WALL_OVEN_AND_MICROWAVE: {
+        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+        microwaveOvenCombo: {
+          status: "YES" as const,
+          relation: "UNKNOWN" as const
+        }
+      },
+      NO_MICROWAVE: {
+        wallOven: { status: "YES" as const, relation: "UNKNOWN" as const },
+        microwaveOvenCombo: {
+          status: "NO" as const,
+          relation: "NOT_APPLICABLE" as const
+        }
+      },
+      NO_OVEN: {
+        wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+        microwaveOvenCombo: {
+          status: "YES" as const,
+          relation: "UNKNOWN" as const
+        }
+      },
+      UNKNOWN: {
+        wallOven: cooking.wallOven,
+        microwaveOvenCombo: cooking.microwaveOvenCombo
+      }
+    } satisfies Record<
+      OvenMicrowaveArrangement,
+      Pick<typeof cooking, "wallOven" | "microwaveOvenCombo">
+    >;
+
+    setForm({
+      ...form,
+      layoutSensitiveCabinets: {
+        ...form.layoutSensitiveCabinets,
+        ovenMicrowave: {
+          ...form.layoutSensitiveCabinets.ovenMicrowave,
+          configuration,
+          relation: "UNKNOWN"
+        },
+        cookingAppliances: {
+          ...cooking,
+          ...arrangementCooking[configuration]
+        }
+      }
+    });
+  };
+  const showOvenMicrowaveArrangement =
+    cooking.wallOven.status === "YES" ||
+    cooking.microwaveOvenCombo.status === "YES";
 
   return (
     <Step title="4. Core Appliances And Fixtures">
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
-          label="Sink size"
-          value={String(form.fixtures.sink.size ?? "UNKNOWN")}
-          options={["30", "33", "36", "UNKNOWN"]}
+          label="Sink included?"
+          value={form.fixtures.sink.status}
+          options={["YES", "NO", "UNKNOWN"]}
           onChange={(value) =>
             setForm({
               ...form,
               fixtures: {
                 ...form.fixtures,
-                sink: { ...form.fixtures.sink, size: parseNullableSize(value) as 30 | 33 | 36 | null }
+                sink: { ...form.fixtures.sink, status: value as "YES" | "NO" | "UNKNOWN" }
               }
             })
           }
@@ -418,7 +549,6 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Cooktop"
           value={cooking.cooktop}
-          showWall={false}
           onStatusChange={(status) => setCookingStatus("cooktop", status)}
           onRelationChange={(relation) =>
             setCookingAppliance("cooktop", { relation })
@@ -435,7 +565,6 @@ export function AppliancesStep({
         <RoughApplianceFields
           label="Microwave / oven combo"
           value={cooking.microwaveOvenCombo}
-          showWall={false}
           onStatusChange={(status) =>
             setCookingStatus("microwaveOvenCombo", status)
           }
@@ -443,22 +572,32 @@ export function AppliancesStep({
             setCookingAppliance("microwaveOvenCombo", { relation })
           }
         />
+        {showOvenMicrowaveArrangement && (
+          <SelectField
+            label="Oven and microwave arrangement?"
+            value={displayOvenMicrowaveArrangement(
+              form.layoutSensitiveCabinets.ovenMicrowave.configuration
+            )}
+            options={ovenMicrowaveArrangementOptions}
+            onChange={setOvenMicrowaveArrangement}
+          />
+        )}
         <SelectField
-          label="Fridge size"
-          value={String(form.fixtures.fridge.size ?? "UNKNOWN")}
-          options={["30", "33", "36", "42", "48", "UNKNOWN"]}
+          label="Fridge included?"
+          value={form.fixtures.fridge.status}
+          options={["YES", "NO", "UNKNOWN"]}
           onChange={(value) =>
             setForm({
               ...form,
               fixtures: {
                 ...form.fixtures,
-                fridge: { ...form.fixtures.fridge, size: parseNullableSize(value) as 30 | 33 | 36 | 42 | 48 | null }
+                fridge: { ...form.fixtures.fridge, status: value as "YES" | "NO" | "UNKNOWN" }
               }
             })
           }
         />
         <SelectField
-          label="Dishwasher status"
+          label="Dishwasher included?"
           value={form.fixtures.dishwasher.status}
           options={["YES", "NONE", "UNKNOWN"]}
           onChange={(value) =>
@@ -481,27 +620,6 @@ export function AppliancesStep({
             })
           }
         />
-        {form.fixtures.dishwasher.status !== "NONE" && (
-          <>
-            <SelectField
-              label="Dishwasher size"
-              value={String(form.fixtures.dishwasher.size ?? "UNKNOWN")}
-              options={["18", "24", "UNKNOWN"]}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  fixtures: {
-                    ...form.fixtures,
-                    dishwasher: {
-                      ...form.fixtures.dishwasher,
-                      size: parseNullableSize(value) as 18 | 24 | null
-                    }
-                  }
-                })
-              }
-            />
-          </>
-        )}
       </div>
     </Step>
   );
@@ -510,37 +628,21 @@ export function AppliancesStep({
 function RoughApplianceFields({
   label,
   value,
-  showWall = true,
   onStatusChange,
   onRelationChange
 }: {
   label: string;
   value: { status: "YES" | "NO" | "UNKNOWN"; relation: string };
-  showWall?: boolean;
   onStatusChange: (status: "YES" | "NO" | "UNKNOWN") => void;
   onRelationChange: (relation: (typeof applianceWallOptions)[number]) => void;
 }) {
   return (
-    <>
-      <SelectField
-        label={`${label} included?`}
-        value={value.status}
-        options={["YES", "NO", "UNKNOWN"]}
-        onChange={onStatusChange}
-      />
-      {value.status === "YES" && showWall && (
-        <SelectField
-          label={`${label} approximate wall`}
-          value={
-            value.relation === "NOT_APPLICABLE"
-              ? "UNKNOWN"
-              : (value.relation as (typeof applianceWallOptions)[number])
-          }
-          options={applianceWallOptions}
-          onChange={onRelationChange}
-        />
-      )}
-    </>
+    <SelectField
+      label={`${label} included?`}
+      value={value.status}
+      options={["YES", "NO", "UNKNOWN"]}
+      onChange={onStatusChange}
+    />
   );
 }
 

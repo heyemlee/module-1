@@ -1,3 +1,4 @@
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
@@ -36,6 +37,105 @@ function buildFixtureSnapshot() {
   });
 }
 
+type ElementWithChildrenProps = {
+  children?: ReactNode;
+};
+
+type SelectChangeEvent = {
+  target: { value: string };
+};
+
+type SelectElementProps = ElementWithChildrenProps & {
+  onChange: (event: SelectChangeEvent) => void;
+};
+
+function childrenOf(element: ReactElement): ReactNode {
+  return (element as ReactElement<ElementWithChildrenProps>).props.children;
+}
+
+function renderFunctionElement(element: ReactElement): ReactNode {
+  const Component = element.type as (props: unknown) => ReactNode;
+  return Component(element.props);
+}
+
+function textFromReactNode(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return "";
+  }
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(textFromReactNode).join("");
+  }
+  if (isValidElement(node)) {
+    if (typeof node.type === "function") {
+      return textFromReactNode(renderFunctionElement(node));
+    }
+    return textFromReactNode(childrenOf(node));
+  }
+  return "";
+}
+
+function findFirstElementByType(
+  node: ReactNode,
+  type: string
+): ReactElement<ElementWithChildrenProps> | null {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return null;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findFirstElementByType(child, type);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  if (typeof node.type === "function") {
+    return findFirstElementByType(renderFunctionElement(node), type);
+  }
+  if (node.type === type) {
+    return node as ReactElement<ElementWithChildrenProps>;
+  }
+  return findFirstElementByType(childrenOf(node), type);
+}
+
+function findSelectByLabel(
+  node: ReactNode,
+  label: string
+): ReactElement<SelectElementProps> | null {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return null;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found: ReactElement<SelectElementProps> | null =
+        findSelectByLabel(child, label);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  if (typeof node.type === "function") {
+    return findSelectByLabel(renderFunctionElement(node), label);
+  }
+  if (node.type === "label" && textFromReactNode(node).includes(label)) {
+    return findFirstElementByType(
+      node,
+      "select"
+    ) as ReactElement<SelectElementProps> | null;
+  }
+  return findSelectByLabel(childrenOf(node), label);
+}
+
+function changeSelect(
+  select: ReactElement<SelectElementProps>,
+  value: string
+): void {
+  select.props.onChange({ target: { value } });
+}
+
 describe("OpeningsStep", () => {
   test("does not render first-phase door or window width inputs", () => {
     const html = renderToStaticMarkup(
@@ -59,16 +159,30 @@ describe("OpeningsStep", () => {
     expect(html).not.toContain("BEHIND_SINK");
     expect(html).not.toContain("UNDER_WINDOW");
   });
+
+  test("stores whether the opening is a swinging door or open passage", () => {
+    const form = createDefaultShowroomForm();
+    let nextForm = form;
+    const tree = (
+      <OpeningsStep form={form} setForm={(value) => { nextForm = value; }} />
+    );
+
+    const select = findSelectByLabel(tree, "Door or open passage?");
+    expect(select).not.toBeNull();
+
+    changeSelect(select!, "OPEN_PASSAGE");
+
+    expect(nextForm.openings.doors.items[0]?.kind).toBe("OPEN_PASSAGE");
+  });
 });
 
 describe("AppliancesStep", () => {
-  test("asks only rough presence and wall for cooking appliances", () => {
+  test("asks only rough presence for cooking appliances", () => {
     const html = renderToStaticMarkup(
       <AppliancesStep form={createDefaultShowroomForm()} setForm={() => {}} />
     );
 
     expect(html).toContain("Range included?");
-    expect(html).toContain("Range approximate wall");
     expect(html).toContain("Cooktop included?");
     expect(html).toContain("Wall oven included?");
     expect(html).toContain("Microwave / oven combo included?");
@@ -78,10 +192,11 @@ describe("AppliancesStep", () => {
     expect(html).not.toContain("Oven / microwave position");
   });
 
-  test("drops the approximate-wall question for cooktop and microwave/oven combo", () => {
+
+  test("shows oven and microwave arrangement only when wall oven or microwave is included", () => {
     const form = createDefaultShowroomForm();
     const cooking = form.layoutSensitiveCabinets.cookingAppliances;
-    const html = renderToStaticMarkup(
+    const hiddenHtml = renderToStaticMarkup(
       <AppliancesStep
         form={{
           ...form,
@@ -89,8 +204,22 @@ describe("AppliancesStep", () => {
             ...form.layoutSensitiveCabinets,
             cookingAppliances: {
               ...cooking,
-              range: { status: "YES", relation: "BACK_SIDE" },
-              cooktop: { status: "YES", relation: "UNKNOWN" },
+              wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+              microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+            }
+          }
+        }}
+        setForm={() => {}}
+      />
+    );
+    const visibleHtml = renderToStaticMarkup(
+      <AppliancesStep
+        form={{
+          ...form,
+          layoutSensitiveCabinets: {
+            ...form.layoutSensitiveCabinets,
+            cookingAppliances: {
+              ...cooking,
               wallOven: { status: "YES", relation: "UNKNOWN" },
               microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
             }
@@ -100,12 +229,174 @@ describe("AppliancesStep", () => {
       />
     );
 
-    // Range and wall oven still ask for an approximate wall.
-    expect(html).toContain("Range approximate wall");
-    expect(html).toContain("Wall oven approximate wall");
-    // Cooktop and microwave/oven combo no longer do — the auto-layout places them.
-    expect(html).not.toContain("Cooktop approximate wall");
-    expect(html).not.toContain("Microwave / oven combo approximate wall");
+    expect(hiddenHtml).not.toContain("Oven and microwave arrangement?");
+    expect(visibleHtml).toContain("Oven and microwave arrangement?");
+    expect(visibleHtml).toContain("WALL_OVEN_MICROWAVE_STACK");
+    expect(visibleHtml).toContain("SEPARATE_WALL_OVEN_AND_MICROWAVE");
+    expect(visibleHtml).toContain("NO_MICROWAVE");
+    expect(visibleHtml).toContain("NO_OVEN");
+    expect(visibleHtml).toContain("UNKNOWN");
+  });
+
+  test("maps oven and microwave arrangement changes into appliance statuses", () => {
+    const cases = [
+      {
+        configuration: "WALL_OVEN_MICROWAVE_STACK",
+        wallOven: { status: "YES", relation: "UNKNOWN" },
+        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+      },
+      {
+        configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE",
+        wallOven: { status: "YES", relation: "UNKNOWN" },
+        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+      },
+      {
+        configuration: "NO_MICROWAVE",
+        wallOven: { status: "YES", relation: "UNKNOWN" },
+        microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+      },
+      {
+        configuration: "NO_OVEN",
+        wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+      },
+      {
+        configuration: "UNKNOWN",
+        wallOven: { status: "YES", relation: "LEFT_SIDE" },
+        microwaveOvenCombo: { status: "NO", relation: "NOT_APPLICABLE" }
+      }
+    ] as const;
+
+    for (const expected of cases) {
+      const form = createDefaultShowroomForm();
+      let nextForm = form;
+      const select = findSelectByLabel(
+        <AppliancesStep
+          form={{
+            ...form,
+            layoutSensitiveCabinets: {
+              ...form.layoutSensitiveCabinets,
+              ovenMicrowave: {
+                configuration: "UNKNOWN",
+                relation: "NEAR_RANGE"
+              },
+              cookingAppliances: {
+                ...form.layoutSensitiveCabinets.cookingAppliances,
+                wallOven: { status: "YES", relation: "LEFT_SIDE" },
+                microwaveOvenCombo: {
+                  status: "NO",
+                  relation: "NOT_APPLICABLE"
+                }
+              }
+            }
+          }}
+          setForm={(updatedForm) => {
+            nextForm = updatedForm;
+          }}
+        />,
+        "Oven and microwave arrangement?"
+      );
+
+      expect(select).not.toBeNull();
+      changeSelect(select!, expected.configuration);
+
+      expect(
+        nextForm.layoutSensitiveCabinets.ovenMicrowave
+      ).toMatchObject({
+        configuration: expected.configuration,
+        relation: "UNKNOWN"
+      });
+      expect(
+        nextForm.layoutSensitiveCabinets.cookingAppliances.wallOven
+      ).toEqual(expected.wallOven);
+      expect(
+        nextForm.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo
+      ).toEqual(expected.microwaveOvenCombo);
+    }
+  });
+
+  test("resets stale oven and microwave arrangement when microwave status changes directly", () => {
+    const form = createDefaultShowroomForm();
+    let nextForm = form;
+    const select = findSelectByLabel(
+      <AppliancesStep
+        form={{
+          ...form,
+          layoutSensitiveCabinets: {
+            ...form.layoutSensitiveCabinets,
+            ovenMicrowave: {
+              configuration: "NO_MICROWAVE",
+              relation: "UNKNOWN"
+            },
+            cookingAppliances: {
+              ...form.layoutSensitiveCabinets.cookingAppliances,
+              wallOven: { status: "YES", relation: "UNKNOWN" },
+              microwaveOvenCombo: {
+                status: "NO",
+                relation: "NOT_APPLICABLE"
+              }
+            }
+          }
+        }}
+        setForm={(updatedForm) => {
+          nextForm = updatedForm;
+        }}
+      />,
+      "Microwave / oven combo included?"
+    );
+
+    expect(select).not.toBeNull();
+    changeSelect(select!, "YES");
+
+    expect(nextForm.layoutSensitiveCabinets.ovenMicrowave).toEqual({
+      configuration: "UNKNOWN",
+      relation: "UNKNOWN"
+    });
+    expect(
+      nextForm.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo
+    ).toEqual({ status: "YES", relation: "UNKNOWN" });
+  });
+
+  test("resets arrangement to unknown when direct status changes leave no wall oven or microwave", () => {
+    const form = createDefaultShowroomForm();
+    let nextForm = form;
+    const select = findSelectByLabel(
+      <AppliancesStep
+        form={{
+          ...form,
+          layoutSensitiveCabinets: {
+            ...form.layoutSensitiveCabinets,
+            ovenMicrowave: {
+              configuration: "NO_OVEN",
+              relation: "UNKNOWN"
+            },
+            cookingAppliances: {
+              ...form.layoutSensitiveCabinets.cookingAppliances,
+              wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+              microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
+            }
+          }
+        }}
+        setForm={(updatedForm) => {
+          nextForm = updatedForm;
+        }}
+      />,
+      "Microwave / oven combo included?"
+    );
+
+    expect(select).not.toBeNull();
+    changeSelect(select!, "NO");
+
+    expect(nextForm.layoutSensitiveCabinets.ovenMicrowave).toEqual({
+      configuration: "UNKNOWN",
+      relation: "UNKNOWN"
+    });
+    expect(
+      nextForm.layoutSensitiveCabinets.cookingAppliances.wallOven
+    ).toEqual({ status: "NO", relation: "NOT_APPLICABLE" });
+    expect(
+      nextForm.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo
+    ).toEqual({ status: "NO", relation: "NOT_APPLICABLE" });
   });
 });
 

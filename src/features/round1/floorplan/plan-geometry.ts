@@ -10,7 +10,7 @@ export type CabinetShape = PlanRect & {
   wall: Wall;
 };
 
-export type ApplianceSymbol = "sink" | "range" | "fridge" | "dishwasher" | "oven" | "hood";
+export type ApplianceSymbol = "sink" | "range" | "fridge" | "dishwasher" | "oven" | "hood" | "microwave";
 
 export type ApplianceShape = PlanRect & {
   key: string;
@@ -23,7 +23,8 @@ export type MarkerLetter = "W" | "G" | "E" | "V";
 export type MarkerShape = { cx: number; cy: number; letter: MarkerLetter };
 
 export type WindowShape = PlanRect & { wall: Wall };
-export type DoorShape = { breakRect: PlanRect; swingPath: string; leafRect: PlanRect; labelX: number; labelY: number; wall: Wall; cx: number; cy: number };
+export type DoorKind = "DOOR" | "OPEN_PASSAGE";
+export type DoorShape = { breakRect: PlanRect; swingPath: string; leafRect: PlanRect; labelX: number; labelY: number; wall: Wall; cx: number; cy: number; kind: DoorKind };
 export type ClearanceZoneShape = PlanRect & {
   ownerKey: string;
   wall: Wall;
@@ -209,7 +210,7 @@ export function buildFloorPlan(
   });
 
   const sharedCabinetObstacles: PlanRect[] = appliances.filter(
-    (a) => a.key === "range" || a.symbol === "fridge" || a.symbol === "oven"
+    (a) => a.key === "range" || a.symbol === "fridge" || a.symbol === "oven" || a.symbol === "microwave"
   );
   sharedCabinetObstacles.push(...clearanceZones);
   if (door) {
@@ -269,7 +270,7 @@ export function buildFloorPlan(
 
   const wallObstacles: PlanRect[] = [
     ...sharedCabinetObstacles,
-    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher")
+    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher" || a.key === "cooktop" || a.symbol === "hood")
   ];
   if (window) {
     let wx = window.x, wy = window.y, ww = window.w, wh = window.h;
@@ -820,6 +821,7 @@ function placeAppliances(
   };
   const specs: Spec[] = [];
   const cooking = layoutSensitive.cookingAppliances;
+  const ovenMicrowaveConfiguration = layoutSensitive.ovenMicrowave?.configuration;
   const layoutPreference = normalized.layoutPreference;
 
   // --- Fixed-wall appliances (explicit relation or drag override) ---
@@ -877,6 +879,20 @@ function placeAppliances(
         layoutPreference
       )
     : undefined;
+  const stackedOvenMicrowave =
+    ovenMicrowaveConfiguration === "WALL_OVEN_MICROWAVE_STACK" &&
+    wallOvenPresent &&
+    microwavePresent;
+  const stackWall = stackedOvenMicrowave
+    ? (resolveApplianceWall(
+        ctx.overrides,
+        "ovenMicrowaveStack",
+        layoutSensitive.ovenMicrowave?.relation,
+        layoutPreference
+      ) ??
+      wallOvenWall ??
+      microwaveWall)
+    : undefined;
 
   // --- Intelligent auto-layout: spread no-preference appliances across walls ---
   // Each appliance with no chosen wall is dropped onto the wall that still has
@@ -900,8 +916,12 @@ function placeAppliances(
   addLoad(rangeWall, fixtures.range?.size ?? 30);
   addLoad(fridgeWall, fixtures.fridge?.size ?? 36);
   addLoad(cooktopWall, 30);
-  addLoad(wallOvenWall, 30);
-  addLoad(microwaveWall, 30);
+  if (stackedOvenMicrowave) {
+    addLoad(stackWall, 30);
+  } else {
+    addLoad(wallOvenWall, 30);
+    addLoad(microwaveWall, 30);
+  }
 
   const pickAutoWall = (preferMainRun: boolean): Wall => {
     if (availableWalls.length === 0) return "TOP";
@@ -926,14 +946,19 @@ function placeAppliances(
   }
   // Wall oven / microwave are tall units -> drop them on the least-crowded wall.
   let wallOvenFinalWall: Wall | undefined;
-  if (wallOvenPresent) {
+  if (wallOvenPresent && !stackedOvenMicrowave) {
     wallOvenFinalWall = wallOvenWall ?? pickAutoWall(false);
     if (!wallOvenWall) addLoad(wallOvenFinalWall, 30);
   }
   let microwaveFinalWall: Wall | undefined;
-  if (microwavePresent) {
+  if (microwavePresent && !stackedOvenMicrowave) {
     microwaveFinalWall = microwaveWall ?? pickAutoWall(false);
     if (!microwaveWall) addLoad(microwaveFinalWall, 30);
+  }
+  let stackFinalWall: Wall | undefined;
+  if (stackedOvenMicrowave) {
+    stackFinalWall = stackWall ?? pickAutoWall(false);
+    if (!stackWall) addLoad(stackFinalWall, 30);
   }
 
   // --- Push specs in a stable order so per-wall positioning is deterministic ---
@@ -975,6 +1000,16 @@ function placeAppliances(
       deep: false
     });
   }
+  if (stackedOvenMicrowave && stackFinalWall) {
+    specs.push({
+      key: "ovenMicrowaveStack",
+      label: "Wall oven + microwave stack",
+      symbol: "oven",
+      sizeIn: 30,
+      wall: stackFinalWall,
+      deep: true
+    });
+  }
   if (wallOvenPresent && wallOvenFinalWall) {
     specs.push({
       key: "wallOven",
@@ -989,7 +1024,7 @@ function placeAppliances(
     specs.push({
       key: "microwaveOvenCombo",
       label: "Microwave / oven combo",
-      symbol: "oven",
+      symbol: "microwave",
       sizeIn: 30,
       wall: microwaveFinalWall,
       deep: true
@@ -1206,11 +1241,17 @@ function placeDoor(
   }
 ): DoorShape | null {
   const doors = (normalized.openings as {
-    doors?: { status?: string; items?: Array<{ location?: string }> };
+    doors?: {
+      status?: string;
+      items?: Array<{ location?: string; kind?: string }>;
+    };
   }).doors;
   if (doors?.status === "NO") return null;
 
   const location = doors?.items?.[0]?.location;
+  // A missing kind is treated as a door (the clearance-reserving default).
+  const kind: DoorKind =
+    doors?.items?.[0]?.kind === "OPEN_PASSAGE" ? "OPEN_PASSAGE" : "DOOR";
   const wall = overrideWall(ctx.overrides, "door", relationToWall(location, "BOTTOM"));
   const opening = clamp(32 * ctx.scale, 44, 110);
   const { roomX, roomY, roomW, roomH, thickness } = ctx;
@@ -1241,15 +1282,21 @@ function placeDoor(
       leafRect = { x: hingeX - 3.5, y: tipY - opening, w: 3.5, h: opening };
     }
 
+    // An open passage is a cased wall gap: no door leaf and no swing arc, so it
+    // reserves no swing clearance downstream.
+    const passage = kind === "OPEN_PASSAGE";
     return {
       breakRect: { x: cx - opening / 2, y: wy, w: opening, h: thickness },
-      swingPath: `M${hingeX},${leafEndY} A${opening},${opening} 0 0 ${sweep} ${cx - opening / 2},${tipY}`,
-      leafRect,
+      swingPath: passage
+        ? ""
+        : `M${hingeX},${leafEndY} A${opening},${opening} 0 0 ${sweep} ${cx - opening / 2},${tipY}`,
+      leafRect: passage ? { x: leafRect.x, y: leafRect.y, w: 0, h: 0 } : leafRect,
       labelX: cx,
       labelY: wall === "TOP" ? roomY - 6 : roomY + roomH + 16,
       wall,
       cx,
-      cy: wy
+      cy: wy,
+      kind
     };
   }
 
@@ -1278,15 +1325,19 @@ function placeDoor(
     leafRect = { x: tipX - opening, y: hingeY - 3.5, w: opening, h: 3.5 };
   }
 
+  const passage = kind === "OPEN_PASSAGE";
   return {
     breakRect: { x: wx, y: cy - opening / 2, w: thickness, h: opening },
-    swingPath: `M${leafEndX},${hingeY} A${opening},${opening} 0 0 ${sweep} ${tipX},${cy - opening / 2}`,
-    leafRect,
+    swingPath: passage
+      ? ""
+      : `M${leafEndX},${hingeY} A${opening},${opening} 0 0 ${sweep} ${tipX},${cy - opening / 2}`,
+    leafRect: passage ? { x: leafRect.x, y: leafRect.y, w: 0, h: 0 } : leafRect,
     labelX: wall === "LEFT" ? roomX - 16 : roomX + roomW + 16,
     labelY: cy,
     wall,
     cx: wx,
-    cy
+    cy,
+    kind
   };
 }
 
@@ -1385,6 +1436,7 @@ function buildClearanceZones(
       appliance.symbol === "fridge" ||
       appliance.symbol === "range" ||
       appliance.symbol === "oven" ||
+      appliance.symbol === "microwave" ||
       appliance.symbol === "dishwasher"
         ? 36
         : 30;
@@ -1405,7 +1457,10 @@ function buildClearanceZones(
     }
   }
 
-  if (door) {
+  // Only a swinging door reserves swing clearance. An open passage has no leaf,
+  // so cabinets and appliances may sit right up to it (e.g. a corner cabinet is
+  // no longer eaten by a phantom swing arc).
+  if (door && door.kind !== "OPEN_PASSAGE") {
     const swing = clampRectToInterior(door.leafRect, {
       ix: ctx.ix,
       iy: ctx.iy,

@@ -63,6 +63,12 @@ const defaultCookingAppliances = {
 
 const doorSchema = z.object({
   location: relationSchema,
+  // Distinguishes a swinging door (reserves a swing-clearance zone that excludes
+  // cabinets/appliances) from an open passage (a cased wall opening with no leaf,
+  // so it reserves no swing clearance). Optional for backward compatibility;
+  // a missing value is treated as a door (the conservative, clearance-reserving
+  // default) everywhere it is read.
+  kind: z.enum(["DOOR", "OPEN_PASSAGE"]).optional(),
   width: nullableNumberSchema.optional(),
   distanceFromCorner: nullableNumberSchema.optional(),
   swingDirection: z.string().optional()
@@ -138,6 +144,7 @@ export const round1FormSchema = z.object({
   ]),
   fixtures: z.object({
     sink: z.object({
+      status: z.enum(["YES", "NO", "UNKNOWN"]).default("YES"),
       size: z.union([z.literal(30), z.literal(33), z.literal(36)]).nullable(),
       type: z.string(),
       relation: relationSchema
@@ -149,6 +156,7 @@ export const round1FormSchema = z.object({
       relation: relationSchema.default("UNKNOWN")
     }),
     fridge: z.object({
+      status: z.enum(["YES", "NO", "UNKNOWN"]).default("YES"),
       size: z
         .union([
           z.literal(30),
@@ -186,6 +194,7 @@ export const round1FormSchema = z.object({
       configuration: z.enum([
         "RANGE_INCLUDES_OVEN",
         "WALL_OVEN_MICROWAVE_STACK",
+        "SEPARATE_WALL_OVEN_AND_MICROWAVE",
         "MICROWAVE_DRAWER",
         "UPPER_CABINET_MICROWAVE",
         "COUNTERTOP_MICROWAVE",

@@ -2,20 +2,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   generatePreliminaryCabinetList,
-  normalizeRound1Form
+  normalizeRound1Form,
+  type Round1FormInput
 } from "@/domain/round1";
 import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-intake-data";
 import { LayoutPreview } from "./layout-preview";
 
 describe("LayoutPreview", () => {
+  function staticApplianceLabelPattern(label: string) {
+    return new RegExp(
+      `class="fill-slate-900 text-\\[11px\\] font-bold"[^>]*>${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</text>`
+    );
+  }
+
   function renderPreview({
     cabinets,
-    previewStage
+    previewStage,
+    form = createDefaultShowroomForm()
   }: {
     cabinets?: ReturnType<typeof generatePreliminaryCabinetList>["cabinets"];
     previewStage?: "room" | "openings" | "layout" | "appliances" | "adjust";
+    form?: Round1FormInput;
   } = {}) {
-    const form = createDefaultShowroomForm();
     const result = normalizeRound1Form(form);
     const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
 
@@ -179,7 +187,21 @@ describe("LayoutPreview", () => {
     expect(html).toContain('stroke="#0ea5e9"');
   });
 
-  test("excludes microwave/oven combo label but shows wall oven label", () => {
+  test("renders an open passage without door leaf or swing arc", () => {
+    const form = createDefaultShowroomForm();
+    form.openings.doors.items = [
+      { location: "LEFT_SIDE", kind: "OPEN_PASSAGE", width: null }
+    ];
+
+    const html = renderPreview({ form });
+
+    expect(html).toContain('data-opening-symbol="door"');
+    expect(html).toContain(">opening<");
+    expect(html).not.toContain(">door<");
+    expect(html).not.toContain('stroke="#2563eb"');
+  });
+
+  test("excludes microwave/oven combo and wall oven static labels", () => {
     const form = createDefaultShowroomForm();
     form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = { status: "YES", relation: "RIGHT_SIDE" };
     form.layoutSensitiveCabinets.cookingAppliances.wallOven = { status: "YES", relation: "LEFT_SIDE" };
@@ -198,7 +220,47 @@ describe("LayoutPreview", () => {
       />
     );
 
-    expect(html).not.toContain("Microwave / oven combo");
+    expect(html).toContain("Microwave / oven combo");
     expect(html).toContain("Wall oven");
+    expect(html).not.toMatch(
+      staticApplianceLabelPattern("Microwave / oven combo")
+    );
+    expect(html).not.toMatch(staticApplianceLabelPattern("Wall oven"));
+  });
+
+  test("excludes stacked wall oven and microwave static label", () => {
+    const form = createDefaultShowroomForm();
+    form.layoutSensitiveCabinets.ovenMicrowave = {
+      configuration: "WALL_OVEN_MICROWAVE_STACK",
+      relation: "UNKNOWN"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.wallOven = {
+      status: "YES",
+      relation: "UNKNOWN"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+      status: "YES",
+      relation: "UNKNOWN"
+    };
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+
+    const html = renderToStaticMarkup(
+      <LayoutPreview
+        normalized={result.normalized}
+        cabinets={estimate.cabinets}
+        confirmationItems={result.confirmationItems}
+        positionOverrides={{}}
+        onPositionOverridesChange={() => {}}
+        highlightDraggableItems={false}
+        showPositionObjects={true}
+      />
+    );
+
+    expect(html).toContain('data-appliance-symbol="oven"');
+    expect(html).toContain("Wall oven + microwave stack");
+    expect(html).not.toMatch(
+      staticApplianceLabelPattern("Wall oven + microwave stack")
+    );
   });
 });

@@ -54,6 +54,18 @@ type PreviewStage = "room" | "openings" | "layout" | "appliances" | "adjust";
 
 const INK = "#1f2937";
 const LINE = "#334155";
+const UNLABELED_APPLIANCE_SYMBOLS = new Set([
+  "range",
+  "sink",
+  "hood",
+  "dishwasher",
+  "fridge"
+]);
+const UNLABELED_APPLIANCE_KEYS = new Set([
+  "microwaveOvenCombo",
+  "ovenMicrowaveStack",
+  "wallOven"
+]);
 
 export function LayoutPreview({
   normalized,
@@ -268,6 +280,8 @@ export function LayoutPreview({
             highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
             referenceMode={referenceMode}
             interactive={enablePositionDragging}
+            canvasWidth={plan.canvas.w}
+            roomY={plan.room.y}
           />
         ))}
 
@@ -501,7 +515,9 @@ function Appliance({
   dragging,
   highlighted,
   referenceMode,
-  interactive
+  interactive,
+  canvasWidth,
+  roomY
 }: {
   appliance: ApplianceShape;
   onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
@@ -509,12 +525,21 @@ function Appliance({
   highlighted?: boolean;
   referenceMode?: boolean;
   interactive?: boolean;
+  canvasWidth?: number;
+  roomY?: number;
 }) {
   const cx = appliance.x + appliance.w / 2;
   const cy = appliance.y + appliance.h / 2;
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
   const currentVal = isHorizontal ? appliance.x : appliance.y;
   const isHood = appliance.symbol === "hood";
+
+  const tooltipW = Math.max(160, (appliance.label?.length || 0) * 8.5);
+  const tooltipH = 32;
+  const tRectX = canvasWidth ? canvasWidth / 2 - tooltipW / 2 : cx - tooltipW / 2;
+  const tRectY = 12;
+  const tTextX = canvasWidth ? canvasWidth / 2 : cx;
+  const tTextY = tRectY + 21;
 
   // Clean reference: just the body rect + symbol glyph, no chrome, no label.
   if (referenceMode) {
@@ -588,7 +613,7 @@ function Appliance({
         strokeWidth="1.3"
       />
       <ApplianceSymbol appliance={appliance} />
-      {appliance.symbol !== "range" && appliance.symbol !== "sink" && appliance.symbol !== "hood" && appliance.symbol !== "dishwasher" && appliance.symbol !== "fridge" && appliance.key !== "microwaveOvenCombo" && appliance.label && (
+      {shouldShowApplianceLabel(appliance) && (
         <text
           x={cx}
           y={cy + appliance.h / 2 - 6}
@@ -605,7 +630,23 @@ function Appliance({
         <circle cx={cx + 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
       </g>
       )}
+      {interactive && appliance.label && (
+        <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none drop-shadow-sm" style={{ pointerEvents: 'none' }}>
+          <rect x={tRectX} y={tRectY} width={tooltipW} height={tooltipH} rx="4" fill="#0f172a" />
+          <text x={tTextX} y={tTextY} textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="700" className="pointer-events-none tracking-wide">
+            {appliance.label}
+          </text>
+        </g>
+      )}
     </g>
+  );
+}
+
+function shouldShowApplianceLabel(appliance: ApplianceShape): boolean {
+  return (
+    Boolean(appliance.label) &&
+    !UNLABELED_APPLIANCE_SYMBOLS.has(appliance.symbol) &&
+    !UNLABELED_APPLIANCE_KEYS.has(appliance.key)
   );
 }
 
@@ -838,6 +879,29 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
       </g>
     );
   }
+  if (symbol === "microwave") {
+    const isHorizontal = wall === "TOP" || wall === "BOTTOM";
+    const windowX = isHorizontal ? w * 0.1 : w * 0.3;
+    const windowY = isHorizontal ? h * 0.3 : h * 0.1;
+    const windowW = isHorizontal ? w * 0.6 : w * 0.4;
+    const windowH = isHorizontal ? h * 0.4 : h * 0.6;
+    return (
+      <g fill="none" stroke={LINE} strokeWidth="1">
+        <rect x={x + windowX} y={y + windowY} width={windowW} height={windowH} rx="2" />
+        {isHorizontal ? (
+          <>
+            <circle cx={x + w * 0.82} cy={y + h * 0.4} r="1" />
+            <circle cx={x + w * 0.82} cy={y + h * 0.6} r="1" />
+          </>
+        ) : (
+          <>
+            <circle cx={x + w * 0.4} cy={y + h * 0.82} r="1" />
+            <circle cx={x + w * 0.6} cy={y + h * 0.82} r="1" />
+          </>
+        )}
+      </g>
+    );
+  }
   if (symbol === "hood") {
     const hw = w * 0.32;
     const hh = h * 0.32;
@@ -1010,16 +1074,21 @@ function Openings({
             height={plan.door.breakRect.h}
             fill="#ffffff"
           />
-          <rect
-            x={plan.door.leafRect.x}
-            y={plan.door.leafRect.y}
-            width={plan.door.leafRect.w}
-            height={plan.door.leafRect.h}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="1.5"
-          />
-          <path d={plan.door.swingPath} fill="none" stroke="#2563eb" strokeWidth="1.2" />
+          {/* An open passage has no leaf or swing arc - only the wall gap. */}
+          {plan.door.kind !== "OPEN_PASSAGE" && (
+            <>
+              <rect
+                x={plan.door.leafRect.x}
+                y={plan.door.leafRect.y}
+                width={plan.door.leafRect.w}
+                height={plan.door.leafRect.h}
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="1.5"
+              />
+              <path d={plan.door.swingPath} fill="none" stroke="#2563eb" strokeWidth="1.2" />
+            </>
+          )}
           {!referenceMode && (
           <text
             x={plan.door.labelX}
@@ -1027,7 +1096,7 @@ function Openings({
             textAnchor="middle"
             className="fill-slate-500 text-[11px] font-bold"
           >
-            door
+            {plan.door.kind === "OPEN_PASSAGE" ? "opening" : "door"}
           </text>
           )}
           {!referenceMode && interactive && (

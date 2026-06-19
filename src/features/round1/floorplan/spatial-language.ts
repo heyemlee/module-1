@@ -36,6 +36,12 @@ export function applianceNoun(appliance: {
   symbol: string;
   label: string;
 }): string {
+  if (appliance.key === "ovenMicrowaveStack") {
+    return "a stacked wall oven and microwave tower";
+  }
+  if (appliance.key === "microwaveOvenCombo") {
+    return "a microwave / oven combo";
+  }
   if (appliance.key === "cooktop") {
     return "a cooktop (burners only, no oven below)";
   }
@@ -195,17 +201,30 @@ export function describeWindow(plan: FloorPlan): string | null {
   )}, letting in natural daylight`;
 }
 
-/** Door phrasing. Always emits a negative constraint to stop wall drift. */
+/**
+ * Door phrasing. Always emits a negative constraint to stop wall drift. An open
+ * passage is rendered as a cased opening with no door leaf, so it is described
+ * differently from a swinging door.
+ */
 export function describeDoor(plan: FloorPlan): string {
   const door = plan.door;
   if (!door) {
     return "There is no entry door in this view; do not add a door to any wall.";
   }
+  const isPassage = door.kind === "OPEN_PASSAGE";
+  const opening = isPassage
+    ? "open passage (a cased wall opening with no door leaf)"
+    : "entry door";
   const surface = wallToCamera(door.wall);
   if (surface === "front") {
-    return "The entry door is on the front wall behind the camera and must NOT appear on the back, left, or right walls.";
+    return `The ${opening} is on the front wall behind the camera and must NOT appear on the back, left, or right walls.`;
   }
-  return `The entry door is on ${cameraSurfaceShort(
+  if (isPassage) {
+    return `The ${opening} is on ${cameraSurfaceShort(
+      surface
+    )}; render it as an open doorway with no swinging door leaf, and do not draw a door or opening on any other wall.`;
+  }
+  return `The ${opening} is on ${cameraSurfaceShort(
     surface
   )}; do not draw a door on any other wall.`;
 }
