@@ -12,7 +12,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
     openings: {
       doors: {
         status: "YES",
-        items: [{ location: "FRONT_SIDE", width: null }]
+        items: [{ location: "FRONT_SIDE", kind: "DOOR", width: null }]
       },
       windows: {
         status: "YES",

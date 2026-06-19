@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   generatePreliminaryCabinetList,
-  normalizeRound1Form
+  normalizeRound1Form,
+  type Round1FormInput
 } from "@/domain/round1";
 import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-intake-data";
 import { LayoutPreview } from "./layout-preview";
@@ -10,12 +11,13 @@ import { LayoutPreview } from "./layout-preview";
 describe("LayoutPreview", () => {
   function renderPreview({
     cabinets,
-    previewStage
+    previewStage,
+    form = createDefaultShowroomForm()
   }: {
     cabinets?: ReturnType<typeof generatePreliminaryCabinetList>["cabinets"];
     previewStage?: "room" | "openings" | "layout" | "appliances" | "adjust";
+    form?: Round1FormInput;
   } = {}) {
-    const form = createDefaultShowroomForm();
     const result = normalizeRound1Form(form);
     const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
 
@@ -177,6 +179,20 @@ describe("LayoutPreview", () => {
     expect(html).toContain(">window<");
     expect(html).toContain(">door<");
     expect(html).toContain('stroke="#0ea5e9"');
+  });
+
+  test("renders an open passage without door leaf or swing arc", () => {
+    const form = createDefaultShowroomForm();
+    form.openings.doors.items = [
+      { location: "LEFT_SIDE", kind: "OPEN_PASSAGE", width: null }
+    ];
+
+    const html = renderPreview({ form });
+
+    expect(html).toContain('data-opening-symbol="door"');
+    expect(html).toContain(">opening<");
+    expect(html).not.toContain(">door<");
+    expect(html).not.toContain('stroke="#2563eb"');
   });
 
   test("excludes microwave/oven combo and wall oven labels", () => {

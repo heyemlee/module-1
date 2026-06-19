@@ -29,14 +29,14 @@ describe("Round 1 layout prompt generation", () => {
       },
       layoutPreference: "L_SHAPE",
       fixtures: {
-        sink: { size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
+        sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "UNKNOWN",
           relation: "NEAR_RANGE"
         },
-        fridge: { size: 36, type: "UNKNOWN", relation: "NEAR_ENTRANCE" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "NEAR_ENTRANCE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },
@@ -93,14 +93,14 @@ describe("Round 1 layout prompt generation", () => {
       },
       layoutPreference: "ONE_WALL",
       fixtures: {
-        sink: { size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        sink: { status: "YES", size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "YES",
           relation: "ON_MAIN_RUN"
         },
-        fridge: { size: 36, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
         dishwasher: { status: "NONE", size: null, relation: "NOT_APPLICABLE" },
         hood: { relation: "ABOVE_RANGE" }
       },

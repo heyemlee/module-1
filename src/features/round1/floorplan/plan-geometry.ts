@@ -23,7 +23,8 @@ export type MarkerLetter = "W" | "G" | "E" | "V";
 export type MarkerShape = { cx: number; cy: number; letter: MarkerLetter };
 
 export type WindowShape = PlanRect & { wall: Wall };
-export type DoorShape = { breakRect: PlanRect; swingPath: string; leafRect: PlanRect; labelX: number; labelY: number; wall: Wall; cx: number; cy: number };
+export type DoorKind = "DOOR" | "OPEN_PASSAGE";
+export type DoorShape = { breakRect: PlanRect; swingPath: string; leafRect: PlanRect; labelX: number; labelY: number; wall: Wall; cx: number; cy: number; kind: DoorKind };
 export type ClearanceZoneShape = PlanRect & {
   ownerKey: string;
   wall: Wall;
@@ -1240,11 +1241,17 @@ function placeDoor(
   }
 ): DoorShape | null {
   const doors = (normalized.openings as {
-    doors?: { status?: string; items?: Array<{ location?: string }> };
+    doors?: {
+      status?: string;
+      items?: Array<{ location?: string; kind?: string }>;
+    };
   }).doors;
   if (doors?.status === "NO") return null;
 
   const location = doors?.items?.[0]?.location;
+  // A missing kind is treated as a door (the clearance-reserving default).
+  const kind: DoorKind =
+    doors?.items?.[0]?.kind === "OPEN_PASSAGE" ? "OPEN_PASSAGE" : "DOOR";
   const wall = overrideWall(ctx.overrides, "door", relationToWall(location, "BOTTOM"));
   const opening = clamp(32 * ctx.scale, 44, 110);
   const { roomX, roomY, roomW, roomH, thickness } = ctx;
@@ -1275,15 +1282,21 @@ function placeDoor(
       leafRect = { x: hingeX - 3.5, y: tipY - opening, w: 3.5, h: opening };
     }
 
+    // An open passage is a cased wall gap: no door leaf and no swing arc, so it
+    // reserves no swing clearance downstream.
+    const passage = kind === "OPEN_PASSAGE";
     return {
       breakRect: { x: cx - opening / 2, y: wy, w: opening, h: thickness },
-      swingPath: `M${hingeX},${leafEndY} A${opening},${opening} 0 0 ${sweep} ${cx - opening / 2},${tipY}`,
-      leafRect,
+      swingPath: passage
+        ? ""
+        : `M${hingeX},${leafEndY} A${opening},${opening} 0 0 ${sweep} ${cx - opening / 2},${tipY}`,
+      leafRect: passage ? { x: leafRect.x, y: leafRect.y, w: 0, h: 0 } : leafRect,
       labelX: cx,
       labelY: wall === "TOP" ? roomY - 6 : roomY + roomH + 16,
       wall,
       cx,
-      cy: wy
+      cy: wy,
+      kind
     };
   }
 
@@ -1312,15 +1325,19 @@ function placeDoor(
     leafRect = { x: tipX - opening, y: hingeY - 3.5, w: opening, h: 3.5 };
   }
 
+  const passage = kind === "OPEN_PASSAGE";
   return {
     breakRect: { x: wx, y: cy - opening / 2, w: thickness, h: opening },
-    swingPath: `M${leafEndX},${hingeY} A${opening},${opening} 0 0 ${sweep} ${tipX},${cy - opening / 2}`,
-    leafRect,
+    swingPath: passage
+      ? ""
+      : `M${leafEndX},${hingeY} A${opening},${opening} 0 0 ${sweep} ${tipX},${cy - opening / 2}`,
+    leafRect: passage ? { x: leafRect.x, y: leafRect.y, w: 0, h: 0 } : leafRect,
     labelX: wall === "LEFT" ? roomX - 16 : roomX + roomW + 16,
     labelY: cy,
     wall,
     cx: wx,
-    cy
+    cy,
+    kind
   };
 }
 
@@ -1439,7 +1456,10 @@ function buildClearanceZones(
     }
   }
 
-  if (door) {
+  // Only a swinging door reserves swing clearance. An open passage has no leaf,
+  // so cabinets and appliances may sit right up to it (e.g. a corner cabinet is
+  // no longer eaten by a phantom swing arc).
+  if (door && door.kind !== "OPEN_PASSAGE") {
     const swing = clampRectToInterior(door.leafRect, {
       ix: ctx.ix,
       iy: ctx.iy,

@@ -159,6 +159,21 @@ describe("OpeningsStep", () => {
     expect(html).not.toContain("BEHIND_SINK");
     expect(html).not.toContain("UNDER_WINDOW");
   });
+
+  test("stores whether the opening is a swinging door or open passage", () => {
+    const form = createDefaultShowroomForm();
+    let nextForm = form;
+    const tree = (
+      <OpeningsStep form={form} setForm={(value) => { nextForm = value; }} />
+    );
+
+    const select = findSelectByLabel(tree, "Door or open passage?");
+    expect(select).not.toBeNull();
+
+    changeSelect(select!, "OPEN_PASSAGE");
+
+    expect(nextForm.openings.doors.items[0]?.kind).toBe("OPEN_PASSAGE");
+  });
 });
 
 describe("AppliancesStep", () => {

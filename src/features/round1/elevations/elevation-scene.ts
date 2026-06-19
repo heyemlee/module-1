@@ -260,12 +260,13 @@ function windowItems(plan: FloorPlan, wall: Wall): ElevationItem[] {
 function doorItems(plan: FloorPlan, wall: Wall): ElevationItem[] {
   if (plan.door?.wall !== wall) return [];
 
+  const isPassage = plan.door.kind === "OPEN_PASSAGE";
   return [
     {
       key: `opening-door-${wall}`,
       kind: "opening",
       symbol: "door",
-      label: "Door",
+      label: isPassage ? "Opening" : "Door",
       wall,
       ...mapRectToBand(plan, wall, plan.door.breakRect, DOOR_Y, DOOR_H)
     }

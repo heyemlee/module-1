@@ -1030,16 +1030,21 @@ function Openings({
             height={plan.door.breakRect.h}
             fill="#ffffff"
           />
-          <rect
-            x={plan.door.leafRect.x}
-            y={plan.door.leafRect.y}
-            width={plan.door.leafRect.w}
-            height={plan.door.leafRect.h}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="1.5"
-          />
-          <path d={plan.door.swingPath} fill="none" stroke="#2563eb" strokeWidth="1.2" />
+          {/* An open passage has no leaf or swing arc - only the wall gap. */}
+          {plan.door.kind !== "OPEN_PASSAGE" && (
+            <>
+              <rect
+                x={plan.door.leafRect.x}
+                y={plan.door.leafRect.y}
+                width={plan.door.leafRect.w}
+                height={plan.door.leafRect.h}
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="1.5"
+              />
+              <path d={plan.door.swingPath} fill="none" stroke="#2563eb" strokeWidth="1.2" />
+            </>
+          )}
           {!referenceMode && (
           <text
             x={plan.door.labelX}
@@ -1047,7 +1052,7 @@ function Openings({
             textAnchor="middle"
             className="fill-slate-500 text-[11px] font-bold"
           >
-            door
+            {plan.door.kind === "OPEN_PASSAGE" ? "opening" : "door"}
           </text>
           )}
           {!referenceMode && interactive && (

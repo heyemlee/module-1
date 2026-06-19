@@ -19,6 +19,8 @@ const wallPositionOptions = [
   "UNKNOWN"
 ] as const;
 
+const doorKindOptions = ["DOOR", "OPEN_PASSAGE"] as const;
+
 const applianceWallOptions = [
   "BACK_SIDE",
   "LEFT_SIDE",
@@ -131,6 +133,7 @@ export function OpeningsStep({
 }) {
   const door = form.openings.doors.items[0] ?? {
     location: "FRONT_SIDE" as const,
+    kind: "DOOR" as const,
     width: null
   };
   const window = form.openings.windows.items[0] ?? {
@@ -187,6 +190,23 @@ export function OpeningsStep({
         />
         {form.openings.doors.status !== "NO" && (
           <>
+            <SelectField
+              label="Door or open passage?"
+              value={door.kind ?? "DOOR"}
+              options={doorKindOptions}
+              onChange={(value) => {
+                setForm({
+                  ...form,
+                  openings: {
+                    ...form.openings,
+                    doors: {
+                      ...form.openings.doors,
+                      items: [{ ...door, kind: value }]
+                    }
+                  }
+                });
+              }}
+            />
             <SelectField
               label="Door / opening wall"
               value={door.location}

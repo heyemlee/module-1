@@ -186,6 +186,20 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("must NOT appear on the back, left, or right walls");
   });
 
+  test("renders an open passage as a cased opening, not a swinging door", () => {
+    const prompt = buildRound1RenderingPrompt(
+      buildSnapshot("U_SHAPE", (form) => {
+        form.openings.doors = {
+          status: "YES",
+          items: [{ location: "LEFT_SIDE", kind: "OPEN_PASSAGE", width: null }]
+        };
+      })
+    );
+
+    expect(prompt).toContain("open passage");
+    expect(prompt).toContain("no swinging door leaf");
+  });
+
   test("keeps a front-wall fridge behind the camera", () => {
     // A galley puts the default front-side fridge on the front (BOTTOM) wall.
     const prompt = buildRound1RenderingPrompt(buildSnapshot("GALLEY"));

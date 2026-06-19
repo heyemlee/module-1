@@ -167,6 +167,28 @@ describe("describeDoor", () => {
     expect(phrase).toContain("the front wall");
     expect(phrase).toContain("must NOT");
   });
+
+  test("describes an open passage as a cased opening with no door leaf", () => {
+    const base = createDefaultShowroomForm();
+    const passagePlan = planFor({
+      ...base,
+      layoutPreference: "U_SHAPE",
+      openings: {
+        ...base.openings,
+        doors: {
+          status: "YES",
+          items: [{ location: "LEFT_SIDE", kind: "OPEN_PASSAGE", width: null }]
+        }
+      }
+    });
+
+    const phrase = describeDoor(passagePlan);
+    expect(phrase).toContain("open passage");
+    expect(phrase).toContain("no door leaf");
+    expect(phrase).toContain("the left wall");
+    // It must not be described as a plain swinging door.
+    expect(phrase).not.toContain("entry door");
+  });
 });
 
 describe("describeBehindCameraAppliances", () => {

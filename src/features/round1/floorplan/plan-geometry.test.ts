@@ -266,14 +266,14 @@ describe("buildFloorPlan", () => {
       },
       fixtures: {
         ...createDefaultShowroomForm().fixtures,
-        sink: { size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "UNKNOWN",
           relation: "ON_MAIN_RUN"
         },
-        fridge: { size: 36, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" }
       }
     };
@@ -337,7 +337,7 @@ describe("buildFloorPlan", () => {
       layoutPreference: "U_SHAPE",
       fixtures: {
         ...createDefaultShowroomForm().fixtures,
-        fridge: { size: 36, type: "UNKNOWN", relation: "RIGHT_SIDE" }
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "RIGHT_SIDE" }
       }
     };
 
@@ -550,5 +550,50 @@ describe("buildFloorPlan", () => {
     const windowCenter = plan.window!.x + plan.window!.w / 2;
     const sinkCenter = sink.x + sink.w / 2;
     expect(Math.abs(windowCenter - sinkCenter)).toBeLessThan(2);
+  });
+
+  test("a swinging door reserves a swing-clearance zone; an open passage does not", () => {
+    const base = createDefaultShowroomForm();
+    const formWithDoor = (
+      kind: "DOOR" | "OPEN_PASSAGE"
+    ): Round1FormInput => ({
+      ...base,
+      layoutPreference: "U_SHAPE",
+      openings: {
+        ...base.openings,
+        doors: {
+          status: "YES",
+          items: [{ location: "LEFT_SIDE", kind, width: null }]
+        }
+      }
+    });
+
+    const doorPlan = planFromForm(formWithDoor("DOOR")).plan;
+    const passagePlan = planFromForm(formWithDoor("OPEN_PASSAGE")).plan;
+
+    // A real door reserves its swing arc; the passage reserves nothing, so a
+    // corner cabinet is no longer eaten by a phantom swing.
+    expect(doorPlan.clearanceZones.some((z) => z.kind === "DOOR_SWING")).toBe(
+      true
+    );
+    expect(
+      passagePlan.clearanceZones.some((z) => z.kind === "DOOR_SWING")
+    ).toBe(false);
+
+    // No base cabinet sits inside the reserved door swing.
+    const swing = doorPlan.clearanceZones.find((z) => z.kind === "DOOR_SWING")!;
+    for (const cabinet of doorPlan.baseCabinets) {
+      expect(intersects(cabinet, swing), "cabinet inside door swing").toBe(
+        false
+      );
+    }
+
+    // The passage carries no door leaf or swing-arc geometry.
+    expect(passagePlan.door?.kind).toBe("OPEN_PASSAGE");
+    expect(passagePlan.door?.swingPath).toBe("");
+    expect(passagePlan.door?.leafRect.w).toBe(0);
+    expect(passagePlan.door?.leafRect.h).toBe(0);
+    expect(doorPlan.door?.kind).toBe("DOOR");
+    expect((doorPlan.door?.swingPath.length ?? 0)).toBeGreaterThan(0);
   });
 });

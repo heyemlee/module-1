@@ -32,14 +32,14 @@ function createValidRound1Form(): Round1FormInput {
     },
     layoutPreference: "ONE_WALL",
     fixtures: {
-      sink: { size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+      sink: { status: "YES", size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
       range: {
         size: null,
         fuel: "UNKNOWN",
         fixedLocation: "UNKNOWN",
         relation: "BACK_SIDE"
       },
-      fridge: { size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
+      fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
       dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
       hood: { relation: "ABOVE_RANGE" }
     },
@@ -181,14 +181,14 @@ describe("Round 1 normalization and readiness", () => {
       },
       layoutPreference: "L_SHAPE",
       fixtures: {
-        sink: { size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
+        sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "UNKNOWN",
           relation: "NEAR_RANGE"
         },
-        fridge: { size: null, type: "UNKNOWN", relation: "NEAR_ENTRANCE" },
+        fridge: { status: "UNKNOWN", size: null, type: "UNKNOWN", relation: "NEAR_ENTRANCE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },
@@ -251,14 +251,14 @@ describe("Round 1 normalization and readiness", () => {
       },
       layoutPreference: "ONE_WALL",
       fixtures: {
-        sink: { size: 30, type: "SINGLE", relation: "ON_MAIN_RUN" },
+        sink: { status: "YES", size: 30, type: "SINGLE", relation: "ON_MAIN_RUN" },
         range: {
           size: 30,
           fuel: "GAS",
           fixedLocation: "YES",
           relation: "NEAR_RANGE"
         },
-        fridge: { size: 36, type: "FRENCH_DOOR", relation: "NEAR_ENTRANCE" },
+        fridge: { status: "YES", size: 36, type: "FRENCH_DOOR", relation: "NEAR_ENTRANCE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },
@@ -306,14 +306,14 @@ describe("Round 1 normalization and readiness", () => {
       },
       layoutPreference: "ONE_WALL",
       fixtures: {
-        sink: { size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        sink: { status: "YES", size: 30, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
         range: {
           size: null,
           fuel: "UNKNOWN",
           fixedLocation: "UNKNOWN",
           relation: "BACK_SIDE"
         },
-        fridge: { size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
         dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
         hood: { relation: "ABOVE_RANGE" }
       },

@@ -63,6 +63,12 @@ const defaultCookingAppliances = {
 
 const doorSchema = z.object({
   location: relationSchema,
+  // Distinguishes a swinging door (reserves a swing-clearance zone that excludes
+  // cabinets/appliances) from an open passage (a cased wall opening with no leaf,
+  // so it reserves no swing clearance). Optional for backward compatibility;
+  // a missing value is treated as a door (the conservative, clearance-reserving
+  // default) everywhere it is read.
+  kind: z.enum(["DOOR", "OPEN_PASSAGE"]).optional(),
   width: nullableNumberSchema.optional(),
   distanceFromCorner: nullableNumberSchema.optional(),
   swingDirection: z.string().optional()
