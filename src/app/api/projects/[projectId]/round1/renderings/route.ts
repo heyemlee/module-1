@@ -29,23 +29,51 @@ export async function POST(
   const { projectId } = await params;
   const project = await getProjectForUser(projectId, user);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  const input = requestSchema.parse(await request.json());
+
+  let input: z.infer<typeof requestSchema>;
+  try {
+    input = requestSchema.parse(await request.json());
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Invalid rendering request", issues: error.issues },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: "Invalid rendering request" }, { status: 400 });
+  }
+
   const latest = await getLatestRound1Snapshot(projectId);
   if (!latest) return NextResponse.json({ error: "Round 1 snapshot required" }, { status: 409 });
   const adapter = createOpenAIImageAdapterFromEnv(process.env);
   if (!adapter) {
     return NextResponse.json({ error: "OpenAI image generation is not configured", reason: "OPENAI_API_KEY_NOT_CONFIGURED" }, { status: 503 });
   }
-  const rendering = await generateRound1Rendering({
-    snapshot: latest.snapshot,
-    referenceImagesBase64: input.referenceImagesBase64,
-    adapter
-  });
-  const saved = await saveRenderingHistory({
-    projectId,
-    snapshotId: latest.id,
-    user,
-    rendering
-  });
-  return NextResponse.json(saved, { status: 200 });
+
+  // Surface the real failure reason instead of an opaque 500: image-model
+  // errors and DB save errors are reported with their message and logged so the
+  // cause is visible in both the UI and the server logs.
+  try {
+    const rendering = await generateRound1Rendering({
+      snapshot: latest.snapshot,
+      referenceImagesBase64: input.referenceImagesBase64,
+      adapter
+    });
+    const saved = await saveRenderingHistory({
+      projectId,
+      snapshotId: latest.id,
+      user,
+      rendering
+    });
+    return NextResponse.json(saved, { status: 200 });
+  } catch (error) {
+    console.error("Round 1 rendering failed", error);
+    return NextResponse.json(
+      {
+        error: "Unable to generate Round 1 concept rendering",
+        reason: error instanceof Error ? error.message : "UNKNOWN_ERROR"
+      },
+      { status: 502 }
+    );
+  }
 }
