@@ -2,6 +2,7 @@ import { query } from "@/server/db/client";
 import { round1FormSchema, type Round1FormInput } from "@/domain/round1";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
+import type { Round1ProjectRendering } from "@/server/round1/round1-repository";
 import type { AuthUser } from "./types";
 
 export type Round1State = {
@@ -108,4 +109,56 @@ export async function getLatestRound1Snapshot(projectId: string) {
   );
   const row = result.rows[0];
   return row ? { id: row.id, snapshot: row.snapshot_json as Round1Snapshot } : null;
+}
+
+export async function saveRenderingHistory(input: {
+  projectId: string;
+  snapshotId: string;
+  user: AuthUser;
+  rendering: Omit<Round1ProjectRendering, "createdAt">;
+}) {
+  const result = await query<{ id: string; created_at: Date }>(
+    `INSERT INTO renderings (
+       project_id, round1_snapshot_id, model, image_base64, prompt, size,
+       based_on_snapshot_generated_at, sales_estimate_only, not_for_production,
+       dimension_confidence, created_by_user_id
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true, true, 'ROUGH', $8)
+     RETURNING id, created_at`,
+    [
+      input.projectId,
+      input.snapshotId,
+      input.rendering.model,
+      input.rendering.imageBase64,
+      input.rendering.prompt,
+      input.rendering.size,
+      input.rendering.basedOnSnapshotGeneratedAt,
+      input.user.id
+    ]
+  );
+  await query(
+    `UPDATE projects SET status = 'ROUND1_RENDERING_READY', updated_at = now() WHERE id = $1`,
+    [input.projectId]
+  );
+  return {
+    ...input.rendering,
+    id: result.rows[0].id,
+    createdAt: result.rows[0].created_at.toISOString()
+  };
+}
+
+export async function listRenderings(projectId: string) {
+  const result = await query<{ id: string; image_base64: string; created_at: Date }>(
+    `SELECT id, image_base64, created_at
+     FROM renderings
+     WHERE project_id = $1
+     ORDER BY created_at DESC
+     LIMIT 20`,
+    [projectId]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    imageBase64: row.image_base64,
+    createdAt: row.created_at.toISOString()
+  }));
 }

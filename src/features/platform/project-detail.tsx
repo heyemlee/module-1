@@ -15,7 +15,9 @@ export function ProjectDetail({ project }: { project: ProjectSummary }) {
           </Link>
           <div className="rounded border border-stone-300 bg-white p-4">
             <h2 className="font-semibold">Renderings</h2>
-            <p className="mt-2 text-sm text-stone-600">Saved concept images appear after Round 1 generation.</p>
+            <p className="mt-2 text-sm text-stone-600">
+              Saved concept images are kept as history after each Round 1 rendering.
+            </p>
           </div>
           <div className="rounded border border-stone-300 bg-white p-4 opacity-70">
             <h2 className="font-semibold">Round 2</h2>
