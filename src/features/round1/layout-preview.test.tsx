@@ -220,10 +220,11 @@ describe("LayoutPreview", () => {
       />
     );
 
-    expect(html).toContain("Microwave / oven combo");
+    expect(html).toContain("Microwave");
+    expect(html).not.toContain("Microwave / oven combo");
     expect(html).toContain("Wall oven");
     expect(html).not.toMatch(
-      staticApplianceLabelPattern("Microwave / oven combo")
+      staticApplianceLabelPattern("Microwave")
     );
     expect(html).not.toMatch(staticApplianceLabelPattern("Wall oven"));
   });

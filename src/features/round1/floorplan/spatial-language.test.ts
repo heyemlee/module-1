@@ -97,7 +97,7 @@ describe("describeWall", () => {
         label: "Microwave / oven combo",
         symbol: "oven"
       })
-    ).toBe("a microwave / oven combo");
+    ).toBe("a microwave");
   });
 
   test("orders back-wall appliances sink -> dishwasher -> range and folds in the hood", () => {

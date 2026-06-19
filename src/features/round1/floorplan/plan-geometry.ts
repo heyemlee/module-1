@@ -1023,7 +1023,7 @@ function placeAppliances(
   if (microwavePresent && microwaveFinalWall) {
     specs.push({
       key: "microwaveOvenCombo",
-      label: "Microwave / oven combo",
+      label: "Microwave",
       symbol: "microwave",
       sizeIn: 30,
       wall: microwaveFinalWall,
