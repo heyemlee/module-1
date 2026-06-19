@@ -10,7 +10,7 @@ export type CabinetShape = PlanRect & {
   wall: Wall;
 };
 
-export type ApplianceSymbol = "sink" | "range" | "fridge" | "dishwasher" | "oven" | "hood";
+export type ApplianceSymbol = "sink" | "range" | "fridge" | "dishwasher" | "oven" | "hood" | "microwave";
 
 export type ApplianceShape = PlanRect & {
   key: string;
@@ -210,7 +210,7 @@ export function buildFloorPlan(
   });
 
   const sharedCabinetObstacles: PlanRect[] = appliances.filter(
-    (a) => a.key === "range" || a.symbol === "fridge" || a.symbol === "oven"
+    (a) => a.key === "range" || a.symbol === "fridge" || a.symbol === "oven" || a.symbol === "microwave"
   );
   sharedCabinetObstacles.push(...clearanceZones);
   if (door) {
@@ -270,7 +270,7 @@ export function buildFloorPlan(
 
   const wallObstacles: PlanRect[] = [
     ...sharedCabinetObstacles,
-    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher")
+    ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher" || a.key === "cooktop" || a.symbol === "hood")
   ];
   if (window) {
     let wx = window.x, wy = window.y, ww = window.w, wh = window.h;
@@ -1024,7 +1024,7 @@ function placeAppliances(
     specs.push({
       key: "microwaveOvenCombo",
       label: "Microwave / oven combo",
-      symbol: "oven",
+      symbol: "microwave",
       sizeIn: 30,
       wall: microwaveFinalWall,
       deep: true
@@ -1436,6 +1436,7 @@ function buildClearanceZones(
       appliance.symbol === "fridge" ||
       appliance.symbol === "range" ||
       appliance.symbol === "oven" ||
+      appliance.symbol === "microwave" ||
       appliance.symbol === "dishwasher"
         ? 36
         : 30;

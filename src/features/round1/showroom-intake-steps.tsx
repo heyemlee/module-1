@@ -422,14 +422,35 @@ export function AppliancesStep({
         [other]: { ...cooking[other], status: "NO", relation: "NOT_APPLICABLE" }
       };
     }
-    const ovenMicrowave =
-      key === "wallOven" || key === "microwaveOvenCombo"
-        ? {
-            ...form.layoutSensitiveCabinets.ovenMicrowave,
-            configuration: "UNKNOWN" as const,
-            relation: "UNKNOWN" as const
-          }
-        : form.layoutSensitiveCabinets.ovenMicrowave;
+    let ovenMicrowave = form.layoutSensitiveCabinets.ovenMicrowave;
+    if (key === "wallOven" || key === "microwaveOvenCombo") {
+      const wStatus = key === "wallOven" ? status : cooking.wallOven.status;
+      const mStatus =
+        key === "microwaveOvenCombo" ? status : cooking.microwaveOvenCombo.status;
+
+      let newConfig = ovenMicrowave.configuration;
+
+      if (wStatus === "YES" && mStatus === "YES") {
+        if (
+          newConfig !== "WALL_OVEN_MICROWAVE_STACK" &&
+          newConfig !== "SEPARATE_WALL_OVEN_AND_MICROWAVE"
+        ) {
+          newConfig = "UNKNOWN";
+        }
+      } else if (wStatus === "YES" && mStatus === "NO") {
+        newConfig = "NO_MICROWAVE";
+      } else if (wStatus === "NO" && mStatus === "YES") {
+        newConfig = "NO_OVEN";
+      } else {
+        newConfig = "UNKNOWN";
+      }
+
+      ovenMicrowave = {
+        ...ovenMicrowave,
+        configuration: newConfig,
+        relation: "UNKNOWN" as const
+      };
+    }
     setForm({
       ...form,
       layoutSensitiveCabinets: {

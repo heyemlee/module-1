@@ -280,6 +280,8 @@ export function LayoutPreview({
             highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
             referenceMode={referenceMode}
             interactive={enablePositionDragging}
+            canvasWidth={plan.canvas.w}
+            roomY={plan.room.y}
           />
         ))}
 
@@ -513,7 +515,9 @@ function Appliance({
   dragging,
   highlighted,
   referenceMode,
-  interactive
+  interactive,
+  canvasWidth,
+  roomY
 }: {
   appliance: ApplianceShape;
   onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
@@ -521,12 +525,21 @@ function Appliance({
   highlighted?: boolean;
   referenceMode?: boolean;
   interactive?: boolean;
+  canvasWidth?: number;
+  roomY?: number;
 }) {
   const cx = appliance.x + appliance.w / 2;
   const cy = appliance.y + appliance.h / 2;
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
   const currentVal = isHorizontal ? appliance.x : appliance.y;
   const isHood = appliance.symbol === "hood";
+
+  const tooltipW = Math.max(160, (appliance.label?.length || 0) * 8.5);
+  const tooltipH = 32;
+  const tRectX = canvasWidth ? canvasWidth / 2 - tooltipW / 2 : cx - tooltipW / 2;
+  const tRectY = 12;
+  const tTextX = canvasWidth ? canvasWidth / 2 : cx;
+  const tTextY = tRectY + 21;
 
   // Clean reference: just the body rect + symbol glyph, no chrome, no label.
   if (referenceMode) {
@@ -616,6 +629,14 @@ function Appliance({
         <circle cx={cx} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
         <circle cx={cx + 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
       </g>
+      )}
+      {interactive && appliance.label && (
+        <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none drop-shadow-sm" style={{ pointerEvents: 'none' }}>
+          <rect x={tRectX} y={tRectY} width={tooltipW} height={tooltipH} rx="4" fill="#0f172a" />
+          <text x={tTextX} y={tTextY} textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="700" className="pointer-events-none tracking-wide">
+            {appliance.label}
+          </text>
+        </g>
       )}
     </g>
   );
@@ -853,6 +874,29 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
           <>
             <line x1={x + w * 0.35} y1={y + 5} x2={x + w * 0.35} y2={y + h - 5} />
             <line x1={x + w * 0.6} y1={y + 5} x2={x + w * 0.6} y2={y + h - 5} />
+          </>
+        )}
+      </g>
+    );
+  }
+  if (symbol === "microwave") {
+    const isHorizontal = wall === "TOP" || wall === "BOTTOM";
+    const windowX = isHorizontal ? w * 0.1 : w * 0.3;
+    const windowY = isHorizontal ? h * 0.3 : h * 0.1;
+    const windowW = isHorizontal ? w * 0.6 : w * 0.4;
+    const windowH = isHorizontal ? h * 0.4 : h * 0.6;
+    return (
+      <g fill="none" stroke={LINE} strokeWidth="1">
+        <rect x={x + windowX} y={y + windowY} width={windowW} height={windowH} rx="2" />
+        {isHorizontal ? (
+          <>
+            <circle cx={x + w * 0.82} cy={y + h * 0.4} r="1" />
+            <circle cx={x + w * 0.82} cy={y + h * 0.6} r="1" />
+          </>
+        ) : (
+          <>
+            <circle cx={x + w * 0.4} cy={y + h * 0.82} r="1" />
+            <circle cx={x + w * 0.6} cy={y + h * 0.82} r="1" />
           </>
         )}
       </g>

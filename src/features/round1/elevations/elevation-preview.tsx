@@ -279,7 +279,7 @@ function ApplianceShape({ item }: { item: ElevationItem }) {
     );
   }
 
-  const needsToeKick = ["dishwasher", "fridge", "oven", "cooktop"].includes(item.symbol);
+  const needsToeKick = ["dishwasher", "fridge", "oven", "microwave", "cooktop"].includes(item.symbol);
   const toeKickH = 12;
   const toeKickInset = 3;
   const isRange = item.symbol === "range";
@@ -420,6 +420,21 @@ function renderApplianceSymbol(item: ElevationItem) {
         <rect x={item.x + 8} y={ovenY + 8} width={item.w - 16} height={ovenH - 16} />
         <line x1={item.x + 10} y1={ovenY + 5} x2={item.x + item.w - 10} y2={ovenY + 5} strokeWidth="1.5" />
         <rect x={item.x} y={ovenY + ovenH} width={item.w} height={item.h - (ovenY + ovenH - item.y)} />
+      </g>
+    );
+  }
+
+  if (item.symbol === "microwave") {
+    const microwaveY = item.y + item.h * 0.4;
+    const microwaveH = 30;
+    return (
+      <g fill="none" stroke={INK} strokeWidth="1">
+        <rect x={item.x} y={item.y} width={item.w} height={item.h * 0.4} />
+        <rect x={item.x + 4} y={microwaveY} width={item.w - 8} height={microwaveH} />
+        <rect x={item.x + 8} y={microwaveY + 6} width={item.w * 0.6} height={microwaveH - 12} />
+        <circle cx={item.x + item.w - 12} cy={microwaveY + 12} r={1.5} />
+        <circle cx={item.x + item.w - 12} cy={microwaveY + 18} r={1.5} />
+        <rect x={item.x} y={microwaveY + microwaveH} width={item.w} height={item.h - (microwaveY + microwaveH - item.y)} />
       </g>
     );
   }

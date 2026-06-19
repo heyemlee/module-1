@@ -22,6 +22,7 @@ export type ElevationSymbol =
   | "fridge"
   | "dishwasher"
   | "oven"
+  | "microwave"
   | "hood"
   | "window"
   | "door";
@@ -132,7 +133,7 @@ function buildWallScene(plan: FloorPlan, wall: Wall): WallElevationScene | null 
   const wallCorners = allCorners.filter(c => c.y < 100);
 
   const baseObstacles = [
-    ...appliances.filter(a => ["sink", "dishwasher", "range", "cooktop", "fridge", "oven"].includes(a.symbol)),
+    ...appliances.filter(a => ["sink", "dishwasher", "range", "cooktop", "fridge", "oven", "microwave"].includes(a.symbol)),
     ...doors
   ];
   const baseCabinets = clipItemsAgainstObstacles([...baseCabinetItems(plan, wall), ...baseCorners], baseObstacles);
@@ -144,7 +145,7 @@ function buildWallScene(plan: FloorPlan, wall: Wall): WallElevationScene | null 
   }));
 
   const wallObstacles = [
-    ...appliances.filter(a => ["hood", "fridge", "oven"].includes(a.symbol)),
+    ...appliances.filter(a => ["hood", "fridge", "oven", "microwave"].includes(a.symbol)),
     ...paddedWindows,
     ...doors
   ];
@@ -320,7 +321,7 @@ function wallAxis(plan: FloorPlan, wall: Wall): { start: number; length: number 
 }
 
 function applianceBand(appliance: ApplianceShape): { y: number; h: number } {
-  if (appliance.symbol === "fridge" || appliance.symbol === "oven") {
+  if (appliance.symbol === "fridge" || appliance.symbol === "oven" || appliance.symbol === "microwave") {
     return { y: TALL_Y, h: TALL_H };
   }
   if (appliance.symbol === "hood") {
@@ -339,6 +340,7 @@ function applianceSymbol(appliance: ApplianceShape): ElevationSymbol {
   if (appliance.symbol === "fridge") return "fridge";
   if (appliance.symbol === "dishwasher") return "dishwasher";
   if (appliance.symbol === "oven") return "oven";
+  if (appliance.symbol === "microwave") return "microwave";
   if (appliance.symbol === "hood") return "hood";
   return "baseCabinet";
 }
