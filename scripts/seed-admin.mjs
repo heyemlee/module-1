@@ -19,19 +19,30 @@ const key = await scrypt(password, salt, 64);
 const passwordHash = `scrypt:${salt}:${Buffer.from(key).toString("hex")}`;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const company = await pool.query(
-  `INSERT INTO companies (name)
-   VALUES ($1)
-   RETURNING id`,
+// Idempotent company: reuse the company by name if it already exists, so
+// re-running (e.g. as a permanent Railway pre-deploy command) never creates
+// duplicate companies.
+const existingCompany = await pool.query(
+  `SELECT id FROM companies WHERE name = $1 ORDER BY created_at LIMIT 1`,
   [companyName]
 );
+const companyId =
+  existingCompany.rows[0]?.id ??
+  (await pool.query(`INSERT INTO companies (name) VALUES ($1) RETURNING id`, [companyName]))
+    .rows[0].id;
 
-await pool.query(
+// Idempotent admin: upsert so a re-run refreshes the password/name/role
+// instead of silently doing nothing.
+const result = await pool.query(
   `INSERT INTO users (company_id, email, name, password_hash, role)
    VALUES ($1, $2, $3, $4, 'ADMIN')
-   ON CONFLICT (email) DO NOTHING`,
-  [company.rows[0].id, email, name, passwordHash]
+   ON CONFLICT (email) DO UPDATE SET
+     name = EXCLUDED.name,
+     password_hash = EXCLUDED.password_hash,
+     role = EXCLUDED.role
+   RETURNING (xmax = 0) AS inserted`,
+  [companyId, email, name, passwordHash]
 );
 
 await pool.end();
-console.log(`Seeded admin ${email}`);
+console.log(`${result.rows[0].inserted ? "Created" : "Updated"} admin ${email}`);
