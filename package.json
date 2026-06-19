@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "start": "next start",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed-admin": "node scripts/seed-admin.mjs",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -14,12 +17,14 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "next": "^15.3.4",
+    "pg": "^8.22.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "typescript": "^5.8.3",
     "zod": "^3.25.64"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "@vitejs/plugin-react": "^4.5.2",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.29.0",
