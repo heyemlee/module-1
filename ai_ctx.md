@@ -208,6 +208,8 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 
 ## Active Work: Next Session
 
+Done (2026-06-19): admin self-service user management implemented — ADMIN-only `/admin/users` page + `GET/POST /api/admin/users` (requireRole ADMIN, 401/403/409 handled), backed by `user-admin-repository.ts` (list + create, password hashed via existing helper). Dashboard shows a Users link for admins. Light real-use polish: login brand from `NEXT_PUBLIC_COMPANY_NAME` (fallback "Showroom"; inlined at build time, set in Railway before build for a custom brand), dashboard empty-state CTA, responsive dashboard/header. Salespeople can now be added from the UI instead of editing the Railway pre-deploy command. Verified with `npm test` (214), `npx tsc --noEmit`, `npm run build`, and end-to-end browser QA against local Docker Postgres (login 200, create 201, duplicate 409, SALES gating 403 + redirect, mobile no-overflow).
+
 Done (2026-06-19): internal project platform foundation implemented for formal Railway deployment. Added fixed email/password auth, Admin/Sales/Designer roles, customer/project dashboard shell, Railway Postgres schema/repositories, project-scoped Round 1 state/snapshot/rendering APIs, rendering history, and read-only AI status from Railway Variables. Production should use `DATABASE_URL`; `ROUND1_DATA_FILE` remains local/dev fallback only. See `docs/deployment/railway-internal-platform.md`.
 
 Current Module 1 status:
