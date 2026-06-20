@@ -8,9 +8,13 @@ describe("CabinetColorForm", () => {
 
     expect(html).toContain("Cabinet style");
     expect(html).toContain("Color name");
+    expect(html).toContain("Color code");
     expect(html).toContain("Swatch image URL");
+    expect(html).toContain("Fallback HEX");
     expect(html).toContain("Hover example image URL");
     expect(html).toContain("Prompt description");
+    expect(html).toContain("Sort order");
+    expect(html).toContain("Active");
   });
 
   test("builds the API payload", () => {
