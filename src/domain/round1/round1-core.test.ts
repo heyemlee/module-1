@@ -10,6 +10,7 @@ import {
   round1NormalizedSchema,
   splitCabinetRun
 } from "./index";
+import { round1FormSchema } from "./schemas";
 
 function createValidRound1Form(): Round1FormInput {
   return {
@@ -56,6 +57,60 @@ function createValidRound1Form(): Round1FormInput {
     }
   };
 }
+
+describe("round1FormSchema rendering preferences", () => {
+  test("accepts European and American rendering preferences", () => {
+    const base = {
+      room: { length: 180, width: 120, dimensionsKnown: true, ceilingHeight: null, obstacles: [] },
+      openings: { doors: { status: "NO", items: [] }, windows: { status: "NO", items: [] } },
+      mep: {
+        water: { relation: "UNKNOWN", movable: "UNKNOWN" },
+        gas: { relation: "UNKNOWN", movable: "UNKNOWN" },
+        electric: { relation: "UNKNOWN", movable: "UNKNOWN" },
+        vent: { relation: "UNKNOWN", movable: "UNKNOWN" }
+      },
+      layoutPreference: "LEFT_L_SHAPE",
+      fixtures: {
+        sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        range: { size: null, fuel: "GAS", fixedLocation: "UNKNOWN", relation: "BACK_SIDE" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "FRONT_SIDE" },
+        dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" },
+        hood: { relation: "ABOVE_RANGE" }
+      },
+      layoutSensitiveCabinets: {
+        cornerCabinet: { preferredType: "NO_PREFERENCE" },
+        ovenMicrowave: { configuration: "UNKNOWN", relation: "UNKNOWN" },
+        cookingAppliances: {
+          range: { status: "YES", relation: "BACK_SIDE" },
+          cooktop: { status: "NO", relation: "NOT_APPLICABLE" },
+          wallOven: { status: "NO", relation: "NOT_APPLICABLE" },
+          microwaveOvenCombo: { status: "UNKNOWN", relation: "UNKNOWN" }
+        },
+        island: { status: "NO", requested: false, functions: [] }
+      }
+    };
+
+    expect(
+      round1FormSchema.parse({
+        ...base,
+        renderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: null
+        }
+      }).renderingPreferences
+    ).toEqual({ cabinetStyle: "EUROPEAN_FRAMELESS", doorColorId: null });
+
+    expect(
+      round1FormSchema.parse({
+        ...base,
+        renderingPreferences: {
+          cabinetStyle: "AMERICAN_FRAMED",
+          doorColorId: "color-1"
+        }
+      }).renderingPreferences
+    ).toEqual({ cabinetStyle: "AMERICAN_FRAMED", doorColorId: "color-1" });
+  });
+});
 
 describe("Round 1 cabinet code helpers", () => {
   test("generates wall and base cabinet codes with base actual height rounded for code height", () => {

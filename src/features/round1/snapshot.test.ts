@@ -91,6 +91,31 @@ describe("buildRound1Snapshot", () => {
       )
     );
   });
+
+  test("copies rendering preferences into the snapshot audit context", () => {
+    const form = createDefaultShowroomForm();
+    form.renderingPreferences = {
+      cabinetStyle: "AMERICAN_FRAMED",
+      doorColorId: "painted-white"
+    };
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+
+    const snapshot = buildRound1Snapshot({
+      showroomForm: form,
+      normalized: result.normalized,
+      positionOverrides: {},
+      preliminaryCabinets: estimate,
+      confirmationItems: [...result.confirmationItems, ...estimate.confirmationItems],
+      readiness: result.readiness,
+      now: () => new Date("2026-06-19T12:00:00.000Z")
+    });
+
+    expect(snapshot.showroomForm.renderingPreferences).toEqual({
+      cabinetStyle: "AMERICAN_FRAMED",
+      doorColorId: "painted-white"
+    });
+  });
 });
 
 describe("summarizeRound1Snapshot", () => {
