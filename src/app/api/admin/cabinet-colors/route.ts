@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ForbiddenError, requireRole, requireUser, UnauthorizedError } from "@/server/platform/auth-service";
-import { cabinetColorInputSchema, createCabinetColor, listCabinetColors } from "@/server/platform/cabinet-color-repository";
-
-export function parseCabinetColorRequest(value: unknown) {
-  return cabinetColorInputSchema.parse(value);
-}
+import { createCabinetColor, listCabinetColors } from "@/server/platform/cabinet-color-repository";
+import { parseCabinetColorRequest } from "./validation";
 
 function authError(error: unknown) {
   if (error instanceof UnauthorizedError) {

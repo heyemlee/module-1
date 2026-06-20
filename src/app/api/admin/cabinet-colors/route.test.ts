@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { parseCabinetColorRequest } from "./route";
+import * as route from "./route";
+import { parseCabinetColorRequest } from "./validation";
 
 describe("admin cabinet color route helpers", () => {
+  test("keeps route module exports compatible with Next route handlers", () => {
+    expect(Object.keys(route).sort()).toEqual(["GET", "POST"]);
+  });
+
   test("parses create requests", () => {
     expect(
       parseCabinetColorRequest({
