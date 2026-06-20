@@ -59,6 +59,13 @@ function createValidRound1Form(): Round1FormInput {
 }
 
 describe("round1FormSchema rendering preferences", () => {
+  test("defaults rendering preferences when omitted", () => {
+    expect(round1FormSchema.parse(createValidRound1Form()).renderingPreferences).toEqual({
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      doorColorId: null
+    });
+  });
+
   test("accepts European and American rendering preferences", () => {
     const base = {
       room: { length: 180, width: 120, dimensionsKnown: true, ceilingHeight: null, obstacles: [] },

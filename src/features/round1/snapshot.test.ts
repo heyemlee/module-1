@@ -111,10 +111,8 @@ describe("buildRound1Snapshot", () => {
       now: () => new Date("2026-06-19T12:00:00.000Z")
     });
 
-    form.renderingPreferences = {
-      cabinetStyle: "EUROPEAN_FRAMELESS",
-      doorColorId: null
-    };
+    form.renderingPreferences.doorColorId = null;
+    form.renderingPreferences.cabinetStyle = "EUROPEAN_FRAMELESS";
 
     expect(snapshot.showroomForm.renderingPreferences).toEqual({
       cabinetStyle: "AMERICAN_FRAMED",
