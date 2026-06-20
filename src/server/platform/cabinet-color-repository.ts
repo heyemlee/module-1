@@ -3,22 +3,50 @@ import { query } from "@/server/db/client";
 import type { CabinetStyle } from "@/domain/round1";
 
 const nullableUrl = z
-  .union([z.string().trim().url(), z.literal("")])
-  .transform((value) => (value ? value : null))
-  .nullable()
-  .optional()
-  .transform((value) => value ?? null);
+  .preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.union([z.string().url(), z.literal(""), z.null(), z.undefined()])
+  )
+  .transform((value) => {
+    if (value === "" || value === null) return null;
+    return value;
+  });
+
+const nullableTrimmedString = z
+  .preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.union([z.string(), z.null(), z.undefined()])
+  )
+  .transform((value) => {
+    if (value === "" || value === null) return null;
+    return value;
+  });
+
+const nullableSwatchHex = z
+  .preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.union([
+      z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
+      z.literal(""),
+      z.null(),
+      z.undefined()
+    ])
+  )
+  .transform((value) => {
+    if (value === "" || value === null) return null;
+    return value;
+  });
 
 export const cabinetColorInputSchema = z.object({
   cabinetStyle: z.enum(["EUROPEAN_FRAMELESS", "AMERICAN_FRAMED"]),
   name: z.string().trim().min(1),
-  colorCode: z.string().trim().nullable().optional().transform((value) => value || null),
+  colorCode: nullableTrimmedString,
   swatchImageUrl: nullableUrl,
-  swatchHex: z.string().trim().nullable().optional().transform((value) => value || null),
+  swatchHex: nullableSwatchHex,
   hoverExampleImageUrl: nullableUrl,
   promptDescription: z.string().trim().min(1),
-  active: z.boolean().default(true),
-  sortOrder: z.number().int().default(0)
+  active: z.boolean(),
+  sortOrder: z.number().int()
 });
 
 export type CabinetColorInput = z.infer<typeof cabinetColorInputSchema>;
@@ -119,10 +147,10 @@ export async function createCabinetColor(companyId: string, input: CabinetColorI
       companyId,
       input.cabinetStyle,
       input.name,
-      input.colorCode,
-      input.swatchImageUrl,
-      input.swatchHex,
-      input.hoverExampleImageUrl,
+      input.colorCode ?? null,
+      input.swatchImageUrl ?? null,
+      input.swatchHex ?? null,
+      input.hoverExampleImageUrl ?? null,
       input.promptDescription,
       input.active,
       input.sortOrder
@@ -136,13 +164,13 @@ export async function updateCabinetColor(companyId: string, colorId: string, inp
     `UPDATE cabinet_colors SET
        cabinet_style = $3,
        name = $4,
-       color_code = $5,
-       swatch_image_url = $6,
-       swatch_hex = $7,
-       hover_example_image_url = $8,
-       prompt_description = $9,
-       active = $10,
-       sort_order = $11,
+       color_code = CASE WHEN $5::boolean THEN $6 ELSE color_code END,
+       swatch_image_url = CASE WHEN $7::boolean THEN $8 ELSE swatch_image_url END,
+       swatch_hex = CASE WHEN $9::boolean THEN $10 ELSE swatch_hex END,
+       hover_example_image_url = CASE WHEN $11::boolean THEN $12 ELSE hover_example_image_url END,
+       prompt_description = $13,
+       active = $14,
+       sort_order = $15,
        updated_at = now()
      WHERE company_id = $1 AND id = $2
      RETURNING id, company_id, cabinet_style, name, color_code, swatch_image_url,
@@ -153,10 +181,14 @@ export async function updateCabinetColor(companyId: string, colorId: string, inp
       colorId,
       input.cabinetStyle,
       input.name,
-      input.colorCode,
-      input.swatchImageUrl,
-      input.swatchHex,
-      input.hoverExampleImageUrl,
+      input.colorCode !== undefined,
+      input.colorCode ?? null,
+      input.swatchImageUrl !== undefined,
+      input.swatchImageUrl ?? null,
+      input.swatchHex !== undefined,
+      input.swatchHex ?? null,
+      input.hoverExampleImageUrl !== undefined,
+      input.hoverExampleImageUrl ?? null,
       input.promptDescription,
       input.active,
       input.sortOrder

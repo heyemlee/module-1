@@ -58,6 +58,113 @@ describe("cabinet color repository helpers", () => {
     expect(input.cabinetStyle).toBe("AMERICAN_FRAMED");
   });
 
+  test("requires complete replacement fields", () => {
+    const baseInput = {
+      cabinetStyle: "AMERICAN_FRAMED",
+      name: "Painted White",
+      colorCode: "US-201",
+      swatchImageUrl: "https://example.com/white.jpg",
+      swatchHex: "#f4f1e8",
+      hoverExampleImageUrl: "",
+      promptDescription: "painted soft white framed cabinet doors"
+    };
+
+    expect(() => cabinetColorInputSchema.parse({ ...baseInput, sortOrder: 2 })).toThrow();
+    expect(() => cabinetColorInputSchema.parse({ ...baseInput, active: true })).toThrow();
+  });
+
+  test("normalizes whitespace-only optional URLs to null", () => {
+    const input = cabinetColorInputSchema.parse({
+      cabinetStyle: "AMERICAN_FRAMED",
+      name: "Painted White",
+      colorCode: "US-201",
+      swatchImageUrl: "   ",
+      swatchHex: "#fff",
+      hoverExampleImageUrl: "\t\n",
+      promptDescription: "painted soft white framed cabinet doors",
+      active: true,
+      sortOrder: 2
+    });
+
+    expect(input.swatchImageUrl).toBeNull();
+    expect(input.hoverExampleImageUrl).toBeNull();
+  });
+
+  test("does not default omitted nullable fields", () => {
+    const input = cabinetColorInputSchema.parse({
+      cabinetStyle: "AMERICAN_FRAMED",
+      name: "Painted White",
+      promptDescription: "painted soft white framed cabinet doors",
+      active: true,
+      sortOrder: 2
+    });
+
+    expect(input.colorCode).toBeUndefined();
+    expect(input.swatchImageUrl).toBeUndefined();
+    expect(input.swatchHex).toBeUndefined();
+    expect(input.hoverExampleImageUrl).toBeUndefined();
+  });
+
+  test("rejects invalid optional URLs", () => {
+    expect(() =>
+      cabinetColorInputSchema.parse({
+        cabinetStyle: "AMERICAN_FRAMED",
+        name: "Painted White",
+        colorCode: "US-201",
+        swatchImageUrl: "not-a-url",
+        swatchHex: "#fff",
+        hoverExampleImageUrl: null,
+        promptDescription: "painted soft white framed cabinet doors",
+        active: true,
+        sortOrder: 2
+      })
+    ).toThrow();
+  });
+
+  test("validates swatch hex colors", () => {
+    expect(
+      cabinetColorInputSchema.parse({
+        cabinetStyle: "AMERICAN_FRAMED",
+        name: "Painted White",
+        colorCode: "US-201",
+        swatchImageUrl: null,
+        swatchHex: "#fff",
+        hoverExampleImageUrl: null,
+        promptDescription: "painted soft white framed cabinet doors",
+        active: true,
+        sortOrder: 2
+      }).swatchHex
+    ).toBe("#fff");
+
+    expect(
+      cabinetColorInputSchema.parse({
+        cabinetStyle: "AMERICAN_FRAMED",
+        name: "Painted White",
+        colorCode: "US-201",
+        swatchImageUrl: null,
+        swatchHex: "#f4f1e8",
+        hoverExampleImageUrl: null,
+        promptDescription: "painted soft white framed cabinet doors",
+        active: true,
+        sortOrder: 2
+      }).swatchHex
+    ).toBe("#f4f1e8");
+
+    expect(() =>
+      cabinetColorInputSchema.parse({
+        cabinetStyle: "AMERICAN_FRAMED",
+        name: "Painted White",
+        colorCode: "US-201",
+        swatchImageUrl: null,
+        swatchHex: "white",
+        hoverExampleImageUrl: null,
+        promptDescription: "painted soft white framed cabinet doors",
+        active: true,
+        sortOrder: 2
+      })
+    ).toThrow();
+  });
+
   test("checks color/style compatibility", () => {
     expect(isColorCompatibleWithStyle(mapCabinetColorRow(row), "EUROPEAN_FRAMELESS")).toBe(true);
     expect(isColorCompatibleWithStyle(mapCabinetColorRow(row), "AMERICAN_FRAMED")).toBe(false);

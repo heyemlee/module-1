@@ -34,4 +34,16 @@ describe("Postgres schema", () => {
     expect(schema).toContain("based_on_cabinet_style TEXT");
     expect(schema).toContain("based_on_door_color_id UUID");
   });
+
+  test("migrates rendering preference metadata onto existing tables", () => {
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'))"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ"
+    );
+  });
 });

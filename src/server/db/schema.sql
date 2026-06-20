@@ -98,6 +98,10 @@ CREATE TABLE IF NOT EXISTS renderings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'));
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS cabinet_colors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
