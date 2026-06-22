@@ -7,6 +7,8 @@ export default async function AdminCabinetColorsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role !== "ADMIN") redirect("/projects");
-  const colors = await listCabinetColors(user.companyId, false);
+  const colors = await listCabinetColors(user.companyId, false, {
+    includeHoverExampleImages: false
+  });
   return <CabinetColorsAdminView colors={colors} />;
 }

@@ -7,7 +7,9 @@ export async function GET() {
   try {
     const user = await requireUser();
     return NextResponse.json({
-      colors: await listCabinetColors(user.companyId, true)
+      colors: await listCabinetColors(user.companyId, true, {
+        includeHoverExampleImages: false
+      })
     });
   } catch (error) {
     return (

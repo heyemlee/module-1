@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildCabinetColorListQuery,
   cabinetColorInputSchema,
   isColorCompatibleWithStyle,
   mapCabinetColorRow,
@@ -39,6 +40,13 @@ describe("cabinet color repository helpers", () => {
       createdAt: "2026-06-19T00:00:00.000Z",
       updatedAt: "2026-06-19T00:01:00.000Z"
     });
+  });
+
+  test("can build a lightweight list query without hover example image payloads", () => {
+    const query = buildCabinetColorListQuery(false);
+
+    expect(query).toContain("NULL::text AS hover_example_image_url");
+    expect(query).not.toContain("swatch_hex, hover_example_image_url,");
   });
 
   test("validates cabinet color input", () => {

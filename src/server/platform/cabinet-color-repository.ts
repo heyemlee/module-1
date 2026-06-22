@@ -116,14 +116,26 @@ export function isColorCompatibleWithStyle(
   return Boolean(color && color.active && color.cabinetStyle === cabinetStyle);
 }
 
-export async function listCabinetColors(companyId: string, activeOnly = false) {
-  const result = await query<CabinetColorRow>(
-    `SELECT id, company_id, cabinet_style, name, color_code, swatch_image_url,
-            swatch_hex, hover_example_image_url, prompt_description, active,
+export function buildCabinetColorListQuery(includeHoverExampleImages = true) {
+  const hoverExampleColumn = includeHoverExampleImages
+    ? "hover_example_image_url"
+    : "NULL::text AS hover_example_image_url";
+
+  return `SELECT id, company_id, cabinet_style, name, color_code, swatch_image_url,
+            swatch_hex, ${hoverExampleColumn}, prompt_description, active,
             sort_order, created_at, updated_at
      FROM cabinet_colors
      WHERE company_id = $1 AND ($2::boolean = false OR active = true)
-     ORDER BY cabinet_style ASC, sort_order ASC, name ASC`,
+     ORDER BY cabinet_style ASC, sort_order ASC, name ASC`;
+}
+
+export async function listCabinetColors(
+  companyId: string,
+  activeOnly = false,
+  options: { includeHoverExampleImages?: boolean } = {}
+) {
+  const result = await query<CabinetColorRow>(
+    buildCabinetColorListQuery(options.includeHoverExampleImages ?? true),
     [companyId, activeOnly]
   );
   return result.rows.map(mapCabinetColorRow);
