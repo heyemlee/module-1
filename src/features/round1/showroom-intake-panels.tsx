@@ -113,30 +113,21 @@ export function RenderingControls({
   busy,
   error,
   stale,
-  image,
-  onGenerate
+  image
 }: {
   canRender: boolean;
   busy: boolean;
   error: string | null;
   stale: boolean;
   image: string | null;
-  onGenerate?: () => void;
 }) {
   return (
     <div className="space-y-2 mt-4">
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={!canRender || busy}
-        className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy
-          ? "Generating Rendering…"
-          : image && stale
-            ? "Regenerate Rendering"
-            : "Generate Rendering"}
-      </button>
+      {busy ? (
+        <p className="rounded-md bg-sky-50 px-3 py-2 text-xs font-bold leading-5 text-sky-800">
+          Generating rendering...
+        </p>
+      ) : null}
       {!canRender ? (
         <p className="text-xs leading-5 text-slate-500">
           {image

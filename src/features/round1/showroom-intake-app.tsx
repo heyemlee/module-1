@@ -613,7 +613,6 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               (!snapshot || renderingBasedOn !== snapshot.generatedAt)
             }
             image={renderingImage}
-            onGenerate={handleGenerateRendering}
           />
 
           {/*

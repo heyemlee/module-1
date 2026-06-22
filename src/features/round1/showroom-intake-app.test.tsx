@@ -505,7 +505,7 @@ describe("CabinetFillSummaryPanel", () => {
 });
 
 describe("Round1SnapshotPanel", () => {
-  test("gates the rendering action and hides the JSON until a snapshot exists", () => {
+  test("shows rendering status without exposing a sidebar generate action", () => {
     const html = renderToStaticMarkup(
       <>
         <RenderingControls
@@ -520,8 +520,11 @@ describe("Round1SnapshotPanel", () => {
     );
 
     expect(html).toContain("No snapshot yet");
-    expect(html).toContain("Generate Rendering");
-    expect(html).toContain("disabled");
+    expect(html).toContain(
+      "Available after cabinet fill is generated and a cabinet color is confirmed."
+    );
+    expect(html).not.toContain("Generate Rendering");
+    expect(html).not.toContain("<button");
     expect(html).not.toContain("Snapshot ready");
     expect(html).not.toContain("View snapshot JSON");
   });
@@ -554,6 +557,13 @@ describe("ShowroomIntakeApp snapshot gating", () => {
 
     expect(html).not.toContain("Rough Wall Elevations");
     expect(html).not.toContain("Round 1 rough elevation - not for production");
+  });
+
+  test("does not expose the rendering generate action outside the final step", () => {
+    const html = renderToStaticMarkup(<ShowroomIntakeApp />);
+
+    expect(html).toContain("Rendering Preferences");
+    expect(html).not.toContain("Generate Rendering");
   });
 });
 
