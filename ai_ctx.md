@@ -122,6 +122,10 @@ Deterministic code must own:
   - Step components for Room, Openings, Layout, Appliances, and Adjust Positions.
 - `src/features/round1/showroom-intake-panels.tsx`
   - Sidebar panels for rough cabinet fill, snapshot status, snapshot JSON, rendering gate note, and snapshot save status.
+- `src/features/platform/cabinet-colors-manager.tsx`
+  - Admin batch editor for existing cabinet colors, with compact swatches, dirty-row tracking, and one Save All action.
+- `src/features/platform/renderings-view.tsx`
+  - Read-only project renderings history page.
 - `src/features/round1/showroom-intake-controls.tsx`
   - Shared intake UI primitives such as `Step`, `Panel`, `NumberField`, `SelectField`, `StatusPill`, and `parseNullableSize`.
 - `src/features/round1/showroom-intake-data.ts`
@@ -132,6 +136,10 @@ Deterministic code must own:
   - Repository abstraction; currently MVP storage, later persistent implementation.
 - `src/infrastructure/image/openai-rest-image-client.ts`
   - Existing optional OpenAI image client; not authoritative for plan data.
+- `src/server/platform/api-errors.ts`
+  - Shared API auth/body error mapping for project, Round 1, cabinet color, and admin routes.
+- `scripts/prepare-cabinet-colors.mjs` / `scripts/seed-cabinet-colors.mjs`
+  - Regenerable EU cabinet color swatch preparation and idempotent seed tooling.
 
 ## Current Implementation
 
@@ -193,9 +201,13 @@ Implemented and verified through 2026-06-22:
   - Sales step: `rendering-preferences-step.tsx` + helpers in `rendering-preferences.ts`. Shows large square swatches for the SELECTED style only (`activeColorsForStyle`), hover example image when configured, and a click-to-confirm dialog before saving a color (`Confirm Color`). Switching style clears an incompatible selected color (`nextRenderingPreferencesForStyle`). Empty state asks an Admin to configure cabinet colors. Rendering is enabled only once a snapshot is saved AND `renderingPreferencesComplete` is true.
   - Prompt: `rendering-prompt.ts` composes style-specific language (European frameless flat-slab/handleless vs. American framed face-frame) plus the selected color's `promptDescription`. The rendering stamp records `basedOnRenderingPreferences` ({ doorColorId, cabinetStyle, colorUpdatedAt }) alongside `basedOnSnapshotGeneratedAt`.
   - Decoupled staleness: changing ONLY style/color after a snapshot does NOT clear cabinet fill or the snapshot (`renderingPreferenceStampMatches` tracks preference staleness separately) — it only marks an existing rendering as stale, prompting regenerate.
+- Cabinet color admin performance and seed tooling (2026-06-22, merged to `main`): the Admin Cabinet Colors page now uses `CabinetColorsManager` instead of one heavy form per existing color. Existing colors are edited inline with compact swatches, per-row dirty state, and one Save All action. Uploaded swatches/hover examples are downscaled client-side before storage; image tags use lazy/async decoding. Seed scripts can prepare and idempotently load the 30 in-stock EU colors into `cabinet_colors`.
+- Rendering color fidelity and history (2026-06-22, merged to `main`): `Generate Rendering` now sends the selected cabinet color swatch as an additional material reference image (`rasterizeImageSourceToPngBase64`) alongside the deterministic spatial reference. `/projects/[projectId]/renderings` shows persisted rendering history, and the project-detail Renderings card links there.
+- Flow, auth, and resilience hardening (2026-06-22, merged to `main`): removed unauthenticated legacy `/api/round1/projects/*` and `/api/round1/layout-image` routes, added auth to the live Round 1 agent API, centralized API auth error handling with `authErrorResponse`, added app-level `not-found`/`error` pages, snapshot save retry, unsaved-edit guard, rendering request timeouts, safer form error handling, and sign-out controls across app surfaces.
 
 Latest known verification:
 
+- 2026-06-22 after PR #11 / cabinet-color performance branch: `npm test` 233 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
 - 2026-06-22 after Admin Add Color upload simplification: `npm test` 251 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
 - Rendering Preferences full QA passed earlier the same day: automated tests/build passed, local Docker Postgres migration passed, Admin Cabinet Colors QA passed, Sales Rendering Preferences QA passed, and prompt/stored-rendering metadata QA passed for both European and American styles.
 - Production migration was applied on 2026-06-22 through the Railway public TCP proxy: `cabinet_colors` table exists and `renderings.based_on_*` columns exist. The migration is idempotent.
@@ -216,12 +228,12 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 
 Current Module 1 status:
 
-- Module 1 Round 1 MVP is feature-complete for the current scope, including Rendering Preferences, admin-managed cabinet colors, and non-authoritative customer concept rendering.
-- Latest automated verification (2026-06-22): `npm test` 251 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
-- Latest manual QA (2026-06-22): Rendering Preferences end-to-end QA passed, Admin Add Color upload form QA passed, and the production migration was applied successfully through the Railway public TCP proxy.
+- Module 1 Round 1 MVP is feature-complete for the current scope, including Rendering Preferences, admin-managed cabinet colors, swatch-as-material rendering references, rendering history, and non-authoritative customer concept rendering.
+- Latest automated verification (2026-06-22): `npm test` 233 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
+- Latest manual QA (2026-06-22): Rendering Preferences end-to-end QA passed, Admin Add Color upload form QA passed, and the production migration was applied successfully through the Railway public TCP proxy. After the latest performance/history/hardening work, browser QA still needs a focused pass on `/admin/cabinet-colors`, Round 1 Rendering Preferences, and `/projects/[projectId]/renderings`.
 - The 2026-06-19 prior baseline (before rendering preferences) also passed `npm test` / `npx tsc --noEmit` / `npm run build` / end-to-end browser QA.
 - Treat old implementation plans under `docs/superpowers/plans/` as historical unless `ai_ctx.md` explicitly reactivates them. The rendering-preferences plan (`2026-06-19-round1-rendering-preferences.md`) is complete and historical.
-- Next useful move: deploy-readiness, production smoke testing, and real sales/customer feedback.
+- Next useful move: production smoke testing and real-use validation, especially Admin Cabinet Colors batch editing, selected-color rendering fidelity for 2–3 distinct finishes, and the renderings history page.
 
 Current Module 1 guardrails:
 
@@ -237,13 +249,13 @@ Current Module 1 guardrails:
 - Keep first-round form questions layout-critical. Oven / microwave belongs in Appliances. Detailed corner cabinet type questions belong in Module 2.
 - Do not expose detailed per-cabinet editing, cabinet codes, production-style dimensions, or internal prompt/debug output in the default Round 1 UI.
 
-Recently completed: the full dated changelog of completed Module 1 work (snapshot + persistence, concept rendering + spatial-prompt/locked-reference accuracy, the optional conversational intake agent + voice STT, rough wall elevations, cooktop-vs-range, layout-shape/island split, oven/microwave arrangement, appliance auto-layout, and assorted preview fixes) now lives in `docs/round1-context-archive.md` under "Module 1 Round 1 — Completed Work Log". The current state of all of it is summarized above in "Current Implementation"; consult the archive only when you need the per-change rationale or history.
+Recently completed: the full dated changelog of completed Module 1 work (snapshot + persistence, concept rendering + spatial-prompt/locked-reference accuracy, the optional conversational intake agent + voice STT, rough wall elevations, cooktop-vs-range, layout-shape/island split, oven/microwave arrangement, appliance auto-layout, Rendering Preferences, cabinet color libraries, seed tooling, flow/security hardening, rendering history, and admin performance fixes) now lives in `docs/round1-context-archive.md` under "Module 1 Round 1 — Completed Work Log". The current state of all of it is summarized above in "Current Implementation"; consult the archive only when you need the per-change rationale or history.
 
 Next implementation TODO:
 
-- Recommended next priority: deploy Module 1 first, then do UI polish from real sales/customer feedback, then open Module 2 detailed measured design as a separate scoped effort.
-- Deployment should come before broad UI redesign because the MVP workflow is already passing verification and needs real-use validation before more interface churn.
-- UI adjustment is the second priority: keep it limited to deployment feedback, responsiveness, copy clarity, and workflow friction. Do not add pricing/quote or production-style cabinet editing during this pass.
+- Recommended next priority: production smoke test the pulled `main` state, then do UI polish from real sales/customer feedback, then open Module 2 detailed measured design as a separate scoped effort.
+- Production smoke should cover login/session expiry behavior, project create/open, Round 1 snapshot save/retry, Rendering Preferences, color batch editing, selected swatch fidelity in generated renderings, renderings history, and logout from each main surface.
+- UI adjustment is the second priority: keep it limited to deployment feedback, responsiveness, copy clarity, performance, and workflow friction. Do not add pricing/quote or production-style cabinet editing during this pass.
 - Module 2 detailed measured design is third priority and should start only with a separate context/spec. It can cover dimension strings, cabinet codes, production-style views, exact filler placement, and measured cabinet-by-cabinet design.
 - No outstanding Module 1 rendering work. The optional conversational Round 1 agent is now implemented; `src/server/llm/` and `POST /api/round1/agent` exist.
 - Note: the previously-leaked `OPENAI_API_KEY` has now been rotated (2026-06-18); the old key is invalid and the new key in `.env.local` is working for rendering. See the "Architecture Decision" security note. No further rotation action outstanding.
