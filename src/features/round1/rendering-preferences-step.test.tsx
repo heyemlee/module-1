@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { createDefaultShowroomForm } from "./showroom-intake-data";
+import {
+  nextRenderingPreferencesForStyle,
+  renderingPreferenceStampForForm,
+  renderingPreferenceStampMatches
+} from "./rendering-preferences";
 import { RenderingPreferencesStep } from "./rendering-preferences-step";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 
@@ -73,5 +78,69 @@ describe("RenderingPreferencesStep", () => {
     );
 
     expect(html).toContain("Ask an Admin to configure cabinet colors");
+  });
+
+  test("compares rendering preference stamps against the current form", () => {
+    const form = {
+      ...createDefaultShowroomForm(),
+      renderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        doorColorId: "eu-oak"
+      }
+    };
+    const stamp = renderingPreferenceStampForForm(form);
+
+    expect(renderingPreferenceStampMatches(stamp, form)).toBe(true);
+    expect(
+      renderingPreferenceStampMatches(stamp, {
+        ...form,
+        renderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-walnut"
+        }
+      })
+    ).toBe(false);
+    expect(
+      renderingPreferenceStampMatches(stamp, {
+        ...form,
+        renderingPreferences: {
+          cabinetStyle: "AMERICAN_FRAMED",
+          doorColorId: "eu-oak"
+        }
+      })
+    ).toBe(false);
+    expect(renderingPreferenceStampMatches(null, form)).toBe(false);
+  });
+
+  test("style switching keeps only known compatible colors", () => {
+    const form = {
+      ...createDefaultShowroomForm(),
+      renderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        doorColorId: "eu-oak"
+      }
+    };
+
+    expect(
+      nextRenderingPreferencesForStyle(form, colors, "EUROPEAN_FRAMELESS")
+        .doorColorId
+    ).toBe("eu-oak");
+    expect(
+      nextRenderingPreferencesForStyle(form, colors, "AMERICAN_FRAMED")
+        .doorColorId
+    ).toBeNull();
+    expect(
+      nextRenderingPreferencesForStyle(
+        {
+          ...form,
+          renderingPreferences: {
+            cabinetStyle: "EUROPEAN_FRAMELESS",
+            doorColorId: "deleted-color"
+          }
+        },
+        colors,
+        "EUROPEAN_FRAMELESS"
+      ).doorColorId
+    ).toBeNull();
   });
 });

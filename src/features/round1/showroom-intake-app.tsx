@@ -21,7 +21,12 @@ import {
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
-import { renderingPreferencesComplete } from "./rendering-preferences";
+import {
+  renderingPreferenceStampForForm,
+  renderingPreferenceStampMatches,
+  renderingPreferencesComplete,
+  type RenderingPreferenceStamp
+} from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
 import {
   AdjustPositionsStep,
@@ -99,8 +104,9 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   // Concept rendering is a non-authoritative customer preview derived from the
   // frozen snapshot. It is persisted separately (never part of the snapshot) so
   // the last preview survives a reload. `renderingBasedOn` records which
-  // snapshot it was built from, so the UI can flag it stale once the snapshot
-  // changes; the image itself is kept (not cleared) across edits.
+  // snapshot it was built from, and `renderingPreferencesBasedOn` records the
+  // finish selection used, so the UI can flag it stale once either changes; the
+  // image itself is kept (not cleared) across edits.
   const floorPlanSvgRef = useRef<SVGSVGElement | null>(null);
   // Hidden, clean render built from the frozen snapshot geometry. This — not the
   // live editable preview — is what gets rasterized and sent to the image model,
@@ -110,6 +116,8 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const referenceElevationRef = useRef<SVGSVGElement | null>(null);
   const [renderingImage, setRenderingImage] = useState<string | null>(null);
   const [renderingBasedOn, setRenderingBasedOn] = useState<string | null>(null);
+  const [renderingPreferencesBasedOn, setRenderingPreferencesBasedOn] =
+    useState<RenderingPreferenceStamp | null>(null);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
 
@@ -142,7 +150,35 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     localSessionChangedRef.current = true;
     setForm(next);
     setRenderingError(null);
-  }, []);
+    if (!projectId) return;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/projects/${projectId}/round1/state`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showroomForm: next,
+            positionOverrides,
+            fixedPositionsConfirmed,
+            cabinetFillGenerated
+          })
+        });
+        if (!response.ok) {
+          throw new Error("Unable to save rendering preferences");
+        }
+      } catch {
+        setRenderingError(
+          "Unable to save rendering preferences. The current selection is kept locally."
+        );
+      }
+    })();
+  }, [
+    cabinetFillGenerated,
+    fixedPositionsConfirmed,
+    positionOverrides,
+    projectId
+  ]);
 
   // Persists the frozen snapshot to the server repository. Lazily creates the
   // project on first save and remembers its id so refreshes can restore it.
@@ -339,6 +375,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       const json = await response.json();
       setRenderingImage(`data:image/png;base64,${json.imageBase64}`);
       setRenderingBasedOn(json.basedOnSnapshotGeneratedAt ?? null);
+      setRenderingPreferencesBasedOn(renderingPreferenceStampForForm(form));
     } catch (error) {
       setRenderingError(
         error instanceof Error ? error.message : "Rendering failed"
@@ -439,12 +476,13 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         }
         
         // Parse the showroom form using round1FormSchema to ensure all defaults are populated
+        let restoredForm: Round1FormInput;
         try {
-          setForm(round1FormSchema.parse(saved.showroomForm));
+          restoredForm = round1FormSchema.parse(saved.showroomForm);
         } catch (e) {
           console.warn("Failed to parse saved showroomForm with round1FormSchema, attempting partial recovery", e);
           // Defensive fallback: merge defaults with whatever was saved
-          setForm({
+          restoredForm = {
             ...createDefaultShowroomForm(),
             ...saved.showroomForm,
             layoutSensitiveCabinets: {
@@ -455,8 +493,9 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                 ...(saved.showroomForm.layoutSensitiveCabinets?.cookingAppliances || {})
               }
             }
-          });
+          };
         }
+        setForm(restoredForm);
         setPositionOverrides(saved.positionOverrides);
         setFixedPositionsConfirmed(true);
         setCabinetFillGenerated(true);
@@ -471,6 +510,9 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         if (rendering?.imageBase64) {
           setRenderingImage(`data:image/png;base64,${rendering.imageBase64}`);
           setRenderingBasedOn(rendering.basedOnSnapshotGeneratedAt ?? null);
+          setRenderingPreferencesBasedOn(
+            renderingPreferenceStampForForm(restoredForm)
+          );
         }
       } catch {
         // Ignore restore failures; the user can regenerate the snapshot.
@@ -610,7 +652,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
             error={renderingError}
             stale={
               renderingImage !== null &&
-              (!snapshot || renderingBasedOn !== snapshot.generatedAt)
+              (!snapshot ||
+                renderingBasedOn !== snapshot.generatedAt ||
+                !renderingPreferenceStampMatches(
+                  renderingPreferencesBasedOn,
+                  form
+                ))
             }
             image={renderingImage}
           />

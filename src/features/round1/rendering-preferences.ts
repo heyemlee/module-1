@@ -10,6 +10,11 @@ export const DEFAULT_RENDERING_PREFERENCES: Round1RenderingPreferences = {
   doorColorId: null
 };
 
+export type RenderingPreferenceStamp = {
+  cabinetStyle: Round1RenderingPreferences["cabinetStyle"];
+  doorColorId: string | null;
+};
+
 export const CABINET_STYLE_LABELS: Record<CabinetStyle, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
   AMERICAN_FRAMED: "American Framed"
@@ -37,6 +42,22 @@ export function selectedRenderingColor(
   return colors.find((color) => color.id === id) ?? null;
 }
 
+export function nextRenderingPreferencesForStyle(
+  form: Round1FormInput,
+  colors: CabinetColor[],
+  style: CabinetStyle
+): Round1RenderingPreferences {
+  const currentColor = selectedRenderingColor(colors, form);
+  return {
+    ...renderingPreferencesForForm(form),
+    cabinetStyle: style,
+    doorColorId:
+      currentColor && currentColor.active && currentColor.cabinetStyle === style
+        ? currentColor.id
+        : null
+  };
+}
+
 export function renderingPreferencesComplete(
   colors: CabinetColor[],
   form: Round1FormInput
@@ -46,5 +67,27 @@ export function renderingPreferencesComplete(
     color &&
       color.active &&
       color.cabinetStyle === renderingPreferencesForForm(form).cabinetStyle
+  );
+}
+
+export function renderingPreferenceStampForForm(
+  form: Round1FormInput
+): RenderingPreferenceStamp {
+  const preferences = renderingPreferencesForForm(form);
+  return {
+    cabinetStyle: preferences.cabinetStyle,
+    doorColorId: preferences.doorColorId
+  };
+}
+
+export function renderingPreferenceStampMatches(
+  stamp: RenderingPreferenceStamp | null,
+  form: Round1FormInput
+) {
+  if (!stamp) return false;
+  const current = renderingPreferenceStampForForm(form);
+  return (
+    stamp.cabinetStyle === current.cabinetStyle &&
+    stamp.doorColorId === current.doorColorId
   );
 }

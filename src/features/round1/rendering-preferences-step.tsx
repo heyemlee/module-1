@@ -6,6 +6,7 @@ import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import {
   activeColorsForStyle,
   CABINET_STYLE_LABELS,
+  nextRenderingPreferencesForStyle,
   renderingPreferencesForForm,
   renderingPreferencesComplete,
   selectedRenderingColor
@@ -47,17 +48,9 @@ export function RenderingPreferencesStep({
   const preferencesComplete = renderingPreferencesComplete(colors, form);
 
   const setStyle = (style: CabinetStyle) => {
-    const currentColor = selectedRenderingColor(colors, form);
     onFormChange({
       ...form,
-      renderingPreferences: {
-        ...renderingPreferences,
-        cabinetStyle: style,
-        doorColorId:
-          currentColor && currentColor.cabinetStyle !== style
-            ? null
-            : renderingPreferences.doorColorId
-      }
+      renderingPreferences: nextRenderingPreferencesForStyle(form, colors, style)
     });
     setPendingColor(null);
   };
