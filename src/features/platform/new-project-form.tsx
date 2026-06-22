@@ -23,18 +23,23 @@ export function NewProjectForm() {
     if (customerEmail.trim()) body.customerEmail = customerEmail.trim();
     if (customerAddress.trim()) body.customerAddress = customerAddress.trim();
 
-    const response = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) {
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        setError("Unable to create project. Customer name and project name are required.");
+        return;
+      }
+      const json = await response.json();
+      window.location.href = `/projects/${json.project.id}`;
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
       setBusy(false);
-      setError("Unable to create project. Customer name and project name are required.");
-      return;
     }
-    const json = await response.json();
-    window.location.href = `/projects/${json.project.id}`;
   }
 
   return (

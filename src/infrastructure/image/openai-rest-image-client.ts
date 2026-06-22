@@ -8,6 +8,35 @@ type FetchImpl = typeof fetch;
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 
+// Image generation/edits can take many seconds; cap them so a stalled upstream
+// connection surfaces as a clear timeout error instead of hanging the request
+// (and the user's "Generating..." spinner) indefinitely.
+const REQUEST_TIMEOUT_MS = 90_000;
+
+async function fetchWithTimeout(
+  fetchImpl: FetchImpl,
+  url: string,
+  init: RequestInit,
+  label: string
+): Promise<Response> {
+  try {
+    return await fetchImpl(url, {
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      throw new Error(
+        `${label} timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s`
+      );
+    }
+    throw error;
+  }
+}
+
 /**
  * Real OpenAI Images API client built on `fetch`, so the MVP can call live
  * image generation without adding an SDK dependency. It conforms to the
@@ -37,14 +66,19 @@ export function createOpenAIRestImageClient(input: {
           body.response_format = request.response_format;
         }
 
-        const response = await fetchImpl(`${baseUrl}/images/generations`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${input.apiKey}`
+        const response = await fetchWithTimeout(
+          fetchImpl,
+          `${baseUrl}/images/generations`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${input.apiKey}`
+            },
+            body: JSON.stringify(body)
           },
-          body: JSON.stringify(body)
-        });
+          "OpenAI image request"
+        );
 
         if (!response.ok) {
           const detail = await safeReadError(response);
@@ -95,12 +129,17 @@ export function createOpenAIRestImageClient(input: {
           });
         }
 
-        const response = await fetchImpl(`${baseUrl}/images/edits`, {
-          method: "POST",
-          // No explicit Content-Type: fetch sets the multipart boundary.
-          headers: { Authorization: `Bearer ${input.apiKey}` },
-          body: form
-        });
+        const response = await fetchWithTimeout(
+          fetchImpl,
+          `${baseUrl}/images/edits`,
+          {
+            method: "POST",
+            // No explicit Content-Type: fetch sets the multipart boundary.
+            headers: { Authorization: `Bearer ${input.apiKey}` },
+            body: form
+          },
+          "OpenAI image edit"
+        );
 
         if (!response.ok) {
           const detail = await safeReadError(response);

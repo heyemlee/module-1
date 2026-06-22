@@ -17,21 +17,26 @@ export function CreateUserForm() {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim(), name: name.trim(), role, password })
-    });
-    if (!response.ok) {
-      setBusy(false);
-      if (response.status === 409) {
-        setError("Email already in use");
-      } else {
-        setError("Unable to create user. Check the fields and try again.");
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), name: name.trim(), role, password })
+      });
+      if (!response.ok) {
+        if (response.status === 409) {
+          setError("Email already in use");
+        } else {
+          setError("Unable to create user. Check the fields and try again.");
+        }
+        return;
       }
-      return;
+      window.location.reload();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    window.location.reload();
   }
 
   const canSubmit = email.trim() && name.trim() && password.length >= 8;

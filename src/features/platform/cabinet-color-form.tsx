@@ -108,20 +108,25 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
       sortOrder: color?.sortOrder ?? 0
     });
 
-    const response = await fetch(
-      color ? `/api/admin/cabinet-colors/${color.id}` : "/api/admin/cabinet-colors",
-      {
-        method: color ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+    try {
+      const response = await fetch(
+        color ? `/api/admin/cabinet-colors/${color.id}` : "/api/admin/cabinet-colors",
+        {
+          method: color ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }
+      );
+      if (!response.ok) {
+        setError("Unable to save cabinet color. Check the fields and try again.");
+        return;
       }
-    );
-    if (!response.ok) {
+      window.location.reload();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
       setBusy(false);
-      setError("Unable to save cabinet color. Check the fields and try again.");
-      return;
     }
-    window.location.reload();
   }
 
   return (

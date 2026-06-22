@@ -21,6 +21,8 @@ const CABINET_STYLES: CabinetStyle[] = [
 export function RenderingPreferencesStep({
   form,
   colors,
+  colorsError = false,
+  onRetryLoadColors,
   onFormChange,
   onGenerateCabinetFill,
   onGenerateRendering,
@@ -30,6 +32,8 @@ export function RenderingPreferencesStep({
 }: {
   form: Round1FormInput;
   colors: CabinetColor[];
+  colorsError?: boolean;
+  onRetryLoadColors?: () => void;
   onFormChange: (form: Round1FormInput) => void;
   onGenerateCabinetFill: () => void;
   onGenerateRendering: () => void;
@@ -97,15 +101,36 @@ export function RenderingPreferencesStep({
         </div>
 
         {activeColors.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-5">
-            <p className="text-sm font-black text-slate-700">
-              Ask an Admin to configure cabinet colors
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Active cabinet colors are required before a sales rendering can be
-              generated for this style.
-            </p>
-          </div>
+          colorsError ? (
+            <div className="rounded-md border border-dashed border-red-300 bg-red-50 p-5">
+              <p className="text-sm font-black text-red-700">
+                Couldn’t load cabinet colors
+              </p>
+              <p className="mt-2 text-sm leading-6 text-red-700">
+                There was a problem loading the cabinet color library. Check your
+                connection and try again.
+              </p>
+              {onRetryLoadColors ? (
+                <button
+                  type="button"
+                  onClick={onRetryLoadColors}
+                  className="mt-3 rounded-md bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700"
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-5">
+              <p className="text-sm font-black text-slate-700">
+                Ask an Admin to configure cabinet colors
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Active cabinet colors are required before a sales rendering can be
+                generated for this style.
+              </p>
+            </div>
+          )
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {activeColors.map((color) => {
