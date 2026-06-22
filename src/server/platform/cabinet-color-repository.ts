@@ -2,10 +2,18 @@ import { z } from "zod";
 import { query } from "@/server/db/client";
 import type { CabinetStyle } from "@/domain/round1";
 
-const nullableUrl = z
+// Accepts either a hosted image URL or an inline uploaded image (data URL,
+// produced by the admin file picker). Whitespace-only values normalize to null.
+const nullableImageSource = z
   .preprocess(
     (value) => (typeof value === "string" ? value.trim() : value),
-    z.union([z.string().url(), z.literal(""), z.null(), z.undefined()])
+    z.union([
+      z.string().url(),
+      z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,/),
+      z.literal(""),
+      z.null(),
+      z.undefined()
+    ])
   )
   .transform((value) => {
     if (value === "" || value === null) return null;
@@ -41,9 +49,9 @@ export const cabinetColorInputSchema = z.object({
   cabinetStyle: z.enum(["EUROPEAN_FRAMELESS", "AMERICAN_FRAMED"]),
   name: z.string().trim().min(1),
   colorCode: nullableTrimmedString,
-  swatchImageUrl: nullableUrl,
+  swatchImageUrl: nullableImageSource,
   swatchHex: nullableSwatchHex,
-  hoverExampleImageUrl: nullableUrl,
+  hoverExampleImageUrl: nullableImageSource,
   promptDescription: z.string().trim().min(1),
   active: z.boolean(),
   sortOrder: z.number().int()
