@@ -43,12 +43,30 @@ export function buildCabinetColorPayload(fields: CabinetColorPayloadFields) {
   return payload;
 }
 
-function readImageAsDataUrl(file: File): Promise<string> {
+// ponytail: downscale on the client so swatch rows stay small — was storing the
+// raw upload (up to 4MB of base64) inline, which bloated every colors payload.
+export function resizeImageToDataUrl(file: File, maxDim = 512, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
-    reader.readAsDataURL(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unsupported"));
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Unable to read image"));
+    };
+    img.src = url;
   });
 }
 
@@ -84,7 +102,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
       return;
     }
     try {
-      const dataUrl = await readImageAsDataUrl(file);
+      const dataUrl = await resizeImageToDataUrl(file);
       setData(dataUrl);
       setPreview(dataUrl);
       setError(null);

@@ -159,6 +159,8 @@ export function RenderingPreferencesStep({
                       <img
                         src={color.swatchImageUrl}
                         alt={`${color.name} swatch`}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                       />
                     ) : null}
@@ -177,6 +179,8 @@ export function RenderingPreferencesStep({
                       <img
                         src={color.hoverExampleImageUrl}
                         alt={`${color.name} kitchen example`}
+                        loading="lazy"
+                        decoding="async"
                         className="aspect-video w-full object-cover"
                       />
                     </span>
