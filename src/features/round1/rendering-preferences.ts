@@ -13,6 +13,7 @@ export const DEFAULT_RENDERING_PREFERENCES: Round1RenderingPreferences = {
 export type RenderingPreferenceStamp = {
   cabinetStyle: Round1RenderingPreferences["cabinetStyle"];
   doorColorId: string | null;
+  colorUpdatedAt?: string | null;
 };
 
 export const CABINET_STYLE_LABELS: Record<CabinetStyle, string> = {
@@ -71,23 +72,29 @@ export function renderingPreferencesComplete(
 }
 
 export function renderingPreferenceStampForForm(
-  form: Round1FormInput
+  form: Round1FormInput,
+  colors: CabinetColor[] = []
 ): RenderingPreferenceStamp {
   const preferences = renderingPreferencesForForm(form);
+  const color = selectedRenderingColor(colors, form);
   return {
     cabinetStyle: preferences.cabinetStyle,
-    doorColorId: preferences.doorColorId
+    doorColorId: preferences.doorColorId,
+    colorUpdatedAt: color?.updatedAt ?? null
   };
 }
 
 export function renderingPreferenceStampMatches(
   stamp: RenderingPreferenceStamp | null,
-  form: Round1FormInput
+  form: Round1FormInput,
+  colors: CabinetColor[] = []
 ) {
   if (!stamp) return false;
-  const current = renderingPreferenceStampForForm(form);
+  const current = renderingPreferenceStampForForm(form, colors);
   return (
     stamp.cabinetStyle === current.cabinetStyle &&
-    stamp.doorColorId === current.doorColorId
+    stamp.doorColorId === current.doorColorId &&
+    (stamp.colorUpdatedAt === undefined ||
+      stamp.colorUpdatedAt === current.colorUpdatedAt)
   );
 }

@@ -156,6 +156,11 @@ describe("Round 1 repository abstraction", () => {
       prompt: "concept",
       size: "1536x1024",
       basedOnSnapshotGeneratedAt: "2026-06-17T00:00:00.000Z",
+      basedOnRenderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS",
+        doorColorId: "eu-oak",
+        colorUpdatedAt: "2026-06-19T00:00:00.000Z"
+      },
       salesEstimateOnly: true,
       notForProduction: true,
       dimensionConfidence: "ROUGH"
@@ -182,6 +187,11 @@ describe("Round 1 repository abstraction", () => {
         prompt: "p",
         size: "1536x1024",
         basedOnSnapshotGeneratedAt: "2026-06-17T00:00:00.000Z",
+        basedOnRenderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-oak",
+          colorUpdatedAt: "2026-06-19T00:00:00.000Z"
+        },
         salesEstimateOnly: true,
         notForProduction: true,
         dimensionConfidence: "ROUGH"

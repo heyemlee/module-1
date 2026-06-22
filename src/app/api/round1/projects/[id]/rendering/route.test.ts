@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   generatePreliminaryCabinetList,
   normalizeRound1Form
@@ -13,20 +13,12 @@ import { GET as getProject } from "../route";
 import { PUT as putSnapshot } from "../snapshot/route";
 import { POST } from "./route";
 
-const originalFetch = globalThis.fetch;
-const originalKey = process.env.OPENAI_API_KEY;
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  if (originalKey === undefined) {
-    delete process.env.OPENAI_API_KEY;
-  } else {
-    process.env.OPENAI_API_KEY = originalKey;
-  }
-});
-
-function buildSnapshotBody() {
+function buildSnapshotBody(doorColorId: string | null = null) {
   const form = createDefaultShowroomForm();
+  form.renderingPreferences = {
+    cabinetStyle: "EUROPEAN_FRAMELESS",
+    doorColorId
+  };
   const result = normalizeRound1Form(form);
   const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
   return buildRound1Snapshot({
@@ -53,9 +45,9 @@ async function createProject() {
   return json.project.id as string;
 }
 
-async function seedProjectWithSnapshot() {
+async function seedProjectWithSnapshot(doorColorId: string | null = null) {
   const id = await createProject();
-  const snapshot = buildSnapshotBody();
+  const snapshot = buildSnapshotBody(doorColorId);
   await putSnapshot(
     new Request(`http://localhost/api/round1/projects/${id}/snapshot`, {
       method: "PUT",
@@ -103,50 +95,27 @@ describe("POST /api/round1/projects/[id]/rendering", () => {
     expect(json.reason).toBe("NO_SNAPSHOT");
   });
 
-  test("returns 503 when OPENAI_API_KEY is not configured", async () => {
+  test("returns 409 when the snapshot has no selected door color", async () => {
     const { id } = await seedProjectWithSnapshot();
-    delete process.env.OPENAI_API_KEY;
 
     const response = await renderRequest(id, { referenceImageBase64: "abc" });
     const json = await response.json();
 
-    expect(response.status).toBe(503);
-    expect(json.reason).toBe("OPENAI_API_KEY_NOT_CONFIGURED");
+    expect(response.status).toBe(409);
+    expect(json.reason).toBe("DOOR_COLOR_REQUIRED");
   });
 
-  test("returns the concept rendering and non-authoritative flags when configured", async () => {
-    const { id, snapshot } = await seedProjectWithSnapshot();
-    process.env.OPENAI_API_KEY = "sk-test";
-    globalThis.fetch = vi.fn(
-      async (): Promise<Response> =>
-        new Response(JSON.stringify({ data: [{ b64_json: "rendered" }] }), {
-          status: 200
-        })
-    ) as unknown as typeof fetch;
-
+  test("returns a clear conflict when legacy rendering cannot resolve the color library", async () => {
+    const { id } = await seedProjectWithSnapshot("eu-oak");
     const response = await renderRequest(id, { referenceImageBase64: "abc" });
     const json = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(json.imageBase64).toBe("rendered");
-    expect(json.salesEstimateOnly).toBe(true);
-    expect(json.notForProduction).toBe(true);
-    expect(json.dimensionConfidence).toBe("ROUGH");
-    expect(json.basedOnSnapshotGeneratedAt).toBe(snapshot.generatedAt);
-    // Persisted as a non-authoritative preview with a createdAt stamp.
-    expect(typeof json.createdAt).toBe("string");
+    expect(response.status).toBe(409);
+    expect(json.reason).toBe("PROJECT_COLOR_LIBRARY_REQUIRED");
   });
 
-  test("persists the rendering so it is returned with the project (non-authoritative)", async () => {
-    const { id } = await seedProjectWithSnapshot();
-    process.env.OPENAI_API_KEY = "sk-test";
-    globalThis.fetch = vi.fn(
-      async (): Promise<Response> =>
-        new Response(JSON.stringify({ data: [{ b64_json: "rendered" }] }), {
-          status: 200
-        })
-    ) as unknown as typeof fetch;
-
+  test("does not persist a rendering from the legacy route when color metadata cannot be resolved", async () => {
+    const { id } = await seedProjectWithSnapshot("eu-oak");
     await renderRequest(id, { referenceImageBase64: "abc" });
 
     const getResponse = await getProject(
@@ -156,29 +125,19 @@ describe("POST /api/round1/projects/[id]/rendering", () => {
     const json = await getResponse.json();
 
     expect(getResponse.status).toBe(200);
-    expect(json.project.latestRendering.imageBase64).toBe("rendered");
-    // The preview is stored separately and never inside the authoritative snapshot.
+    expect(json.project.latestRendering).toBeUndefined();
     expect(json.project.snapshot.preliminaryCabinets).toBeDefined();
-    expect("latestRendering" in json.project.snapshot).toBe(false);
   });
 
-  test("accepts a referenceImagesBase64 array of multiple views", async () => {
-    const { id } = await seedProjectWithSnapshot();
-    process.env.OPENAI_API_KEY = "sk-test";
-    globalThis.fetch = vi.fn(
-      async (): Promise<Response> =>
-        new Response(JSON.stringify({ data: [{ b64_json: "rendered" }] }), {
-          status: 200
-        })
-    ) as unknown as typeof fetch;
-
+  test("accepts a referenceImagesBase64 array before returning the legacy color-library conflict", async () => {
+    const { id } = await seedProjectWithSnapshot("eu-oak");
     const response = await renderRequest(id, {
       referenceImagesBase64: ["top-down", "perspective"]
     });
     const json = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(json.imageBase64).toBe("rendered");
+    expect(response.status).toBe(409);
+    expect(json.reason).toBe("PROJECT_COLOR_LIBRARY_REQUIRED");
   });
 
   test("returns 400 for an empty referenceImagesBase64 array", async () => {

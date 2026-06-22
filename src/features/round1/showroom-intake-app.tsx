@@ -375,7 +375,10 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       const json = await response.json();
       setRenderingImage(`data:image/png;base64,${json.imageBase64}`);
       setRenderingBasedOn(json.basedOnSnapshotGeneratedAt ?? null);
-      setRenderingPreferencesBasedOn(renderingPreferenceStampForForm(form));
+      setRenderingPreferencesBasedOn(
+        json.basedOnRenderingPreferences ??
+          renderingPreferenceStampForForm(form, cabinetColors)
+      );
     } catch (error) {
       setRenderingError(
         error instanceof Error ? error.message : "Rendering failed"
@@ -505,13 +508,18 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         // Restore the last non-authoritative concept preview, if any. Staleness
         // is derived from `basedOnSnapshotGeneratedAt` vs the restored snapshot.
         const rendering = json.project?.latestRendering as
-          | { imageBase64?: string; basedOnSnapshotGeneratedAt?: string }
+          | {
+              imageBase64?: string;
+              basedOnSnapshotGeneratedAt?: string;
+              basedOnRenderingPreferences?: RenderingPreferenceStamp;
+            }
           | undefined;
         if (rendering?.imageBase64) {
           setRenderingImage(`data:image/png;base64,${rendering.imageBase64}`);
           setRenderingBasedOn(rendering.basedOnSnapshotGeneratedAt ?? null);
           setRenderingPreferencesBasedOn(
-            renderingPreferenceStampForForm(restoredForm)
+            rendering.basedOnRenderingPreferences ??
+              renderingPreferenceStampForForm(restoredForm, cabinetColors)
           );
         }
       } catch {
@@ -656,7 +664,8 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                 renderingBasedOn !== snapshot.generatedAt ||
                 !renderingPreferenceStampMatches(
                   renderingPreferencesBasedOn,
-                  form
+                  form,
+                  cabinetColors
                 ))
             }
             image={renderingImage}

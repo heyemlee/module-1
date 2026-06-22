@@ -3,6 +3,7 @@ import { round1FormSchema, type Round1FormInput } from "@/domain/round1";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
 import type { Round1ProjectRendering } from "@/server/round1/round1-repository";
+import type { Round1RenderingPreferenceStamp } from "@/server/round1/rendering-service";
 import type { AuthUser } from "./types";
 
 export type Round1State = {
@@ -23,6 +24,22 @@ type Round1StateRow = {
   updated_at: Date;
 };
 
+type RenderingHistoryRow = {
+  id: string;
+  model: string;
+  image_base64: string;
+  prompt: string;
+  size: string;
+  based_on_snapshot_generated_at: Date;
+  based_on_cabinet_style: Round1RenderingPreferenceStamp["cabinetStyle"] | null;
+  based_on_door_color_id: string | null;
+  based_on_color_updated_at: Date | null;
+  sales_estimate_only: true;
+  not_for_production: true;
+  dimension_confidence: "ROUGH";
+  created_at: Date;
+};
+
 export function mapRound1StateRow(row: Round1StateRow): Round1State {
   return {
     projectId: row.project_id,
@@ -31,6 +48,32 @@ export function mapRound1StateRow(row: Round1StateRow): Round1State {
     fixedPositionsConfirmed: row.fixed_positions_confirmed,
     cabinetFillGenerated: row.cabinet_fill_generated,
     updatedAt: row.updated_at.toISOString()
+  };
+}
+
+export function mapRenderingHistoryRow(
+  row: RenderingHistoryRow
+): Round1ProjectRendering & { id: string } {
+  return {
+    id: row.id,
+    model: row.model,
+    imageBase64: row.image_base64,
+    prompt: row.prompt,
+    size: row.size,
+    basedOnSnapshotGeneratedAt: row.based_on_snapshot_generated_at.toISOString(),
+    basedOnRenderingPreferences:
+      row.based_on_cabinet_style && row.based_on_door_color_id
+        ? {
+            cabinetStyle: row.based_on_cabinet_style,
+            doorColorId: row.based_on_door_color_id,
+            colorUpdatedAt:
+              row.based_on_color_updated_at?.toISOString() ?? null
+          }
+        : null,
+    salesEstimateOnly: row.sales_estimate_only,
+    notForProduction: row.not_for_production,
+    dimensionConfidence: row.dimension_confidence,
+    createdAt: row.created_at.toISOString()
   };
 }
 
@@ -117,13 +160,20 @@ export async function saveRenderingHistory(input: {
   user: AuthUser;
   rendering: Omit<Round1ProjectRendering, "createdAt">;
 }) {
+  const basedOnRenderingPreferences =
+    input.rendering.basedOnRenderingPreferences;
+  if (!basedOnRenderingPreferences) {
+    throw new Error("Rendering preference metadata is required");
+  }
+
   const result = await query<{ id: string; created_at: Date }>(
     `INSERT INTO renderings (
        project_id, round1_snapshot_id, model, image_base64, prompt, size,
-       based_on_snapshot_generated_at, sales_estimate_only, not_for_production,
-       dimension_confidence, created_by_user_id
+       based_on_snapshot_generated_at, based_on_cabinet_style,
+       based_on_door_color_id, based_on_color_updated_at, sales_estimate_only,
+       not_for_production, dimension_confidence, created_by_user_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, true, true, 'ROUGH', $8)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, true, 'ROUGH', $11)
      RETURNING id, created_at`,
     [
       input.projectId,
@@ -133,6 +183,9 @@ export async function saveRenderingHistory(input: {
       input.rendering.prompt,
       input.rendering.size,
       input.rendering.basedOnSnapshotGeneratedAt,
+      basedOnRenderingPreferences.cabinetStyle,
+      basedOnRenderingPreferences.doorColorId,
+      basedOnRenderingPreferences.colorUpdatedAt,
       input.user.id
     ]
   );
@@ -148,17 +201,17 @@ export async function saveRenderingHistory(input: {
 }
 
 export async function listRenderings(projectId: string) {
-  const result = await query<{ id: string; image_base64: string; created_at: Date }>(
-    `SELECT id, image_base64, created_at
+  const result = await query<RenderingHistoryRow>(
+    `SELECT id, model, image_base64, prompt, size,
+            based_on_snapshot_generated_at, based_on_cabinet_style,
+            based_on_door_color_id, based_on_color_updated_at,
+            sales_estimate_only, not_for_production, dimension_confidence,
+            created_at
      FROM renderings
      WHERE project_id = $1
      ORDER BY created_at DESC
      LIMIT 20`,
     [projectId]
   );
-  return result.rows.map((row) => ({
-    id: row.id,
-    imageBase64: row.image_base64,
-    createdAt: row.created_at.toISOString()
-  }));
+  return result.rows.map(mapRenderingHistoryRow);
 }

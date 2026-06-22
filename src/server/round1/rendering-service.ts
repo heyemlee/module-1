@@ -1,5 +1,7 @@
 import { buildRound1RenderingPrompt } from "@/features/round1/rendering-prompt";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
+import type { CabinetStyle } from "@/domain/round1";
+import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import type {
   ImageGenerationSize,
   OpenAIImageAdapter
@@ -7,6 +9,12 @@ import type {
 
 // Landscape size that matches the top-down plan aspect ratio.
 export const DEFAULT_RENDERING_SIZE: ImageGenerationSize = "1536x1024";
+
+export type Round1RenderingPreferenceStamp = {
+  cabinetStyle: CabinetStyle;
+  doorColorId: string;
+  colorUpdatedAt: string | null;
+};
 
 /**
  * Customer-facing Round 1 concept rendering.
@@ -27,6 +35,7 @@ export type Round1Rendering = {
   salesEstimateOnly: true;
   notForProduction: true;
   dimensionConfidence: "ROUGH";
+  basedOnRenderingPreferences: Round1RenderingPreferenceStamp;
 };
 
 /**
@@ -38,6 +47,10 @@ export type Round1Rendering = {
 export async function generateRound1Rendering(input: {
   snapshot: Round1Snapshot;
   referenceImagesBase64: string[];
+  renderingPreferences: {
+    cabinetStyle: CabinetStyle;
+    color: CabinetColor;
+  };
   adapter: OpenAIImageAdapter;
   size?: ImageGenerationSize;
 }): Promise<Round1Rendering> {
@@ -45,7 +58,10 @@ export async function generateRound1Rendering(input: {
     throw new Error("At least one floor plan reference image is required for rendering");
   }
 
-  const prompt = buildRound1RenderingPrompt(input.snapshot);
+  const prompt = buildRound1RenderingPrompt(
+    input.snapshot,
+    input.renderingPreferences
+  );
   const size = input.size ?? DEFAULT_RENDERING_SIZE;
 
   const result = await input.adapter.generateConceptRendering({
@@ -60,6 +76,11 @@ export async function generateRound1Rendering(input: {
     prompt,
     size,
     basedOnSnapshotGeneratedAt: input.snapshot.generatedAt,
+    basedOnRenderingPreferences: {
+      cabinetStyle: input.renderingPreferences.cabinetStyle,
+      doorColorId: input.renderingPreferences.color.id,
+      colorUpdatedAt: input.renderingPreferences.color.updatedAt ?? null
+    },
     salesEstimateOnly: true,
     notForProduction: true,
     dimensionConfidence: "ROUGH"
