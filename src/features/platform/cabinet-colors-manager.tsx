@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
+import { Button } from "@/components/ui/button";
 import { buildCabinetColorPayload, resizeImageToDataUrl } from "./cabinet-color-form";
+
+const inputCls =
+  "w-full rounded-md border border-border bg-input px-2.5 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/40";
+const fileCls =
+  "mt-1 block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-border";
 
 const STYLES = [
   { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
@@ -145,30 +151,25 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded border border-stone-300 bg-white px-4 py-3 shadow-sm">
-        <p className="text-sm text-stone-600">
+      <div className="sticky top-[57px] z-10 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface/90 px-4 py-3 shadow-sm backdrop-blur-md">
+        <p className="text-sm text-muted-foreground">
           {dirtyIds.length === 0
             ? "No unsaved changes"
             : `${dirtyIds.length} unsaved ${dirtyIds.length === 1 ? "change" : "changes"}`}
         </p>
         <div className="flex items-center gap-3">
-          {error && <p className="text-sm text-red-700">{error}</p>}
-          <button
-            type="button"
-            onClick={saveAll}
-            disabled={busy || dirtyIds.length === 0}
-            className="rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
+          {error && <p className="text-sm text-danger-foreground">{error}</p>}
+          <Button type="button" size="sm" onClick={saveAll} disabled={busy || dirtyIds.length === 0}>
             {busy ? "Saving..." : "Save all changes"}
-          </button>
+          </Button>
         </div>
       </div>
 
       {(["EUROPEAN_FRAMELESS", "AMERICAN_FRAMED"] as const).map((style) => {
         const group = colors.filter((color) => color.cabinetStyle === style);
         return (
-          <section key={style} className="rounded border border-stone-300 bg-white">
-            <h2 className="border-b border-stone-200 px-4 py-3 text-lg font-semibold">
+          <section key={style} className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+            <h2 className="border-b border-border px-4 py-3 text-lg font-semibold">
               {STYLE_LABELS[style]}
             </h2>
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -179,10 +180,10 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                 return (
                   <article
                     key={color.id}
-                    className={`rounded border p-3 ${dirty ? "border-amber-400 bg-amber-50/40" : "border-stone-200"}`}
+                    className={`rounded-lg border p-3 transition-colors ${dirty ? "border-warning bg-warning-surface" : "border-border bg-background"}`}
                   >
                     <div className="flex gap-3">
-                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-surface-2">
                         {draft.swatchPreview ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -200,27 +201,28 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                         <input
                           value={draft.name}
                           onChange={(e) => update(color.id, { name: e.target.value })}
-                          className="w-full rounded border border-stone-300 px-2 py-1 text-sm font-semibold"
+                          className={`${inputCls} font-semibold`}
                         />
-                        <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+                        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                           <input
                             type="checkbox"
                             checked={draft.active}
                             onChange={(e) => update(color.id, { active: e.target.checked })}
+                            className="accent-[var(--primary)]"
                           />
                           Active
                         </label>
                       </div>
                     </div>
 
-                    <label className="mt-3 block text-xs font-medium text-stone-600">
+                    <label className="mt-3 block text-xs font-medium text-muted-foreground">
                       Cabinet style
                       <select
                         value={draft.cabinetStyle}
                         onChange={(e) =>
                           update(color.id, { cabinetStyle: e.target.value as CabinetStyle })
                         }
-                        className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-sm"
+                        className={`${inputCls} mt-1`}
                       >
                         {STYLES.map((s) => (
                           <option key={s.value} value={s.value}>{s.label}</option>
@@ -228,39 +230,39 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                       </select>
                     </label>
 
-                    <label className="mt-2 block text-xs font-medium text-stone-600">
+                    <label className="mt-2 block text-xs font-medium text-muted-foreground">
                       Swatch image
                       <input
                         type="file"
                         accept="image/*"
                         onChange={(e) => pickImage(color.id, e.target.files?.[0], "swatch")}
-                        className="mt-1 block w-full text-xs"
+                        className={fileCls}
                       />
                     </label>
 
-                    <label className="mt-2 block text-xs font-medium text-stone-600">
+                    <label className="mt-2 block text-xs font-medium text-muted-foreground">
                       Hover example image (optional)
                       <input
                         type="file"
                         accept="image/*"
                         onChange={(e) => pickImage(color.id, e.target.files?.[0], "hover")}
-                        className="mt-1 block w-full text-xs"
+                        className={fileCls}
                       />
                     </label>
 
-                    <label className="mt-2 block text-xs font-medium text-stone-600">
+                    <label className="mt-2 block text-xs font-medium text-muted-foreground">
                       AI description
                       <textarea
                         value={draft.promptDescription}
                         onChange={(e) => update(color.id, { promptDescription: e.target.value })}
                         rows={2}
-                        className="mt-1 w-full rounded border border-stone-300 px-2 py-1 text-xs"
+                        className={`${inputCls} text-xs`}
                       />
                     </label>
                   </article>
                 );
               })}
-              {group.length === 0 && <p className="text-sm text-stone-600">No colors configured.</p>}
+              {group.length === 0 && <p className="text-sm text-muted-foreground">No colors configured.</p>}
             </div>
           </section>
         );

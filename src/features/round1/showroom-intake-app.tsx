@@ -32,6 +32,11 @@ import {
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
+import { Panel as ResizablePanel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { ArrowLeft, BotMessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
+import { IntakeSidebar } from "./intake-sidebar";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/components/ui/cn";
 import { LogoutButton } from "@/features/platform/logout-button";
 import {
   AdjustPositionsStep,
@@ -55,6 +60,28 @@ export const SHOWROOM_STEPS = [
   "Adjust Positions",
   "Rendering Preferences"
 ] as const;
+
+// Switches the shell between the desktop resizable PanelGroup and the stacked
+// mobile layout. Defaults to desktop so SSR/first paint matches, then corrects.
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isDesktop;
+}
+
+function ResizeHandle() {
+  return (
+    <PanelResizeHandle className="group flex w-1.5 items-center justify-center bg-transparent transition-colors hover:bg-surface-2">
+      <div className="h-6 w-1 rounded-full bg-border-strong transition-colors group-hover:bg-accent" />
+    </PanelResizeHandle>
+  );
+}
 
 const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
 const PREVIEW_STAGES = [
@@ -528,52 +555,22 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setStep(index);
   }, [maxAccessibleStep]);
 
-  return (
-    <main className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="border-b border-slate-200 bg-white px-6 py-5">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-sky-700">
-              <a href="/projects" className="hover:underline">
-                ← Back to projects
-              </a>
-              {projectId ? (
-                <a href={`/projects/${projectId}`} className="hover:underline">
-                  Back to project
-                </a>
-              ) : null}
-            </div>
-            <h1 className="mt-1 text-2xl font-black tracking-normal">
-              Showroom Intake + Layout Preview
-            </h1>
-          </div>
-          <LogoutButton />
-        </div>
-      </header>
+  const isDesktop = useIsDesktop();
+  const [showChat, setShowChat] = useState(true);
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[260px_minmax(0,1fr)_430px]">
-        <aside className="h-fit rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          {SHOWROOM_STEPS.map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => goToStep(index)}
-              disabled={index > maxAccessibleStep}
-              className={`mb-2 flex w-full items-center justify-between rounded-md px-3 py-3 text-left text-sm font-bold ${
-                step === index
-                  ? "bg-sky-700 text-white"
-                  : index > maxAccessibleStep
-                    ? "cursor-not-allowed bg-slate-50 text-slate-300"
-                    : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              <span>{label}</span>
-              <span>{index + 1}</span>
-            </button>
-          ))}
-        </aside>
+  const persistBadge =
+    persistState === "saving"
+      ? { tone: "warning" as const, label: "Saving…" }
+      : persistState === "saved"
+        ? { tone: "success" as const, label: "Saved" }
+        : persistState === "error"
+          ? { tone: "danger" as const, label: "Save failed" }
+          : { tone: "neutral" as const, label: "Draft" };
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+  const stepContent = (
+    <div className="flex h-full flex-col bg-surface">
+      <div className="flex-1 overflow-y-auto px-6 py-8 lg:px-10 lg:py-10">
+        <div key={step} className="mx-auto max-w-3xl animate-blur-in">
           {step === 0 && <RoomStep form={form} setForm={updateForm} />}
           {step === 1 && <OpeningsStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 2 && <LayoutStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
@@ -596,162 +593,236 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               onFormChange={updateRenderingPreferencesForm}
               onGenerateCabinetFill={handleGenerateCabinetFill}
               onGenerateRendering={handleGenerateRendering}
-              canGenerateCabinetFill={
-                fixedPositionsConfirmed && !cabinetFillGenerated
-              }
+              canGenerateCabinetFill={fixedPositionsConfirmed && !cabinetFillGenerated}
               canGenerateRendering={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
+                persistState === "saved" && renderingPreferencesComplete(cabinetColors, form)
               }
               renderingBusy={renderingBusy}
             />
           )}
-          <div className="mt-6 flex justify-between border-t border-slate-200 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                localSessionChangedRef.current = true;
-                setStep(Math.max(0, step - 1));
-              }}
-              disabled={step === 0}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={goToNextStep}
-              disabled={step === SHOWROOM_STEPS.length - 1}
-              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </section>
+        </div>
+      </div>
+      <div className="flex items-center justify-between border-t border-border bg-surface px-6 py-4 lg:px-10">
+        <button
+          type="button"
+          onClick={() => {
+            localSessionChangedRef.current = true;
+            setStep(Math.max(0, step - 1));
+          }}
+          disabled={step === 0}
+          className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ChevronLeft size={16} />
+          Previous
+        </button>
+        <button
+          type="button"
+          onClick={goToNextStep}
+          disabled={step === SHOWROOM_STEPS.length - 1}
+          className="inline-flex h-10 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-hover hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+        >
+          Next
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
 
-        <aside className="space-y-4">
-          <LayoutPreview
-            normalized={result.normalized}
-            cabinets={preliminaryEstimate.cabinets}
-            confirmationItems={confirmationItems}
-            positionOverrides={positionOverrides}
-            onPositionOverridesChange={updatePositionOverrides}
-            highlightDraggableItems={highlightDraggableItems}
-            showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
-            previewStage={previewStage}
-            svgRef={floorPlanSvgRef}
-          />
+  const floorPlanColumn = (
+    <div className="flex h-full flex-col gap-4 overflow-y-auto bg-background p-4">
+      <LayoutPreview
+        normalized={result.normalized}
+        cabinets={preliminaryEstimate.cabinets}
+        confirmationItems={confirmationItems}
+        positionOverrides={positionOverrides}
+        onPositionOverridesChange={updatePositionOverrides}
+        highlightDraggableItems={highlightDraggableItems}
+        showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
+        previewStage={previewStage}
+        svgRef={floorPlanSvgRef}
+      />
 
-          {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
+      {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
 
-          <RenderingControls
-            canRender={
-              persistState === "saved" &&
-              renderingPreferencesComplete(cabinetColors, form)
-            }
-            busy={renderingBusy}
-            error={renderingError}
-            stale={
-              renderingImage !== null &&
-              (!snapshot ||
-                renderingBasedOn !== snapshot.generatedAt ||
-                !renderingPreferenceStampMatches(
-                  renderingPreferencesBasedOn,
-                  form,
-                  cabinetColors
-                ))
-            }
-            image={renderingImage}
-          />
+      <RenderingControls
+        canRender={persistState === "saved" && renderingPreferencesComplete(cabinetColors, form)}
+        busy={renderingBusy}
+        error={renderingError}
+        stale={
+          renderingImage !== null &&
+          (!snapshot ||
+            renderingBasedOn !== snapshot.generatedAt ||
+            !renderingPreferenceStampMatches(renderingPreferencesBasedOn, form, cabinetColors))
+        }
+        image={renderingImage}
+      />
 
-          {/*
-            Hidden, clean reference render bound to the frozen snapshot geometry.
-            This is the image rasterized for the AI rendering — same locked
-            source as the JSON prompt, with no labels/markers/drag chrome.
-          */}
-          {snapshot && (
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                width: 0,
-                height: 0,
-                overflow: "hidden",
-                pointerEvents: "none"
-              }}
-            >
-              <LayoutPreview
-                plan={snapshot.floorPlan}
-                referenceMode
-                normalized={snapshot.normalized}
-                cabinets={snapshot.preliminaryCabinets.cabinets}
-                confirmationItems={snapshot.confirmationItems}
-                positionOverrides={snapshot.positionOverrides}
-                onPositionOverridesChange={() => {}}
-                highlightDraggableItems={false}
-                showPositionObjects
-                svgRef={referenceTopDownRef}
-              />
-              <ElevationPreview
-                plan={snapshot.floorPlan}
-                svgRef={referenceElevationRef}
-              />
-            </div>
+      <Panel title="Confirmation Required">
+        <div className="max-h-48 space-y-2 overflow-auto pr-1">
+          {confirmationItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No current confirmation flags.</p>
+          ) : (
+            confirmationItems.map((item) => (
+              <div key={item.id} className="rounded-md bg-warning-surface p-2 text-sm">
+                <p className="font-semibold text-warning-foreground">{item.code}</p>
+                <p className="text-warning-foreground/90">{item.message}</p>
+              </div>
+            ))
           )}
+        </div>
+      </Panel>
 
-          <Panel title="Confirmation Required">
-            <div className="max-h-48 space-y-2 overflow-auto pr-1">
-              {confirmationItems.length === 0 ? (
-                <p className="text-sm text-slate-500">No current confirmation flags.</p>
-              ) : (
-                confirmationItems.map((item) => (
-                  <div key={item.id} className="rounded-md bg-amber-50 p-2 text-sm">
-                    <p className="font-bold text-amber-900">{item.code}</p>
-                    <p className="text-amber-800">{item.message}</p>
-                  </div>
-                ))
-              )}
+      <Panel title="Rough Cabinet Fill">
+        <CabinetFillSummaryPanel
+          summary={estimateSummary}
+          positionsConfirmed={fixedPositionsConfirmed}
+          cabinetFillGenerated={cabinetFillGenerated}
+        />
+      </Panel>
+
+      <Panel title="Round 1 Snapshot">
+        <Round1SnapshotPanel
+          snapshot={snapshot}
+          persistState={persistState}
+          onRetrySave={handleRetrySnapshotSave}
+        />
+      </Panel>
+    </div>
+  );
+
+  const chatColumn = <AgentChatPanel form={form} onFormUpdate={updateForm} />;
+
+  return (
+    <main className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-2.5 lg:px-6">
+        <div className="flex items-center gap-4">
+          <a
+            href={projectId ? `/projects/${projectId}` : "/projects"}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft size={15} />
+            {projectId ? "Back to project" : "Back to projects"}
+          </a>
+          <Badge tone={persistBadge.tone} dot className="hidden sm:inline-flex">
+            {persistBadge.label}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowChat((value) => !value)}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors",
+              showChat
+                ? "border-primary/20 bg-primary/10 text-primary"
+                : "border-border bg-surface text-muted-foreground hover:bg-surface-2"
+            )}
+          >
+            <BotMessageSquare size={14} />
+            {showChat ? "Hide AI Agent" : "AI Intake Agent"}
+          </button>
+          <LogoutButton />
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-hidden">
+        {isDesktop ? (
+          <PanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel id="sidebar" order={1} defaultSize={16} minSize={12} maxSize={22}>
+              <IntakeSidebar
+                steps={SHOWROOM_STEPS}
+                step={step}
+                maxAccessibleStep={maxAccessibleStep}
+                onStepClick={goToStep}
+              />
+            </ResizablePanel>
+            <ResizeHandle />
+            <ResizablePanel id="content" order={2} defaultSize={showChat ? 38 : 46} minSize={28}>
+              {stepContent}
+            </ResizablePanel>
+            <ResizeHandle />
+            <ResizablePanel id="floorplan" order={3} defaultSize={showChat ? 28 : 38} minSize={20}>
+              {floorPlanColumn}
+            </ResizablePanel>
+            {showChat && (
+              <>
+                <ResizeHandle />
+                <ResizablePanel id="chat" order={4} defaultSize={18} minSize={14} maxSize={28}>
+                  {chatColumn}
+                </ResizablePanel>
+              </>
+            )}
+          </PanelGroup>
+        ) : (
+          <div className="flex h-full flex-col overflow-y-auto">
+            <div className="flex gap-2 overflow-x-auto border-b border-border bg-background px-4 py-3">
+              {SHOWROOM_STEPS.map((label, index) => {
+                const locked = index > maxAccessibleStep;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={locked}
+                    onClick={() => goToStep(index)}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      index === step
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground",
+                      locked && "cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    <span className="font-mono">{index + 1}</span>
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-          </Panel>
-
-          <Panel title="Rough Cabinet Fill">
-            <CabinetFillSummaryPanel
-              summary={estimateSummary}
-              positionsConfirmed={fixedPositionsConfirmed}
-              cabinetFillGenerated={cabinetFillGenerated}
-            />
-          </Panel>
-
-          <Panel title="Round 1 Snapshot">
-            <Round1SnapshotPanel
-              snapshot={snapshot}
-              persistState={persistState}
-              onRetrySave={handleRetrySnapshotSave}
-            />
-          </Panel>
-
-          {/*
-            Optional conversational intake assistant. It edits the live form via
-            the same `updateForm` path manual edits use, so the deterministic
-            preview updates in place and snapshot staleness rules still apply. It
-            has no snapshot-freeze authority — that stays on Generate Cabinet Fill.
-          */}
-          <AgentChatPanel form={form} onFormUpdate={updateForm} />
-        </aside>
+            <div className="border-b border-border">{stepContent}</div>
+            <div className="border-b border-border">{floorPlanColumn}</div>
+            {showChat && <div className="h-[80vh]">{chatColumn}</div>}
+          </div>
+        )}
       </div>
 
+      {/*
+        Hidden, clean reference render bound to the frozen snapshot geometry.
+        This is the image rasterized for the AI rendering — same locked source
+        as the JSON prompt, with no labels/markers/drag chrome.
+      */}
+      {snapshot && (
+        <div
+          aria-hidden
+          style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", pointerEvents: "none" }}
+        >
+          <LayoutPreview
+            plan={snapshot.floorPlan}
+            referenceMode
+            normalized={snapshot.normalized}
+            cabinets={snapshot.preliminaryCabinets.cabinets}
+            confirmationItems={snapshot.confirmationItems}
+            positionOverrides={snapshot.positionOverrides}
+            onPositionOverridesChange={() => {}}
+            highlightDraggableItems={false}
+            showPositionObjects
+            svgRef={referenceTopDownRef}
+          />
+          <ElevationPreview plan={snapshot.floorPlan} svgRef={referenceElevationRef} />
+        </div>
+      )}
+
       {showAdjustPositionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md animate-blur-in rounded-lg border border-border bg-surface p-6 shadow-xl">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
               Adjust Positions
             </p>
-            <h2 className="mt-2 text-lg font-black text-slate-950">
+            <h2 className="mt-2 text-lg font-semibold text-foreground">
               Door, window, and appliance locations can be dragged on the plan.
             </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Drag these rough positions first, then confirm them to generate
-              the preliminary cabinet fill around those constraints.
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Drag these rough positions first, then confirm them to generate the
+              preliminary cabinet fill around those constraints.
             </p>
             <div className="mt-5 flex justify-end">
               <button
@@ -760,7 +831,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                   setShowAdjustPositionsModal(false);
                   startDraggableHighlightCue();
                 }}
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+                className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
               >
                 Got It
               </button>

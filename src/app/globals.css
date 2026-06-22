@@ -2,15 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens — light is the default theme, .dark overrides. */
 :root {
+  --background: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --foreground: #0f172a;
+  --muted-foreground: #64748b;
+  --subtle-foreground: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --input: #ffffff;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --accent: #3b82f6;
+  --ring: #3b82f6;
+  --warning: #f59e0b;
+  --warning-surface: #fffbeb;
+  --warning-foreground: #92400e;
+  --success: #10b981;
+  --success-surface: #ecfdf5;
+  --success-foreground: #065f46;
+  --danger: #dc2626;
+  --danger-surface: #fef2f2;
+  --danger-foreground: #b91c1c;
+  --info: #6366f1;
+  --radius: 0.625rem;
   color-scheme: light;
 }
 
-body {
-  margin: 0;
-  background: #f5f7fb;
-  color: #172033;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Microsoft YaHei", Arial, sans-serif;
+.dark {
+  --background: #0a0a0f;
+  --surface: #121217;
+  --surface-2: #1a1a1e;
+  --foreground: #f8fafc;
+  --muted-foreground: #94a3b8;
+  --subtle-foreground: #64748b;
+  --border: #27272a;
+  --border-strong: #3a3a42;
+  --input: #101014;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-foreground: #ffffff;
+  --accent: #3b82f6;
+  --ring: #3b82f6;
+  --warning: #f59e0b;
+  --warning-surface: rgba(245, 158, 11, 0.1);
+  --warning-foreground: #fbbf24;
+  --success: #10b981;
+  --success-surface: rgba(16, 185, 129, 0.1);
+  --success-foreground: #34d399;
+  --danger: #ef4444;
+  --danger-surface: rgba(239, 68, 68, 0.1);
+  --danger-foreground: #f87171;
+  --info: #818cf8;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  h1 { font-size: 1.5rem; font-weight: 600; line-height: 1.4; letter-spacing: -0.01em; }
+  h2 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
+  h3 { font-size: 1.0625rem; font-weight: 600; line-height: 1.5; }
 }

@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
+import { Button } from "@/components/ui/button";
 
 const STYLES = [
   { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
   { value: "AMERICAN_FRAMED", label: "American Framed" }
 ] as const;
+
+const fieldCls =
+  "mt-1 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/40";
 
 // Inline uploads are stored as data URLs in the existing text columns, so cap
 // the file size to keep rows (and the colors API payload) reasonable.
@@ -161,7 +165,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded border border-stone-300 bg-white p-5 shadow-sm">
+    <form onSubmit={submit} className="h-fit space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
       <h2 className="text-lg font-semibold">{color ? "Edit color" : "Add color"}</h2>
 
       <label className="block text-sm font-medium">
@@ -169,7 +173,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
         <select
           value={cabinetStyle}
           onChange={(event) => setCabinetStyle(event.target.value as CabinetStyle)}
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2"
+          className={fieldCls}
         >
           {STYLES.map((style) => (
             <option key={style.value} value={style.value}>{style.label}</option>
@@ -179,17 +183,13 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
 
       <label className="block text-sm font-medium">
         Color name
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2"
-        />
+        <input value={name} onChange={(event) => setName(event.target.value)} className={fieldCls} />
       </label>
 
       <div className="text-sm font-medium">
         Swatch image
         <div className="mt-1 flex items-center gap-3">
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-surface-2">
             {swatchPreview && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={swatchPreview} alt="Swatch preview" className="h-full w-full object-cover" />
@@ -199,7 +199,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
             type="file"
             accept="image/*"
             onChange={(event) => handleFile(event.target.files?.[0], setSwatchData, setSwatchPreview)}
-            className="text-sm"
+            className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-border"
           />
         </div>
       </div>
@@ -207,7 +207,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
       <div className="text-sm font-medium">
         Hover example image (optional)
         <div className="mt-1 flex items-center gap-3">
-          <div className="h-16 w-24 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
+          <div className="h-16 w-24 shrink-0 overflow-hidden rounded-md border border-border bg-surface-2">
             {hoverPreview && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={hoverPreview} alt="Hover example preview" className="h-full w-full object-cover" />
@@ -217,7 +217,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
             type="file"
             accept="image/*"
             onChange={(event) => handleFile(event.target.files?.[0], setHoverData, setHoverPreview)}
-            className="text-sm"
+            className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-border"
           />
         </div>
       </div>
@@ -229,7 +229,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
           onChange={(event) => setPromptDescription(event.target.value)}
           rows={3}
           placeholder="Leave blank to use the color name"
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2"
+          className={fieldCls}
         />
       </label>
 
@@ -239,18 +239,16 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
             type="checkbox"
             checked={active}
             onChange={(event) => setActive(event.target.checked)}
+            className="accent-[var(--primary)]"
           />
           Active
         </label>
       )}
 
-      {error && <p className="text-sm text-red-700">{error}</p>}
-      <button
-        disabled={busy || !name.trim()}
-        className="w-full rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-      >
+      {error && <p className="text-sm text-danger-foreground">{error}</p>}
+      <Button type="submit" disabled={busy || !name.trim()} className="w-full">
         {busy ? "Saving..." : "Save color"}
-      </button>
+      </Button>
     </form>
   );
 }

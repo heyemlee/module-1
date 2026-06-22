@@ -641,29 +641,27 @@ export function AdjustPositionsStep({
 }) {
   return (
     <Step title="5. Adjust Positions">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {cabinetFillGenerated ? (
-            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-              Cabinet fill generated
-            </span>
-          ) : fixedPositionsConfirmed ? (
-            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-              Fixed positions confirmed
-            </span>
-          ) : hasOverrides ? (
-            <span className="rounded bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
-              Adjusted manually
-            </span>
-          ) : null}
-        </div>
+      <div className="mb-4 flex items-center gap-2">
+        {cabinetFillGenerated ? (
+          <span className="rounded-md bg-success-surface px-2.5 py-1 text-xs font-medium text-success-foreground">
+            Cabinet fill generated
+          </span>
+        ) : fixedPositionsConfirmed ? (
+          <span className="rounded-md bg-success-surface px-2.5 py-1 text-xs font-medium text-success-foreground">
+            Fixed positions confirmed
+          </span>
+        ) : hasOverrides ? (
+          <span className="rounded-md bg-warning-surface px-2.5 py-1 text-xs font-medium text-warning-foreground">
+            Adjusted manually
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-3">
         <button
           type="button"
           onClick={onReset}
           disabled={!hasOverrides && !fixedPositionsConfirmed && !cabinetFillGenerated}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-10 items-center rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Reset Positions
         </button>
@@ -671,7 +669,7 @@ export function AdjustPositionsStep({
           type="button"
           onClick={onConfirmPositions}
           disabled={fixedPositionsConfirmed}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+          className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-70"
         >
           {fixedPositionsConfirmed
             ? "Fixed Positions Confirmed"

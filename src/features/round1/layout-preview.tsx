@@ -186,30 +186,31 @@ export function LayoutPreview({
   }, []);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white relative">
+    <div className="relative overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
       {!referenceMode && (
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Top-Down Layout Plan
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <input
               type="checkbox"
               checked={showMep}
               onChange={(e) => setShowMep(e.target.checked)}
-              className="rounded border-slate-300 text-sky-700 focus:ring-sky-700"
+              className="accent-[var(--primary)]"
             />
             Show MEP
           </label>
-          <span className="rounded bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+          <span className="rounded-md bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted-foreground">
             Round 1
           </span>
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 hover:bg-sky-100 transition-colors"
+            className="flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
             title="Print Floor Plan"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

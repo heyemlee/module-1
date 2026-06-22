@@ -76,7 +76,7 @@ export function RenderingPreferencesStep({
     <Step title="6. Rendering Preferences">
       <div className="space-y-6">
         <div>
-          <p className="mb-2 text-sm font-bold text-slate-700">
+          <p className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Cabinet construction style
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -87,10 +87,10 @@ export function RenderingPreferencesStep({
                   key={style}
                   type="button"
                   onClick={() => setStyle(style)}
-                  className={`rounded-md border px-4 py-3 text-left text-sm font-black ${
+                  className={`rounded-lg border px-4 py-3 text-left text-sm font-semibold transition-colors ${
                     selected
-                      ? "border-sky-700 bg-sky-50 text-sky-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-surface text-foreground hover:bg-surface-2"
                   }`}
                 >
                   {CABINET_STYLE_LABELS[style]}
@@ -102,11 +102,11 @@ export function RenderingPreferencesStep({
 
         {activeColors.length === 0 ? (
           colorsError ? (
-            <div className="rounded-md border border-dashed border-red-300 bg-red-50 p-5">
-              <p className="text-sm font-black text-red-700">
+            <div className="rounded-lg border border-dashed border-danger/40 bg-danger-surface p-5">
+              <p className="text-sm font-semibold text-danger-foreground">
                 Couldn’t load cabinet colors
               </p>
-              <p className="mt-2 text-sm leading-6 text-red-700">
+              <p className="mt-2 text-sm leading-6 text-danger-foreground">
                 There was a problem loading the cabinet color library. Check your
                 connection and try again.
               </p>
@@ -114,18 +114,18 @@ export function RenderingPreferencesStep({
                 <button
                   type="button"
                   onClick={onRetryLoadColors}
-                  className="mt-3 rounded-md bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700"
+                  className="mt-3 rounded-md bg-danger px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
                 >
                   Retry
                 </button>
               ) : null}
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-5">
-              <p className="text-sm font-black text-slate-700">
+            <div className="rounded-lg border border-dashed border-border bg-surface-2 p-5">
+              <p className="text-sm font-semibold text-foreground">
                 Ask an Admin to configure cabinet colors
               </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Active cabinet colors are required before a sales rendering can be
                 generated for this style.
               </p>
@@ -140,14 +140,14 @@ export function RenderingPreferencesStep({
                   key={color.id}
                   type="button"
                   onClick={() => setPendingColor(color)}
-                  className={`group rounded-md border bg-white p-3 text-left shadow-sm ${
+                  className={`group rounded-lg border bg-surface p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 ${
                     isSelected
-                      ? "border-sky-700 ring-2 ring-sky-100"
-                      : "border-slate-200 hover:border-sky-300"
+                      ? "border-primary ring-2 ring-primary/20"
+                      : "border-border hover:border-border-strong"
                   }`}
                 >
                   <span
-                    className="block aspect-square w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100"
+                    className="block aspect-square w-full overflow-hidden rounded-md border border-border bg-surface-2"
                     style={{
                       backgroundColor: color.swatchImageUrl
                         ? undefined
@@ -165,16 +165,16 @@ export function RenderingPreferencesStep({
                       />
                     ) : null}
                   </span>
-                  <span className="mt-3 block text-base font-black text-slate-950">
+                  <span className="mt-3 block text-base font-semibold text-foreground">
                     {color.name}
                   </span>
                   {color.colorCode ? (
-                    <span className="mt-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <span className="mt-1 block font-mono text-xs font-medium uppercase tracking-wide text-subtle-foreground">
                       {color.colorCode}
                     </span>
                   ) : null}
                   {color.hoverExampleImageUrl ? (
-                    <span className="mt-3 block overflow-hidden rounded-md border border-slate-200 bg-slate-50 opacity-75 transition group-hover:opacity-100">
+                    <span className="mt-3 block overflow-hidden rounded-md border border-border bg-surface-2 opacity-75 transition group-hover:opacity-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={color.hoverExampleImageUrl}
@@ -185,7 +185,7 @@ export function RenderingPreferencesStep({
                       />
                     </span>
                   ) : null}
-                  <span className="mt-3 inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-black text-white">
+                  <span className="mt-3 inline-flex rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground">
                     Confirm Color
                   </span>
                 </button>
@@ -194,11 +194,11 @@ export function RenderingPreferencesStep({
           </div>
         )}
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        <div className="rounded-lg border border-border bg-surface-2 p-4">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Selected finish
           </p>
-          <p className="mt-1 text-sm font-bold text-slate-800">
+          <p className="mt-1 text-sm font-medium text-foreground">
             {selectedColor
               ? `${selectedColor.name} · ${
                   CABINET_STYLE_LABELS[selectedColor.cabinetStyle]
@@ -207,12 +207,12 @@ export function RenderingPreferencesStep({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4">
+        <div className="flex flex-wrap gap-3 border-t border-border pt-4">
           <button
             type="button"
             onClick={onGenerateCabinetFill}
             disabled={!canGenerateCabinetFill}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Generate Cabinet Fill
           </button>
@@ -220,43 +220,43 @@ export function RenderingPreferencesStep({
             type="button"
             onClick={onGenerateRendering}
             disabled={!preferencesComplete || !canGenerateRendering || renderingBusy}
-            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {renderingBusy ? "Generating Rendering..." : "Generate Rendering"}
           </button>
         </div>
 
         {!preferencesComplete ? (
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-muted-foreground">
             Confirm a cabinet color before generating the rendering.
           </p>
         ) : null}
       </div>
 
       {pendingColor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md animate-blur-in rounded-lg border border-border bg-surface p-6 shadow-xl">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
               Confirm cabinet color
             </p>
-            <h3 className="mt-2 text-lg font-black text-slate-950">
+            <h3 className="mt-2 text-lg font-semibold text-foreground">
               {pendingColor.name}
             </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Save this finish for the sales rendering preferences.
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setPendingColor(null)}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+                className="inline-flex h-10 items-center rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmColor}
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+                className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
               >
                 Confirm Color
               </button>

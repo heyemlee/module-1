@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 
 export function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <h2 className="text-xl font-black tracking-normal">{title}</h2>
-      <p className="mb-5 mt-2 text-sm leading-6 text-slate-600">
+      <h2 className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+      <p className="mb-6 mt-2 text-sm leading-6 text-muted-foreground">
         Unknown or rough answers are allowed. They stay visible as Confirmation Required.
       </p>
       {children}
@@ -14,8 +15,8 @@ export function Step({ title, children }: { title: string; children: ReactNode }
 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-slate-700">
+    <section className="rounded-lg border border-border bg-surface p-4 shadow-sm">
+      <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {title}
       </h2>
       {children}
@@ -23,6 +24,8 @@ export function Panel({ title, children }: { title: string; children: ReactNode 
   );
 }
 
+// Floating mono-label native number input. Native <label><span/><input/></label>
+// structure is preserved so the intake SSR tests can locate fields by label.
 export function NumberField({
   label,
   value,
@@ -33,20 +36,24 @@ export function NumberField({
   onChange: (value: number | null) => void;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-bold text-slate-700">{label}</span>
+    <label className="group relative block">
+      <span className="absolute -top-2 left-3 z-10 bg-surface px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle-foreground">
+        {label}
+      </span>
       <input
         type="number"
         value={value ?? ""}
         onChange={(event) =>
           onChange(event.target.value ? Number(event.target.value) : null)
         }
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-700"
+        className="h-11 w-full rounded-lg border border-border bg-input px-3 font-mono text-sm text-foreground outline-none transition-all hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent/40"
       />
     </label>
   );
 }
 
+// Floating mono-label native select with a custom chevron. The native <select>
+// is kept (appearance-none) so it stays test-locatable and fully accessible.
 export function SelectField<T extends string>({
   label,
   value,
@@ -59,12 +66,14 @@ export function SelectField<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-bold text-slate-700">{label}</span>
+    <label className="group relative block">
+      <span className="absolute -top-2 left-3 z-10 bg-surface px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle-foreground">
+        {label}
+      </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
-        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-700"
+        className="h-11 w-full appearance-none rounded-lg border border-border bg-input px-3 pr-9 font-mono text-sm text-foreground outline-none transition-all hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent/40"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -72,6 +81,11 @@ export function SelectField<T extends string>({
           </option>
         ))}
       </select>
+      <ChevronDown
+        size={16}
+        strokeWidth={2}
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-subtle-foreground"
+      />
     </label>
   );
 }
@@ -84,11 +98,13 @@ export function StatusPill({
   tone: "red" | "amber" | "green";
 }) {
   const classes = {
-    red: "bg-red-50 text-red-700",
-    amber: "bg-amber-50 text-amber-800",
-    green: "bg-emerald-50 text-emerald-700"
+    red: "bg-danger-surface text-danger-foreground",
+    amber: "bg-warning-surface text-warning-foreground",
+    green: "bg-success-surface text-success-foreground"
   };
-  return <span className={`rounded px-2.5 py-1 ${classes[tone]}`}>{label}</span>;
+  return (
+    <span className={`rounded-md px-2.5 py-1 text-xs font-medium ${classes[tone]}`}>{label}</span>
+  );
 }
 
 export function parseNullableSize(value: string) {
