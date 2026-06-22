@@ -1,8 +1,8 @@
 # AI Context: Module 1 Round 1 MVP
 
-Date: 2026-06-17
-Scope: Module 1 only: Round 1 showroom intake, deterministic layout generation, and preliminary cabinet sales estimate.
-Status: Implementation in progress.
+Date: 2026-06-22
+Scope: Module 1 only: Round 1 showroom intake, deterministic layout generation, preliminary cabinet sales estimate, and non-authoritative customer concept rendering.
+Status: Module 1 Round 1 MVP is feature-complete for the current scope; next priority is deployment readiness and real-use validation.
 
 This is the short "hot context" file to feed AI at the start of normal development sessions.
 For full historical context, complete JSON examples, old decisions, detailed form field lists, and prior implementation notes, read `docs/round1-context-archive.md` only when needed.
@@ -66,12 +66,12 @@ Current authoritative path:
 4. `buildFloorPlan(normalized, cabinets, confirmationCount)` builds deterministic plan geometry.
 5. The React layout preview renders the top-down SVG live from that geometry.
 
-The existing OpenAI image route/client is retained only for a future optional realistic-render-from-SVG feature. It must never own cabinet data, dimensions, layout geometry, or production readiness.
+The existing OpenAI image route/client is retained only for optional customer concept rendering. It must never own cabinet data, dimensions, layout geometry, or production readiness.
 
-Future customer rendering flow:
+Customer concept rendering flow:
 
-- The app may later expose a separate `Generate Rendering` button after rough cabinet fill is generated.
-- This button should use the deterministic layout image plus a summary of the complete Round 1 JSON snapshot as GPT Image input.
+- The app exposes `Generate Rendering` only after rough cabinet fill is generated, the snapshot is saved, and required rendering preferences are confirmed.
+- The rendering path uses the deterministic layout image plus a summary of the complete Round 1 JSON snapshot as GPT Image input.
 - Do not use only JSON or only the layout image for customer rendering; use both so the image model gets spatial constraints and semantic/material context.
 - Generated renderings are customer-facing concept images only. They must not become the source of truth for cabinet data, dimensions, counts, geometry, quote data, or production readiness.
 
@@ -135,7 +135,7 @@ Deterministic code must own:
 
 ## Current Implementation
 
-Implemented and verified as of 2026-06-17:
+Implemented and verified through 2026-06-22:
 
 - Round 1 form schema and normalized JSON schema.
 - `Confirmation Required` item model.
@@ -180,13 +180,13 @@ Implemented and verified as of 2026-06-17:
 - Authoritative Round 1 JSON snapshot, frozen by `Generate Cabinet Fill`. Pure builder `buildRound1Snapshot` in `src/features/round1/snapshot.ts` captures `showroomForm`, normalized data, `positionOverrides`, `fixedPositionsConfirmed: true`, `cabinetFillGenerated: true`, the preliminary cabinet list, the deterministic `floorPlan` geometry (rebuildable from the captured inputs), `confirmationItems`, `readiness`, and the metadata flags (`salesEstimateOnly`, `notForProduction`, `dimensionConfidence: "ROUGH"`). Includes `schemaVersion` and `generatedAt`.
 - Snapshot staleness: editing any layout-critical form value or dragging any position after a snapshot exists clears `cabinetFillGenerated` and the snapshot, forcing regeneration before the snapshot is valid again.
 - `Round 1 Snapshot` sidebar panel (sales/QA): shows snapshot status, rough counts, sales-only flags, and a collapsible raw JSON view. Kept out of the customer-facing SVG, which stays clean.
-- `Generate Rendering` button: disabled until a complete snapshot exists and is saved to the server; once enabled it generates a customer concept preview (see the dedicated rendering entry below for the full data flow and AI-boundary guarantees).
+- `Generate Rendering` button: lives in the final `Rendering Preferences` step and stays disabled until a complete snapshot exists, is saved to the server, and required rendering preferences are confirmed; once enabled it generates a customer concept preview (see the dedicated rendering entry below for the full data flow and AI-boundary guarantees).
 - Snapshot persistence: `Round1Repository` gained `saveSnapshot` and a `Round1Project.snapshot` field, plus a file-backed implementation `createFileSystemRound1Repository` (single JSON document) alongside the in-memory one. The default `round1Repository` singleton is file-backed when `ROUND1_DATA_FILE` is set (e.g. `.data/round1-projects.json` via `.env.local` in dev) and in-memory otherwise, so tests stay disk-free. API: `PUT /api/round1/projects/[id]/snapshot` (validates the Round 1 safety invariants, passthrough rest) and `GET /api/round1/projects/[id]`.
 - Client persistence + restore: `Generate Cabinet Fill` lazily creates a project (id kept in `localStorage`) and `PUT`s the snapshot, with a `Saving/Saved/error` status line in the panel. On mount the app fetches the stored project and, if a snapshot exists, rehydrates `form`, `positionOverrides`, `fixedPositionsConfirmed`, `cabinetFillGenerated`, and the snapshot — so a page refresh keeps the frozen Round 1 result.
 - Safe refactor (2026-06-17): the oversized intake and preview files were split without behavior changes. `showroom-intake-app.tsx` now keeps workflow orchestration while steps, panels, and shared controls live in adjacent focused files. `layout-preview.tsx` keeps stateful preview/drag behavior while stateless SVG shape components live in `layout-preview-shapes.tsx`.
 - `Generate Rendering` (customer concept preview) is implemented and non-authoritative. The button is enabled only once the snapshot is persisted (`persistState === "saved"`). On click the client rasterizes the on-screen deterministic floor plan SVG to a PNG (`src/features/round1/rasterize-svg.ts`, via an exposed `svgRef` on `LayoutPreview`) and `POST`s it to `POST /api/round1/projects/[id]/rendering`. The route loads the authoritative snapshot server-side by project id (never trusting client-posted data), builds a JSON-derived prompt from the snapshot (`src/features/round1/rendering-prompt.ts`), and calls the image edit boundary. Rendering input includes BOTH the deterministic layout image and the JSON prompt. Image boundary extended: `ImageClient.images.edit` (multipart `POST /images/edits`) + `OpenAIImageAdapter.generateConceptRendering`; server orchestration in `src/server/round1/rendering-service.ts` stamps `salesEstimateOnly`/`notForProduction`/`dimensionConfidence: "ROUGH"` and `basedOnSnapshotGeneratedAt`. Model: `gpt-image-2`.
 - Concept rendering persistence + staleness: the rendering is stored in a SEPARATE non-authoritative `Round1Project.latestRendering` field (`Round1ProjectRendering` in `round1-repository.ts`, via `saveRendering`, file-backed + in-memory) — never inside `Round1Snapshot`, never affecting readiness/validity. The rendering route persists after generating and returns the stored payload (incl. `createdAt`); `GET /api/round1/projects/[id]` returns it, and the client mount-restore rehydrates it. Staleness is derived (`renderingBasedOn !== snapshot.generatedAt`, or snapshot cleared): a layout-critical edit/drag no longer discards the preview — it stays visible but dimmed with an "Outdated — based on an earlier snapshot" warning and a disabled `Regenerate Rendering` button until cabinet fill is regenerated and the rendering re-run. Shared `RenderingControls` sub-component renders the button/messages/image in both panel branches.
-- Rendering Preferences step + cabinet color libraries (2026-06-22, Tasks 1–5 of the rendering-preferences plan): the default Round 1 workflow is now SIX steps — `Room`, `Openings`, `Layout`, `Appliances`, `Adjust Positions`, `Rendering Preferences` (`SHOWROOM_STEPS` in `showroom-intake-app.tsx`). `Adjust Positions` now focuses only on confirming fixed positions and generating cabinet fill; the `Generate Rendering` action moved into the final `Rendering Preferences` step.
+- Rendering Preferences step + cabinet color libraries (2026-06-22, Tasks 1–6 of the rendering-preferences plan, merged to `main` via PR #6): the default Round 1 workflow is now SIX steps — `Room`, `Openings`, `Layout`, `Appliances`, `Adjust Positions`, `Rendering Preferences` (`SHOWROOM_STEPS` in `showroom-intake-app.tsx`). `Adjust Positions` now focuses only on confirming fixed positions and generating cabinet fill; the `Generate Rendering` action moved into the final `Rendering Preferences` step.
   - Schema: `Round1RenderingPreferences` ({ `cabinetStyle: "EUROPEAN_FRAMELESS" | "AMERICAN_FRAMED"`, `doorColorId: string | null` }) lives on the showroom form and is copied into the snapshot. `DEFAULT_RENDERING_PREFERENCES` defaults to European frameless / no color.
   - Cabinet color libraries are admin-managed, per-company, and per-style: `CabinetColor` (`src/server/platform/cabinet-color-repository.ts`, Postgres + in-memory, `cabinet_colors` table with hardened migrations) holds `cabinetStyle`, `name`, `colorCode`, `swatchImageUrl`, `swatchHex`, `hoverExampleImageUrl`, `promptDescription`, `active`, `sortOrder`. APIs under `/api/admin/cabinet-colors` (ADMIN-only). Admin UI at `/admin/cabinet-colors` (`cabinet-colors-admin-view.tsx` + `cabinet-color-form.tsx`) with a dashboard link.
   - Admin Add Color form is intentionally minimal (simplified 2026-06-22): only Cabinet style, Color name, **Swatch image (file upload)**, **Hover example image (file upload, optional)**, and an optional AI description. Uploads are read client-side into data URLs and stored in the existing `swatch_image_url` / `hover_example_image_url` text columns (no image host / object storage; ~4MB per-file cap). `promptDescription` falls back to the color name when left blank. `colorCode`, `swatchHex`, and `sortOrder` are no longer in the form (columns kept nullable; sortOrder defaults 0 → list sorts by name); `active` is only shown when editing an existing color (defaults true on create). The `cabinetColorInputSchema` `swatchImageUrl`/`hoverExampleImageUrl` validators accept either a hosted URL or a `data:image/...;base64,` URL. Editing without re-picking a file preserves the stored image.
@@ -194,12 +194,11 @@ Implemented and verified as of 2026-06-17:
   - Prompt: `rendering-prompt.ts` composes style-specific language (European frameless flat-slab/handleless vs. American framed face-frame) plus the selected color's `promptDescription`. The rendering stamp records `basedOnRenderingPreferences` ({ doorColorId, cabinetStyle, colorUpdatedAt }) alongside `basedOnSnapshotGeneratedAt`.
   - Decoupled staleness: changing ONLY style/color after a snapshot does NOT clear cabinet fill or the snapshot (`renderingPreferenceStampMatches` tracks preference staleness separately) — it only marks an existing rendering as stale, prompting regenerate.
 
-Latest known verification (after merging the safe refactor and concept rendering branches):
+Latest known verification:
 
-- `npm test`: 193 tests passing.
-- `npx tsc --noEmit`: passing.
-- `npm run build`: passing.
-- Browser QA at `http://127.0.0.1:3000/`: initial load shows an empty room shell with no opening/appliance/cabinet symbols; Openings shows selected door/window symbols immediately; Layout adds two pale guide bands for the default L-shape; Appliances adds five fixed-position symbols; Adjust Positions keeps those symbols draggable with no cabinet fill; `Generate Cabinet Fill` produces rough base/wall cabinets. Openings status toggles were verified live: door/window `NO` removes the symbol and `YES` restores it immediately.
+- 2026-06-22 after Admin Add Color upload simplification: `npm test` 251 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
+- Rendering Preferences full QA passed earlier the same day: automated tests/build passed, local Docker Postgres migration passed, Admin Cabinet Colors QA passed, Sales Rendering Preferences QA passed, and prompt/stored-rendering metadata QA passed for both European and American styles.
+- Production migration was applied on 2026-06-22 through the Railway public TCP proxy: `cabinet_colors` table exists and `renderings.based_on_*` columns exist. The migration is idempotent.
 
 Always re-run relevant verification after changing behavior.
 
@@ -213,35 +212,16 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 - **Interactive Drag-and-Drop**: The `layout-preview.tsx` supports manual `PositionOverrides`. Users can drag any window, door, or appliance along its designated wall. The geometry algorithm instantly recalculates the layout, dynamically splitting, growing, or shrinking the adjacent cabinets to wrap tightly around the user's manually chosen position.
 - **Base Cabinet Visual Fillers**: To uphold the rule "where there is a wall cabinet, there must be a base cabinet", a post-processing step automatically projects missing base cabinets under floating wall cabinets if no base appliance or cabinet exists there. This keeps the sales-estimate preview visually cohesive even with incomplete or manually altered preliminary cabinet arrays.
 
-## Active Work: Next Session
-
-Done (2026-06-22): Round 1 Rendering Preferences + cabinet color libraries (plan `docs/superpowers/plans/2026-06-19-round1-rendering-preferences.md`) — Tasks 1–6 complete and verified. See the "Rendering Preferences step + cabinet color libraries" entry under Current Implementation for the full surface. Work lives on branch `codex/round1-rendering-preferences` (not yet merged to `main`).
-
-- Tasks 1–5: implemented and reviewed (schema/defaults/snapshot copy; cabinet color DB/schema/repository/API; Admin Cabinet Colors page/form/dashboard link; Sales Rendering Preferences step; rendering prompt/service/history metadata).
-- Task 6 (final verification) PASSED end-to-end:
-  - Step 1 automated: `npm test` 250 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
-  - Step 2 `npm run db:migrate`: ran against a local Docker Postgres (the only configured `DATABASE_URL` is the Railway `postgres.railway.internal` prod host, which is unreachable from local and must not be migrated from a dev machine — migrations run on Railway deploy). Migration created the `cabinet_colors` table with the style check constraint + company FK.
-  - Step 3 Admin color QA: created a European color (swatch + hover example URLs) and an American color through the real UI/API → DB; an inactive European color shows in Admin but is hidden from the Sales board. Non-admin redirect is enforced in `src/app/admin/cabinet-colors/page.tsx` (non-ADMIN → `/projects`, unauth → `/login`).
-  - Step 4 Sales QA: Round 1 page shows the 6-step list ending in `Rendering Preferences`; the color board shows only the selected style's active colors (inactive + other-style hidden); switching style clears an incompatible selected color; hover example image present; click opens a confirm dialog (Cancel does not save, Confirm saves); `Generate Rendering` enables only once the snapshot is saved AND a color is confirmed; changing style/color after a snapshot does NOT clear cabinet fill or the snapshot (same `generatedAt`); an existing rendering stays visible but is marked "Outdated — please regenerate rendering to update" with regenerate disabled until a compatible color is reconfirmed.
-  - Step 5 rendering-prompt QA: generated one European (`gpt-image-2`) and one American rendering. European prompt contains "modern frameless European-style cabinetry" + the color's `promptDescription` and no American language; American prompt contains "American framed cabinetry" + its `promptDescription` and no European language. Each stored rendering stamps `based_on_cabinet_style`, `based_on_door_color_id` (matching the selected color), `based_on_snapshot_generated_at` (both renderings share the locked snapshot timestamp), and `sales_estimate_only`/`not_for_production`/`dimension_confidence=ROUGH`.
-  - Step 6: no verification fixes were required.
-- QA was run against an ephemeral local Docker Postgres (`module1-qa-pg`) seeded with a throwaway admin; that container + a temporary `module-1-qa` launch config were torn down after QA. Production still uses Railway `DATABASE_URL`.
-
-Follow-up (2026-06-22): simplified the Admin Add Color form to upload-based fields (see the "Admin Add Color form is intentionally minimal" bullet under Current Implementation) and re-verified — `npm test` 251 passing, `tsc --noEmit` exit 0, `npm run build` exit 0, plus local browser QA (form renders the 5 fields, image upload → `POST` 201 → data URL persisted → renders in the Admin board). The schema/table were unchanged by this UI work.
-
-Production migration applied (2026-06-22): ran `npm run db:migrate` against the Railway DB via the public TCP-proxy `DATABASE_URL` (`*.proxy.rlwy.net`) — `cabinet_colors` table created and the `renderings.based_on_*` columns added. Migration is idempotent (`CREATE TABLE / ADD COLUMN IF NOT EXISTS`), so the Railway pre-deploy `db:migrate` will be a no-op on redeploy. Note: `.env.local` `DATABASE_URL` now points at the Railway **public proxy** host for local dev against prod data; `migrate.mjs` does not auto-load `.env.local`, so pass `DATABASE_URL` explicitly when running it from local.
-
-Done (2026-06-19): admin self-service user management implemented — ADMIN-only `/admin/users` page + `GET/POST /api/admin/users` (requireRole ADMIN, 401/403/409 handled), backed by `user-admin-repository.ts` (list + create, password hashed via existing helper). Dashboard shows a Users link for admins. Light real-use polish: login brand from `NEXT_PUBLIC_COMPANY_NAME` (fallback "Showroom"; inlined at build time, set in Railway before build for a custom brand), dashboard empty-state CTA, responsive dashboard/header. Salespeople can now be added from the UI instead of editing the Railway pre-deploy command. Verified with `npm test` (214), `npx tsc --noEmit`, `npm run build`, and end-to-end browser QA against local Docker Postgres (login 200, create 201, duplicate 409, SALES gating 403 + redirect, mobile no-overflow).
-
-Done (2026-06-19): internal project platform foundation implemented for formal Railway deployment. Added fixed email/password auth, Admin/Sales/Designer roles, customer/project dashboard shell, Railway Postgres schema/repositories, project-scoped Round 1 state/snapshot/rendering APIs, rendering history, and read-only AI status from Railway Variables. Production should use `DATABASE_URL`; `ROUND1_DATA_FILE` remains local/dev fallback only. See `docs/deployment/railway-internal-platform.md`.
+## Current State: Next Session
 
 Current Module 1 status:
 
-- Module 1 Round 1 MVP is feature-complete for the prior scope. The active addition is the Rendering Preferences + cabinet color feature (see "Active Work" above): Tasks 1–5 done, Task 6 manual QA pending.
-- Latest automated verification (2026-06-22): `npm test` 250 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0. End-to-end browser QA for the new feature is still outstanding (Task 6 steps 2–5).
+- Module 1 Round 1 MVP is feature-complete for the current scope, including Rendering Preferences, admin-managed cabinet colors, and non-authoritative customer concept rendering.
+- Latest automated verification (2026-06-22): `npm test` 251 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
+- Latest manual QA (2026-06-22): Rendering Preferences end-to-end QA passed, Admin Add Color upload form QA passed, and the production migration was applied successfully through the Railway public TCP proxy.
 - The 2026-06-19 prior baseline (before rendering preferences) also passed `npm test` / `npx tsc --noEmit` / `npm run build` / end-to-end browser QA.
-- Treat old implementation plans under `docs/superpowers/plans/` as historical unless `ai_ctx.md` explicitly reactivates them. The rendering-preferences plan (`2026-06-19-round1-rendering-preferences.md`) is currently ACTIVE.
-- After the rendering-preferences feature passes manual QA, the next useful move is deploy-readiness.
+- Treat old implementation plans under `docs/superpowers/plans/` as historical unless `ai_ctx.md` explicitly reactivates them. The rendering-preferences plan (`2026-06-19-round1-rendering-preferences.md`) is complete and historical.
+- Next useful move: deploy-readiness, production smoke testing, and real sales/customer feedback.
 
 Current Module 1 guardrails:
 
@@ -251,7 +231,8 @@ Current Module 1 guardrails:
   3. Layout.
   4. Appliances.
   5. Adjust Positions.
-- Do not keep a separate `Cabinets` form step in Module 1. `Adjust Positions` owns the final Round 1 actions: confirm fixed positions, then explicitly generate rough cabinet fill.
+  6. Rendering Preferences.
+- Do not keep a separate `Cabinets` form step in Module 1. `Adjust Positions` owns fixed-position confirmation and rough cabinet fill generation; `Rendering Preferences` owns style/color selection and customer concept rendering.
 - Do not add pricing/quote functionality yet; leave it reserved for a later step.
 - Keep first-round form questions layout-critical. Oven / microwave belongs in Appliances. Detailed corner cabinet type questions belong in Module 2.
 - Do not expose detailed per-cabinet editing, cabinet codes, production-style dimensions, or internal prompt/debug output in the default Round 1 UI.
