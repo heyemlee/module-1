@@ -5,11 +5,55 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import { buildRound1RenderingPrompt } from "./rendering-prompt";
+import type { RenderingPromptPreferences } from "./rendering-prompt";
 import {
   createDefaultCabinetRuns,
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
+import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
+
+const europeanOak: CabinetColor = {
+  id: "eu-oak",
+  companyId: "company-1",
+  cabinetStyle: "EUROPEAN_FRAMELESS",
+  name: "European Oak",
+  colorCode: null,
+  swatchImageUrl: null,
+  swatchHex: "#b98a58",
+  hoverExampleImageUrl: null,
+  promptDescription: "warm natural oak matte slab cabinet doors",
+  active: true,
+  sortOrder: 1,
+  createdAt: "2026-06-18T00:00:00.000Z",
+  updatedAt: "2026-06-19T00:00:00.000Z"
+};
+
+const americanWhite: CabinetColor = {
+  id: "us-white",
+  companyId: "company-1",
+  cabinetStyle: "AMERICAN_FRAMED",
+  name: "American White",
+  colorCode: null,
+  swatchImageUrl: null,
+  swatchHex: "#f7f4ee",
+  hoverExampleImageUrl: null,
+  promptDescription: "soft painted white shaker cabinet doors",
+  active: true,
+  sortOrder: 2,
+  createdAt: "2026-06-18T00:00:00.000Z",
+  updatedAt: "2026-06-19T00:00:00.000Z"
+};
+
+function buildPrompt(
+  snapshot = buildSnapshot(),
+  preferences: RenderingPromptPreferences = {
+    cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+    color: europeanOak
+  }
+) {
+  return buildRound1RenderingPrompt(snapshot, preferences);
+}
 
 function buildSnapshot(
   layoutPreference: ReturnType<
@@ -35,7 +79,7 @@ function buildSnapshot(
 
 describe("buildRound1RenderingPrompt", () => {
   test("asks for a realistic concept that defers placement to the reference image", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+    const prompt = buildPrompt();
 
     expect(prompt).toContain("concept rendering");
     expect(prompt).toContain("authoritative spatial reference");
@@ -43,7 +87,7 @@ describe("buildRound1RenderingPrompt", () => {
   });
 
   test("marks the output as a non-authoritative sales concept with no on-image text", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+    const prompt = buildPrompt();
 
     expect(prompt).toContain("sales-estimate concept image only");
     expect(prompt.toLowerCase()).toContain("not a production drawing");
@@ -52,14 +96,29 @@ describe("buildRound1RenderingPrompt", () => {
     );
   });
 
-  test("anchors the rendering style to Bay Area single-family homes with modern frameless wood cabinetry", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+  test("uses European frameless style language and the selected color prompt description", () => {
+    const prompt = buildPrompt(buildSnapshot(), {
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      color: europeanOak
+    });
 
     expect(prompt).toContain("California Bay Area");
     expect(prompt).toContain("single-family house");
     expect(prompt).toContain("modern frameless European-style cabinetry");
-    expect(prompt).toContain("medium-tone wood grain");
+    expect(prompt).toContain("warm natural oak matte slab cabinet doors");
+    expect(prompt).not.toContain("medium-tone wood grain");
     expect(prompt).toContain("American residential appliances");
+  });
+
+  test("uses American framed style language and the selected color prompt description", () => {
+    const prompt = buildPrompt(buildSnapshot(), {
+      cabinetStyle: "AMERICAN_FRAMED",
+      color: americanWhite
+    });
+
+    expect(prompt).toContain("American framed cabinetry");
+    expect(prompt).toContain("soft painted white shaker cabinet doors");
+    expect(prompt).not.toContain("modern frameless European-style cabinetry");
   });
 
   test("relays the deterministic cabinet counts instead of inventing them", () => {
@@ -71,14 +130,14 @@ describe("buildRound1RenderingPrompt", () => {
       (cabinet) => cabinet.kind === "WALL"
     ).length;
 
-    const prompt = buildRound1RenderingPrompt(snapshot);
+    const prompt = buildPrompt(snapshot);
 
     expect(prompt).toContain(`approximately ${baseCount} base cabinet`);
     expect(prompt).toContain(`${wallCount} wall cabinet`);
   });
 
   test("fixes a one-point camera viewpoint", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+    const prompt = buildPrompt();
 
     expect(prompt).toContain("one-point perspective");
     expect(prompt).toContain("looking straight at the back wall");
@@ -86,7 +145,7 @@ describe("buildRound1RenderingPrompt", () => {
   });
 
   test("walks the layout wall by wall from the deterministic geometry", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+    const prompt = buildPrompt();
 
     expect(prompt).toContain("On the back wall, from left to right:");
     // Sink and range are clustered on the back run in the default L-shape.
@@ -103,7 +162,7 @@ describe("buildRound1RenderingPrompt", () => {
       microwaveOvenCombo: { status: "YES", relation: "RIGHT_SIDE" }
     };
 
-    const prompt = buildRound1RenderingPrompt(snapshot);
+    const prompt = buildPrompt(snapshot);
 
     expect(prompt).toContain("Cooking appliances:");
     expect(prompt).toContain("built-in cooktop (burners only, no oven");
@@ -126,7 +185,7 @@ describe("buildRound1RenderingPrompt", () => {
       };
     });
 
-    const prompt = buildRound1RenderingPrompt(snapshot);
+    const prompt = buildPrompt(snapshot);
 
     expect(prompt).toContain(
       "Oven / microwave: a stacked wall oven and microwave tower in one tall appliance cabinet."
@@ -151,7 +210,7 @@ describe("buildRound1RenderingPrompt", () => {
       };
     });
 
-    const prompt = buildRound1RenderingPrompt(snapshot);
+    const prompt = buildPrompt(snapshot);
 
     expect(prompt).toContain(
       "Oven / microwave: a wall oven and a separate microwave location."
@@ -171,7 +230,7 @@ describe("buildRound1RenderingPrompt", () => {
   });
 
   test("names the corner cabinet and forbids dropping it", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+    const prompt = buildPrompt();
 
     expect(prompt).toContain("Corner cabinetry:");
     expect(prompt).toContain("back-left corner");
@@ -179,7 +238,7 @@ describe("buildRound1RenderingPrompt", () => {
   });
 
   test("constrains the front-wall door behind the camera", () => {
-    const prompt = buildRound1RenderingPrompt(buildSnapshot());
+    const prompt = buildPrompt();
 
     // Default door is on the front wall (behind the camera).
     expect(prompt).toContain("The entry door is on the front wall behind the camera");
@@ -187,7 +246,7 @@ describe("buildRound1RenderingPrompt", () => {
   });
 
   test("renders an open passage as a cased opening, not a swinging door", () => {
-    const prompt = buildRound1RenderingPrompt(
+    const prompt = buildPrompt(
       buildSnapshot("U_SHAPE", (form) => {
         form.openings.doors = {
           status: "YES",
@@ -202,14 +261,12 @@ describe("buildRound1RenderingPrompt", () => {
 
   test("keeps a front-wall fridge behind the camera", () => {
     // A galley puts the default front-side fridge on the front (BOTTOM) wall.
-    const prompt = buildRound1RenderingPrompt(buildSnapshot("GALLEY"));
+    const prompt = buildPrompt(buildSnapshot("GALLEY"));
     expect(prompt).toContain("behind the viewpoint");
   });
 
   test("is deterministic for the same snapshot", () => {
     const snapshot = buildSnapshot();
-    expect(buildRound1RenderingPrompt(snapshot)).toBe(
-      buildRound1RenderingPrompt(snapshot)
-    );
+    expect(buildPrompt(snapshot)).toBe(buildPrompt(snapshot));
   });
 });

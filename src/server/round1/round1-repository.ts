@@ -10,6 +10,7 @@ import {
 // persists it as data, so importing the type here is runtime-safe and does not
 // pull any client code onto the server.
 import type { Round1Snapshot } from "@/features/round1/snapshot";
+import type { Round1RenderingPreferenceStamp } from "./rendering-service";
 
 /**
  * Non-authoritative concept rendering stored alongside a project.
@@ -26,6 +27,7 @@ export type Round1ProjectRendering = {
   prompt: string;
   size: string;
   basedOnSnapshotGeneratedAt: string;
+  basedOnRenderingPreferences: Round1RenderingPreferenceStamp | null;
   salesEstimateOnly: true;
   notForProduction: true;
   dimensionConfidence: "ROUGH";

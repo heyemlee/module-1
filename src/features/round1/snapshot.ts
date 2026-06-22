@@ -80,6 +80,7 @@ export function buildRound1Snapshot(
   input: BuildRound1SnapshotInput
 ): Round1Snapshot {
   const now = input.now ?? (() => new Date());
+  const showroomForm = copyJson(input.showroomForm);
 
   const floorPlan = buildFloorPlan(
     input.normalized,
@@ -96,7 +97,7 @@ export function buildRound1Snapshot(
     salesEstimateOnly: true,
     notForProduction: true,
     dimensionConfidence: "ROUGH",
-    showroomForm: input.showroomForm,
+    showroomForm,
     normalized: input.normalized,
     positionOverrides: input.positionOverrides,
     preliminaryCabinets: input.preliminaryCabinets,
@@ -104,6 +105,10 @@ export function buildRound1Snapshot(
     readiness: input.readiness,
     floorPlan
   };
+}
+
+function copyJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 export type Round1SnapshotSummary = {

@@ -23,6 +23,12 @@ const relationSchema = z.enum([
 
 const nullableNumberSchema = z.number().positive().nullable();
 const statusSchema = z.enum(["YES", "NO", "UNKNOWN"]);
+const cabinetStyleSchema = z.enum(["EUROPEAN_FRAMELESS", "AMERICAN_FRAMED"]);
+
+const renderingPreferencesSchema = z.object({
+  cabinetStyle: cabinetStyleSchema.default("EUROPEAN_FRAMELESS"),
+  doorColorId: z.string().min(1).nullable().default(null)
+});
 const roughApplianceSchema = z.object({
   status: statusSchema,
   relation: relationSchema.default("UNKNOWN")
@@ -142,6 +148,10 @@ export const round1FormSchema = z.object({
     "U_SHAPE_ISLAND",
     "NO_PREFERENCE"
   ]),
+  renderingPreferences: renderingPreferencesSchema.default({
+    cabinetStyle: "EUROPEAN_FRAMELESS",
+    doorColorId: null
+  }),
   fixtures: z.object({
     sink: z.object({
       status: z.enum(["YES", "NO", "UNKNOWN"]).default("YES"),
@@ -258,5 +268,12 @@ export const round1NormalizedSchema = z.object({
   )
 });
 
-export type Round1FormInput = z.infer<typeof round1FormSchema>;
+export type CabinetStyle = z.infer<typeof cabinetStyleSchema>;
+export type Round1RenderingPreferences = z.infer<
+  typeof renderingPreferencesSchema
+>;
+export type Round1Form = z.infer<typeof round1FormSchema>;
+export type Round1FormInput = Omit<Round1Form, "renderingPreferences"> & {
+  renderingPreferences?: Round1RenderingPreferences;
+};
 export type Round1Normalized = z.infer<typeof round1NormalizedSchema>;

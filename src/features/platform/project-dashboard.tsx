@@ -27,6 +27,11 @@ export function ProjectDashboard({
                 Users
               </Link>
             )}
+            {user.role === "ADMIN" && (
+              <Link href="/admin/cabinet-colors" className="rounded border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">
+                Cabinet Colors
+              </Link>
+            )}
             <LogoutButton />
           </div>
         </header>

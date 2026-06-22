@@ -1,5 +1,7 @@
 import type { Round1Snapshot } from "./snapshot";
 import type { Wall } from "./floorplan/plan-geometry";
+import type { CabinetStyle } from "@/domain/round1";
+import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import {
   describeBehindCameraAppliances,
   describeCorners,
@@ -57,7 +59,15 @@ const OVEN_MICROWAVE_PHRASES: Record<string, string> = {
 // (BOTTOM) is behind the camera and described separately.
 const VISIBLE_WALLS: Wall[] = ["TOP", "LEFT", "RIGHT"];
 
-export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
+export type RenderingPromptPreferences = {
+  cabinetStyle: CabinetStyle;
+  color: CabinetColor;
+};
+
+export function buildRound1RenderingPrompt(
+  snapshot: Round1Snapshot,
+  preferences: RenderingPromptPreferences
+): string {
   const { normalized, floorPlan, preliminaryCabinets, showroomForm } = snapshot;
 
   const layoutPhrase =
@@ -76,11 +86,13 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
   const wallCount = preliminaryCabinets.cabinets.filter(
     (cabinet) => cabinet.kind === "WALL"
   ).length;
+  const style = describeCabinetStyle(preferences.cabinetStyle);
+  const colorDescription = preferences.color.promptDescription;
 
   const lines: string[] = [
     "Create a warm, spacious, and photorealistic customer concept rendering of a high-end residential kitchen for a Round 1 sales preview in a luxury California Bay Area single-family house. Ensure the room features high ceilings and an airy, open-concept feel to maximize the perceived size of the space.",
     "",
-    "Design style: modern frameless European-style cabinetry (flat slab doors, full-height single panel doors with no splits, handleless press-to-open design, clean reveals, continuous toe kicks, NO crown molding, NO top fascia board, NO soffit, NO top trim), medium-tone wood grain cabinet fronts, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the wood.",
+    `Design style: ${style.designStyle}, ${colorDescription}, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the selected cabinet door color.`,
     "",
     "Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions. CRITICAL: ONLY draw the exact appliances explicitly listed in this prompt. DO NOT hallucinate or add any extra appliances (like wall ovens or microwaves) that are not explicitly requested.",
     "",
@@ -152,7 +164,7 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
       baseCount === 1 ? "" : "s"
     } and ${wallCount} wall cabinet${
       wallCount === 1 ? "" : "s"
-    }, using modern frameless European-style cabinetry with flat medium-tone wood grain fronts, true handleless press-to-open design (no visible hardware), and continuous recessed toe kicks.`,
+    }, using ${style.cabinetry} with ${colorDescription}.`,
     "",
     "This is a sales-estimate concept image only, not a production drawing. All dimensions are approximate and subject to confirmation.",
     "Do not draw dimension lines, measurements, cabinet codes, labels, numbers, legends, or any text annotations on the image.",
@@ -160,6 +172,24 @@ export function buildRound1RenderingPrompt(snapshot: Round1Snapshot): string {
   );
 
   return lines.join("\n");
+}
+
+function describeCabinetStyle(cabinetStyle: CabinetStyle) {
+  if (cabinetStyle === "AMERICAN_FRAMED") {
+    return {
+      designStyle:
+        "American framed cabinetry (classic face-frame construction, framed doors or shaker-style proportions, refined rails and stiles, modest traditional detailing, and furniture-like residential millwork)",
+      cabinetry:
+        "American framed cabinetry with visible face-frame proportions, framed door detailing, and polished residential hardware or integrated pulls appropriate to the selected door style"
+    };
+  }
+
+  return {
+    designStyle:
+      "modern frameless European-style cabinetry (flat slab doors, full-height single panel doors with no splits, handleless press-to-open design, clean reveals, continuous toe kicks, NO crown molding, NO top fascia board, NO soffit, NO top trim)",
+    cabinetry:
+      "modern frameless European-style cabinetry with flat fronts, true handleless press-to-open design (no visible hardware), and continuous recessed toe kicks"
+  };
 }
 
 function describeRoughCookingAppliances(

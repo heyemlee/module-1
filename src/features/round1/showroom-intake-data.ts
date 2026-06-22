@@ -26,6 +26,10 @@ export function createDefaultShowroomForm(): Round1FormInput {
       vent: { relation: "ABOVE_RANGE", movable: "UNKNOWN" }
     },
     layoutPreference: "LEFT_L_SHAPE",
+    renderingPreferences: {
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      doorColorId: null
+    },
     fixtures: {
       sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
       range: {

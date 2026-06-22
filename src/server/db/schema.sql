@@ -88,6 +88,9 @@ CREATE TABLE IF NOT EXISTS renderings (
   prompt TEXT NOT NULL,
   size TEXT NOT NULL,
   based_on_snapshot_generated_at TIMESTAMPTZ NOT NULL,
+  based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED')),
+  based_on_door_color_id UUID,
+  based_on_color_updated_at TIMESTAMPTZ,
   sales_estimate_only BOOLEAN NOT NULL CHECK (sales_estimate_only = true),
   not_for_production BOOLEAN NOT NULL CHECK (not_for_production = true),
   dimension_confidence TEXT NOT NULL CHECK (dimension_confidence = 'ROUGH'),
@@ -95,7 +98,28 @@ CREATE TABLE IF NOT EXISTS renderings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'));
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS cabinet_colors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  cabinet_style TEXT NOT NULL CHECK (cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED')),
+  name TEXT NOT NULL,
+  color_code TEXT,
+  swatch_image_url TEXT,
+  swatch_hex TEXT,
+  hover_example_image_url TEXT,
+  prompt_description TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS customers_company_name_idx ON customers(company_id, name);
 CREATE INDEX IF NOT EXISTS projects_company_status_idx ON projects(company_id, status);
 CREATE INDEX IF NOT EXISTS projects_created_by_idx ON projects(created_by_user_id);
 CREATE INDEX IF NOT EXISTS renderings_project_created_idx ON renderings(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS cabinet_colors_company_style_idx ON cabinet_colors(company_id, cabinet_style, active, sort_order);

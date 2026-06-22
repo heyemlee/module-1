@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createOpenAIImageAdapterFromEnv } from "@/infrastructure/image/openai-rest-image-client";
-import { generateRound1Rendering } from "@/server/round1/rendering-service";
 import { round1Repository } from "@/server/round1/round1-repository";
 
 const requestSchema = z
@@ -62,38 +60,23 @@ export async function POST(
     );
   }
 
-  const adapter = createOpenAIImageAdapterFromEnv(process.env);
-  if (!adapter) {
+  const preferences = project.snapshot.showroomForm.renderingPreferences;
+  if (!preferences?.doorColorId) {
     return NextResponse.json(
       {
-        error: "OpenAI image generation is not configured",
-        reason: "OPENAI_API_KEY_NOT_CONFIGURED"
+        error: "A door color is required before generating a Round 1 rendering",
+        reason: "DOOR_COLOR_REQUIRED"
       },
-      { status: 503 }
+      { status: 409 }
     );
   }
 
-  const referenceImagesBase64 =
-    parsed.referenceImagesBase64 ??
-    (parsed.referenceImageBase64 ? [parsed.referenceImageBase64] : []);
-
-  try {
-    const rendering = await generateRound1Rendering({
-      snapshot: project.snapshot,
-      referenceImagesBase64,
-      adapter
-    });
-    // Persist as a non-authoritative preview so it survives a reload. This is
-    // stored separately from the snapshot and never affects snapshot validity.
-    const updated = await round1Repository.saveRendering(id, rendering);
-    return NextResponse.json(updated.latestRendering, { status: 200 });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: "Unable to generate Round 1 concept rendering",
-        reason: error instanceof Error ? error.message : "UNKNOWN_ERROR"
-      },
-      { status: 502 }
-    );
-  }
+  return NextResponse.json(
+    {
+      error:
+        "Legacy Round 1 rendering cannot resolve cabinet color library metadata",
+      reason: "PROJECT_COLOR_LIBRARY_REQUIRED"
+    },
+    { status: 409 }
+  );
 }

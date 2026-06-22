@@ -3,8 +3,17 @@ import { z } from "zod";
 import { createOpenAIImageAdapterFromEnv } from "@/infrastructure/image/openai-rest-image-client";
 import { generateRound1Rendering } from "@/server/round1/rendering-service";
 import { requireUser } from "@/server/platform/auth-service";
+import {
+  getCabinetColor,
+  isColorCompatibleWithStyle
+} from "@/server/platform/cabinet-color-repository";
 import { getProjectForUser } from "@/server/platform/project-repository";
-import { getLatestRound1Snapshot, listRenderings, saveRenderingHistory } from "@/server/platform/round1-postgres-repository";
+import {
+  getLatestRound1Snapshot,
+  getRound1State,
+  listRenderings,
+  saveRenderingHistory
+} from "@/server/platform/round1-postgres-repository";
 
 const requestSchema = z.object({
   referenceImagesBase64: z.array(z.string().min(1)).min(1)
@@ -43,6 +52,23 @@ export async function POST(
     return NextResponse.json({ error: "Invalid rendering request" }, { status: 400 });
   }
 
+  const state = await getRound1State(projectId);
+  const preferences = state?.showroomForm.renderingPreferences;
+  if (!state || !preferences?.doorColorId) {
+    return NextResponse.json(
+      { error: "Round 1 door color required", reason: "DOOR_COLOR_REQUIRED" },
+      { status: 409 }
+    );
+  }
+
+  const color = await getCabinetColor(user.companyId, preferences.doorColorId);
+  if (!color || !isColorCompatibleWithStyle(color, preferences.cabinetStyle)) {
+    return NextResponse.json(
+      { error: "Invalid Round 1 door color", reason: "INVALID_DOOR_COLOR" },
+      { status: 409 }
+    );
+  }
+
   const latest = await getLatestRound1Snapshot(projectId);
   if (!latest) return NextResponse.json({ error: "Round 1 snapshot required" }, { status: 409 });
   const adapter = createOpenAIImageAdapterFromEnv(process.env);
@@ -57,6 +83,10 @@ export async function POST(
     const rendering = await generateRound1Rendering({
       snapshot: latest.snapshot,
       referenceImagesBase64: input.referenceImagesBase64,
+      renderingPreferences: {
+        cabinetStyle: preferences.cabinetStyle,
+        color
+      },
       adapter
     });
     const saved = await saveRenderingHistory({

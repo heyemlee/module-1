@@ -24,4 +24,26 @@ describe("Postgres schema", () => {
     expect(schema).toContain("company_id UUID NOT NULL REFERENCES companies(id)");
     expect(schema).toContain("role TEXT NOT NULL CHECK (role IN ('ADMIN', 'SALES', 'DESIGNER'))");
   });
+
+  test("defines cabinet color library and rendering preference metadata", () => {
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS cabinet_colors");
+    expect(schema).toContain("cabinet_style TEXT NOT NULL CHECK (cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'))");
+    expect(schema).toContain("swatch_image_url TEXT");
+    expect(schema).toContain("hover_example_image_url TEXT");
+    expect(schema).toContain("prompt_description TEXT NOT NULL");
+    expect(schema).toContain("based_on_cabinet_style TEXT");
+    expect(schema).toContain("based_on_door_color_id UUID");
+  });
+
+  test("migrates rendering preference metadata onto existing tables", () => {
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'))"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ"
+    );
+  });
 });
