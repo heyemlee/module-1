@@ -28,6 +28,7 @@ import {
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
+import { LogoutButton } from "@/features/platform/logout-button";
 import {
   AdjustPositionsStep,
   AppliancesStep,
@@ -93,6 +94,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
   const projectIdRef = useRef<string | null>(null);
+  const prefsSaveControllerRef = useRef<AbortController | null>(null);
   const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
   const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
@@ -150,6 +152,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setRenderingError(null);
     if (!projectId) return;
 
+    // Cancel any in-flight preference save so overlapping rapid selections can't
+    // land out of order (the latest selection wins).
+    prefsSaveControllerRef.current?.abort();
+    const controller = new AbortController();
+    prefsSaveControllerRef.current = controller;
+
     void (async () => {
       try {
         const response = await fetch(`/api/projects/${projectId}/round1/state`, {
@@ -160,12 +168,14 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
             positionOverrides,
             fixedPositionsConfirmed,
             cabinetFillGenerated
-          })
+          }),
+          signal: controller.signal
         });
         if (!response.ok) {
           throw new Error("Unable to save rendering preferences");
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
         setRenderingError(
           "Unable to save rendering preferences. The current selection is kept locally."
         );
@@ -409,6 +419,10 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setCabinetFillGenerated(false);
     setSnapshot(null);
     setPersistState("idle");
+    // Send the user back to Adjust Positions so they can't sit on the Rendering
+    // step with every action disabled; they must re-confirm + regenerate fill.
+    setStep(ADJUST_POSITIONS_STEP_INDEX);
+    setMaxAccessibleStep(ADJUST_POSITIONS_STEP_INDEX);
     // Keep the last rendering visible; it will surface as stale.
     setRenderingError(null);
   }, []);
@@ -444,6 +458,13 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         }
         if (latestSnapshot) {
           setSnapshot(latestSnapshot);
+          // A persisted snapshot proves positions were confirmed and cabinet fill
+          // was generated; derive both flags from it rather than trusting a
+          // possibly-skewed saved-state row (state + snapshot are written
+          // non-atomically), which could otherwise land the user on a step with
+          // disabled actions.
+          setFixedPositionsConfirmed(true);
+          setCabinetFillGenerated(true);
           setPersistState("saved");
           setMaxAccessibleStep(SHOWROOM_STEPS.length - 1);
         }
@@ -505,6 +526,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               Showroom Intake + Layout Preview
             </h1>
           </div>
+          <LogoutButton />
         </div>
       </header>
 

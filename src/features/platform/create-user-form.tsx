@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { UserRole } from "@/server/platform/types";
 
 const ROLES: UserRole[] = ["SALES", "DESIGNER", "ADMIN"];
@@ -12,6 +13,7 @@ export function CreateUserForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -31,7 +33,11 @@ export function CreateUserForm() {
         }
         return;
       }
-      window.location.reload();
+      router.refresh();
+      setEmail("");
+      setName("");
+      setPassword("");
+      setRole("SALES");
     } catch {
       setError("Network error. Please try again.");
     } finally {

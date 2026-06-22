@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 
@@ -53,6 +54,7 @@ function readImageAsDataUrl(file: File): Promise<string> {
 
 export function CabinetColorForm({ color }: { color?: CabinetColor }) {
   const isEdit = Boolean(color);
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -121,7 +123,18 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
         setError("Unable to save cabinet color. Check the fields and try again.");
         return;
       }
-      window.location.reload();
+      router.refresh();
+      if (!isEdit) {
+        // Clear the "Add color" form for the next entry (router.refresh keeps
+        // client state, so reset explicitly instead of relying on a full reload).
+        setName("");
+        setPromptDescription("");
+        setSwatchData(undefined);
+        setHoverData(undefined);
+        setSwatchPreview(null);
+        setHoverPreview(null);
+        setError(null);
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {

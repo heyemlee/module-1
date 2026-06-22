@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { LogoutButton } from "./logout-button";
 
 export function NewProjectForm() {
   const [customerName, setCustomerName] = useState("");
@@ -45,7 +46,10 @@ export function NewProjectForm() {
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-8 text-stone-950">
       <div className="mx-auto max-w-xl">
-        <Link href="/projects" className="text-sm text-stone-600">Back to projects</Link>
+        <div className="flex items-center justify-between">
+          <Link href="/projects" className="text-sm text-stone-600">Back to projects</Link>
+          <LogoutButton />
+        </div>
         <h1 className="mt-4 text-2xl font-semibold">New customer project</h1>
         <form onSubmit={submit} className="mt-6 space-y-4 rounded border border-stone-300 bg-white p-6 shadow-sm">
           <label className="block text-sm font-medium">
