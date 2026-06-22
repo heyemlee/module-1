@@ -9,6 +9,8 @@ const STYLES = [
 ] as const;
 
 export function buildCabinetColorPayload(formData: FormData) {
+  const sortOrder = String(formData.get("sortOrder") ?? "").trim();
+
   return {
     cabinetStyle: String(formData.get("cabinetStyle")),
     name: String(formData.get("name") ?? "").trim(),
@@ -18,7 +20,7 @@ export function buildCabinetColorPayload(formData: FormData) {
     hoverExampleImageUrl: String(formData.get("hoverExampleImageUrl") ?? "").trim() || null,
     promptDescription: String(formData.get("promptDescription") ?? "").trim(),
     active: formData.get("active") === "on",
-    sortOrder: Number(String(formData.get("sortOrder") ?? "0")) || 0
+    sortOrder: sortOrder === "" ? 0 : Number(sortOrder)
   };
 }
 

@@ -41,4 +41,42 @@ describe("CabinetColorForm", () => {
       sortOrder: 3
     });
   });
+
+  test("builds null optional fields and inactive payload values", () => {
+    const formData = new FormData();
+    formData.set("cabinetStyle", "AMERICAN_FRAMED");
+    formData.set("name", "Painted White");
+    formData.set("colorCode", "");
+    formData.set("swatchImageUrl", "");
+    formData.set("swatchHex", "");
+    formData.set("hoverExampleImageUrl", "");
+    formData.set("promptDescription", "painted white shaker cabinet doors");
+    formData.set("sortOrder", "4");
+
+    expect(buildCabinetColorPayload(formData)).toEqual({
+      cabinetStyle: "AMERICAN_FRAMED",
+      name: "Painted White",
+      colorCode: null,
+      swatchImageUrl: null,
+      swatchHex: null,
+      hoverExampleImageUrl: null,
+      promptDescription: "painted white shaker cabinet doors",
+      active: false,
+      sortOrder: 4
+    });
+  });
+
+  test("builds zero sort order from a blank value", () => {
+    const formData = new FormData();
+    formData.set("sortOrder", "");
+
+    expect(buildCabinetColorPayload(formData).sortOrder).toBe(0);
+  });
+
+  test("preserves invalid sort order as NaN for API schema rejection", () => {
+    const formData = new FormData();
+    formData.set("sortOrder", "invalid");
+
+    expect(Number.isNaN(buildCabinetColorPayload(formData).sortOrder)).toBe(true);
+  });
 });

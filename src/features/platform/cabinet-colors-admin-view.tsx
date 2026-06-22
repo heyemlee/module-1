@@ -41,7 +41,7 @@ export function CabinetColorsAdminView({ colors }: { colors: CabinetColor[] }) {
                           </span>
                         </div>
                         <details className="mt-3">
-                          <summary className="cursor-pointer text-sm font-medium text-stone-700">Edit</summary>
+                          <summary className="cursor-pointer text-sm font-medium text-stone-700">Edit {color.name}</summary>
                           <div className="mt-3">
                             <CabinetColorForm color={color} />
                           </div>
