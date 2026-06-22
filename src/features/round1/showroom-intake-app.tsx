@@ -533,12 +533,16 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       <header className="border-b border-slate-200 bg-white px-6 py-5">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
           <div>
-            <a
-              href={projectId ? `/projects/${projectId}` : "/projects"}
-              className="text-sm font-semibold text-sky-700 hover:underline"
-            >
-              ← Back to project
-            </a>
+            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-sky-700">
+              <a href="/projects" className="hover:underline">
+                ← Back to projects
+              </a>
+              {projectId ? (
+                <a href={`/projects/${projectId}`} className="hover:underline">
+                  Back to project
+                </a>
+              ) : null}
+            </div>
             <h1 className="mt-1 text-2xl font-black tracking-normal">
               Showroom Intake + Layout Preview
             </h1>
