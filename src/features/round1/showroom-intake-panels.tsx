@@ -163,10 +163,12 @@ export function RenderingControls({
 
 export function Round1SnapshotPanel({
   snapshot,
-  persistState = "idle"
+  persistState = "idle",
+  onRetrySave
 }: {
   snapshot: Round1Snapshot | null;
   persistState?: SnapshotPersistState;
+  onRetrySave?: () => void;
 }) {
   if (!snapshot) {
     return (
@@ -206,7 +208,7 @@ export function Round1SnapshotPanel({
             ~{summary.estimatedFillerWidth}&quot; filler
           </span>
         </div>
-        <SnapshotPersistStatus persistState={persistState} />
+        <SnapshotPersistStatus persistState={persistState} onRetrySave={onRetrySave} />
       </div>
 
       <details className="rounded-md border border-slate-200">
@@ -222,19 +224,36 @@ export function Round1SnapshotPanel({
 }
 
 function SnapshotPersistStatus({
-  persistState
+  persistState,
+  onRetrySave
 }: {
   persistState: SnapshotPersistState;
+  onRetrySave?: () => void;
 }) {
   if (persistState === "idle") return null;
 
+  if (persistState === "error") {
+    return (
+      <div className="mt-2 space-y-2">
+        <p className="text-[11px] font-bold text-amber-700">
+          Couldn’t reach the server — snapshot kept locally.
+        </p>
+        {onRetrySave ? (
+          <button
+            type="button"
+            onClick={onRetrySave}
+            className="rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+          >
+            Retry save
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   const config = {
     saving: { text: "Saving to server…", className: "text-slate-500" },
-    saved: { text: "Saved to server", className: "text-emerald-700" },
-    error: {
-      text: "Couldn’t reach server — snapshot kept locally.",
-      className: "text-amber-700"
-    }
+    saved: { text: "Saved to server", className: "text-emerald-700" }
   }[persistState];
 
   return (

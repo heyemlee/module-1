@@ -3,6 +3,8 @@ import { z } from "zod";
 import { round1FormSchema } from "@/domain/round1";
 import { runRound1AgentTurn } from "@/server/round1/agent-service";
 import { LLMProviderNotConfiguredError } from "@/server/llm/provider";
+import { requireUser } from "@/server/platform/auth-service";
+import { authErrorResponse } from "@/server/platform/api-errors";
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(500),
@@ -22,6 +24,17 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // The agent drives a (potentially paid) LLM turn, so it must be authenticated —
+  // it is only ever called from the authed Round 1 page.
+  try {
+    await requireUser();
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "AGENT_ERROR" }, { status: 500 })
+    );
+  }
+
   let parsed: z.infer<typeof requestSchema>;
   try {
     parsed = requestSchema.parse(await request.json());

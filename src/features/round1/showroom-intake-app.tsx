@@ -14,7 +14,10 @@ import { AgentChatPanel } from "./agent-chat-panel";
 import { ElevationPreview } from "./elevations/elevation-preview";
 import { LayoutPreview } from "./layout-preview";
 import { RenderingPreferencesStep } from "./rendering-preferences-step";
-import { rasterizeRenderingReferences } from "./rendering-references";
+import {
+  rasterizeImageSourceToPngBase64,
+  rasterizeRenderingReferences
+} from "./rendering-references";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
@@ -25,9 +28,11 @@ import {
   renderingPreferenceStampForForm,
   renderingPreferenceStampMatches,
   renderingPreferencesComplete,
+  selectedRenderingColor,
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
+import { LogoutButton } from "@/features/platform/logout-button";
 import {
   AdjustPositionsStep,
   AppliancesStep,
@@ -69,9 +74,6 @@ const EMPTY_PRELIMINARY_CABINET_ESTIMATE: PreliminaryCabinetEstimate = {
   notForProduction: true
 };
 
-const PROJECT_ID_STORAGE_KEY = "round1ProjectId";
-const DEFAULT_PROJECT_CUSTOMER_NAME = "Showroom Round 1";
-
 export function shouldApplySnapshotRestore({
   cancelled,
   hasSavedSnapshot,
@@ -92,9 +94,11 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const [fixedPositionsConfirmed, setFixedPositionsConfirmed] = useState(false);
   const [cabinetFillGenerated, setCabinetFillGenerated] = useState(false);
   const [cabinetColors, setCabinetColors] = useState<CabinetColor[]>([]);
+  const [cabinetColorsError, setCabinetColorsError] = useState(false);
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
   const projectIdRef = useRef<string | null>(null);
+  const prefsSaveControllerRef = useRef<AbortController | null>(null);
   const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
   const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
@@ -152,6 +156,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setRenderingError(null);
     if (!projectId) return;
 
+    // Cancel any in-flight preference save so overlapping rapid selections can't
+    // land out of order (the latest selection wins).
+    prefsSaveControllerRef.current?.abort();
+    const controller = new AbortController();
+    prefsSaveControllerRef.current = controller;
+
     void (async () => {
       try {
         const response = await fetch(`/api/projects/${projectId}/round1/state`, {
@@ -162,12 +172,14 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
             positionOverrides,
             fixedPositionsConfirmed,
             cabinetFillGenerated
-          })
+          }),
+          signal: controller.signal
         });
         if (!response.ok) {
           throw new Error("Unable to save rendering preferences");
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
         setRenderingError(
           "Unable to save rendering preferences. The current selection is kept locally."
         );
@@ -183,52 +195,26 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   // Persists the frozen snapshot to the server repository. Lazily creates the
   // project on first save and remembers its id so refreshes can restore it.
   const persistSnapshot = useCallback(async (snap: Round1Snapshot) => {
+    if (!projectId) return;
     setPersistState("saving");
     try {
-      if (projectId) {
-        // Authenticated project-scoped persistence. Save the editable Round 1
-        // state and the frozen snapshot under the project. The server loads the
-        // authoritative snapshot back by project id and never trusts
-        // client-posted plan data for rendering.
-        projectIdRef.current = projectId;
-        const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            showroomForm: snap.showroomForm,
-            positionOverrides: snap.positionOverrides,
-            fixedPositionsConfirmed: true,
-            cabinetFillGenerated: true
-          })
-        });
-        if (!savedState.ok) throw new Error("Unable to save Round 1 state");
-        const saved = await fetch(`/api/projects/${projectId}/round1/snapshot`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(snap)
-        });
-        if (!saved.ok) throw new Error("Unable to save snapshot");
-        setPersistState("saved");
-        return;
-      }
-
-      // Legacy localStorage-scoped path for the standalone dev workflow.
-      let id = projectIdRef.current;
-      if (!id) {
-        const created = await fetch("/api/round1/projects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customerName: DEFAULT_PROJECT_CUSTOMER_NAME })
-        });
-        if (!created.ok) throw new Error("Unable to create project");
-        const json = await created.json();
-        id = json.project.id as string;
-        projectIdRef.current = id;
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(PROJECT_ID_STORAGE_KEY, id);
-        }
-      }
-      const saved = await fetch(`/api/round1/projects/${id}/snapshot`, {
+      // Authenticated project-scoped persistence. Save the editable Round 1
+      // state and the frozen snapshot under the project. The server loads the
+      // authoritative snapshot back by project id and never trusts client-posted
+      // plan data for rendering.
+      projectIdRef.current = projectId;
+      const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showroomForm: snap.showroomForm,
+          positionOverrides: snap.positionOverrides,
+          fixedPositionsConfirmed: true,
+          cabinetFillGenerated: true
+        })
+      });
+      if (!savedState.ok) throw new Error("Unable to save Round 1 state");
+      const saved = await fetch(`/api/projects/${projectId}/round1/snapshot`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(snap)
@@ -236,11 +222,18 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       if (!saved.ok) throw new Error("Unable to save snapshot");
       setPersistState("saved");
     } catch {
-      // Keep the snapshot in local state; the server copy can be retried on the
-      // next generation. Surface a non-blocking error in the panel.
+      // Keep the snapshot in local state and surface "error" so the user can
+      // retry the save in place (Round1SnapshotPanel onRetrySave) instead of
+      // being stuck with rendering disabled.
       setPersistState("error");
     }
   }, [projectId]);
+
+  // Re-run the snapshot save after a transient failure without rebuilding it, so
+  // a network blip on save doesn't block rendering or force a destructive redo.
+  const handleRetrySnapshotSave = useCallback(() => {
+    if (snapshot) void persistSnapshot(snapshot);
+  }, [snapshot, persistSnapshot]);
 
   const startDraggableHighlightCue = useCallback(() => {
     if (highlightTimerRef.current) {
@@ -253,27 +246,33 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     }, 5000);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const response = await fetch("/api/cabinet-colors");
-        if (!response.ok || cancelled) return;
-        const json = await response.json();
-        const colors = Array.isArray(json) ? json : json.colors;
-        if (Array.isArray(colors)) {
-          setCabinetColors(colors);
-        }
-      } catch {
-        if (!cancelled) setCabinetColors([]);
+  // Load the cabinet color library. A failed load is tracked separately from a
+  // genuinely empty library so the Rendering Preferences step can show a
+  // "couldn't load — retry" state instead of the misleading "ask an Admin to
+  // configure cabinet colors" empty state.
+  const loadCabinetColors = useCallback(async (signal?: AbortSignal) => {
+    setCabinetColorsError(false);
+    try {
+      const response = await fetch("/api/cabinet-colors", { signal });
+      if (!response.ok) {
+        setCabinetColorsError(true);
+        return;
       }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      const json = await response.json();
+      const colors = Array.isArray(json) ? json : json.colors;
+      if (Array.isArray(colors)) {
+        setCabinetColors(colors);
+      }
+    } catch {
+      if (!signal?.aborted) setCabinetColorsError(true);
+    }
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadCabinetColors(controller.signal);
+    return () => controller.abort();
+  }, [loadCabinetColors]);
 
   useEffect(() => {
     if (step !== ADJUST_POSITIONS_STEP_INDEX || hasEnteredAdjustPositions) {
@@ -339,10 +338,9 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const handleGenerateRendering = useCallback(async () => {
     const referenceTopDownSvg = referenceTopDownRef.current;
     const referenceElevationSvg = referenceElevationRef.current;
-    const resolvedProjectId = projectId ?? projectIdRef.current;
     if (
       !referenceTopDownSvg ||
-      !resolvedProjectId ||
+      !projectId ||
       !snapshot ||
       !renderingPreferencesComplete(cabinetColors, form)
     ) {
@@ -352,18 +350,49 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setRenderingBusy(true);
     setRenderingError(null);
     try {
+      // Persist the latest finish selection BEFORE rendering: the rendering route
+      // builds the prompt from the saved server state, so an unsaved color would
+      // otherwise render with the previously-saved finish.
+      const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showroomForm: form,
+          positionOverrides,
+          fixedPositionsConfirmed,
+          cabinetFillGenerated
+        })
+      });
+      if (!savedState.ok) {
+        throw new Error("Couldn't save your color selection. Please try again.");
+      }
+
       const referenceImagesBase64 = await rasterizeRenderingReferences([
         referenceTopDownSvg,
         referenceElevationSvg
       ]);
+      // Also send the selected door color's swatch as a MATERIAL reference so the
+      // image model matches the actual color/finish, not just the text prompt.
+      const selectedColor = selectedRenderingColor(cabinetColors, form);
+      if (selectedColor?.swatchImageUrl) {
+        try {
+          const swatchPng = await rasterizeImageSourceToPngBase64(
+            selectedColor.swatchImageUrl
+          );
+          if (swatchPng) referenceImagesBase64.push(swatchPng);
+        } catch {
+          // Best-effort: fall back to the text prompt if the swatch can't rasterize.
+        }
+      }
       const response = await fetch(
-        projectId
-          ? `/api/projects/${resolvedProjectId}/round1/renderings`
-          : `/api/round1/projects/${resolvedProjectId}/rendering`,
+        `/api/projects/${projectId}/round1/renderings`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ referenceImagesBase64 })
+          body: JSON.stringify({ referenceImagesBase64 }),
+          // Recover the UI if the whole request stalls (the server also caps the
+          // upstream image call), instead of spinning on "Generating..." forever.
+          signal: AbortSignal.timeout(120_000)
         }
       );
       if (!response.ok) {
@@ -381,12 +410,24 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       );
     } catch (error) {
       setRenderingError(
-        error instanceof Error ? error.message : "Rendering failed"
+        error instanceof Error
+          ? error.name === "TimeoutError"
+            ? "Rendering timed out. Please try again."
+            : error.message
+          : "Rendering failed"
       );
     } finally {
       setRenderingBusy(false);
     }
-  }, [cabinetColors, form, projectId, snapshot]);
+  }, [
+    cabinetColors,
+    form,
+    projectId,
+    snapshot,
+    positionOverrides,
+    fixedPositionsConfirmed,
+    cabinetFillGenerated
+  ]);
 
   const handleResetPositions = useCallback(() => {
     localSessionChangedRef.current = true;
@@ -395,6 +436,10 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setCabinetFillGenerated(false);
     setSnapshot(null);
     setPersistState("idle");
+    // Send the user back to Adjust Positions so they can't sit on the Rendering
+    // step with every action disabled; they must re-confirm + regenerate fill.
+    setStep(ADJUST_POSITIONS_STEP_INDEX);
+    setMaxAccessibleStep(ADJUST_POSITIONS_STEP_INDEX);
     // Keep the last rendering visible; it will surface as stale.
     setRenderingError(null);
   }, []);
@@ -430,6 +475,13 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         }
         if (latestSnapshot) {
           setSnapshot(latestSnapshot);
+          // A persisted snapshot proves positions were confirmed and cabinet fill
+          // was generated; derive both flags from it rather than trusting a
+          // possibly-skewed saved-state row (state + snapshot are written
+          // non-atomically), which could otherwise land the user on a step with
+          // disabled actions.
+          setFixedPositionsConfirmed(true);
+          setCabinetFillGenerated(true);
           setPersistState("saved");
           setMaxAccessibleStep(SHOWROOM_STEPS.length - 1);
         }
@@ -443,94 +495,22 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     };
   }, [projectId]);
 
-  // On mount, restore the last persisted snapshot (if any) so a refresh keeps
-  // the frozen Round 1 result. The snapshot carries everything needed to
-  // rehydrate the editing session consistently. Standalone dev workflow only;
-  // the project-scoped effect above owns restore when a projectId is present.
+  // Warn before leaving (back link / refresh / tab close) when there are unsaved
+  // in-progress intake edits that haven't been frozen and saved to the server,
+  // so navigating away doesn't silently discard the work.
   useEffect(() => {
-    if (projectId) return;
-    if (typeof window === "undefined") return;
-    const storedId = window.localStorage.getItem(PROJECT_ID_STORAGE_KEY);
-    if (!storedId) return;
-    projectIdRef.current = storedId;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const response = await fetch(`/api/round1/projects/${storedId}`);
-        if (!response.ok) {
-          if (response.status === 404) {
-            window.localStorage.removeItem(PROJECT_ID_STORAGE_KEY);
-            projectIdRef.current = null;
-          }
-          return;
-        }
-        const json = await response.json();
-        const saved = json.project?.snapshot as Round1Snapshot | undefined;
-        if (!saved) return;
-        if (
-          !shouldApplySnapshotRestore({
-            cancelled,
-            hasSavedSnapshot: true,
-            localSessionChanged: localSessionChangedRef.current
-          })
-        ) {
-          return;
-        }
-        
-        // Parse the showroom form using round1FormSchema to ensure all defaults are populated
-        let restoredForm: Round1FormInput;
-        try {
-          restoredForm = round1FormSchema.parse(saved.showroomForm);
-        } catch (e) {
-          console.warn("Failed to parse saved showroomForm with round1FormSchema, attempting partial recovery", e);
-          // Defensive fallback: merge defaults with whatever was saved
-          restoredForm = {
-            ...createDefaultShowroomForm(),
-            ...saved.showroomForm,
-            layoutSensitiveCabinets: {
-              ...createDefaultShowroomForm().layoutSensitiveCabinets,
-              ...(saved.showroomForm.layoutSensitiveCabinets || {}),
-              cookingAppliances: {
-                ...createDefaultShowroomForm().layoutSensitiveCabinets.cookingAppliances,
-                ...(saved.showroomForm.layoutSensitiveCabinets?.cookingAppliances || {})
-              }
-            }
-          };
-        }
-        setForm(restoredForm);
-        setPositionOverrides(saved.positionOverrides);
-        setFixedPositionsConfirmed(true);
-        setCabinetFillGenerated(true);
-        setSnapshot(saved);
-        setPersistState("saved");
-        setMaxAccessibleStep(SHOWROOM_STEPS.length - 1);
-        // Restore the last non-authoritative concept preview, if any. Staleness
-        // is derived from `basedOnSnapshotGeneratedAt` vs the restored snapshot.
-        const rendering = json.project?.latestRendering as
-          | {
-              imageBase64?: string;
-              basedOnSnapshotGeneratedAt?: string;
-              basedOnRenderingPreferences?: RenderingPreferenceStamp;
-            }
-          | undefined;
-        if (rendering?.imageBase64) {
-          setRenderingImage(`data:image/png;base64,${rendering.imageBase64}`);
-          setRenderingBasedOn(rendering.basedOnSnapshotGeneratedAt ?? null);
-          setRenderingPreferencesBasedOn(
-            rendering.basedOnRenderingPreferences ??
-              renderingPreferenceStampForForm(restoredForm, cabinetColors)
-          );
-        }
-      } catch {
-        // Ignore restore failures; the user can regenerate the snapshot.
-      }
-    })();
-
-    return () => {
-      cancelled = true;
+    const hasUnsavedEdits =
+      localSessionChangedRef.current &&
+      persistState !== "saved" &&
+      persistState !== "saving";
+    if (!hasUnsavedEdits) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
     };
-  }, [projectId]);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [persistState, cabinetFillGenerated, form, positionOverrides]);
 
   const goToNextStep = useCallback(() => {
     localSessionChangedRef.current = true;
@@ -553,10 +533,21 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       <header className="border-b border-slate-200 bg-white px-6 py-5">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black tracking-normal">
+            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-sky-700">
+              <a href="/projects" className="hover:underline">
+                ← Back to projects
+              </a>
+              {projectId ? (
+                <a href={`/projects/${projectId}`} className="hover:underline">
+                  Back to project
+                </a>
+              ) : null}
+            </div>
+            <h1 className="mt-1 text-2xl font-black tracking-normal">
               Showroom Intake + Layout Preview
             </h1>
           </div>
+          <LogoutButton />
         </div>
       </header>
 
@@ -600,6 +591,8 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
             <RenderingPreferencesStep
               form={form}
               colors={cabinetColors}
+              colorsError={cabinetColorsError}
+              onRetryLoadColors={() => void loadCabinetColors()}
               onFormChange={updateRenderingPreferencesForm}
               onGenerateCabinetFill={handleGenerateCabinetFill}
               onGenerateRendering={handleGenerateRendering}
@@ -733,6 +726,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
             <Round1SnapshotPanel
               snapshot={snapshot}
               persistState={persistState}
+              onRetrySave={handleRetrySnapshotSave}
             />
           </Panel>
 
