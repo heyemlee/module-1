@@ -1,12 +1,16 @@
 import Link from "next/link";
 import type { CompanyUserSummary } from "@/server/platform/user-admin-repository";
 import { CreateUserForm } from "./create-user-form";
+import { LogoutButton } from "./logout-button";
 
 export function AdminUsersView({ users }: { users: CompanyUserSummary[] }) {
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-8 text-stone-950">
       <div className="mx-auto max-w-4xl">
-        <Link href="/projects" className="text-sm text-stone-600">Back to projects</Link>
+        <div className="flex items-center justify-between">
+          <Link href="/projects" className="text-sm text-stone-600">Back to projects</Link>
+          <LogoutButton />
+        </div>
         <h1 className="mt-4 text-2xl font-semibold">Users</h1>
         <section className="mt-6 grid gap-6 md:grid-cols-[1fr_320px]">
           <div className="overflow-hidden rounded border border-stone-300 bg-white">

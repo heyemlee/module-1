@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createOpenAIImageAdapterFromEnv } from "@/infrastructure/image/openai-rest-image-client";
 import { generateRound1Rendering } from "@/server/round1/rendering-service";
 import { requireUser } from "@/server/platform/auth-service";
+import { authErrorResponse } from "@/server/platform/api-errors";
+import type { AuthUser } from "@/server/platform/types";
 import {
   getCabinetColor,
   isColorCompatibleWithStyle
@@ -23,18 +25,33 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const user = await requireUser();
-  const { projectId } = await params;
-  const project = await getProjectForUser(projectId, user);
-  if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  return NextResponse.json({ renderings: await listRenderings(projectId) });
+  try {
+    const user = await requireUser();
+    const { projectId } = await params;
+    const project = await getProjectForUser(projectId, user);
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return NextResponse.json({ renderings: await listRenderings(projectId) });
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unable to list renderings" }, { status: 500 })
+    );
+  }
 }
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const user = await requireUser();
+  let user: AuthUser;
+  try {
+    user = await requireUser();
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unable to generate Round 1 concept rendering" }, { status: 500 })
+    );
+  }
   const { projectId } = await params;
   const project = await getProjectForUser(projectId, user);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });

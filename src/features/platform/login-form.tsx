@@ -12,17 +12,22 @@ export function LoginForm() {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-    setBusy(false);
-    if (!response.ok) {
-      setError("Invalid email or password");
-      return;
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      if (!response.ok) {
+        setError("Invalid email or password");
+        return;
+      }
+      window.location.href = "/projects";
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    window.location.href = "/projects";
   }
 
   return (

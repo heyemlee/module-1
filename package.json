@@ -9,6 +9,8 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs",
     "db:seed-user": "node scripts/seed-user.mjs",
+    "db:prepare-cabinet-colors": "node scripts/prepare-cabinet-colors.mjs",
+    "db:seed-cabinet-colors": "node scripts/seed-cabinet-colors.mjs",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest"

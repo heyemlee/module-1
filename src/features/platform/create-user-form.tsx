@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { UserRole } from "@/server/platform/types";
 
 const ROLES: UserRole[] = ["SALES", "DESIGNER", "ADMIN"];
@@ -12,26 +13,36 @@ export function CreateUserForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim(), name: name.trim(), role, password })
-    });
-    if (!response.ok) {
-      setBusy(false);
-      if (response.status === 409) {
-        setError("Email already in use");
-      } else {
-        setError("Unable to create user. Check the fields and try again.");
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), name: name.trim(), role, password })
+      });
+      if (!response.ok) {
+        if (response.status === 409) {
+          setError("Email already in use");
+        } else {
+          setError("Unable to create user. Check the fields and try again.");
+        }
+        return;
       }
-      return;
+      router.refresh();
+      setEmail("");
+      setName("");
+      setPassword("");
+      setRole("SALES");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    window.location.reload();
   }
 
   const canSubmit = email.trim() && name.trim() && password.length >= 8;

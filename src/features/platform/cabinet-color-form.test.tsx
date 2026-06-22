@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { CabinetColorForm, buildCabinetColorPayload } from "./cabinet-color-form";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: () => {}, push: () => {}, replace: () => {} })
+}));
 
 describe("CabinetColorForm", () => {
   test("renders the simplified upload-based fields", () => {
