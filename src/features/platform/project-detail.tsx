@@ -17,12 +17,10 @@ export function ProjectDetail({ project }: { project: ProjectSummary }) {
             <h2 className="font-semibold">Round 1 Intake</h2>
             <p className="mt-2 text-sm text-stone-600">Showroom intake, rough layout, snapshot, and rendering.</p>
           </Link>
-          <div className="rounded border border-stone-300 bg-white p-4 opacity-70">
+          <Link href={`/projects/${project.id}/renderings`} className="rounded border border-stone-300 bg-white p-4">
             <h2 className="font-semibold">Renderings</h2>
-            <p className="mt-2 text-sm text-stone-600">
-              Concept images are generated and viewed inside Round 1 Intake.
-            </p>
-          </div>
+            <p className="mt-2 text-sm text-stone-600">Saved Round 1 concept images for this project.</p>
+          </Link>
           <div className="rounded border border-stone-300 bg-white p-4 opacity-70">
             <h2 className="font-semibold">Round 2</h2>
             <p className="mt-2 text-sm text-stone-600">Reserved for detailed measured design.</p>

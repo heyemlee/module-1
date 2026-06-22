@@ -104,6 +104,15 @@ export function buildRound1RenderingPrompt(
     `Approximate room size: ${roomDimensions}.`
   ];
 
+  // When a swatch image is available it is sent to the image model as an extra
+  // MATERIAL reference, so tell the model to match the cabinet door finish to it.
+  if (preferences.color.swatchImageUrl) {
+    lines.push(
+      "",
+      "A separate close-up image of the selected cabinet door color/material swatch is also provided as a reference. Match the cabinet door fronts' exact color, tone, sheen, and any wood-grain pattern to that swatch. The swatch is a material reference only — do not render it as a physical object in the room."
+    );
+  }
+
   // Explicit per-wall walkthrough, derived from the deterministic geometry.
   for (const wall of VISIBLE_WALLS) {
     const sentence = wallWalkthroughSentence(floorPlan, wall);

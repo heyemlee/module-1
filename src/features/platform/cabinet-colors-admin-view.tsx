@@ -38,7 +38,6 @@ export function CabinetColorsAdminView({ colors }: { colors: CabinetColor[] }) {
                         <div className="mt-3 flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold">{color.name}</p>
-                            <p className="text-sm text-stone-500">{color.colorCode ?? "No code"}</p>
                           </div>
                           <span className={`rounded px-2 py-1 text-xs font-semibold ${color.active ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
                             {color.active ? "Active" : "Inactive"}

@@ -14,7 +14,10 @@ import { AgentChatPanel } from "./agent-chat-panel";
 import { ElevationPreview } from "./elevations/elevation-preview";
 import { LayoutPreview } from "./layout-preview";
 import { RenderingPreferencesStep } from "./rendering-preferences-step";
-import { rasterizeRenderingReferences } from "./rendering-references";
+import {
+  rasterizeImageSourceToPngBase64,
+  rasterizeRenderingReferences
+} from "./rendering-references";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
 import {
   createDefaultCabinetRuns,
@@ -25,6 +28,7 @@ import {
   renderingPreferenceStampForForm,
   renderingPreferenceStampMatches,
   renderingPreferencesComplete,
+  selectedRenderingColor,
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
@@ -367,6 +371,19 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         referenceTopDownSvg,
         referenceElevationSvg
       ]);
+      // Also send the selected door color's swatch as a MATERIAL reference so the
+      // image model matches the actual color/finish, not just the text prompt.
+      const selectedColor = selectedRenderingColor(cabinetColors, form);
+      if (selectedColor?.swatchImageUrl) {
+        try {
+          const swatchPng = await rasterizeImageSourceToPngBase64(
+            selectedColor.swatchImageUrl
+          );
+          if (swatchPng) referenceImagesBase64.push(swatchPng);
+        } catch {
+          // Best-effort: fall back to the text prompt if the swatch can't rasterize.
+        }
+      }
       const response = await fetch(
         `/api/projects/${projectId}/round1/renderings`,
         {
