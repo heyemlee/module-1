@@ -443,6 +443,12 @@ describe("ShowroomIntakeApp", () => {
     expect(html).not.toContain("Ready To Generate");
     expect(html).not.toContain("The top-down layout plan updates live as you fill the form.");
   });
+
+  test("includes Rendering Preferences as the sixth showroom step", () => {
+    const html = renderToStaticMarkup(<ShowroomIntakeApp />);
+
+    expect(html).toContain("Rendering Preferences");
+  });
 });
 
 describe("CabinetFillSummaryPanel", () => {

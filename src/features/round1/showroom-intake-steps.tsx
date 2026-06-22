@@ -629,27 +629,16 @@ function RoughApplianceFields({
 export function AdjustPositionsStep({
   onReset,
   onConfirmPositions,
-  onGenerateCabinetFill,
   hasOverrides,
   fixedPositionsConfirmed,
   cabinetFillGenerated
 }: {
   onReset: () => void;
   onConfirmPositions: () => void;
-  onGenerateCabinetFill: () => void;
   hasOverrides: boolean;
   fixedPositionsConfirmed: boolean;
   cabinetFillGenerated: boolean;
 }) {
-  const primaryAction = fixedPositionsConfirmed
-    ? onGenerateCabinetFill
-    : onConfirmPositions;
-  const primaryLabel = !fixedPositionsConfirmed
-    ? "Confirm Fixed Positions"
-    : cabinetFillGenerated
-      ? "Cabinet Fill Generated"
-      : "Generate Cabinet Fill";
-
   return (
     <Step title="5. Adjust Positions">
       <div className="mb-4 flex items-center justify-between">
@@ -680,11 +669,13 @@ export function AdjustPositionsStep({
         </button>
         <button
           type="button"
-          onClick={primaryAction}
-          disabled={cabinetFillGenerated}
+          onClick={onConfirmPositions}
+          disabled={fixedPositionsConfirmed}
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {primaryLabel}
+          {fixedPositionsConfirmed
+            ? "Fixed Positions Confirmed"
+            : "Confirm Fixed Positions"}
         </button>
       </div>
     </Step>

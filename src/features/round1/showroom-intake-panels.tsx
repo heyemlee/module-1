@@ -140,8 +140,8 @@ export function RenderingControls({
       {!canRender ? (
         <p className="text-xs leading-5 text-slate-500">
           {image
-            ? "Regenerate cabinet fill, then re-run to refresh this preview."
-            : "Available after cabinet fill is generated."}
+            ? "Regenerate cabinet fill and confirm rendering preferences, then re-run to refresh this preview."
+            : "Available after cabinet fill is generated and a cabinet color is confirmed."}
         </p>
       ) : null}
       {error && (

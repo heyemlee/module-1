@@ -9,9 +9,11 @@ import {
   type PreliminaryCabinetEstimate,
   type Round1FormInput
 } from "@/domain/round1";
+import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { AgentChatPanel } from "./agent-chat-panel";
 import { ElevationPreview } from "./elevations/elevation-preview";
 import { LayoutPreview } from "./layout-preview";
+import { RenderingPreferencesStep } from "./rendering-preferences-step";
 import { rasterizeRenderingReferences } from "./rendering-references";
 import { type PositionOverrides } from "./floorplan/plan-geometry";
 import {
@@ -19,6 +21,7 @@ import {
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
+import { renderingPreferencesComplete } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
 import {
   AdjustPositionsStep,
@@ -39,7 +42,8 @@ export const SHOWROOM_STEPS = [
   "Openings",
   "Layout",
   "Appliances",
-  "Adjust Positions"
+  "Adjust Positions",
+  "Rendering Preferences"
 ] as const;
 
 const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
@@ -48,6 +52,7 @@ const PREVIEW_STAGES = [
   "openings",
   "layout",
   "appliances",
+  "adjust",
   "adjust"
 ] as const;
 
@@ -81,6 +86,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const [positionOverrides, setPositionOverrides] = useState<PositionOverrides>({});
   const [fixedPositionsConfirmed, setFixedPositionsConfirmed] = useState(false);
   const [cabinetFillGenerated, setCabinetFillGenerated] = useState(false);
+  const [cabinetColors, setCabinetColors] = useState<CabinetColor[]>([]);
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
   const projectIdRef = useRef<string | null>(null);
@@ -130,6 +136,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setCabinetFillGenerated(false);
     setSnapshot(null);
     setPersistState("idle");
+  }, []);
+
+  const updateRenderingPreferencesForm = useCallback((next: Round1FormInput) => {
+    localSessionChangedRef.current = true;
+    setForm(next);
+    setRenderingError(null);
   }, []);
 
   // Persists the frozen snapshot to the server repository. Lazily creates the
@@ -206,6 +218,28 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch("/api/cabinet-colors");
+        if (!response.ok || cancelled) return;
+        const json = await response.json();
+        const colors = Array.isArray(json) ? json : json.colors;
+        if (Array.isArray(colors)) {
+          setCabinetColors(colors);
+        }
+      } catch {
+        if (!cancelled) setCabinetColors([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (step !== ADJUST_POSITIONS_STEP_INDEX || hasEnteredAdjustPositions) {
       return;
     }
@@ -270,7 +304,14 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     const referenceTopDownSvg = referenceTopDownRef.current;
     const referenceElevationSvg = referenceElevationRef.current;
     const resolvedProjectId = projectId ?? projectIdRef.current;
-    if (!referenceTopDownSvg || !resolvedProjectId || !snapshot) return;
+    if (
+      !referenceTopDownSvg ||
+      !resolvedProjectId ||
+      !snapshot ||
+      !renderingPreferencesComplete(cabinetColors, form)
+    ) {
+      return;
+    }
 
     setRenderingBusy(true);
     setRenderingError(null);
@@ -305,7 +346,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     } finally {
       setRenderingBusy(false);
     }
-  }, [projectId, snapshot]);
+  }, [cabinetColors, form, projectId, snapshot]);
 
   const handleResetPositions = useCallback(() => {
     localSessionChangedRef.current = true;
@@ -500,10 +541,26 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
             <AdjustPositionsStep
               onReset={handleResetPositions}
               onConfirmPositions={() => setFixedPositionsConfirmed(true)}
-              onGenerateCabinetFill={handleGenerateCabinetFill}
               hasOverrides={Object.keys(positionOverrides).length > 0}
               fixedPositionsConfirmed={fixedPositionsConfirmed}
               cabinetFillGenerated={cabinetFillGenerated}
+            />
+          )}
+          {step === 5 && (
+            <RenderingPreferencesStep
+              form={form}
+              colors={cabinetColors}
+              onFormChange={updateRenderingPreferencesForm}
+              onGenerateCabinetFill={handleGenerateCabinetFill}
+              onGenerateRendering={handleGenerateRendering}
+              canGenerateCabinetFill={
+                fixedPositionsConfirmed && !cabinetFillGenerated
+              }
+              canGenerateRendering={
+                persistState === "saved" &&
+                renderingPreferencesComplete(cabinetColors, form)
+              }
+              renderingBusy={renderingBusy}
             />
           )}
           <div className="mt-6 flex justify-between border-t border-slate-200 pt-4">
@@ -545,7 +602,10 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
           {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
 
           <RenderingControls
-            canRender={persistState === "saved"}
+            canRender={
+              persistState === "saved" &&
+              renderingPreferencesComplete(cabinetColors, form)
+            }
             busy={renderingBusy}
             error={renderingError}
             stale={
