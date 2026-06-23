@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  CabinetConstructionStylePicker,
+  type CabinetConstructionOption
+} from "@/components/ui/cabinet-construction-style-picker";
 import type { CabinetStyle, Round1FormInput } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import {
@@ -13,9 +17,21 @@ import {
 } from "./rendering-preferences";
 import { Step } from "./showroom-intake-controls";
 
-const CABINET_STYLES: CabinetStyle[] = [
-  "EUROPEAN_FRAMELESS",
-  "AMERICAN_FRAMED"
+const CABINET_STYLE_OPTIONS: CabinetConstructionOption<CabinetStyle>[] = [
+  {
+    value: "EUROPEAN_FRAMELESS",
+    label: CABINET_STYLE_LABELS.EUROPEAN_FRAMELESS,
+    image:
+      "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=1200&q=80",
+    description: "Clean slab lines, concealed hardware, and modern frameless construction."
+  },
+  {
+    value: "AMERICAN_FRAMED",
+    label: CABINET_STYLE_LABELS.AMERICAN_FRAMED,
+    image:
+      "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?auto=format&fit=crop&w=1200&q=80",
+    description: "Classic face-frame proportions with framed doors and residential detail."
+  }
 ];
 
 export function RenderingPreferencesStep({
@@ -41,6 +57,7 @@ export function RenderingPreferencesStep({
   canGenerateRendering: boolean;
   renderingBusy: boolean;
 }) {
+  const [pendingStyle, setPendingStyle] = useState<CabinetStyle | null>(null);
   const [pendingColor, setPendingColor] = useState<CabinetColor | null>(null);
   const renderingPreferences = renderingPreferencesForForm(form);
   const selectedStyle = renderingPreferences.cabinetStyle;
@@ -59,6 +76,11 @@ export function RenderingPreferencesStep({
       renderingPreferences: nextRenderingPreferencesForStyle(form, colors, style)
     });
     setPendingColor(null);
+    setPendingStyle(null);
+  };
+
+  const requestStyle = (style: CabinetStyle) => {
+    setPendingStyle(style);
   };
 
   const confirmColor = () => {
@@ -81,25 +103,11 @@ export function RenderingPreferencesStep({
           <p className="mb-2 text-sm font-semibold text-[var(--app-muted)]">
             Cabinet construction style
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {CABINET_STYLES.map((style) => {
-              const selected = style === selectedStyle;
-              return (
-                <button
-                  key={style}
-                  type="button"
-                  onClick={() => setStyle(style)}
-                  className={`rounded-lg border px-4 py-3 text-left text-sm font-bold transition ${
-                    selected
-                      ? "border-[rgba(0,113,227,0.55)] bg-[var(--app-blue-soft)] text-[var(--app-blue)]"
-                      : "border-[var(--app-border)] bg-white text-[var(--app-ink)] hover:bg-black/[0.025]"
-                  }`}
-                >
-                  {CABINET_STYLE_LABELS[style]}
-                </button>
-              );
-            })}
-          </div>
+          <CabinetConstructionStylePicker
+            value={selectedStyle}
+            options={CABINET_STYLE_OPTIONS}
+            onRequestSelect={requestStyle}
+          />
         </div>
 
         {activeColors.length === 0 ? (
@@ -278,6 +286,42 @@ export function RenderingPreferencesStep({
                 className="uiverse-fill-button px-4 py-2"
               >
                 {isChangingLockedColor(pendingColor) ? "Change Finish" : "Confirm Color"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingStyle ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/70 bg-white/95 p-5 shadow-2xl backdrop-blur">
+            <p className="text-xs font-bold text-[var(--app-blue)]">
+              {pendingStyle === selectedStyle
+                ? "Confirm cabinet construction style"
+                : "Change cabinet construction style"}
+            </p>
+            <h3 className="mt-2 text-lg font-bold text-[var(--app-ink)]">
+              {CABINET_STYLE_LABELS[pendingStyle]}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
+              {pendingStyle === selectedStyle
+                ? "Lock this construction style for the rendering preferences."
+                : "This will replace the locked construction style. You will need to generate a new rendering after changing it."}
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingStyle(null)}
+                className="uiverse-fill-button px-4 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setStyle(pendingStyle)}
+                className="uiverse-fill-button px-4 py-2"
+              >
+                {pendingStyle === selectedStyle ? "Confirm Style" : "Change Style"}
               </button>
             </div>
           </div>

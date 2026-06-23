@@ -1,4 +1,13 @@
 import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import type { AuthUser } from "@/server/platform/types";
 import type { ProjectSummary } from "@/server/platform/project-repository";
 import { LogoutButton } from "./logout-button";
@@ -67,74 +76,71 @@ export function ProjectDashboard({
             <h2 className="text-xl font-bold text-[var(--app-ink)]">Projects</h2>
             <label className="min-w-[280px] flex-1 text-sm font-medium text-[var(--app-muted)] md:max-w-md">
               Search customer, address, or project
-              <input
+              <Input
                 name="q"
-                className="apple-input mt-1"
+                className="mt-1"
                 placeholder="Search projects..."
               />
             </label>
           </form>
 
           {projects.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full caption-bottom text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--app-border)]">
-                    <th className="h-12 px-4 text-left align-middle font-semibold text-[var(--app-muted)]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                    <TableHead>
                       Customer
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-semibold text-[var(--app-muted)]">
+                    </TableHead>
+                    <TableHead>
                       Project
-                    </th>
-                    <th className="h-12 px-4 text-left align-middle font-semibold text-[var(--app-muted)]">
+                    </TableHead>
+                    <TableHead>
                       Status
-                    </th>
-                    <th className="h-12 px-4 text-right align-middle font-semibold text-[var(--app-muted)]">
+                    </TableHead>
+                    <TableHead className="text-right">
                       Updated
-                    </th>
-                    <th className="h-12 px-4 text-right align-middle font-semibold text-[var(--app-muted)]">
+                    </TableHead>
+                    <TableHead className="text-right">
                       Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {projects.map((project) => (
-                    <tr
+                    <TableRow
                       key={project.id}
-                      className="border-b border-[var(--app-border)] transition-colors last:border-b-0 hover:bg-black/[0.025]"
                     >
-                      <td className="p-4 align-middle">
+                      <TableCell>
                         <Link
                           href={`/projects/${project.id}`}
                           className="font-semibold text-[var(--app-ink)] hover:text-[var(--app-blue)]"
                         >
                           {project.customerName}
                         </Link>
-                      </td>
-                      <td className="p-4 align-middle text-[var(--app-muted)]">
+                      </TableCell>
+                      <TableCell className="text-[var(--app-muted)]">
                         {project.projectName}
-                      </td>
-                      <td className="p-4 align-middle">
+                      </TableCell>
+                      <TableCell>
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(project.status)}`}>
                           {STATUS_LABELS[project.status]}
                         </span>
-                      </td>
-                      <td className="p-4 text-right align-middle text-[var(--app-muted)]">
+                      </TableCell>
+                      <TableCell className="text-right text-[var(--app-muted)]">
                         {new Date(project.updatedAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-right align-middle">
+                      </TableCell>
+                      <TableCell className="text-right">
                         <Link
                           href={`/projects/${project.id}`}
                           className="uiverse-fill-button px-3 py-2 text-xs"
                         >
                           Open
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TableBody>
+              </Table>
           )}
 
           {projects.length === 0 && (

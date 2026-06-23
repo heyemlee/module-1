@@ -1,4 +1,13 @@
 import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 export function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -35,13 +44,12 @@ export function NumberField({
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-semibold text-[var(--app-muted)]">{label}</span>
-      <input
+      <Input
         type="number"
         value={value ?? ""}
         onChange={(event) =>
           onChange(event.target.value ? Number(event.target.value) : null)
         }
-        className="apple-input"
       />
     </label>
   );
@@ -64,7 +72,9 @@ export function SelectField<T extends string>({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
-        className="apple-dropdown"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -72,6 +82,29 @@ export function SelectField<T extends string>({
           </option>
         ))}
       </select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="h-[42px] w-full justify-between">
+            {value}
+            <ChevronDown
+              className="-me-1 ms-2 opacity-60"
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="min-w-[--radix-dropdown-menu-trigger-width]">
+          {options.map((option) => (
+            <DropdownMenuItem
+              key={option}
+              onSelect={() => onChange(option)}
+            >
+              {option}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </label>
   );
 }

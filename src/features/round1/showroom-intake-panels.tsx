@@ -1,6 +1,7 @@
 import {
   type PreliminaryCabinetEstimateSummary
 } from "@/domain/round1";
+import { ImageGeneration } from "@/components/ui/ai-chat-image-generation-1";
 import {
   summarizeRound1Snapshot,
   type Round1Snapshot
@@ -150,17 +151,14 @@ export function RenderingControls({
               Outdated — please regenerate rendering to update.
             </p>
           )}
-          <div className="relative overflow-hidden rounded-xl border border-[var(--app-border)] bg-white">
+          <ImageGeneration active={busy}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={image}
               alt="Round 1 concept rendering"
-              className={`w-full ${stale ? "opacity-60" : ""}`}
+              className={`aspect-video max-w-md object-cover ${stale ? "opacity-60" : ""}`}
             />
-            {busy ? (
-              <div className="pointer-events-none absolute -top-1/4 h-[125%] w-full animate-[image_reveal_30s_linear_forwards] backdrop-blur-3xl" />
-            ) : null}
-          </div>
+          </ImageGeneration>
         </figure>
       )}
     </div>

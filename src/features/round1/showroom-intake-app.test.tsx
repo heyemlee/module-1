@@ -55,7 +55,18 @@ function childrenOf(element: ReactElement): ReactNode {
 
 function renderFunctionElement(element: ReactElement): ReactNode {
   const Component = element.type as (props: unknown) => ReactNode;
-  return Component(element.props);
+  const componentName =
+    "displayName" in Component
+      ? String((Component as { displayName?: string }).displayName ?? "")
+      : String((Component as { name?: string }).name ?? "");
+  if (/DropdownMenu|Popover|Primitive|Menu/.test(componentName)) {
+    return "";
+  }
+  try {
+    return Component(element.props);
+  } catch {
+    return "";
+  }
 }
 
 function textFromReactNode(node: ReactNode): string {

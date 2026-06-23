@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
 import { LogoutButton } from "./logout-button";
 
 export function NewProjectForm() {
@@ -54,23 +55,23 @@ export function NewProjectForm() {
         <form onSubmit={submit} className="app-panel mt-6 space-y-4 p-6">
           <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Customer name
-            <input className="apple-input mt-1" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+            <Input className="mt-1" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
           </label>
           <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Project name
-            <input className="apple-input mt-1" value={projectName} onChange={(event) => setProjectName(event.target.value)} />
+            <Input className="mt-1" value={projectName} onChange={(event) => setProjectName(event.target.value)} />
           </label>
           <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Phone <span className="font-normal text-[var(--app-muted)]">(optional)</span>
-            <input className="apple-input mt-1" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
+            <Input className="mt-1" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
           </label>
           <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Email <span className="font-normal text-[var(--app-muted)]">(optional)</span>
-            <input className="apple-input mt-1" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
+            <Input className="mt-1" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
           </label>
           <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Address <span className="font-normal text-[var(--app-muted)]">(optional)</span>
-            <input className="apple-input mt-1" value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} />
+            <Input className="mt-1" value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} />
           </label>
           {error && <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-sm text-[var(--app-red)]">{error}</p>}
           <button disabled={busy || !customerName.trim() || !projectName.trim()} className="uiverse-fill-button w-full px-4 py-3 disabled:opacity-60">
