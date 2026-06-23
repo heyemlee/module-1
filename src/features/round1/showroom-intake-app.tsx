@@ -552,7 +552,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   return (
     <main ref={shellRef} className="app-page min-h-screen text-[var(--app-ink)]">
       <header className="border-b border-[var(--app-border)] bg-white/80 px-6 py-5 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-[var(--app-blue)]">
               <a href="/projects" className="hover:underline">
@@ -572,7 +572,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[260px_minmax(0,1fr)_430px]">
+      <div className="mx-auto grid max-w-[1800px] gap-6 px-6 py-6 lg:grid-cols-[220px_minmax(450px,1fr)_minmax(450px,1.2fr)] xl:grid-cols-[250px_minmax(500px,1fr)_minmax(550px,1.25fr)]">
         <aside className="round1-animate app-panel h-fit p-3">
           {SHOWROOM_STEPS.map((label, index) => (
             <button
@@ -651,6 +651,28 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         </section>
 
         <aside className="round1-animate space-y-4">
+          {(renderingBusy || renderingImage !== null) && (
+            <RenderingControls
+              canRender={
+                persistState === "saved" &&
+                renderingPreferencesComplete(cabinetColors, form)
+              }
+              busy={renderingBusy}
+              error={renderingError}
+              stale={
+                renderingImage !== null &&
+                (!snapshot ||
+                  renderingBasedOn !== snapshot.generatedAt ||
+                  !renderingPreferenceStampMatches(
+                    renderingPreferencesBasedOn,
+                    form,
+                    cabinetColors
+                  ))
+              }
+              image={renderingImage}
+            />
+          )}
+
           <LayoutPreview
             normalized={result.normalized}
             cabinets={preliminaryEstimate.cabinets}
@@ -665,25 +687,28 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
 
           {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
 
-          <RenderingControls
-            canRender={
-              persistState === "saved" &&
-              renderingPreferencesComplete(cabinetColors, form)
-            }
-            busy={renderingBusy}
-            error={renderingError}
-            stale={
-              renderingImage !== null &&
-              (!snapshot ||
-                renderingBasedOn !== snapshot.generatedAt ||
-                !renderingPreferenceStampMatches(
-                  renderingPreferencesBasedOn,
-                  form,
-                  cabinetColors
-                ))
-            }
-            image={renderingImage}
-          />
+          {!(renderingBusy || renderingImage !== null) && (
+            <RenderingControls
+              canRender={
+                persistState === "saved" &&
+                renderingPreferencesComplete(cabinetColors, form)
+              }
+              busy={renderingBusy}
+              error={renderingError}
+              stale={
+                renderingImage !== null &&
+                (!snapshot ||
+                  renderingBasedOn !== snapshot.generatedAt ||
+                  !renderingPreferenceStampMatches(
+                    renderingPreferencesBasedOn,
+                    form,
+                    cabinetColors
+                  ))
+              }
+              image={renderingImage}
+            />
+          )}
+
 
           {/*
             Hidden, clean reference render bound to the frozen snapshot geometry.

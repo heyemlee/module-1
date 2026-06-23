@@ -20,7 +20,7 @@ export function CabinetConstructionStylePicker<T extends string>({
   onRequestSelect: (value: T) => void;
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2">
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -29,43 +29,35 @@ export function CabinetConstructionStylePicker<T extends string>({
             type="button"
             onClick={() => onRequestSelect(option.value)}
             className={cn(
-              "group relative overflow-hidden rounded-lg border bg-white text-left transition",
+              "group relative flex items-center gap-3 rounded-xl border bg-white p-3 text-left transition",
               selected
-                ? "border-[#333] shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
-                : "border-[var(--app-border)] hover:border-[#333]"
+                ? "border-[var(--app-blue)] ring-1 ring-[var(--app-blue)] bg-blue-50/30"
+                : "border-[var(--app-border)] hover:border-slate-300 hover:shadow-sm"
             )}
           >
-            <span className="block aspect-[4/3] overflow-hidden bg-[var(--app-surface-muted)]">
+            <span className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[var(--app-surface-muted)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={option.image}
                 alt={option.label}
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                className="h-full w-full object-cover transition duration-300 group-hover:scale-110"
                 loading="lazy"
                 decoding="async"
               />
             </span>
-            <span className="block p-4">
-              <span className="flex items-center justify-between gap-3">
-                <span className="text-base font-semibold text-[var(--app-ink)]">
+            <span className="flex-1 overflow-hidden">
+              <span className="flex items-center justify-between gap-2">
+                <span className={cn("truncate text-sm font-bold", selected ? "text-[var(--app-blue)]" : "text-[var(--app-ink)]")}>
                   {option.label}
                 </span>
                 {selected ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#333] px-2.5 py-1 text-xs font-semibold text-white">
-                    <LockKeyhole className="h-3.5 w-3.5" />
-                    Locked
-                  </span>
+                  <Check className="h-4 w-4 shrink-0 text-[var(--app-blue)]" />
                 ) : null}
               </span>
-              <span className="mt-2 block text-sm leading-6 text-[var(--app-muted)]">
+              <span className="mt-0.5 block truncate text-xs text-[var(--app-muted)]">
                 {option.description}
               </span>
             </span>
-            {selected ? (
-              <span className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#333] text-white shadow-lg">
-                <Check className="h-5 w-5" />
-              </span>
-            ) : null}
           </button>
         );
       })}
