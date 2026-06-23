@@ -51,6 +51,37 @@ export function mapRound1StateRow(row: Round1StateRow): Round1State {
   };
 }
 
+// Gallery list rows omit `image_base64` (~2.8MB each) — those are streamed on
+// demand per image via the rendering image route instead of being inlined.
+export type RenderingSummary = Omit<
+  Round1ProjectRendering & { id: string },
+  "imageBase64"
+>;
+
+type RenderingSummaryRow = Omit<RenderingHistoryRow, "image_base64">;
+
+export function mapRenderingSummaryRow(row: RenderingSummaryRow): RenderingSummary {
+  return {
+    id: row.id,
+    model: row.model,
+    prompt: row.prompt,
+    size: row.size,
+    basedOnSnapshotGeneratedAt: row.based_on_snapshot_generated_at.toISOString(),
+    basedOnRenderingPreferences:
+      row.based_on_cabinet_style && row.based_on_door_color_id
+        ? {
+            cabinetStyle: row.based_on_cabinet_style,
+            doorColorId: row.based_on_door_color_id,
+            colorUpdatedAt: row.based_on_color_updated_at?.toISOString() ?? null
+          }
+        : null,
+    salesEstimateOnly: row.sales_estimate_only,
+    notForProduction: row.not_for_production,
+    dimensionConfidence: row.dimension_confidence,
+    createdAt: row.created_at.toISOString()
+  };
+}
+
 export function mapRenderingHistoryRow(
   row: RenderingHistoryRow
 ): Round1ProjectRendering & { id: string } {
@@ -200,9 +231,9 @@ export async function saveRenderingHistory(input: {
   };
 }
 
-export async function listRenderings(projectId: string) {
-  const result = await query<RenderingHistoryRow>(
-    `SELECT id, model, image_base64, prompt, size,
+export async function listRenderings(projectId: string): Promise<RenderingSummary[]> {
+  const result = await query<RenderingSummaryRow>(
+    `SELECT id, model, prompt, size,
             based_on_snapshot_generated_at, based_on_cabinet_style,
             based_on_door_color_id, based_on_color_updated_at,
             sales_estimate_only, not_for_production, dimension_confidence,
@@ -213,5 +244,19 @@ export async function listRenderings(projectId: string) {
      LIMIT 20`,
     [projectId]
   );
-  return result.rows.map(mapRenderingHistoryRow);
+  return result.rows.map(mapRenderingSummaryRow);
+}
+
+/**
+ * Fetch a single rendering's PNG bytes by id, scoped to its project. Returns
+ * null when the rendering does not exist (or belongs to another project) so the
+ * caller can answer 404 without leaking other projects' images.
+ */
+export async function getRenderingImage(projectId: string, renderingId: string) {
+  const result = await query<{ image_base64: string }>(
+    `SELECT image_base64 FROM renderings WHERE id = $1 AND project_id = $2 LIMIT 1`,
+    [renderingId, projectId]
+  );
+  const row = result.rows[0];
+  return row ? Buffer.from(row.image_base64, "base64") : null;
 }

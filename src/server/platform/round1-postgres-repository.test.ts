@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { query } from "@/server/db/client";
 import { createDefaultShowroomForm } from "@/features/round1/showroom-intake-data";
 import {
+  getRenderingImage,
+  listRenderings,
   mapRenderingHistoryRow,
   mapRound1StateRow,
   saveRenderingHistory
@@ -134,5 +136,52 @@ describe("round1 postgres mappers", () => {
       "2026-06-19T00:00:00.000Z",
       "user-1"
     ]);
+  });
+});
+
+describe("rendering gallery payload", () => {
+  test("listRenderings does not select or return the heavy image_base64 column", async () => {
+    vi.mocked(query).mockResolvedValue({
+      rows: [
+        {
+          id: "r1",
+          model: "gpt-image-test",
+          prompt: "p",
+          size: "1536x1024",
+          based_on_snapshot_generated_at: new Date("2026-06-18T00:00:00.000Z"),
+          based_on_cabinet_style: "EUROPEAN_FRAMELESS",
+          based_on_door_color_id: "eu-oak",
+          based_on_color_updated_at: null,
+          sales_estimate_only: true,
+          not_for_production: true,
+          dimension_confidence: "ROUGH",
+          created_at: new Date("2026-06-20T00:00:00.000Z")
+        }
+      ]
+    } as never);
+
+    const rows = await listRenderings("project-1");
+
+    // Guards the perf fix: the gallery list must stay metadata-only so the page
+    // never pulls tens of MB of base64 from the remote DB again.
+    expect(vi.mocked(query).mock.calls[0][0]).not.toContain("image_base64");
+    expect(rows[0]).not.toHaveProperty("imageBase64");
+    expect(rows[0].id).toBe("r1");
+  });
+
+  test("getRenderingImage returns decoded PNG bytes scoped to the project", async () => {
+    const base64 = Buffer.from("png-bytes").toString("base64");
+    vi.mocked(query).mockResolvedValue({ rows: [{ image_base64: base64 }] } as never);
+
+    const image = await getRenderingImage("project-1", "rendering-1");
+
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(["rendering-1", "project-1"]);
+    expect(image).toBeInstanceOf(Buffer);
+    expect(image?.toString()).toBe("png-bytes");
+  });
+
+  test("getRenderingImage returns null when the rendering is not found", async () => {
+    vi.mocked(query).mockResolvedValue({ rows: [] } as never);
+    expect(await getRenderingImage("project-1", "missing")).toBeNull();
   });
 });

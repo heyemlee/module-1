@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { RenderingsView } from "@/features/platform/renderings-view";
 import { getCurrentUser } from "@/server/platform/auth-service";
-import { listCabinetColors } from "@/server/platform/cabinet-color-repository";
+import { listCabinetColorNames } from "@/server/platform/cabinet-color-repository";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import { listRenderings } from "@/server/platform/round1-postgres-repository";
 
@@ -18,7 +18,7 @@ export default async function ProjectRenderingsPage({
 
   const [renderings, colors] = await Promise.all([
     listRenderings(projectId),
-    listCabinetColors(user.companyId)
+    listCabinetColorNames(user.companyId)
   ]);
 
   return (

@@ -54,7 +54,7 @@ export function PlatformHeader({ userName, nav }: { userName: string; nav: React
     <header className="sticky top-0 z-10 border-b border-[#d2d2d7] bg-[#f5f5f7]/95 backdrop-blur">
       <div className="mx-auto flex h-[74px] max-w-[1320px] items-center gap-6 px-8">
         <Link href="/projects" className="text-[16px] font-bold text-[#1d1d1f]">
-          ABC Cabinet
+          ABCabinet
         </Link>
         <nav className="flex items-center gap-2">{nav}</nav>
         <div className="ml-auto">

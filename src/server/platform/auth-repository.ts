@@ -37,7 +37,25 @@ export async function findUserForLogin(identifier: string) {
   return row ? { user: mapUser(row), passwordHash: row.password_hash } : null;
 }
 
+// Session → user is resolved on every page navigation (the auth guard). Against
+// the remote DB that JOIN costs a full ~254ms round trip each time, so we cache
+// the resolved user in-process for a short TTL. Repeated navigations within the
+// window skip the DB entirely, which is what makes page switches feel instant.
+// Trade-off: a role change or disable lands up to TTL_MS later; logout evicts
+// immediately via deleteSession. Bounded so a flood of bad session ids can't
+// grow it without limit.
+const SESSION_CACHE_TTL_MS = 30_000;
+const SESSION_CACHE_MAX = 5_000;
+const sessionUserCache = new Map<string, { user: AuthUser; expiresAtMs: number }>();
+
+export function invalidateSessionCache(sessionId: string) {
+  sessionUserCache.delete(sessionId);
+}
+
 export async function getUserBySession(sessionId: string) {
+  const cached = sessionUserCache.get(sessionId);
+  if (cached && cached.expiresAtMs > Date.now()) return cached.user;
+
   const result = await query<UserRow>(
     `SELECT users.id, users.company_id, users.account, users.email, users.name, users.password_hash, users.role, users.disabled_at
      FROM sessions
@@ -47,7 +65,14 @@ export async function getUserBySession(sessionId: string) {
     [sessionId]
   );
   const row = result.rows[0];
-  return row ? mapUser(row) : null;
+  if (!row) {
+    sessionUserCache.delete(sessionId);
+    return null;
+  }
+  const user = mapUser(row);
+  if (sessionUserCache.size >= SESSION_CACHE_MAX) sessionUserCache.clear();
+  sessionUserCache.set(sessionId, { user, expiresAtMs: Date.now() + SESSION_CACHE_TTL_MS });
+  return user;
 }
 
 export async function createSession(userId: string): Promise<SessionRecord> {
@@ -63,5 +88,6 @@ export async function createSession(userId: string): Promise<SessionRecord> {
 }
 
 export async function deleteSession(sessionId: string) {
+  invalidateSessionCache(sessionId);
   await query(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
 }

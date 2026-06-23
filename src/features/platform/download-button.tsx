@@ -3,16 +3,18 @@
 import "./download-button.css";
 
 export function DownloadButton({
-  imageBase64,
+  href,
   fileName,
 }: {
-  imageBase64: string;
+  href: string;
   fileName: string;
 }) {
   const handleDownload = () => {
-    // Trigger download
+    // Trigger download. `href` may be a same-origin image route URL (persisted
+    // gallery) or an inline data URL (freshly generated preview); both download
+    // with our filename via the `download` attribute.
     const link = document.createElement("a");
-    link.href = `data:image/png;base64,${imageBase64}`;
+    link.href = href;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();

@@ -51,15 +51,6 @@ export function AdminUsersView({
       />
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
-        <h1
-          className="text-[56px] font-bold leading-[1.05] tracking-[-0.01em] text-[#1d1d1f]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
-          Users
-        </h1>
-        <p className="mt-4 max-w-[500px] text-[15px] leading-[23px] text-[#6e6e73]">
-          Manage who can access sales, designer, and admin workflows.
-        </p>
 
         <section className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
           <div className="rounded-[18px] border border-[#d2d2d7] bg-white p-5">

@@ -141,6 +141,19 @@ export async function listCabinetColors(
   return result.rows.map(mapCabinetColorRow);
 }
 
+/**
+ * Lightweight id→name lookup for callers that only need to label a color (e.g.
+ * the rendering gallery) and must not pull the heavy swatch/hover image columns.
+ * The full list with images is ~73MB per company over the remote DB; this is KB.
+ */
+export async function listCabinetColorNames(companyId: string) {
+  const result = await query<{ id: string; name: string }>(
+    `SELECT id, name FROM cabinet_colors WHERE company_id = $1 ORDER BY name ASC`,
+    [companyId]
+  );
+  return result.rows.map((row) => ({ id: row.id, name: row.name }));
+}
+
 export async function getCabinetColor(companyId: string, colorId: string) {
   const result = await query<CabinetColorRow>(
     `SELECT id, company_id, cabinet_style, name, color_code, swatch_image_url,

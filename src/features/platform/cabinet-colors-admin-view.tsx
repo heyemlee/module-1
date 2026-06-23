@@ -26,16 +26,7 @@ export function CabinetColorsAdminView({
       />
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
-        <h1
-          className="text-[56px] font-bold leading-[1.05] tracking-[-0.01em] text-[#1d1d1f]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
-          Cabinet colors
-        </h1>
-        <p className="mt-4 max-w-[560px] text-[15px] leading-[23px] text-[#6e6e73]">
-          A visual library for rendering preferences. Swatches behave like media cards,
-          not plain rows.
-        </p>
+
 
         <section className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
           <CabinetColorsManager colors={colors} />

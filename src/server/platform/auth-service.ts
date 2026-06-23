@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createSession, deleteSession, findUserForLogin, getUserBySession } from "./auth-repository";
 import { verifyPassword } from "./passwords";
@@ -38,11 +39,13 @@ export async function clearSessionCookie() {
   jar.delete(SESSION_COOKIE);
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+// Deduped per request: a page and anything else in the same render tree that
+// needs the current user share one resolution instead of repeating the lookup.
+export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const jar = await cookies();
   const sessionId = jar.get(SESSION_COOKIE)?.value;
   return sessionId ? getUserBySession(sessionId) : null;
-}
+});
 
 export async function requireUser() {
   const user = await getCurrentUser();

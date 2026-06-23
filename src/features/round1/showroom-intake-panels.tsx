@@ -171,7 +171,7 @@ export function RenderingControls({
             )}
             <div className="absolute bottom-3 right-3">
               <DownloadButton
-                imageBase64={currentRendering.url.replace("data:image/png;base64,", "")}
+                href={currentRendering.url}
                 fileName="concept-rendering.png"
               />
             </div>
@@ -242,7 +242,7 @@ export function RenderingControls({
             </button>
             <div className="absolute bottom-4 right-4">
               <DownloadButton
-                imageBase64={currentRendering.url.replace("data:image/png;base64,", "")}
+                href={currentRendering.url}
                 fileName="concept-rendering.png"
               />
             </div>

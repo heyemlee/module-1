@@ -10,7 +10,6 @@ const STYLE_LABELS: Record<string, string> = {
 
 type RenderingHistoryItem = {
   id: string;
-  imageBase64: string;
   size: string;
   createdAt: string;
   basedOnRenderingPreferences: {
@@ -89,6 +88,7 @@ export function RenderingsView({
               const style = prefs
                 ? STYLE_LABELS[prefs.cabinetStyle] ?? prefs.cabinetStyle
                 : null;
+              const imageUrl = `/api/projects/${project.id}/round1/renderings/${rendering.id}/image`;
               return (
                 <figure
                   key={rendering.id}
@@ -97,8 +97,10 @@ export function RenderingsView({
                   <div className="relative overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`data:image/png;base64,${rendering.imageBase64}`}
+                      src={imageUrl}
                       alt={`Concept rendering for ${project.customerName}`}
+                      loading="lazy"
+                      decoding="async"
                       className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
                     />
                     {index === 0 && (
@@ -118,7 +120,7 @@ export function RenderingsView({
                       </p>
                     </div>
                     <DownloadButton
-                      imageBase64={rendering.imageBase64}
+                      href={imageUrl}
                       fileName={`rendering_${project.projectName.replace(/\s+/g, "_")}_${new Date(rendering.createdAt).getTime()}.png`}
                     />
                   </figcaption>
