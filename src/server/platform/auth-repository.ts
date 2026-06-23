@@ -91,3 +91,12 @@ export async function deleteSession(sessionId: string) {
   invalidateSessionCache(sessionId);
   await query(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
 }
+
+export async function deleteSessionsForUser(userId: string) {
+  for (const [sessionId, cached] of sessionUserCache) {
+    if (cached.user.id === userId) {
+      sessionUserCache.delete(sessionId);
+    }
+  }
+  await query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+}

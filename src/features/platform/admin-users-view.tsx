@@ -1,8 +1,13 @@
 import type { CompanyUserSummary } from "@/server/platform/user-admin-repository";
 import { CreateUserForm } from "./create-user-form";
 import { PlatformHeader, NavPill } from "./platform-header";
+import { UserStatusAction } from "./user-status-action";
 
-const COLS = "grid grid-cols-[1.5fr_1.3fr_0.9fr_auto] items-center gap-3";
+const COLS = "grid grid-cols-[1.5fr_1.3fr_0.8fr_auto_auto] items-center gap-3";
+
+export function canManageUserStatus(currentUserId: string, targetUserId: string) {
+  return currentUserId !== targetUserId;
+}
 
 /**
  * Status reflects the real `disabledAt` field: a user is Active until disabled.
@@ -59,6 +64,7 @@ export function AdminUsersView({
               <span>Account</span>
               <span>Role</span>
               <span>Status</span>
+              <span className="text-right">Action</span>
             </div>
             <div className="space-y-2">
               {users.map((u) => (
@@ -83,6 +89,11 @@ export function AdminUsersView({
                     {u.role}
                   </span>
                   <UserStatus disabled={u.disabledAt !== null} />
+                  {canManageUserStatus(currentUserId, u.id) ? (
+                    <UserStatusAction userId={u.id} disabled={u.disabledAt !== null} />
+                  ) : (
+                    <span />
+                  )}
                 </div>
               ))}
               {users.length === 0 && (
