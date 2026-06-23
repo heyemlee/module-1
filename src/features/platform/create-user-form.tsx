@@ -11,8 +11,6 @@ const FIELD =
 
 export function CreateUserForm() {
   const [account, setAccount] = useState("");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [role, setRole] = useState<UserRole>("SALES");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +25,11 @@ export function CreateUserForm() {
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account: account.trim(), email: email.trim(), name: name.trim(), role, password })
+        body: JSON.stringify({ account: account.trim(), role, password })
       });
       if (!response.ok) {
         if (response.status === 409) {
-          setError("Account or email already in use");
+          setError("Account already in use");
         } else {
           setError("Unable to create user. Check the fields and try again.");
         }
@@ -39,8 +37,6 @@ export function CreateUserForm() {
       }
       router.refresh();
       setAccount("");
-      setEmail("");
-      setName("");
       setPassword("");
       setRole("SALES");
     } catch {
@@ -50,7 +46,7 @@ export function CreateUserForm() {
     }
   }
 
-  const canSubmit = account.trim() && email.trim() && name.trim() && password.length >= 8;
+  const canSubmit = account.trim() && password.length >= 8;
 
   return (
     <form
@@ -60,19 +56,8 @@ export function CreateUserForm() {
       <h2 className="text-[28px] font-bold text-[#1d1d1f]">Create user</h2>
       <div className="mt-6 space-y-4">
         <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">Name</span>
-          <input className={FIELD} value={name} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">
-            Account{" "}
-            <span className="font-normal text-[#86868b]">— Account is used for sign in</span>
-          </span>
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Account</span>
           <input className={FIELD} value={account} onChange={(event) => setAccount(event.target.value)} />
-        </label>
-        <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">Email</span>
-          <input className={FIELD} type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </label>
         <label className="block">
           <span className="text-[12px] font-semibold text-[#6e6e73]">Role</span>
@@ -85,9 +70,7 @@ export function CreateUserForm() {
           </select>
         </label>
         <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">
-            Temporary password <span className="font-normal text-[#86868b]">(min 8 characters)</span>
-          </span>
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Password</span>
           <input className={FIELD} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
         </label>
       </div>

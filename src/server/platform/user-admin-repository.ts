@@ -51,14 +51,11 @@ export async function listCompanyUsers(companyId: string) {
   return result.rows.map(mapCompanyUserRow);
 }
 
-export class EmailAlreadyExistsError extends Error {}
 export class AccountAlreadyExistsError extends Error {}
 
 export async function createCompanyUser(input: {
   companyId: string;
   account: string;
-  email: string;
-  name: string;
   role: UserRole;
   password: string;
 }) {
@@ -68,15 +65,16 @@ export async function createCompanyUser(input: {
   );
   if (accountResult.rows[0]) throw new AccountAlreadyExistsError("Account already in use");
 
+  // Name and email remain required legacy columns, but account is now the only
+  // user-facing identity field. Keep those columns internal and deterministic.
+  const internalName = input.account;
+  const internalEmail = `${input.account.toLowerCase()}@users.internal`;
   const passwordHash = await hashPassword(input.password);
   const result = await query<CompanyUserRow>(
     `INSERT INTO users (company_id, account, email, name, password_hash, role)
      VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (email) DO NOTHING
      RETURNING id, account, email, name, role, disabled_at, created_at`,
-    [input.companyId, input.account, input.email, input.name, passwordHash, input.role]
+    [input.companyId, input.account, internalEmail, internalName, passwordHash, input.role]
   );
-  const row = result.rows[0];
-  if (!row) throw new EmailAlreadyExistsError("Email already in use");
-  return mapCompanyUserRow(row);
+  return mapCompanyUserRow(result.rows[0]);
 }
