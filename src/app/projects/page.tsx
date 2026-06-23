@@ -12,5 +12,5 @@ export default async function ProjectsPage({
   if (!user) redirect("/login");
   const params = await searchParams;
   const projects = await listProjectsForUser(user, params.q ?? "");
-  return <ProjectDashboard user={user} projects={projects} />;
+  return <ProjectDashboard user={user} projects={projects} query={params.q ?? ""} />;
 }

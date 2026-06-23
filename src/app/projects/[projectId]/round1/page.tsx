@@ -13,5 +13,13 @@ export default async function ProjectRound1Page({
   const { projectId } = await params;
   const project = await getProjectForUser(projectId, user);
   if (!project) notFound();
-  return <ShowroomIntakeApp projectId={projectId} />;
+  return (
+    <ShowroomIntakeApp
+      projectId={projectId}
+      customerName={project.customerName}
+      projectName={project.projectName}
+      userName={user.name}
+      isAdmin={user.role === "ADMIN"}
+    />
+  );
 }

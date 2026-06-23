@@ -12,7 +12,7 @@ import {
 export function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <h2 className="text-xl font-bold tracking-normal text-[var(--app-ink)]">{title}</h2>
+      <h2 className="text-[26px] font-bold leading-[32px] tracking-tight text-[var(--app-ink)]">{title}</h2>
       <p className="mb-5 mt-2 text-sm leading-6 text-[var(--app-muted)]">
         Unknown or rough answers are allowed. They stay visible as Confirmation Required.
       </p>

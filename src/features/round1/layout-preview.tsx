@@ -359,8 +359,8 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
   const { x, y, w, h, thickness } = plan.room;
   const inset = thickness + 6;
   const guideDepth = 22;
-  const color = "#bae6fd";
-  const stroke = "#0284c7";
+  const color = "#fff0dc";
+  const stroke = "#c56a16";
 
   const wallRects: Record<Wall, PlanRect> = {
     TOP: {
@@ -454,7 +454,7 @@ function DragFeedback({ plan, draggingId }: { plan: FloorPlan; draggingId?: stri
 
   const insets = thickness;
   const strokeW = 6;
-  const color = "#0ea5e9";
+  const color = "#c56a16";
   
   return (
     <g pointerEvents="none" opacity="0.4">
@@ -582,7 +582,7 @@ function Appliance({
         height={appliance.h + 8}
         rx="4"
         fill="none"
-        stroke="#0ea5e9"
+        stroke="#c56a16"
         strokeWidth="2"
         className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
         pointerEvents="none"
@@ -596,7 +596,7 @@ function Appliance({
           height={appliance.h + 10}
           rx="5"
           fill="none"
-          stroke="#0284c7"
+          stroke="#c56a16"
           strokeWidth="2.2"
           strokeDasharray="5 4"
           pointerEvents="none"
@@ -968,7 +968,7 @@ function Openings({
             height={plan.window.h + 8}
             rx="4"
             fill="none"
-            stroke="#0ea5e9"
+            stroke="#c56a16"
             strokeWidth="2"
             className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
             pointerEvents="none"
@@ -982,7 +982,7 @@ function Openings({
               height={plan.window.h + 10}
               rx="5"
               fill="none"
-              stroke="#0284c7"
+              stroke="#c56a16"
               strokeWidth="2.2"
               strokeDasharray="5 4"
               pointerEvents="none"
@@ -997,15 +997,15 @@ function Openings({
           />
           {plan.window.wall === "TOP" || plan.window.wall === "BOTTOM" ? (
             <g>
-              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y} stroke="#1e3a8a" strokeWidth="1.2" />
-              <line x1={plan.window.x} y1={plan.window.y + plan.window.h / 2} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h / 2} stroke="#1e3a8a" strokeWidth="1.2" />
-              <line x1={plan.window.x} y1={plan.window.y + plan.window.h} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1e3a8a" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y} stroke="#1d1d1f" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y + plan.window.h / 2} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h / 2} stroke="#1d1d1f" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y + plan.window.h} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
             </g>
           ) : (
             <g>
-              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x} y2={plan.window.y + plan.window.h} stroke="#1e3a8a" strokeWidth="1.2" />
-              <line x1={plan.window.x + plan.window.w / 2} y1={plan.window.y} x2={plan.window.x + plan.window.w / 2} y2={plan.window.y + plan.window.h} stroke="#1e3a8a" strokeWidth="1.2" />
-              <line x1={plan.window.x + plan.window.w} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1e3a8a" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
+              <line x1={plan.window.x + plan.window.w / 2} y1={plan.window.y} x2={plan.window.x + plan.window.w / 2} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
+              <line x1={plan.window.x + plan.window.w} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
             </g>
           )}
           {!referenceMode && (
@@ -1047,7 +1047,7 @@ function Openings({
             height={plan.door.breakRect.h + 8}
             rx="4"
             fill="none"
-            stroke="#0ea5e9"
+            stroke="#c56a16"
             strokeWidth="2"
             className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
             pointerEvents="none"
@@ -1061,7 +1061,7 @@ function Openings({
               height={plan.door.breakRect.h + 10}
               rx="5"
               fill="none"
-              stroke="#0284c7"
+              stroke="#c56a16"
               strokeWidth="2.2"
               strokeDasharray="5 4"
               pointerEvents="none"
@@ -1083,10 +1083,10 @@ function Openings({
                 width={plan.door.leafRect.w}
                 height={plan.door.leafRect.h}
                 fill="none"
-                stroke="#2563eb"
+                stroke="#1d1d1f"
                 strokeWidth="1.5"
               />
-              <path d={plan.door.swingPath} fill="none" stroke="#2563eb" strokeWidth="1.2" />
+              <path d={plan.door.swingPath} fill="none" stroke="#1d1d1f" strokeWidth="1.2" />
             </>
           )}
           {!referenceMode && (

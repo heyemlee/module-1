@@ -1,10 +1,14 @@
 "use client";
 
-import { Lock, UserRound } from "lucide-react";
 import { type FormEvent, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+
+const fieldClass =
+  "h-11 rounded-xl border-[#d8d2c7] bg-white text-[14px] text-[#060606] transition-all placeholder:text-[#a8a399] focus-visible:-translate-y-0.5 focus-visible:border-[#060606] focus-visible:shadow-md focus-visible:ring-[#060606]/15";
+const labelClass = "text-[12px] font-semibold text-[#68645d]";
 
 export default function SignInForm({
   account,
@@ -29,59 +33,68 @@ export default function SignInForm({
 }) {
   return (
     <form onSubmit={onSubmit}>
-      <Card className="w-full max-w-md rounded-2xl border bg-background shadow-md">
-        <CardContent className="flex flex-col gap-6 p-6">
+      <Card className="rounded-[18px] border-[#d8d2c7] bg-white shadow-[0_16px_45px_rgba(0,0,0,0.06)]">
+        <CardContent className="flex flex-col gap-5 p-8">
+          <span className="inline-flex w-fit items-center rounded-full bg-[#060606] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            Secure
+          </span>
+
+          <h2
+            className="text-[44px] leading-[1.05] text-[#060606]"
+            style={{ fontFamily: "var(--font-instrument-serif), Georgia, serif" }}
+          >
+            Sign in
+          </h2>
+
           <div className="flex flex-col gap-2">
-            <Label htmlFor="account">Account</Label>
-            <div className="flex h-12 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring">
-              <UserRound className="h-5 w-5 text-muted-foreground" />
-              <Input
-                id="account"
-                type="text"
-                placeholder="Enter your account"
-                className="border-0 shadow-none focus-visible:ring-0"
-                value={account}
-                onChange={(event) => onAccountChange(event.target.value)}
-              />
-            </div>
+            <Label htmlFor="account" className={labelClass}>
+              Account
+            </Label>
+            <Input
+              id="account"
+              type="text"
+              placeholder="Enter your account"
+              className={fieldClass}
+              value={account}
+              onChange={(event) => onAccountChange(event.target.value)}
+            />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="flex h-12 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring">
-              <Lock className="h-5 w-5 text-muted-foreground" />
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                className="border-0 shadow-none focus-visible:ring-0"
-                value={password}
-                onChange={(event) => onPasswordChange(event.target.value)}
-              />
-            </div>
+            <Label htmlFor="password" className={labelClass}>
+              Password
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              className={fieldClass}
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+            />
           </div>
 
-          <div className="flex items-center justify-between">
-            <label className="custom-checkbox text-sm font-normal">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(event) => onRememberChange(event.target.checked)}
-              />
-              <span className="checkmark" />
-              <span>Remember me</span>
-            </label>
-          </div>
+          <label className="inline-flex w-fit cursor-pointer select-none items-center">
+            <input
+              type="checkbox"
+              className="peer sr-only"
+              checked={remember}
+              onChange={(event) => onRememberChange(event.target.checked)}
+            />
+            <span className="rounded-full border border-[#d8d2c7] bg-white px-3 py-1 text-[11px] font-bold text-[#060606] transition-colors peer-checked:border-[#060606] peer-checked:bg-[#060606] peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#060606]/30">
+              Remember me
+            </span>
+          </label>
 
           {error}
 
-          <button
+          <Button
             type="submit"
             disabled={busy}
-            className="uiverse-fill-button h-12 w-full"
+            className="h-[42px] w-full rounded-full bg-[#060606] text-[13px] font-semibold text-white hover:bg-[#1f1f1f]"
           >
             {busy ? "Signing in..." : "Sign In"}
-          </button>
+          </Button>
         </CardContent>
       </Card>
     </form>

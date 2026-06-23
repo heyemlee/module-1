@@ -34,7 +34,7 @@ import {
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
-import { LogoutButton } from "@/features/platform/logout-button";
+import { PlatformHeader, NavPill } from "@/features/platform/platform-header";
 import {
   AdjustPositionsStep,
   AppliancesStep,
@@ -59,6 +59,39 @@ export const SHOWROOM_STEPS = [
   "Adjust Positions",
   "Rendering Preferences"
 ] as const;
+
+// Short imperative cue per step for the rail's "Next action" callout.
+const NEXT_ACTIONS: Record<number, string> = {
+  0: "Enter room size & obstacles",
+  1: "Mark doors & windows",
+  2: "Choose a kitchen layout",
+  3: "Set appliances & fixtures",
+  4: "Confirm dragged constraints",
+  5: "Generate fill & rendering"
+};
+
+const PILL_TONES = {
+  green: "bg-[var(--app-green-soft)] text-[var(--app-green)]",
+  amber: "bg-[var(--app-amber-soft)] text-[var(--app-amber)]",
+  red: "bg-[var(--app-red-soft)] text-[var(--app-red)]",
+  ink: "bg-[var(--app-ink)] text-white"
+} as const;
+
+function StatusBadge({
+  label,
+  tone
+}: {
+  label: string;
+  tone: keyof typeof PILL_TONES;
+}) {
+  return (
+    <span
+      className={`inline-flex h-[26px] items-center whitespace-nowrap rounded-full px-3 text-[11px] font-bold ${PILL_TONES[tone]}`}
+    >
+      {label}
+    </span>
+  );
+}
 
 const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
 const PREVIEW_STAGES = [
@@ -90,7 +123,19 @@ export function shouldApplySnapshotRestore({
   return !cancelled && hasSavedSnapshot && !localSessionChanged;
 }
 
-export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
+export function ShowroomIntakeApp({
+  projectId,
+  customerName,
+  projectName,
+  userName = "Account",
+  isAdmin = false
+}: {
+  projectId?: string;
+  customerName?: string;
+  projectName?: string;
+  userName?: string;
+  isAdmin?: boolean;
+}) {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
   const [maxAccessibleStep, setMaxAccessibleStep] = useState(0);
@@ -312,6 +357,41 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     [preliminaryEstimate.confirmationItems, result.confirmationItems]
   );
   const previewStage = PREVIEW_STAGES[step] ?? "room";
+
+  // Derived header/rail UI state. The concept rendering is stale when it no
+  // longer matches the current snapshot geometry or finish selection.
+  const renderingStale =
+    renderingImage !== null &&
+    (!snapshot ||
+      renderingBasedOn !== snapshot.generatedAt ||
+      !renderingPreferenceStampMatches(
+        renderingPreferencesBasedOn,
+        form,
+        cabinetColors
+      ));
+  const canRenderConcept =
+    persistState === "saved" &&
+    renderingPreferencesComplete(cabinetColors, form);
+  const confirmationCount = confirmationItems.length;
+  const screenTitle = `${customerName ?? projectName ?? "Showroom"} / Round 1 Intake`;
+  const nextAction = NEXT_ACTIONS[step] ?? "";
+
+  const snapshotPill: { label: string; tone: keyof typeof PILL_TONES } =
+    persistState === "saving"
+      ? { label: "Saving snapshot", tone: "amber" }
+      : persistState === "error"
+        ? { label: "Snapshot save failed", tone: "red" }
+        : snapshot
+          ? { label: "Snapshot saved", tone: "green" }
+          : { label: "Snapshot pending", tone: "amber" };
+  const renderingPill: { label: string; tone: keyof typeof PILL_TONES } | null =
+    renderingBusy
+      ? { label: "Rendering…", tone: "amber" }
+      : renderingImage === null
+        ? null
+        : renderingStale
+          ? { label: "Rendering stale", tone: "amber" }
+          : { label: "Rendering ready", tone: "green" };
 
   // `Generate Cabinet Fill` is the authoritative snapshot point for Module 1.
   // The estimate is computed inline (not read from the gated memo, which is
@@ -550,51 +630,114 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
 
   return (
-    <main ref={shellRef} className="app-page min-h-screen text-[var(--app-ink)]">
-      <header className="border-b border-[var(--app-border)] bg-white/80 px-6 py-5 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-[var(--app-blue)]">
-              <a href="/projects" className="hover:underline">
-                ← Back to projects
-              </a>
-              {projectId ? (
-                <a href={`/projects/${projectId}`} className="hover:underline">
-                  Back to project
-                </a>
-              ) : null}
-            </div>
-            <h1 className="mt-1 text-3xl font-bold tracking-normal">
-              Showroom Intake + Layout Preview
-            </h1>
-          </div>
-          <LogoutButton />
-        </div>
-      </header>
+    <main ref={shellRef} className="min-h-screen bg-[#f5f5f7] text-[var(--app-ink)]">
+      <PlatformHeader
+        userName={userName}
+        nav={
+          <>
+            <NavPill href="/projects">Projects</NavPill>
+            {projectId && (
+              <NavPill href={`/projects/${projectId}/round1`} active>
+                Round 1
+              </NavPill>
+            )}
+            {projectId && (
+              <NavPill href={`/projects/${projectId}/renderings`}>Renderings</NavPill>
+            )}
+            {isAdmin && <NavPill href="/admin/users">Admin</NavPill>}
+          </>
+        }
+      />
 
-      <div className="mx-auto grid max-w-[1800px] gap-6 px-6 py-6 lg:grid-cols-[220px_minmax(450px,1fr)_minmax(450px,1.2fr)] xl:grid-cols-[250px_minmax(500px,1fr)_minmax(550px,1.25fr)]">
-        <aside className="round1-animate app-panel h-fit p-3">
-          {SHOWROOM_STEPS.map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => goToStep(index)}
-              disabled={index > maxAccessibleStep}
-              className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-bold transition ${
-                step === index
-                  ? "bg-[var(--app-blue)] text-white shadow-sm"
-                  : index > maxAccessibleStep
-                    ? "cursor-not-allowed bg-black/[0.025] text-[var(--app-quiet)]"
-                    : "bg-white text-[var(--app-ink)] hover:bg-black/[0.035]"
-              }`}
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-end justify-between gap-4 px-6 pt-8">
+        <div className="min-w-0">
+          {projectId ? (
+            <a
+              href={`/projects/${projectId}`}
+              className="block truncate text-[28px] font-bold leading-tight tracking-tight text-[var(--app-ink)] hover:underline"
+              style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
             >
-              <span>{label}</span>
-              <span>{index + 1}</span>
-            </button>
-          ))}
+              {screenTitle}
+            </a>
+          ) : (
+            <span
+              className="block truncate text-[28px] font-bold leading-tight tracking-tight text-[var(--app-ink)]"
+              style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+            >
+              {screenTitle}
+            </span>
+          )}
+          <p className="mt-1 text-[13px] text-[var(--app-muted)]">
+            Guided intake with persistent evidence and next-action rail
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <StatusBadge label={snapshotPill.label} tone={snapshotPill.tone} />
+          {renderingPill ? (
+            <StatusBadge label={renderingPill.label} tone={renderingPill.tone} />
+          ) : null}
+          <StatusBadge
+            label={`${confirmationCount} confirmation${confirmationCount === 1 ? "" : "s"}`}
+            tone={confirmationCount > 0 ? "amber" : "green"}
+          />
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-6 py-6 lg:grid-cols-[250px_minmax(420px,1fr)_minmax(440px,1.05fr)]">
+        <aside className="round1-animate app-panel-flat h-fit p-4">
+          <h2 className="text-[15px] font-bold text-[var(--app-ink)]">Round 1 progress</h2>
+          <p className="mt-1 text-[12px] leading-[18px] text-[var(--app-muted)]">
+            Sales-ready path with locked gates
+          </p>
+          <div className="mt-4 space-y-2">
+            {SHOWROOM_STEPS.map((label, index) => {
+              const done = index < step;
+              const current = index === step;
+              const locked = index > maxAccessibleStep;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => goToStep(index)}
+                  disabled={locked}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
+                    current
+                      ? "border-[var(--app-ink)] bg-[var(--app-ink)] text-white"
+                      : done
+                        ? "border-[var(--app-border)] bg-[var(--app-green-soft)] text-[var(--app-ink)]"
+                        : locked
+                          ? "cursor-not-allowed border-[var(--app-border)] bg-white text-[var(--app-quiet)]"
+                          : "border-[var(--app-border)] bg-white text-[var(--app-ink)] hover:bg-black/[0.03]"
+                  }`}
+                >
+                  <span
+                    className={`flex size-[22px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                      current
+                        ? "bg-white text-[var(--app-ink)]"
+                        : done
+                          ? "bg-[var(--app-green)] text-white"
+                          : "border border-[var(--app-border-strong)] text-[var(--app-muted)]"
+                    }`}
+                  >
+                    {done ? "✓" : index + 1}
+                  </span>
+                  <span className="text-[13px] font-semibold">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {nextAction ? (
+            <div className="mt-4 rounded-lg bg-[var(--app-ink)] p-4 text-white">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-white/55">
+                Next action
+              </p>
+              <p className="mt-1 text-[15px] font-bold leading-[20px]">{nextAction}</p>
+            </div>
+          ) : null}
         </aside>
 
-        <section className="round1-animate app-panel p-5">
+        <section className="round1-animate app-panel-flat flex min-h-[560px] flex-col p-6">
+          <div className="flex-1">
           {step === 0 && <RoomStep form={form} setForm={updateForm} />}
           {step === 1 && <OpeningsStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 2 && <LayoutStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
@@ -620,14 +763,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               canGenerateCabinetFill={
                 fixedPositionsConfirmed && !cabinetFillGenerated
               }
-              canGenerateRendering={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
-              }
+              canGenerateRendering={canRenderConcept}
               renderingBusy={renderingBusy}
             />
           )}
-          <div className="mt-6 flex justify-between border-t border-[var(--app-border)] pt-4">
+          </div>
+          <div className="mt-6 flex justify-between border-t border-[var(--app-border)] pt-5">
             <button
               type="button"
               onClick={() => {
@@ -635,7 +776,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                 setStep(Math.max(0, step - 1));
               }}
               disabled={step === 0}
-              className="uiverse-fill-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[var(--app-border-strong)] bg-white px-5 py-2.5 text-[13px] font-semibold text-[var(--app-ink)] transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
@@ -643,32 +784,21 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               type="button"
               onClick={goToNextStep}
               disabled={step === SHOWROOM_STEPS.length - 1}
-              className="uiverse-fill-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-[var(--app-ink)] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Next
+              Continue
             </button>
           </div>
         </section>
 
         <aside className="round1-animate space-y-4">
+          <h2 className="text-[16px] font-bold text-[var(--app-ink)]">Design evidence</h2>
           {(renderingBusy || renderingImage !== null) && (
             <RenderingControls
-              canRender={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
-              }
+              canRender={canRenderConcept}
               busy={renderingBusy}
               error={renderingError}
-              stale={
-                renderingImage !== null &&
-                (!snapshot ||
-                  renderingBasedOn !== snapshot.generatedAt ||
-                  !renderingPreferenceStampMatches(
-                    renderingPreferencesBasedOn,
-                    form,
-                    cabinetColors
-                  ))
-              }
+              stale={renderingStale}
               image={renderingImage}
             />
           )}
@@ -689,22 +819,10 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
 
           {!(renderingBusy || renderingImage !== null) && (
             <RenderingControls
-              canRender={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
-              }
+              canRender={canRenderConcept}
               busy={renderingBusy}
               error={renderingError}
-              stale={
-                renderingImage !== null &&
-                (!snapshot ||
-                  renderingBasedOn !== snapshot.generatedAt ||
-                  !renderingPreferenceStampMatches(
-                    renderingPreferencesBasedOn,
-                    form,
-                    cabinetColors
-                  ))
-              }
+              stale={renderingStale}
               image={renderingImage}
             />
           )}
@@ -748,12 +866,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
           <Panel title="Confirmation Required">
             <div className="max-h-48 space-y-2 overflow-auto pr-1">
               {confirmationItems.length === 0 ? (
-                <p className="text-sm text-slate-500">No current confirmation flags.</p>
+                <p className="text-sm text-[#6e6e73]">No current confirmation flags.</p>
               ) : (
                 confirmationItems.map((item) => (
-                  <div key={item.id} className="rounded-md bg-amber-50 p-2 text-sm">
-                    <p className="font-bold text-amber-900">{item.code}</p>
-                    <p className="text-amber-800">{item.message}</p>
+                  <div key={item.id} className="rounded-lg bg-[#fff0dc] p-2.5 text-sm">
+                    <p className="font-bold text-[#c56a16]">{item.code}</p>
+                    <p className="text-[#9a5a1e]">{item.message}</p>
                   </div>
                 ))
               )}
@@ -787,15 +905,15 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       </div>
 
       {showAdjustPositionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d1f]/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#d2d2d7] bg-white p-6 shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
               Adjust Positions
             </p>
-            <h2 className="mt-2 text-lg font-black text-slate-950">
+            <h2 className="mt-2 text-lg font-bold text-[#1d1d1f]">
               Door, window, and appliance locations can be dragged on the plan.
             </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
               Drag these rough positions first, then confirm them to generate
               the preliminary cabinet fill around those constraints.
             </p>
@@ -806,7 +924,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                   setShowAdjustPositionsModal(false);
                   startDraggableHighlightCue();
                 }}
-                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+                className="rounded-full bg-[#1d1d1f] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Got It
               </button>

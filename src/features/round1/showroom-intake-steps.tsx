@@ -646,15 +646,15 @@ export function AdjustPositionsStep({
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {cabinetFillGenerated ? (
-            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
+            <span className="rounded-full bg-[#e6f4ef] px-2.5 py-1 text-xs font-bold text-[#008060]">
               Cabinet fill generated
             </span>
           ) : fixedPositionsConfirmed ? (
-            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
+            <span className="rounded-full bg-[#e6f4ef] px-2.5 py-1 text-xs font-bold text-[#008060]">
               Fixed positions confirmed
             </span>
           ) : hasOverrides ? (
-            <span className="rounded bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+            <span className="rounded-full bg-[#fff0dc] px-2.5 py-1 text-xs font-bold text-[#c56a16]">
               Adjusted manually
             </span>
           ) : null}
@@ -665,7 +665,7 @@ export function AdjustPositionsStep({
           type="button"
           onClick={onReset}
           disabled={!hasOverrides && !fixedPositionsConfirmed && !cabinetFillGenerated}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-[#d2d2d7] bg-white px-4 py-2 text-sm font-semibold text-[#1d1d1f] transition hover:border-[#1d1d1f]/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Reset Positions
         </button>
@@ -673,7 +673,7 @@ export function AdjustPositionsStep({
           type="button"
           onClick={onConfirmPositions}
           disabled={fixedPositionsConfirmed}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+          className="rounded-lg bg-[#1d1d1f] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {fixedPositionsConfirmed
             ? "Fixed Positions Confirmed"

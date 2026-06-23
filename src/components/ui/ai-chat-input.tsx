@@ -243,7 +243,7 @@ const AIChatInput = ({
               <button
                 className={`flex items-center gap-1 px-4 py-2 rounded-full transition-all font-medium group ${
                   thinkActive
-                    ? "bg-blue-600/10 outline outline-blue-600/60 text-blue-950"
+                    ? "bg-[#1d1d1f]/[0.08] outline outline-[#1d1d1f]/50 text-[#1d1d1f]"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
                 title="Think"
@@ -264,7 +264,7 @@ const AIChatInput = ({
               <motion.button
                 className={`flex items-center px-4 gap-1 py-2 rounded-full transition font-medium whitespace-nowrap overflow-hidden justify-start  ${
                   deepSearchActive
-                    ? "bg-blue-600/10 outline outline-blue-600/60 text-blue-950"
+                    ? "bg-[#1d1d1f]/[0.08] outline outline-[#1d1d1f]/50 text-[#1d1d1f]"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
                 title="Deep Search"

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import type { AuthUser } from "@/server/platform/types";
 import type { ProjectSummary } from "@/server/platform/project-repository";
-import { LogoutButton } from "./logout-button";
+import { PlatformHeader, NavPill } from "./platform-header";
 import { UiverseDeleteButton } from "./uiverse-delete-button";
 
 const STATUS_LABELS: Record<ProjectSummary["status"], string> = {
@@ -27,33 +28,44 @@ const STATUS_LABELS: Record<ProjectSummary["status"], string> = {
   ARCHIVED: "Archived"
 };
 
-function statusClass(status: ProjectSummary["status"]) {
-  if (status === "ROUND1_RENDERING_READY" || status === "ROUND1_SNAPSHOT_READY") {
-    return "bg-[var(--app-green-soft)] text-[var(--app-green)]";
-  }
-  if (status === "NEEDS_CONFIRMATION") {
-    return "bg-[var(--app-amber-soft)] text-[var(--app-amber)]";
-  }
-  return "bg-[var(--app-blue-soft)] text-[var(--app-blue)]";
+const READY_STATUSES: ReadonlySet<ProjectSummary["status"]> = new Set([
+  "ROUND1_SNAPSHOT_READY",
+  "ROUND1_RENDERING_READY",
+  "ROUND2_READY"
+]);
+
+function statusColor(status: ProjectSummary["status"]) {
+  if (READY_STATUSES.has(status)) return "#008060";
+  if (status === "NEEDS_CONFIRMATION") return "#c56a16";
+  return "#1d1d1f";
+}
+
+function formatUpdated(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export function ProjectDashboard({
   user,
-  projects
+  projects,
+  query = ""
 }: {
   user: AuthUser;
   projects: ProjectSummary[];
+  query?: string;
 }) {
   const router = useRouter();
   const canDeleteProjects = user.role === "ADMIN";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
+  const activeCount = projects.filter((p) => p.status !== "ARCHIVED").length;
+  const needReviewCount = projects.filter((p) => p.status === "NEEDS_CONFIRMATION").length;
+
   const toggleAll = () => {
     if (selectedIds.size === projects.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(projects.map(p => p.id)));
+      setSelectedIds(new Set(projects.map((p) => p.id)));
     }
   };
 
@@ -71,9 +83,7 @@ export function ProjectDashboard({
     setDeleting(true);
     try {
       const responses = await Promise.all(
-        Array.from(selectedIds).map(id =>
-          fetch(`/api/projects/${id}`, { method: "DELETE" })
-        )
+        Array.from(selectedIds).map((id) => fetch(`/api/projects/${id}`, { method: "DELETE" }))
       );
       if (responses.some((response) => !response.ok)) {
         throw new Error("Unable to delete one or more projects");
@@ -86,66 +96,79 @@ export function ProjectDashboard({
       setDeleting(false);
     }
   };
+
   return (
-    <main className="app-page px-6 py-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-[var(--app-blue)]">
+    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+      <PlatformHeader
+        userName={user.name}
+        nav={
+          <>
+            <NavPill href="/projects" active>
               Projects
-            </p>
-            <h1 className="mt-1 text-4xl font-bold tracking-normal text-[var(--app-ink)]">
-              Customer project workspace
-            </h1>
-            <p className="mt-2 text-sm text-[var(--app-muted)]">
-              {user.name} · {user.role}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link href="/projects/new" className="uiverse-fill-button px-4 py-2">
-              New customer project
-            </Link>
-            {user.role === "ADMIN" && (
-              <Link href="/admin/users" className="uiverse-fill-button px-3 py-2">
-                Users
-              </Link>
-            )}
-            {user.role === "ADMIN" && (
-              <Link href="/admin/cabinet-colors" className="uiverse-fill-button px-3 py-2">
-                Cabinet Colors
-              </Link>
-            )}
-            <LogoutButton />
-          </div>
-        </header>
+            </NavPill>
+            {canDeleteProjects && <NavPill href="/admin/users">Users</NavPill>}
+            {canDeleteProjects && <NavPill href="/admin/cabinet-colors">Cabinet Colors</NavPill>}
+          </>
+        }
+      />
 
-        <div className="app-panel mt-7 overflow-hidden">
-          <form className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--app-border)] p-4">
-            <h2 className="text-xl font-bold text-[var(--app-ink)]">Projects</h2>
-            <div className="flex flex-1 items-center justify-end gap-4 min-w-[280px]">
-              {canDeleteProjects && selectedIds.size > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-[var(--app-red)]">{selectedIds.size} selected</span>
-                  <UiverseDeleteButton onClick={handleDeleteSelected} disabled={deleting} />
-                </div>
-              )}
-              <label className="text-sm font-medium text-[var(--app-muted)] md:max-w-md w-full">
-                Search customer, address, or project
-                <Input
-                  name="q"
-                  className="mt-1"
-                  placeholder="Search projects..."
-                />
-              </label>
+      <div className="mx-auto max-w-[1320px] px-8 py-10">
+        {/* Title row */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <h1
+            className="max-w-[560px] text-[48px] font-bold leading-[1.1] tracking-[-0.01em] text-[#1d1d1f]"
+            style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+          >
+            Customer project workspace
+          </h1>
+          <Link
+            href="/projects/new"
+            className="inline-flex h-[42px] items-center rounded-full bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition-transform hover:-translate-y-0.5"
+          >
+            New project
+          </Link>
+        </div>
+
+        {/* Search + filters */}
+        <form method="get" className="mt-8 flex flex-wrap items-end gap-4">
+          <div className="w-full max-w-[500px]">
+            <label htmlFor="q" className="mb-2 block text-[12px] font-semibold text-[#6e6e73]">
+              Search
+            </label>
+            <Input
+              id="q"
+              name="q"
+              defaultValue={query}
+              placeholder="Search customer, address, or project"
+              className="h-11 rounded-xl border-[#d2d2d7] bg-white text-[14px] text-[#1d1d1f] shadow-none placeholder:text-[#86868b] focus-visible:border-[#1d1d1f]/40 focus-visible:ring-[#1d1d1f]/10"
+            />
+          </div>
+          <div className="flex items-center gap-3 pb-1.5">
+            <span className="inline-flex h-7 items-center rounded-full bg-[#e6f4ef] px-3 text-[11px] font-bold text-[#008060]">
+              {activeCount} active
+            </span>
+            {needReviewCount > 0 && (
+              <span className="inline-flex h-7 items-center rounded-full bg-[#fff0dc] px-3 text-[11px] font-bold text-[#c56a16]">
+                {needReviewCount} need review
+              </span>
+            )}
+          </div>
+          {canDeleteProjects && selectedIds.size > 0 && (
+            <div className="ml-auto flex items-center gap-2 pb-1.5">
+              <span className="text-[12px] font-medium text-[#b42318]">{selectedIds.size} selected</span>
+              <UiverseDeleteButton onClick={handleDeleteSelected} disabled={deleting} />
             </div>
-          </form>
+          )}
+        </form>
 
-          {projects.length > 0 && (
-            <Table>
+        {/* Table */}
+        {projects.length > 0 ? (
+          <div className="mt-6 rounded-2xl border border-[#d2d2d7] bg-white p-4">
+            <Table className="border-separate border-spacing-y-2">
               <TableHeader>
-                <TableRow>
+                <TableRow className="hover:bg-transparent [&>th]:h-auto [&>th]:px-4 [&>th]:pb-2 [&>th]:pt-1 [&>th]:text-[11px] [&>th]:font-bold [&>th]:text-[#6e6e73]">
                   {canDeleteProjects && (
-                    <TableHead className="w-12">
+                    <TableHead className="w-10">
                       <Checkbox
                         checked={projects.length > 0 && selectedIds.size === projects.length}
                         onCheckedChange={toggleAll}
@@ -153,82 +176,85 @@ export function ProjectDashboard({
                       />
                     </TableHead>
                   )}
-                    <TableHead>
-                      Customer
-                    </TableHead>
-                    <TableHead>
-                      Project
-                    </TableHead>
-                    <TableHead>
-                      Status
-                    </TableHead>
-                    <TableHead className="text-right">
-                      Updated
-                    </TableHead>
-                    <TableHead className="text-right">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projects.map((project) => (
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Project</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.map((project) => {
+                  const ready = READY_STATUSES.has(project.status);
+                  const stale = project.status === "NEEDS_CONFIRMATION";
+                  return (
                     <TableRow
                       key={project.id}
                       data-state={selectedIds.has(project.id) ? "selected" : undefined}
+                      className={cn(
+                        "transition-transform duration-200 hover:-translate-y-[3px] hover:scale-[1.006]",
+                        ready ? "bg-[#e6f4ef] hover:bg-[#e6f4ef]" : "bg-white hover:bg-white",
+                        "data-[state=selected]:bg-[#e8e8ed]",
+                        "[&>td]:border-y [&>td]:border-[#d2d2d7] [&>td]:text-[13px]",
+                        "[&>td:first-child]:rounded-l-xl [&>td:first-child]:border-l",
+                        "[&>td:last-child]:rounded-r-xl [&>td:last-child]:border-r"
+                      )}
                     >
                       {canDeleteProjects && (
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.has(project.id)}
-                          onCheckedChange={() => toggleOne(project.id)}
-                          aria-label={`Select project ${project.projectName}`}
-                        />
-                      </TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(project.id)}
+                            onCheckedChange={() => toggleOne(project.id)}
+                            aria-label={`Select project ${project.projectName}`}
+                          />
+                        </TableCell>
                       )}
                       <TableCell>
                         <Link
                           href={`/projects/${project.id}`}
-                          className="font-semibold text-[var(--app-ink)] hover:text-black"
+                          className="font-semibold text-[#1d1d1f] hover:underline"
                         >
                           {project.customerName}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-[var(--app-muted)]">
-                        {project.projectName}
-                      </TableCell>
+                      <TableCell className="text-[#1d1d1f]">{project.projectName}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(project.status)}`}>
+                        <span
+                          className="inline-flex items-center gap-1.5 font-medium"
+                          style={{ color: statusColor(project.status) }}
+                        >
+                          {stale && (
+                            <span className="size-1.5 animate-pulse rounded-full bg-[#c56a16]" />
+                          )}
                           {STATUS_LABELS[project.status]}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-[var(--app-muted)]">
-                        {new Date(project.updatedAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/projects/${project.id}`}
-                            className="uiverse-fill-button px-3 py-2 text-xs"
-                          >
-                            Open
-                          </Link>
-                        </div>
+                      <TableCell className="text-[#1d1d1f]">{formatUpdated(project.updatedAt)}</TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="font-semibold text-[#1d1d1f] hover:underline"
+                        >
+                          Open
+                        </Link>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-          )}
-
-          {projects.length === 0 && (
-            <div className="px-4 py-10 text-center">
-              <p className="text-sm text-[var(--app-muted)]">No projects yet.</p>
-              <Link href="/projects/new" className="uiverse-fill-button mt-4 px-4 py-2">
-                Create your first project
-              </Link>
-            </div>
-          )}
-        </div>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-2xl border border-[#d2d2d7] bg-white px-6 py-16 text-center">
+            <p className="text-[14px] text-[#6e6e73]">No projects yet.</p>
+            <Link
+              href="/projects/new"
+              className="mt-4 inline-flex h-[42px] items-center rounded-full bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white"
+            >
+              Create your first project
+            </Link>
+          </div>
+        )}
       </div>
     </main>
   );

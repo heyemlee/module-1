@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { LogoutButton } from "./logout-button";
+import type { AuthUser } from "@/server/platform/types";
 import { DownloadButton } from "./download-button";
+import { PlatformHeader, NavPill } from "./platform-header";
 
 const STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -25,40 +26,53 @@ type RenderingHistoryItem = {
 export function RenderingsView({
   project,
   renderings,
-  colors
+  colors,
+  user
 }: {
   project: { id: string; customerName: string; projectName: string };
   renderings: RenderingHistoryItem[];
   colors: { id: string; name: string }[];
+  user: AuthUser;
 }) {
   const colorNameById = new Map(colors.map((color) => [color.id, color.name]));
+  const isAdmin = user.role === "ADMIN";
 
   return (
-    <main className="app-page px-6 py-8">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex items-center justify-between">
-          <Link href={`/projects/${project.id}`} className="text-sm font-semibold text-[var(--app-blue)]">
-            Back to project
-          </Link>
-          <LogoutButton />
-        </div>
-        <h1 className="mt-4 text-4xl font-bold tracking-normal text-[var(--app-ink)]">Renderings</h1>
-        <p className="mt-2 text-[var(--app-muted)]">
-          {project.customerName} · {project.projectName}
-        </p>
-        <p className="mt-1 text-xs text-[var(--app-muted)]">
-          Sales-estimate concept images only — not for production. Most recent first
-          (up to 20).
+    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+      <PlatformHeader
+        userName={user.name}
+        nav={
+          <>
+            <NavPill href="/projects">Projects</NavPill>
+            <NavPill href={`/projects/${project.id}/round1`}>Round 1</NavPill>
+            <NavPill href={`/projects/${project.id}/renderings`} active>
+              Renderings
+            </NavPill>
+            {isAdmin && <NavPill href="/admin/users">Admin</NavPill>}
+          </>
+        }
+      />
+
+      <div className="mx-auto max-w-[1320px] px-8 py-10">
+        <h1
+          className="text-[58px] font-bold leading-[1.05] tracking-[-0.01em] text-[#1d1d1f]"
+          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+        >
+          Concept renderings
+        </h1>
+        <p className="mt-4 max-w-[620px] text-[15px] leading-[23px] text-[#6e6e73]">
+          {project.customerName} · {project.projectName} — sales-estimate concept images
+          only, not for production. Most recent first.
         </p>
 
         {renderings.length === 0 ? (
-          <div className="app-panel-flat mt-6 border-dashed p-8 text-center">
-            <p className="text-sm font-semibold text-[var(--app-ink)]">No renderings yet</p>
-            <p className="mt-2 text-sm text-[var(--app-muted)]">
+          <div className="mt-8 rounded-[18px] border border-dashed border-[#d2d2d7] bg-white p-12 text-center">
+            <p className="text-[14px] font-semibold text-[#1d1d1f]">No renderings yet</p>
+            <p className="mt-2 text-[13px] text-[#6e6e73]">
               Generate a concept rendering from the{" "}
               <Link
                 href={`/projects/${project.id}/round1`}
-                className="text-[var(--app-blue)] underline"
+                className="font-semibold text-[#1d1d1f] underline"
               >
                 Round 1 Intake
               </Link>{" "}
@@ -66,31 +80,40 @@ export function RenderingsView({
             </p>
           </div>
         ) : (
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            {renderings.map((rendering) => {
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {renderings.map((rendering, index) => {
               const prefs = rendering.basedOnRenderingPreferences;
               const colorName = prefs
                 ? colorNameById.get(prefs.doorColorId) ?? "Unknown color"
                 : "—";
               const style = prefs
                 ? STYLE_LABELS[prefs.cabinetStyle] ?? prefs.cabinetStyle
-                : "—";
+                : null;
               return (
                 <figure
                   key={rendering.id}
-                  className="app-panel overflow-hidden"
+                  className="group overflow-hidden rounded-[18px] border border-[#d2d2d7] bg-white"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`data:image/png;base64,${rendering.imageBase64}`}
-                    alt={`Concept rendering for ${project.customerName}`}
-                    className="w-full"
-                  />
-                  <figcaption className="border-t border-[var(--app-border)] px-4 py-3 flex items-center justify-between">
-                    <div className="space-y-1 text-sm">
-                      <p className="font-semibold">{colorName}</p>
-                      <p className="text-[var(--app-muted)]">{style}</p>
-                      <p className="text-xs text-[var(--app-muted)]">
+                  <div className="relative overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`data:image/png;base64,${rendering.imageBase64}`}
+                      alt={`Concept rendering for ${project.customerName}`}
+                      className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
+                    />
+                    {index === 0 && (
+                      <span className="absolute left-3 top-3 inline-flex h-7 items-center rounded-full bg-[#e6f4ef] px-3 text-[11px] font-bold text-[#008060]">
+                        LATEST
+                      </span>
+                    )}
+                  </div>
+                  <figcaption className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-bold text-[#1d1d1f]">
+                        {colorName}
+                        {style ? ` · ${style}` : ""}
+                      </p>
+                      <p className="text-[11px] text-[#6e6e73]">
                         {new Date(rendering.createdAt).toLocaleString()}
                       </p>
                     </div>

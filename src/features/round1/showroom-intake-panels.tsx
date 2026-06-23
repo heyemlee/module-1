@@ -22,11 +22,11 @@ export function CabinetFillSummaryPanel({
 }) {
   if (!positionsConfirmed) {
     return (
-      <div className="rounded-md bg-slate-50 p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+      <div className="rounded-md bg-[#f5f5f7] p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
           Position setup first
         </p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           Confirm dragged door, window, and appliance positions before cabinet fill.
         </p>
       </div>
@@ -35,11 +35,11 @@ export function CabinetFillSummaryPanel({
 
   if (!cabinetFillGenerated) {
     return (
-      <div className="rounded-md bg-slate-50 p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+      <div className="rounded-md bg-[#f5f5f7] p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
           Fixed positions confirmed
         </p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           Generate cabinet fill when the fixed positions are ready.
         </p>
       </div>
@@ -48,8 +48,8 @@ export function CabinetFillSummaryPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-slate-50 p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+      <div className="rounded-md bg-[#f5f5f7] p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
           Rough cabinet fill
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
@@ -68,21 +68,21 @@ export function CabinetFillSummaryPanel({
             count={summary.tallCabinets.count}
             linearFeet={summary.tallCabinets.linearFeet}
           />
-          <div className="rounded-md border border-slate-200 bg-white p-2">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+          <div className="rounded-md border border-[#d2d2d7] bg-white p-2">
+            <p className="text-xs font-black uppercase tracking-wide text-[#6e6e73]">
               Filler
             </p>
-            <p className="mt-1 text-lg font-black text-slate-950">
+            <p className="mt-1 text-lg font-black text-[#1d1d1f]">
               ~{summary.estimatedFillerWidth}"
             </p>
-            <p className="text-xs font-bold text-slate-500">allowance</p>
+            <p className="text-xs font-bold text-[#6e6e73]">allowance</p>
           </div>
         </div>
-        <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-white px-3 py-2">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        <div className="mt-3 rounded-md border border-dashed border-[#d2d2d7] bg-white px-3 py-2">
+          <p className="text-xs font-black uppercase tracking-wide text-[#6e6e73]">
             Pricing reserved
           </p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
+          <p className="mt-1 text-xs leading-5 text-[#6e6e73]">
             Dollar pricing is intentionally left for a later quote step.
           </p>
         </div>
@@ -101,12 +101,12 @@ function CabinetSummaryMetric({
   linearFeet: number;
 }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-2">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+    <div className="rounded-md border border-[#d2d2d7] bg-white p-2">
+      <p className="text-xs font-black uppercase tracking-wide text-[#6e6e73]">
         {label}
       </p>
-      <p className="mt-1 text-lg font-black text-slate-950">{count}</p>
-      <p className="text-xs font-bold text-slate-500">~{linearFeet} lf</p>
+      <p className="mt-1 text-lg font-black text-[#1d1d1f]">{count}</p>
+      <p className="text-xs font-bold text-[#6e6e73]">~{linearFeet} lf</p>
     </div>
   );
 }
@@ -227,11 +227,11 @@ export function Round1SnapshotPanel({
   if (!snapshot) {
     return (
       <div className="space-y-3">
-        <div className="rounded-md bg-slate-50 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        <div className="rounded-md bg-[#f5f5f7] p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
             No snapshot yet
           </p>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
             Generate cabinet fill to freeze the authoritative Round 1 sales
             snapshot. Until then, form and position changes stay draft only.
           </p>
@@ -244,32 +244,32 @@ export function Round1SnapshotPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-emerald-50 p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+      <div className="rounded-md bg-[#e6f4ef] p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-[#008060]">
           Snapshot ready
         </p>
-        <p className="mt-1 text-xs font-bold text-emerald-800">
+        <p className="mt-1 text-xs font-bold text-[#008060]">
           Generated {snapshot.generatedAt}
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-bold">
-          <span className="rounded bg-white px-2 py-1 text-slate-700">
+          <span className="rounded bg-white px-2 py-1 text-[#1d1d1f]">
             {summary.totalCabinets} cabinets
           </span>
-          <span className="rounded bg-white px-2 py-1 text-slate-700">
+          <span className="rounded bg-white px-2 py-1 text-[#1d1d1f]">
             {summary.confirmationCount} to confirm
           </span>
-          <span className="rounded bg-white px-2 py-1 text-slate-700">
+          <span className="rounded bg-white px-2 py-1 text-[#1d1d1f]">
             ~{summary.estimatedFillerWidth}&quot; filler
           </span>
         </div>
         <SnapshotPersistStatus persistState={persistState} onRetrySave={onRetrySave} />
       </div>
 
-      <details className="rounded-md border border-slate-200">
-        <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-700">
+      <details className="rounded-md border border-[#d2d2d7]">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-[#1d1d1f]">
           View snapshot JSON
         </summary>
-        <pre className="max-h-64 overflow-auto border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-700">
+        <pre className="max-h-64 overflow-auto border-t border-[#d2d2d7] bg-[#f5f5f7] px-3 py-2 text-[11px] leading-4 text-[#1d1d1f]">
 {JSON.stringify(snapshot, null, 2)}
         </pre>
       </details>
@@ -289,14 +289,14 @@ function SnapshotPersistStatus({
   if (persistState === "error") {
     return (
       <div className="mt-2 space-y-2">
-        <p className="text-[11px] font-bold text-amber-700">
+        <p className="text-[11px] font-bold text-[#c56a16]">
           Couldn’t reach the server — snapshot kept locally.
         </p>
         {onRetrySave ? (
           <button
             type="button"
             onClick={onRetrySave}
-            className="rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+            className="rounded-md bg-[#c56a16] px-3 py-1.5 text-[11px] font-bold text-white hover:bg-[#a85a13]"
           >
             Retry save
           </button>
@@ -306,8 +306,8 @@ function SnapshotPersistStatus({
   }
 
   const config = {
-    saving: { text: "Saving to server…", className: "text-slate-500" },
-    saved: { text: "Saved to server", className: "text-emerald-700" }
+    saving: { text: "Saving to server…", className: "text-[#6e6e73]" },
+    saved: { text: "Saved to server", className: "text-[#008060]" }
   }[persistState];
 
   return (

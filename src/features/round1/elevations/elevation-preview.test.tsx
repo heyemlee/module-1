@@ -33,11 +33,11 @@ describe("ElevationPreview", () => {
     expect(html).toContain("Round 1 rough elevation - not for production");
   });
 
-  test("uses blue styling for openings and keeps cabinet linework neutral", () => {
+  test("uses accent styling for openings and keeps cabinet linework neutral", () => {
     const html = renderElevation();
 
     expect(html).toContain('data-elevation-opening="window"');
-    expect(html).toContain('stroke="#0ea5e9"');
+    expect(html).toContain('stroke="#c56a16"');
     expect(html).toContain('data-elevation-item="baseCabinet"');
     expect(html).toContain('stroke="#1f2937"');
   });

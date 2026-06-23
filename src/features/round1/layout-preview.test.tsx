@@ -158,7 +158,7 @@ describe("LayoutPreview", () => {
     expect(html).not.toContain("Show MEP");
     expect(html).not.toContain(">Print");
     // No hover/drag chrome (sky halo, grab-dots).
-    expect(html).not.toContain('stroke="#0ea5e9"');
+    expect(html).not.toContain('stroke="#c56a16"');
     expect(html).not.toContain('fill="#334155"');
     // Geometry retained: appliances drawn (forced on) and the SVG viewBox intact.
     expect(html).toContain('data-appliance-symbol="sink"');
@@ -184,7 +184,7 @@ describe("LayoutPreview", () => {
 
     expect(html).toContain(">window<");
     expect(html).toContain(">door<");
-    expect(html).toContain('stroke="#0ea5e9"');
+    expect(html).toContain('stroke="#c56a16"');
   });
 
   test("renders an open passage without door leaf or swing arc", () => {
