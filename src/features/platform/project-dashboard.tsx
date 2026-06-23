@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -11,6 +16,7 @@ import {
 import type { AuthUser } from "@/server/platform/types";
 import type { ProjectSummary } from "@/server/platform/project-repository";
 import { LogoutButton } from "./logout-button";
+import { UiverseDeleteButton } from "./uiverse-delete-button";
 
 const STATUS_LABELS: Record<ProjectSummary["status"], string> = {
   DRAFT: "Draft",
@@ -38,6 +44,43 @@ export function ProjectDashboard({
   user: AuthUser;
   projects: ProjectSummary[];
 }) {
+  const router = useRouter();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  const toggleAll = () => {
+    if (selectedIds.size === projects.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(projects.map(p => p.id)));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} project(s)?`)) return;
+    setDeleting(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          fetch(`/api/projects/${id}`, { method: "DELETE" })
+        )
+      );
+      setSelectedIds(new Set());
+      router.refresh();
+    } catch {
+      alert("Network error while deleting projects");
+    } finally {
+      setDeleting(false);
+    }
+  };
   return (
     <main className="app-page px-6 py-8">
       <div className="mx-auto max-w-7xl">
@@ -74,20 +117,35 @@ export function ProjectDashboard({
         <div className="app-panel mt-7 overflow-hidden">
           <form className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--app-border)] p-4">
             <h2 className="text-xl font-bold text-[var(--app-ink)]">Projects</h2>
-            <label className="min-w-[280px] flex-1 text-sm font-medium text-[var(--app-muted)] md:max-w-md">
-              Search customer, address, or project
-              <Input
-                name="q"
-                className="mt-1"
-                placeholder="Search projects..."
-              />
-            </label>
+            <div className="flex flex-1 items-center justify-end gap-4 min-w-[280px]">
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--app-red)]">{selectedIds.size} selected</span>
+                  <UiverseDeleteButton onClick={handleDeleteSelected} disabled={deleting} />
+                </div>
+              )}
+              <label className="text-sm font-medium text-[var(--app-muted)] md:max-w-md w-full">
+                Search customer, address, or project
+                <Input
+                  name="q"
+                  className="mt-1"
+                  placeholder="Search projects..."
+                />
+              </label>
+            </div>
           </form>
 
           {projects.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={projects.length > 0 && selectedIds.size === projects.length}
+                        onCheckedChange={toggleAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
                     <TableHead>
                       Customer
                     </TableHead>
@@ -109,7 +167,15 @@ export function ProjectDashboard({
                   {projects.map((project) => (
                     <TableRow
                       key={project.id}
+                      data-state={selectedIds.has(project.id) ? "selected" : undefined}
                     >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(project.id)}
+                          onCheckedChange={() => toggleOne(project.id)}
+                          aria-label={`Select project ${project.projectName}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Link
                           href={`/projects/${project.id}`}
@@ -130,12 +196,14 @@ export function ProjectDashboard({
                         {new Date(project.updatedAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="uiverse-fill-button px-3 py-2 text-xs"
-                        >
-                          Open
-                        </Link>
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/projects/${project.id}`}
+                            className="uiverse-fill-button px-3 py-2 text-xs"
+                          >
+                            Open
+                          </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

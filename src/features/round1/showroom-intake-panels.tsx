@@ -1,11 +1,12 @@
 import {
   type PreliminaryCabinetEstimateSummary
 } from "@/domain/round1";
-import { ImageGeneration } from "@/components/ui/ai-chat-image-generation-1";
+import { AIChatInput } from "@/components/ui/ai-chat-input";
 import {
   summarizeRound1Snapshot,
   type Round1Snapshot
 } from "./snapshot";
+import "./ghost-loader.css";
 
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
 
@@ -126,7 +127,7 @@ export function RenderingControls({
     <div className="mt-4 space-y-2">
       {busy ? (
         <div className="rendering-loader rounded-lg border border-[var(--app-border)] bg-white p-3">
-          <TruckLoader />
+          <GhostLoader />
           <p className="mt-2 bg-[linear-gradient(110deg,var(--app-muted),35%,var(--app-ink),50%,var(--app-muted),75%,var(--app-muted))] bg-[length:200%_100%] bg-clip-text text-sm font-semibold text-transparent [animation:rendering-shimmer_3s_linear_infinite]">
             Creating image. May take a moment.
           </p>
@@ -151,35 +152,59 @@ export function RenderingControls({
               Outdated — please regenerate rendering to update.
             </p>
           )}
-          <ImageGeneration active={busy}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+          <div className="flex flex-col gap-4">
+            <AIChatInput />
             <img
               src={image}
               alt="Round 1 concept rendering"
               className={`aspect-video max-w-md object-cover ${stale ? "opacity-60" : ""}`}
             />
-          </ImageGeneration>
+          </div>
         </figure>
       )}
     </div>
   );
 }
 
-function TruckLoader() {
+function GhostLoader() {
   return (
-    <div className="loader" aria-hidden>
-      <div className="truckWrapper">
-        <div className="truckBody">
-          <div className="h-10 w-28 rounded-md border-2 border-[var(--app-ink)] bg-[var(--app-blue-soft)]" />
-          <div className="ml-auto h-8 w-12 rounded-r-md border-2 border-l-0 border-[var(--app-ink)] bg-white" />
-        </div>
-        <div className="truckTires">
-          <span />
-          <span />
-        </div>
-        <div className="road" />
-        <div className="lampPost" />
+    <div className="gl-ghost" aria-hidden>
+      <div className="gl-red">
+        <div className="gl-top0"></div>
+        <div className="gl-top1"></div>
+        <div className="gl-top2"></div>
+        <div className="gl-top3"></div>
+        <div className="gl-top4"></div>
+        <div className="gl-st0"></div>
+        <div className="gl-st1"></div>
+        <div className="gl-st2"></div>
+        <div className="gl-st3"></div>
+        <div className="gl-st4"></div>
+        <div className="gl-st5"></div>
+        <div className="gl-an1"></div>
+        <div className="gl-an2"></div>
+        <div className="gl-an3"></div>
+        <div className="gl-an4"></div>
+        <div className="gl-an5"></div>
+        <div className="gl-an6"></div>
+        <div className="gl-an7"></div>
+        <div className="gl-an8"></div>
+        <div className="gl-an9"></div>
+        <div className="gl-an10"></div>
+        <div className="gl-an11"></div>
+        <div className="gl-an12"></div>
+        <div className="gl-an13"></div>
+        <div className="gl-an14"></div>
+        <div className="gl-an15"></div>
+        <div className="gl-an16"></div>
+        <div className="gl-an17"></div>
+        <div className="gl-an18"></div>
+        <div className="gl-eye"></div>
+        <div className="gl-eye1"></div>
+        <div className="gl-pupil"></div>
+        <div className="gl-pupil1"></div>
       </div>
+      <div className="gl-shadow"></div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoutButton } from "./logout-button";
+import { DownloadButton } from "./download-button";
 
 const STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -85,12 +86,18 @@ export function RenderingsView({
                     alt={`Concept rendering for ${project.customerName}`}
                     className="w-full"
                   />
-                  <figcaption className="space-y-1 border-t border-[var(--app-border)] px-4 py-3 text-sm">
-                    <p className="font-semibold">{colorName}</p>
-                    <p className="text-[var(--app-muted)]">{style}</p>
-                    <p className="text-xs text-[var(--app-muted)]">
-                      {new Date(rendering.createdAt).toLocaleString()}
-                    </p>
+                  <figcaption className="border-t border-[var(--app-border)] px-4 py-3 flex items-center justify-between">
+                    <div className="space-y-1 text-sm">
+                      <p className="font-semibold">{colorName}</p>
+                      <p className="text-[var(--app-muted)]">{style}</p>
+                      <p className="text-xs text-[var(--app-muted)]">
+                        {new Date(rendering.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <DownloadButton
+                      imageBase64={rendering.imageBase64}
+                      fileName={`rendering_${project.projectName.replace(/\s+/g, "_")}_${new Date(rendering.createdAt).getTime()}.png`}
+                    />
                   </figcaption>
                 </figure>
               );
