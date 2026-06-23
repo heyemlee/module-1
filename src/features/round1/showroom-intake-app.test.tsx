@@ -533,8 +533,8 @@ describe("Round1SnapshotPanel", () => {
           canRender={false}
           busy={false}
           error={null}
-          stale={false}
-          image={null}
+          renderings={[]}
+          cabinetColors={[]}
         />
         <Round1SnapshotPanel snapshot={null} />
       </>
@@ -556,8 +556,8 @@ describe("Round1SnapshotPanel", () => {
         canRender
         busy
         error={null}
-        stale={false}
-        image="data:image/png;base64,abc"
+        renderings={[{ id: "1", url: "data:image/png;base64,abc", doorColorId: null }]}
+        cabinetColors={[]}
       />
     );
 

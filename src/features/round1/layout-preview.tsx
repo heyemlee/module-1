@@ -48,6 +48,7 @@ type LayoutPreviewProps = {
    * `showPositionObjects`).
    */
   referenceMode?: boolean;
+  showHeader?: boolean;
 };
 
 type PreviewStage = "room" | "openings" | "layout" | "appliances" | "adjust";
@@ -78,7 +79,8 @@ export function LayoutPreview({
   svgRef: externalSvgRef,
   plan: planProp,
   previewStage,
-  referenceMode = false
+  referenceMode = false,
+  showHeader = true
 }: LayoutPreviewProps) {
   const [showMep, setShowMep] = useState(false);
 
@@ -187,7 +189,7 @@ export function LayoutPreview({
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white relative">
-      {!referenceMode && (
+      {showHeader && !referenceMode && (
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-slate-950">
@@ -204,8 +206,12 @@ export function LayoutPreview({
             />
             Show MEP
           </label>
-          <span className="rounded bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
-            Round 1
+          <span className={`rounded px-2.5 py-1 text-xs font-bold ${
+            confirmationItems.length > 0
+              ? "bg-[var(--app-amber-soft)] text-[var(--app-amber)]"
+              : "bg-[var(--app-green-soft)] text-[var(--app-green)]"
+          }`}>
+            {`${confirmationItems.length} confirmation${confirmationItems.length === 1 ? "" : "s"}`}
           </span>
           <button
             onClick={handlePrint}

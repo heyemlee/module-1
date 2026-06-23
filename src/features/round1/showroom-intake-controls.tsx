@@ -9,13 +9,10 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 
-export function Step({ title, children }: { title: string; children: ReactNode }) {
+export function Step({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <div>
-      <h2 className="text-[26px] font-bold leading-[32px] tracking-tight text-[var(--app-ink)]">{title}</h2>
-      <p className="mb-5 mt-2 text-sm leading-6 text-[var(--app-muted)]">
-        Unknown or rough answers are allowed. They stay visible as Confirmation Required.
-      </p>
+      {title && <h2 className="mb-5 text-[26px] font-bold leading-[32px] tracking-tight text-[var(--app-ink)]">{title}</h2>}
       {children}
     </div>
   );

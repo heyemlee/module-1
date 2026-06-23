@@ -147,8 +147,18 @@ describe("describeCorners", () => {
 });
 
 describe("describeWindow", () => {
-  test("places the default window on its wall without forcing sink alignment", () => {
-    const phrase = describeWindow(defaultPlan);
+  test("places the window without forcing sink alignment when sink is elsewhere", () => {
+    const offCenterSinkPlan = planFor({
+      ...createDefaultShowroomForm(),
+      fixtures: {
+        ...createDefaultShowroomForm().fixtures,
+        sink: {
+          ...createDefaultShowroomForm().fixtures.sink,
+          relation: "LEFT_SIDE"
+        }
+      }
+    });
+    const phrase = describeWindow(offCenterSinkPlan);
     expect(phrase).not.toBeNull();
     expect(phrase!).toContain("the back wall");
     expect(phrase!).not.toContain("above the sink");

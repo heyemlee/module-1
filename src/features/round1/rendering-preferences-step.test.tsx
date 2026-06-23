@@ -50,18 +50,11 @@ describe("RenderingPreferencesStep", () => {
         form={form}
         colors={colors}
         onFormChange={() => {}}
-        onGenerateCabinetFill={() => {}}
-        onGenerateRendering={() => {}}
-        canGenerateCabinetFill
-        canGenerateRendering={false}
-        renderingBusy={false}
       />
     );
 
     expect(html).toContain("Natural Oak Matte");
     expect(html).not.toContain("Painted White");
-    expect(html).toContain("Action Required");
-    expect(html).toContain("Choose a cabinet finish to unlock rendering.");
   });
 
   test("marks a confirmed cabinet color as locked", () => {
@@ -78,18 +71,10 @@ describe("RenderingPreferencesStep", () => {
         form={form}
         colors={colors}
         onFormChange={() => {}}
-        onGenerateCabinetFill={() => {}}
-        onGenerateRendering={() => {}}
-        canGenerateCabinetFill={false}
-        canGenerateRendering
-        renderingBusy={false}
       />
     );
 
-    expect(html).toContain("Current Selection");
     expect(html).toContain("Natural Oak Matte");
-    expect(html).toContain("European Frameless");
-    expect(html).toContain("Generate Rendering");
   });
 
   test("shows an admin setup message when no active colors exist", () => {
@@ -98,11 +83,6 @@ describe("RenderingPreferencesStep", () => {
         form={createDefaultShowroomForm()}
         colors={[]}
         onFormChange={() => {}}
-        onGenerateCabinetFill={() => {}}
-        onGenerateRendering={() => {}}
-        canGenerateCabinetFill={false}
-        canGenerateRendering={false}
-        renderingBusy={false}
       />
     );
 

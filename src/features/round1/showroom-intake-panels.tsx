@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   type PreliminaryCabinetEstimateSummary
 } from "@/domain/round1";
@@ -115,17 +116,25 @@ export function RenderingControls({
   canRender,
   busy,
   error,
-  stale,
-  image
+  renderings,
+  cabinetColors
 }: {
   canRender: boolean;
   busy: boolean;
   error: string | null;
-  stale: boolean;
-  image: string | null;
+  renderings: { id: string; url: string; doorColorId: string | null }[];
+  cabinetColors: { id: string; name: string }[];
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // If new renderings arrive, try to keep showing the latest (first) if we were at 0, 
+  // or adjust index if needed. For simplicity, just bounding it.
+  const index = Math.min(currentIndex, Math.max(0, renderings.length - 1));
+  const currentRendering = renderings[index];
+
   return (
-    <div className="mt-4 space-y-2">
+    <div className="space-y-2">
       {busy ? (
         <div className="rendering-loader rounded-lg border border-[var(--app-border)] bg-white p-3">
           <GhostLoader />
@@ -136,7 +145,7 @@ export function RenderingControls({
       ) : null}
       {!canRender ? (
         <p className="text-xs leading-5 text-[var(--app-muted)]">
-          {image
+          {renderings.length > 0
             ? "Regenerate cabinet fill and confirm rendering preferences, then re-run to refresh this preview."
             : "Available after cabinet fill is generated and a cabinet color is confirmed."}
         </p>
@@ -146,27 +155,125 @@ export function RenderingControls({
           Could not generate the rendering: {error}
         </p>
       )}
-      {image && (
-        <figure className="image-generation-preview mt-3 space-y-1">
-          {stale && (
-            <p className="rounded-lg bg-[var(--app-amber-soft)] px-3 py-2 text-[11px] font-bold leading-4 text-[var(--app-amber)]">
-              Outdated — please regenerate rendering to update.
-            </p>
-          )}
+      {currentRendering && (
+        <figure className="image-generation-preview mt-3 space-y-1 relative group">
           <div className="relative flex flex-col gap-4">
             <img
-              src={image}
+              src={currentRendering.url}
               alt="Round 1 concept rendering"
-              className={`aspect-video w-full rounded-lg object-cover ${stale ? "opacity-60" : ""}`}
+              className="aspect-video w-full cursor-pointer rounded-lg object-cover transition hover:opacity-90"
+              onClick={() => setIsFullscreen(true)}
             />
+            {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
+              <div className="absolute top-3 left-3 rounded bg-black/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm pointer-events-none">
+                {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
+              </div>
+            )}
             <div className="absolute bottom-3 right-3">
               <DownloadButton
-                imageBase64={image.replace("data:image/png;base64,", "")}
+                imageBase64={currentRendering.url.replace("data:image/png;base64,", "")}
                 fileName="concept-rendering.png"
               />
             </div>
+
+            {renderings.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100 disabled:hidden"
+                  onClick={() => setCurrentIndex((i) => Math.min(renderings.length - 1, i + 1))}
+                  disabled={index === renderings.length - 1}
+                  aria-label="Previous rendering"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100 disabled:hidden"
+                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                  disabled={index === 0}
+                  aria-label="Next rendering"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+                <div className="absolute bottom-3 left-3 flex gap-1">
+                  {renderings.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 w-1.5 rounded-full transition-all ${i === index ? "bg-white scale-110" : "bg-white/40"}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </figure>
+      )}
+
+      {isFullscreen && currentRendering && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setIsFullscreen(false)}
+        >
+          <div className="relative max-h-[95vh] max-w-[95vw]">
+            <img 
+              src={currentRendering.url} 
+              alt="Fullscreen rendering" 
+              className="max-h-[95vh] max-w-[95vw] rounded-lg object-contain shadow-2xl" 
+            />
+            {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
+              <div className="absolute top-4 left-4 rounded-md bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md pointer-events-none">
+                {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
+              </div>
+            )}
+            <button 
+              className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white transition hover:bg-black/70"
+              onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+              aria-label="Close fullscreen"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <div className="absolute bottom-4 right-4">
+              <DownloadButton
+                imageBase64={currentRendering.url.replace("data:image/png;base64,", "")}
+                fileName="concept-rendering.png"
+              />
+            </div>
+            {renderings.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/80 disabled:hidden"
+                  onClick={(e) => { e.stopPropagation(); setCurrentIndex((i) => Math.min(renderings.length - 1, i + 1)); }}
+                  disabled={index === renderings.length - 1}
+                  aria-label="Previous rendering"
+                >
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/80 disabled:hidden"
+                  onClick={(e) => { e.stopPropagation(); setCurrentIndex((i) => Math.max(0, i - 1)); }}
+                  disabled={index === 0}
+                  aria-label="Next rendering"
+                >
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
