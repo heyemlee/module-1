@@ -7,8 +7,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("CreateUserForm", () => {
-  test("renders email, name, role, password fields", () => {
+  test("renders account, email, name, role, password fields", () => {
     const html = renderToStaticMarkup(<CreateUserForm />);
+    expect(html).toContain("Account");
+    expect(html).toContain("Account is used for sign in");
     expect(html).toContain("Email");
     expect(html).toContain("Name");
     expect(html).toContain("Role");

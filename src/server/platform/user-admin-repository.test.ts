@@ -5,6 +5,7 @@ describe("user admin helpers", () => {
   test("maps a user row to a safe summary (no password hash)", () => {
     const user = mapCompanyUserRow({
       id: "u1",
+      account: "sales-one",
       email: "sales@example.com",
       name: "Sales One",
       role: "SALES",
@@ -13,6 +14,7 @@ describe("user admin helpers", () => {
     });
     expect(user).toEqual({
       id: "u1",
+      account: "sales-one",
       email: "sales@example.com",
       name: "Sales One",
       role: "SALES",

@@ -3,14 +3,14 @@ import { z } from "zod";
 import { loginWithPassword, setSessionCookie, UnauthorizedError } from "@/server/platform/auth-service";
 
 const requestSchema = z.object({
-  email: z.string().min(1),
+  account: z.string().trim().min(1),
   password: z.string().min(1)
 });
 
 export async function POST(request: Request) {
   try {
     const input = requestSchema.parse(await request.json());
-    const session = await loginWithPassword(input.email, input.password);
+    const session = await loginWithPassword(input.account, input.password);
     await setSessionCookie(session.id);
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {

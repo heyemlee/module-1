@@ -8,14 +8,14 @@ export const SESSION_COOKIE = "abc_module_session";
 export class UnauthorizedError extends Error {}
 export class ForbiddenError extends Error {}
 
-export async function loginWithPassword(email: string, password: string) {
-  const record = await findUserForLogin(email);
+export async function loginWithPassword(account: string, password: string) {
+  const record = await findUserForLogin(account);
   if (!record || record.user.disabledAt) {
-    throw new UnauthorizedError("Invalid email or password");
+    throw new UnauthorizedError("Invalid account or password");
   }
   const ok = await verifyPassword(password, record.passwordHash);
   if (!ok) {
-    throw new UnauthorizedError("Invalid email or password");
+    throw new UnauthorizedError("Invalid account or password");
   }
   return createSession(record.user.id);
 }

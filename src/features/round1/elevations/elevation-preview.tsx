@@ -41,7 +41,7 @@ export function ElevationPreview({ plan, svgRef, className }: ElevationPreviewPr
   return (
     <section className={sectionClassName}>
       <div className="border-b border-slate-200 px-4 py-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-950">
           Rough Wall Elevations
         </p>
       </div>

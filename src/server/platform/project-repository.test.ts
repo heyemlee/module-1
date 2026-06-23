@@ -5,6 +5,7 @@ import type { AuthUser } from "./types";
 const sales: AuthUser = {
   id: "sales-1",
   companyId: "company-1",
+  account: "sales",
   email: "sales@example.com",
   name: "Sales",
   role: "SALES",

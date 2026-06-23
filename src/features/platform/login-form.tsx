@@ -18,7 +18,7 @@ export function LoginForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: account, password })
+        body: JSON.stringify({ account: account.trim(), password })
       });
       if (!response.ok) {
         setError("Invalid account or password");

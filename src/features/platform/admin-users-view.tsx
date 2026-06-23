@@ -17,7 +17,7 @@ export function AdminUsersView({ users }: { users: CompanyUserSummary[] }) {
             {users.map((u) => (
               <div key={u.id} className="grid grid-cols-3 gap-4 border-b border-stone-200 px-4 py-3 text-sm last:border-b-0">
                 <span className="font-medium">{u.name}</span>
-                <span className="truncate text-stone-600">{u.email}</span>
+                <span className="truncate text-stone-600">{u.account}</span>
                 <span className="text-right">{u.role}</span>
               </div>
             ))}

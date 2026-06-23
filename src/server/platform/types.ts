@@ -3,6 +3,7 @@ export type UserRole = "ADMIN" | "SALES" | "DESIGNER";
 export type AuthUser = {
   id: string;
   companyId: string;
+  account: string;
   email: string;
   name: string;
   role: UserRole;

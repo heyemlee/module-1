@@ -113,7 +113,7 @@ export function ProjectDashboard({
                       <TableCell>
                         <Link
                           href={`/projects/${project.id}`}
-                          className="font-semibold text-[var(--app-ink)] hover:text-[var(--app-blue)]"
+                          className="font-semibold text-[var(--app-ink)] hover:text-black"
                         >
                           {project.customerName}
                         </Link>

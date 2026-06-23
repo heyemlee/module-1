@@ -764,7 +764,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       {showAdjustPositionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-950">
               Adjust Positions
             </p>
             <h2 className="mt-2 text-lg font-black text-slate-950">
@@ -781,7 +781,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                   setShowAdjustPositionsModal(false);
                   startDraggableHighlightCue();
                 }}
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white"
               >
                 Got It
               </button>
