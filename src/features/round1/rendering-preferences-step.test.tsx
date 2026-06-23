@@ -63,6 +63,33 @@ describe("RenderingPreferencesStep", () => {
     expect(html).toContain("Confirm Color");
   });
 
+  test("marks a confirmed cabinet color as locked", () => {
+    const form = {
+      ...createDefaultShowroomForm(),
+      renderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        doorColorId: "eu-oak"
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      <RenderingPreferencesStep
+        form={form}
+        colors={colors}
+        onFormChange={() => {}}
+        onGenerateCabinetFill={() => {}}
+        onGenerateRendering={() => {}}
+        canGenerateCabinetFill={false}
+        canGenerateRendering
+        renderingBusy={false}
+      />
+    );
+
+    expect(html).toContain("Locked finish");
+    expect(html).toContain("Natural Oak Matte");
+    expect(html).toContain("Change requires a new rendering");
+  });
+
   test("shows an admin setup message when no active colors exist", () => {
     const html = renderToStaticMarkup(
       <RenderingPreferencesStep

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { loginWithPassword, setSessionCookie, UnauthorizedError } from "@/server/platform/auth-service";
 
 const requestSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1),
   password: z.string().min(1)
 });
 
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid login request" }, { status: 400 });
     }
     if (error instanceof UnauthorizedError) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid account or password" }, { status: 401 });
     }
     return NextResponse.json({ error: "Unable to log in" }, { status: 500 });
   }

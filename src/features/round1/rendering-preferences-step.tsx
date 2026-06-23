@@ -50,6 +50,8 @@ export function RenderingPreferencesStep({
   );
   const selectedColor = selectedRenderingColor(colors, form);
   const preferencesComplete = renderingPreferencesComplete(colors, form);
+  const isChangingLockedColor = (color: CabinetColor) =>
+    selectedColor !== null && selectedColor.id !== color.id;
 
   const setStyle = (style: CabinetStyle) => {
     onFormChange({
@@ -76,7 +78,7 @@ export function RenderingPreferencesStep({
     <Step title="6. Rendering Preferences">
       <div className="space-y-6">
         <div>
-          <p className="mb-2 text-sm font-bold text-slate-700">
+          <p className="mb-2 text-sm font-semibold text-[var(--app-muted)]">
             Cabinet construction style
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -87,10 +89,10 @@ export function RenderingPreferencesStep({
                   key={style}
                   type="button"
                   onClick={() => setStyle(style)}
-                  className={`rounded-md border px-4 py-3 text-left text-sm font-black ${
+                  className={`rounded-lg border px-4 py-3 text-left text-sm font-bold transition ${
                     selected
-                      ? "border-sky-700 bg-sky-50 text-sky-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "border-[rgba(0,113,227,0.55)] bg-[var(--app-blue-soft)] text-[var(--app-blue)]"
+                      : "border-[var(--app-border)] bg-white text-[var(--app-ink)] hover:bg-black/[0.025]"
                   }`}
                 >
                   {CABINET_STYLE_LABELS[style]}
@@ -140,14 +142,14 @@ export function RenderingPreferencesStep({
                   key={color.id}
                   type="button"
                   onClick={() => setPendingColor(color)}
-                  className={`group rounded-md border bg-white p-3 text-left shadow-sm ${
+                  className={`group rounded-lg border bg-white p-3 text-left transition ${
                     isSelected
-                      ? "border-sky-700 ring-2 ring-sky-100"
-                      : "border-slate-200 hover:border-sky-300"
+                      ? "border-[rgba(0,113,227,0.75)] ring-4 ring-[rgba(0,113,227,0.12)]"
+                      : "border-[var(--app-border)] hover:border-[rgba(0,113,227,0.45)] hover:shadow-lg"
                   }`}
                 >
                   <span
-                    className="block aspect-square w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100"
+                    className="block aspect-square w-full overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)]"
                     style={{
                       backgroundColor: color.swatchImageUrl
                         ? undefined
@@ -165,16 +167,16 @@ export function RenderingPreferencesStep({
                       />
                     ) : null}
                   </span>
-                  <span className="mt-3 block text-base font-black text-slate-950">
+                  <span className="mt-3 block text-base font-bold text-[var(--app-ink)]">
                     {color.name}
                   </span>
                   {color.colorCode ? (
-                    <span className="mt-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <span className="mt-1 block text-xs font-semibold text-[var(--app-muted)]">
                       {color.colorCode}
                     </span>
                   ) : null}
                   {color.hoverExampleImageUrl ? (
-                    <span className="mt-3 block overflow-hidden rounded-md border border-slate-200 bg-slate-50 opacity-75 transition group-hover:opacity-100">
+                    <span className="mt-3 block overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] opacity-80 transition group-hover:opacity-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={color.hoverExampleImageUrl}
@@ -185,8 +187,12 @@ export function RenderingPreferencesStep({
                       />
                     </span>
                   ) : null}
-                  <span className="mt-3 inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-black text-white">
-                    Confirm Color
+                  <span className={`mt-3 inline-flex rounded-full px-3 py-2 text-xs font-bold ${
+                    isSelected
+                      ? "bg-[var(--app-green-soft)] text-[var(--app-green)]"
+                      : "bg-[var(--app-ink)] text-white"
+                  }`}>
+                    {isSelected ? "Locked finish" : "Confirm Color"}
                   </span>
                 </button>
               );
@@ -194,40 +200,49 @@ export function RenderingPreferencesStep({
           </div>
         )}
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Selected finish
+        <div className="rounded-lg border border-[var(--app-border)] bg-white p-4">
+          <p className="text-xs font-bold text-[var(--app-muted)]">
+            {selectedColor ? "Locked finish" : "Selected finish"}
           </p>
-          <p className="mt-1 text-sm font-bold text-slate-800">
+          <p className="mt-1 text-sm font-semibold text-[var(--app-ink)]">
             {selectedColor
               ? `${selectedColor.name} · ${
                   CABINET_STYLE_LABELS[selectedColor.cabinetStyle]
                 }`
               : "Choose and confirm a cabinet color before rendering."}
           </p>
+          {selectedColor ? (
+            <p className="mt-2 text-xs leading-5 text-[var(--app-amber)]">
+              Change requires a new rendering after you confirm a different finish.
+            </p>
+          ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4">
+        <div className="flex flex-wrap gap-3 border-t border-[var(--app-border)] pt-4">
           <button
             type="button"
             onClick={onGenerateCabinetFill}
             disabled={!canGenerateCabinetFill}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="uiverse-fill-button px-4 py-2"
           >
             Generate Cabinet Fill
           </button>
-          <button
-            type="button"
-            onClick={onGenerateRendering}
-            disabled={!preferencesComplete || !canGenerateRendering || renderingBusy}
-            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {renderingBusy ? "Generating Rendering..." : "Generate Rendering"}
-          </button>
+          <span className="rendering-glow-wrapper">
+            <button
+              type="button"
+              onClick={onGenerateRendering}
+              disabled={!preferencesComplete || !canGenerateRendering || renderingBusy}
+              className="rendering-glow-button"
+            >
+              <RenderingButtonText
+                text={renderingBusy ? "Generating..." : "Generate Rendering"}
+              />
+            </button>
+          </span>
         </div>
 
         {!preferencesComplete ? (
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-[var(--app-muted)]">
             Confirm a cabinet color before generating the rendering.
           </p>
         ) : null}
@@ -235,35 +250,56 @@ export function RenderingPreferencesStep({
 
       {pendingColor ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
-              Confirm cabinet color
+          <div className="w-full max-w-md rounded-2xl border border-white/70 bg-white/95 p-5 shadow-2xl backdrop-blur">
+            <p className="text-xs font-bold text-[var(--app-blue)]">
+              {isChangingLockedColor(pendingColor)
+                ? "Change locked finish"
+                : "Confirm cabinet color"}
             </p>
-            <h3 className="mt-2 text-lg font-black text-slate-950">
+            <h3 className="mt-2 text-lg font-bold text-[var(--app-ink)]">
               {pendingColor.name}
             </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Save this finish for the sales rendering preferences.
+            <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
+              {isChangingLockedColor(pendingColor)
+                ? "This will replace the locked finish. The existing rendering will need to be regenerated."
+                : "Save this finish for the sales rendering preferences."}
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setPendingColor(null)}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+                className="uiverse-fill-button px-4 py-2"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmColor}
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+                className="uiverse-fill-button px-4 py-2"
               >
-                Confirm Color
+                {isChangingLockedColor(pendingColor) ? "Change Finish" : "Confirm Color"}
               </button>
             </div>
           </div>
         </div>
       ) : null}
     </Step>
+  );
+}
+
+function RenderingButtonText({ text }: { text: string }) {
+  return (
+    <span aria-label={text}>
+      {text.split("").map((letter, index) => (
+        <span
+          key={`${letter}-${index}`}
+          className="rendering-glow-letter"
+          style={{ animationDelay: `${Math.min(index * 0.08, 0.96)}s` }}
+          aria-hidden
+        >
+          {letter === " " ? "\u00a0" : letter}
+        </span>
+      ))}
+    </span>
   );
 }

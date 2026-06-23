@@ -122,41 +122,66 @@ export function RenderingControls({
   image: string | null;
 }) {
   return (
-    <div className="space-y-2 mt-4">
+    <div className="mt-4 space-y-2">
       {busy ? (
-        <p className="rounded-md bg-sky-50 px-3 py-2 text-xs font-bold leading-5 text-sky-800">
-          Generating rendering...
-        </p>
+        <div className="rendering-loader rounded-lg border border-[var(--app-border)] bg-white p-3">
+          <TruckLoader />
+          <p className="mt-2 bg-[linear-gradient(110deg,var(--app-muted),35%,var(--app-ink),50%,var(--app-muted),75%,var(--app-muted))] bg-[length:200%_100%] bg-clip-text text-sm font-semibold text-transparent [animation:rendering-shimmer_3s_linear_infinite]">
+            Creating image. May take a moment.
+          </p>
+        </div>
       ) : null}
       {!canRender ? (
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-xs leading-5 text-[var(--app-muted)]">
           {image
             ? "Regenerate cabinet fill and confirm rendering preferences, then re-run to refresh this preview."
             : "Available after cabinet fill is generated and a cabinet color is confirmed."}
         </p>
       ) : null}
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+        <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-xs leading-5 text-[var(--app-red)]">
           Could not generate the rendering: {error}
         </p>
       )}
       {image && (
-        <figure className="space-y-1 mt-3">
+        <figure className="image-generation-preview mt-3 space-y-1">
           {stale && (
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] font-bold leading-4 text-amber-800">
+            <p className="rounded-lg bg-[var(--app-amber-soft)] px-3 py-2 text-[11px] font-bold leading-4 text-[var(--app-amber)]">
               Outdated — please regenerate rendering to update.
             </p>
           )}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt="Round 1 concept rendering"
-            className={`w-full rounded-md border border-slate-200 ${
-              stale ? "opacity-60" : ""
-            }`}
-          />
+          <div className="relative overflow-hidden rounded-xl border border-[var(--app-border)] bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt="Round 1 concept rendering"
+              className={`w-full ${stale ? "opacity-60" : ""}`}
+            />
+            {busy ? (
+              <div className="pointer-events-none absolute -top-1/4 h-[125%] w-full animate-[image_reveal_30s_linear_forwards] backdrop-blur-3xl" />
+            ) : null}
+          </div>
         </figure>
       )}
+    </div>
+  );
+}
+
+function TruckLoader() {
+  return (
+    <div className="loader" aria-hidden>
+      <div className="truckWrapper">
+        <div className="truckBody">
+          <div className="h-10 w-28 rounded-md border-2 border-[var(--app-ink)] bg-[var(--app-blue-soft)]" />
+          <div className="ml-auto h-8 w-12 rounded-r-md border-2 border-l-0 border-[var(--app-ink)] bg-white" />
+        </div>
+        <div className="truckTires">
+          <span />
+          <span />
+        </div>
+        <div className="road" />
+        <div className="lampPost" />
+      </div>
     </div>
   );
 }

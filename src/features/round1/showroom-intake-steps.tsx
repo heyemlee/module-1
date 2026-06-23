@@ -5,6 +5,7 @@ import {
   type PositionOverrides
 } from "./floorplan/plan-geometry";
 import {
+  CheckboxField,
   NumberField,
   SelectField,
   Step,
@@ -341,11 +342,12 @@ export function LayoutStep({
             });
           }}
         />
-        <SelectField
-          label="Need island?"
-          value={islandStatusForForm(form)}
-          options={["YES", "NO", "UNKNOWN"] as const}
-          onChange={(status) =>
+        <CheckboxField
+          label="Include an island"
+          checked={islandStatusForForm(form) === "YES"}
+          help="A checked island maps to YES; unchecked maps to NO for the existing Round 1 schema."
+          onChange={(checked) => {
+            const status = checked ? "YES" : "NO";
             setForm({
               ...form,
               layoutSensitiveCabinets: {
@@ -353,11 +355,11 @@ export function LayoutStep({
                 island: {
                   ...form.layoutSensitiveCabinets.island,
                   status,
-                  requested: status === "YES"
+                  requested: checked
                 }
               }
-            })
-          }
+            });
+          }}
         />
       </div>
     </Step>

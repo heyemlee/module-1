@@ -33,31 +33,31 @@ export function RenderingsView({
   const colorNameById = new Map(colors.map((color) => [color.id, color.name]));
 
   return (
-    <main className="min-h-screen bg-stone-100 px-6 py-8 text-stone-950">
+    <main className="app-page px-6 py-8">
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center justify-between">
-          <Link href={`/projects/${project.id}`} className="text-sm text-stone-600">
+          <Link href={`/projects/${project.id}`} className="text-sm font-semibold text-[var(--app-blue)]">
             Back to project
           </Link>
           <LogoutButton />
         </div>
-        <h1 className="mt-4 text-2xl font-semibold">Renderings</h1>
-        <p className="text-stone-700">
+        <h1 className="mt-4 text-4xl font-bold tracking-normal text-[var(--app-ink)]">Renderings</h1>
+        <p className="mt-2 text-[var(--app-muted)]">
           {project.customerName} · {project.projectName}
         </p>
-        <p className="mt-1 text-xs text-stone-500">
+        <p className="mt-1 text-xs text-[var(--app-muted)]">
           Sales-estimate concept images only — not for production. Most recent first
           (up to 20).
         </p>
 
         {renderings.length === 0 ? (
-          <div className="mt-6 rounded border border-dashed border-stone-300 bg-white p-8 text-center">
-            <p className="text-sm font-semibold text-stone-700">No renderings yet</p>
-            <p className="mt-2 text-sm text-stone-600">
+          <div className="app-panel-flat mt-6 border-dashed p-8 text-center">
+            <p className="text-sm font-semibold text-[var(--app-ink)]">No renderings yet</p>
+            <p className="mt-2 text-sm text-[var(--app-muted)]">
               Generate a concept rendering from the{" "}
               <Link
                 href={`/projects/${project.id}/round1`}
-                className="text-sky-700 underline"
+                className="text-[var(--app-blue)] underline"
               >
                 Round 1 Intake
               </Link>{" "}
@@ -77,7 +77,7 @@ export function RenderingsView({
               return (
                 <figure
                   key={rendering.id}
-                  className="overflow-hidden rounded border border-stone-300 bg-white"
+                  className="app-panel overflow-hidden"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -85,10 +85,10 @@ export function RenderingsView({
                     alt={`Concept rendering for ${project.customerName}`}
                     className="w-full"
                   />
-                  <figcaption className="space-y-1 border-t border-stone-200 px-4 py-3 text-sm">
+                  <figcaption className="space-y-1 border-t border-[var(--app-border)] px-4 py-3 text-sm">
                     <p className="font-semibold">{colorName}</p>
-                    <p className="text-stone-600">{style}</p>
-                    <p className="text-xs text-stone-500">
+                    <p className="text-[var(--app-muted)]">{style}</p>
+                    <p className="text-xs text-[var(--app-muted)]">
                       {new Date(rendering.createdAt).toLocaleString()}
                     </p>
                   </figcaption>

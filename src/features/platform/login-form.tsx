@@ -1,10 +1,12 @@
 "use client";
 
+import { Lock, UserRound } from "lucide-react";
 import { useState } from "react";
 
 export function LoginForm() {
-  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -16,10 +18,10 @@ export function LoginForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: account, password })
       });
       if (!response.ok) {
-        setError("Invalid email or password");
+        setError("Invalid account or password");
         return;
       }
       window.location.href = "/projects";
@@ -31,20 +33,74 @@ export function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-6 py-16 text-stone-950">
-      <form onSubmit={submit} className="mx-auto max-w-sm rounded border border-stone-300 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold">{`${process.env.NEXT_PUBLIC_COMPANY_NAME ?? "Showroom"} Login`}</h1>
-        <label className="mt-5 block text-sm font-medium">
-          Email
-          <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={email} onChange={(event) => setEmail(event.target.value)} />
+    <main className="app-page flex min-h-screen items-center justify-center px-6 py-16">
+      <form
+        onSubmit={submit}
+        className="app-panel w-full max-w-md rounded-2xl p-6"
+      >
+        <div className="mb-6">
+          <p className="text-sm font-semibold text-[var(--app-blue)]">
+            {process.env.NEXT_PUBLIC_COMPANY_NAME ?? "Showroom"}
+          </p>
+          <h1 className="mt-2 text-3xl font-bold tracking-normal text-[var(--app-ink)]">
+            Sign In
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
+            Access the internal Round 1 project workspace.
+          </p>
+        </div>
+
+        <label className="block text-sm font-semibold text-[var(--app-ink)]">
+          Account
+          <span className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-[var(--app-border)] bg-white px-3 transition focus-within:border-[rgba(0,113,227,0.72)] focus-within:ring-4 focus-within:ring-[rgba(0,113,227,0.12)]">
+            <UserRound className="h-5 w-5 text-[var(--app-muted)]" aria-hidden />
+            <input
+              className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-[var(--app-quiet)]"
+              type="text"
+              placeholder="Enter your account"
+              value={account}
+              onChange={(event) => setAccount(event.target.value)}
+            />
+          </span>
         </label>
-        <label className="mt-4 block text-sm font-medium">
+
+        <label className="mt-5 block text-sm font-semibold text-[var(--app-ink)]">
           Password
-          <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <span className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-[var(--app-border)] bg-white px-3 transition focus-within:border-[rgba(0,113,227,0.72)] focus-within:ring-4 focus-within:ring-[rgba(0,113,227,0.12)]">
+            <Lock className="h-5 w-5 text-[var(--app-muted)]" aria-hidden />
+            <input
+              className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-[var(--app-quiet)]"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </span>
         </label>
-        {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-        <button disabled={busy} className="mt-6 w-full rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-          {busy ? "Signing in..." : "Sign in"}
+
+        <div className="mt-5">
+          <label className="custom-checkbox text-sm">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+            />
+            <span className="checkmark" />
+            <span>Remember me</span>
+          </label>
+        </div>
+
+        {error && (
+          <p className="mt-4 rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-sm text-[var(--app-red)]">
+            {error}
+          </p>
+        )}
+
+        <button
+          disabled={busy}
+          className="uiverse-fill-button mt-6 h-12 w-full px-5"
+        >
+          {busy ? "Signing in..." : "Sign In"}
         </button>
       </form>
     </main>

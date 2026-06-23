@@ -4,13 +4,490 @@
 
 :root {
   color-scheme: light;
+  --app-bg: #f5f5f7;
+  --app-surface: #ffffff;
+  --app-surface-muted: #fbfbfd;
+  --app-ink: #1d1d1f;
+  --app-muted: #6e6e73;
+  --app-quiet: #86868b;
+  --app-border: rgba(0, 0, 0, 0.12);
+  --app-border-strong: rgba(0, 0, 0, 0.2);
+  --app-blue: #0071e3;
+  --app-blue-soft: #e8f2ff;
+  --app-green: #16823a;
+  --app-green-soft: #eaf7ee;
+  --app-amber: #b25a00;
+  --app-amber-soft: #fff3df;
+  --app-red: #b42318;
+  --app-red-soft: #fff1ef;
+  --app-radius: 8px;
+  --app-shadow: 0 16px 45px rgba(0, 0, 0, 0.08);
 }
 
 body {
   margin: 0;
-  background: #f5f7fb;
-  color: #172033;
+  background: var(--app-bg);
+  color: var(--app-ink);
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.app-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.9), transparent 32%),
+    linear-gradient(180deg, #fbfbfd 0%, var(--app-bg) 45%, #efeff4 100%);
+  color: var(--app-ink);
+}
+
+.app-panel {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--app-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.app-panel-flat {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+}
+
+.app-muted {
+  color: var(--app-muted);
+}
+
+.uiverse-fill-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1.5px solid var(--app-blue);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-blue);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    color 0.45s ease-out,
+    transform 0.16s ease-out,
+    border-color 0.45s ease-out,
+    box-shadow 0.45s ease-out;
+  box-shadow: inset 0 0 0 0 var(--app-blue);
+}
+
+.uiverse-fill-button:hover:not(:disabled) {
+  color: white;
+  box-shadow: inset 0 -100px 0 0 var(--app-blue);
+}
+
+.uiverse-fill-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.uiverse-fill-button:disabled {
+  cursor: not-allowed;
+  border-color: rgba(0, 0, 0, 0.16);
+  color: var(--app-quiet);
+  opacity: 0.65;
+}
+
+.rendering-glow-wrapper {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+
+.rendering-glow-button {
+  --border-radius: 24px;
+  --padding: 4px;
+  --transition: 0.4s;
+  --button-color: #101010;
+  --highlight-color-hue: 210deg;
+  user-select: none;
+  position: relative;
+  z-index: 0;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  overflow: visible;
+  border: solid 1px #fff2;
+  border-radius: var(--border-radius);
+  background-color: var(--button-color);
+  padding: 0.58em 1.1em;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
+    inset 0 2px 2px rgba(255, 255, 255, 0.15),
+    inset 0 4px 4px rgba(255, 255, 255, 0.1),
+    inset 0 8px 8px rgba(255, 255, 255, 0.05),
+    inset 0 16px 16px rgba(255, 255, 255, 0.05),
+    0 -1px 1px rgba(0, 0, 0, 0.02),
+    0 -2px 2px rgba(0, 0, 0, 0.03),
+    0 -4px 4px rgba(0, 0, 0, 0.05),
+    0 -8px 8px rgba(0, 0, 0, 0.06),
+    0 -16px 16px rgba(0, 0, 0, 0.08);
+  transition:
+    box-shadow var(--transition),
+    border var(--transition),
+    background-color var(--transition),
+    opacity var(--transition);
+}
+
+.rendering-glow-button::before {
+  content: "";
+  position: absolute;
+  inset: calc(0px - var(--padding));
+  z-index: -1;
+  border-radius: calc(var(--border-radius) + var(--padding));
+  pointer-events: none;
+  background-image: linear-gradient(0deg, #0004, #000a);
+  box-shadow:
+    0 -8px 8px -6px #0000 inset,
+    0 -16px 16px -8px #0000 inset,
+    1px 1px 1px #fff2,
+    2px 2px 2px #fff1,
+    -1px -1px 1px #0002,
+    -2px -2px 2px #0001;
+  transition:
+    box-shadow var(--transition),
+    filter var(--transition);
+}
+
+.rendering-glow-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background-image: linear-gradient(
+    0deg,
+    #fff,
+    hsl(var(--highlight-color-hue), 100%, 70%),
+    hsla(var(--highlight-color-hue), 100%, 70%, 50%),
+    8%,
+    transparent
+  );
+  transition:
+    opacity var(--transition),
+    filter var(--transition);
+}
+
+.rendering-glow-button:hover:not(:disabled),
+.rendering-glow-button:focus-visible:not(:disabled) {
+  border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 40%);
+}
+
+.rendering-glow-button:hover:not(:disabled)::before,
+.rendering-glow-button:focus-visible:not(:disabled)::before {
+  box-shadow:
+    0 -8px 8px -6px #fffa inset,
+    0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 30%) inset,
+    1px 1px 1px #fff2,
+    2px 2px 2px #fff1,
+    -1px -1px 1px #0002,
+    -2px -2px 2px #0001;
+}
+
+.rendering-glow-button:hover:not(:disabled)::after,
+.rendering-glow-button:focus-visible:not(:disabled)::after {
+  opacity: 0.82;
+  mask-image: linear-gradient(0deg, #fff, transparent);
+}
+
+.rendering-glow-button:active:not(:disabled) {
+  border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%);
+  background-color: hsla(var(--highlight-color-hue), 50%, 20%, 0.5);
+}
+
+.rendering-glow-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.rendering-glow-letter {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  color: #fff8;
+  animation: rendering-letter 2s ease-in-out infinite;
+  transition:
+    color var(--transition),
+    text-shadow var(--transition),
+    opacity var(--transition);
+}
+
+@keyframes rendering-letter {
+  50% {
+    color: #fff;
+    text-shadow: 0 0 3px #fff8;
+  }
+}
+
+.custom-checkbox {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  color: var(--app-ink);
+  font-size: 0.95rem;
+  font-weight: 650;
+  transition: color 0.3s;
+}
+
+.custom-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.custom-checkbox .checkmark {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  border: 2px solid var(--app-ink);
+  border-radius: 4px;
+  transform-style: preserve-3d;
+  transition:
+    background-color 1.3s,
+    border-color 1.3s,
+    color 1.3s,
+    transform 0.3s;
+}
+
+.custom-checkbox .checkmark::before {
+  content: "\2713";
+  color: transparent;
+  font-size: 16px;
+  transition:
+    color 0.3s,
+    transform 0.3s;
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkmark {
+  border-color: var(--app-ink);
+  background-color: var(--app-ink);
+  transform: scale(1.1) rotateZ(360deg) rotateY(360deg);
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkmark::before {
+  color: white;
+}
+
+.custom-checkbox:hover {
+  color: var(--app-muted);
+}
+
+.custom-checkbox:hover .checkmark {
+  border-color: var(--app-muted);
+  background-color: #f0f0f0;
+  transform: scale(1.05);
+}
+
+.custom-checkbox input[type="checkbox"]:focus + .checkmark {
+  outline: none;
+  box-shadow: 0 0 3px 2px rgba(0, 0, 0, 0.2);
+}
+
+.apple-dropdown {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+  color: var(--app-ink);
+  padding: 0 2.35rem 0 0.78rem;
+  font-size: 0.9rem;
+  outline: none;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.apple-input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+  color: var(--app-ink);
+  padding: 0 0.78rem;
+  font-size: 0.9rem;
+  outline: none;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.apple-dropdown:focus,
+.apple-input:focus,
+.apple-textarea:focus {
+  border-color: rgba(0, 113, 227, 0.72);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
+}
+
+.apple-textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+  color: var(--app-ink);
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+@keyframes rendering-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes image_reveal {
+  0% {
+    clip-path: polygon(0 0%, 100% 0%, 100% 100%, 0 100%);
+    opacity: 1;
+    mask-image: linear-gradient(to bottom, black -5%, black 100%);
+  }
+  100% {
+    clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%);
+    opacity: 0;
+    mask-image: linear-gradient(to bottom, transparent 95%, black 100%);
+  }
+}
+
+.loader {
+  display: flex;
+  width: fit-content;
+  height: fit-content;
+  align-items: center;
+  justify-content: center;
+}
+
+.truckWrapper {
+  position: relative;
+  display: flex;
+  width: 160px;
+  height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  overflow-x: hidden;
+}
+
+.truckBody {
+  width: 112px;
+  height: fit-content;
+  margin-bottom: 6px;
+  animation: truck-motion 1s linear infinite;
+}
+
+@keyframes truck-motion {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+.truckTires {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  width: 112px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 15px;
+}
+
+.truckTires span {
+  width: 18px;
+  height: 18px;
+  border: 4px solid var(--app-ink);
+  border-radius: 999px;
+  background: white;
+}
+
+.road {
+  position: relative;
+  bottom: 0;
+  width: 100%;
+  height: 1.5px;
+  align-self: flex-end;
+  border-radius: 3px;
+  background-color: #282828;
+}
+
+.road::before {
+  content: "";
+  position: absolute;
+  right: -50%;
+  width: 20px;
+  height: 100%;
+  animation: roadAnimation 1.4s linear infinite;
+  border-left: 10px solid white;
+  border-radius: 3px;
+  background-color: #282828;
+}
+
+.road::after {
+  content: "";
+  position: absolute;
+  right: -65%;
+  width: 10px;
+  height: 100%;
+  animation: roadAnimation 1.4s linear infinite;
+  border-left: 4px solid white;
+  border-radius: 3px;
+  background-color: #282828;
+}
+
+.lampPost {
+  position: absolute;
+  right: -90%;
+  bottom: 0;
+  width: 8px;
+  height: 70px;
+  animation: roadAnimation 1.4s linear infinite;
+  border-radius: 999px;
+  background: #282828;
+}
+
+@keyframes roadAnimation {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-350px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
 }
