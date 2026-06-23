@@ -14,15 +14,37 @@ const PLACEHOLDERS = [
   "Summarize this article",
 ];
  
-const AIChatInput = () => {
+export type AIChatInputProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onMicClick?: () => void;
+  micActive?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  controls?: React.ReactNode;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+};
+
+const AIChatInput = ({
+  value,
+  onChange,
+  onSubmit,
+  onMicClick,
+  micActive,
+  disabled,
+  placeholder,
+  controls,
+  onKeyDown
+}: AIChatInputProps) => {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [thinkActive, setThinkActive] = useState(false);
   const [deepSearchActive, setDeepSearchActive] = useState(false);
-  const [inputValue, setInputValue] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
- 
+  const inputValue = value;
+
   // Cycle placeholder text when input is inactive
   useEffect(() => {
     if (isActive || inputValue) return;
@@ -103,7 +125,7 @@ const AIChatInput = () => {
   };
  
   return (
-    <div className="w-full min-h-screen flex justify-center items-center text-black">
+    <div className="w-full flex justify-center items-center text-black relative z-10">
       <motion.div
         ref={wrapperRef}
         className="w-full max-w-3xl"
@@ -130,8 +152,11 @@ const AIChatInput = () => {
               <input
                 type="text"
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                className="flex-1 border-0 outline-0 rounded-md py-2 text-base bg-transparent w-full font-normal"
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                disabled={disabled}
+                placeholder={isActive && placeholder ? placeholder : ""}
+                className="flex-1 border-0 outline-0 rounded-md py-2 text-base bg-transparent w-full font-normal disabled:opacity-50"
                 style={{ position: "relative", zIndex: 1 }}
                 onFocus={handleActivate}
               />
@@ -169,19 +194,24 @@ const AIChatInput = () => {
               </div>
             </div>
  
+            {controls}
             <button
-              className="p-3 rounded-full hover:bg-gray-100 transition"
+              className={`p-3 rounded-full transition ${micActive ? "bg-red-100 text-red-600 hover:bg-red-200" : "hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"}`}
               title="Voice input"
               type="button"
               tabIndex={-1}
+              onClick={onMicClick}
+              disabled={disabled}
             >
               <Mic size={20} />
             </button>
             <button
-              className="flex items-center gap-1 bg-black hover:bg-zinc-700 text-white p-3 rounded-full font-medium justify-center"
+              className="flex items-center gap-1 bg-black hover:bg-zinc-700 text-white p-3 rounded-full font-medium justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               title="Send"
               type="button"
               tabIndex={-1}
+              onClick={onSubmit}
+              disabled={disabled}
             >
               <Send size={18} />
             </button>

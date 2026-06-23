@@ -7,7 +7,7 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
-import RuixenQueryBox from "@/components/ui/ruixen-query-box";
+import { AIChatInput } from "@/components/ui/ai-chat-input";
 import type { Round1FormInput } from "@/domain/round1";
 import { Panel } from "./showroom-intake-controls";
 import { useSpeechToText, type SttLang } from "./use-speech-to-text";
@@ -128,7 +128,7 @@ export function AgentChatPanel({
   }, [form, input, isLoading, messages, onFormUpdate, sttRecording, sttStop]);
 
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    (event: KeyboardEvent<HTMLInputElement>) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         void send();
@@ -213,7 +213,7 @@ export function AgentChatPanel({
                 </p>
               )}
 
-              <RuixenQueryBox
+              <AIChatInput
                 value={input}
                 placeholder={
                   sttRecording
@@ -221,14 +221,13 @@ export function AgentChatPanel({
                     : "Ask anything about this kitchen..."
                 }
                 disabled={isLoading}
-                micSupported={stt.supported}
                 micActive={sttRecording}
-                onValueChange={(value) =>
+                onChange={(value) =>
                   setInput(value.slice(0, MAX_INPUT_LENGTH))
                 }
                 onKeyDown={handleKeyDown}
                 onMicClick={handleMicClick}
-                onSend={() => void send()}
+                onSubmit={() => void send()}
                 controls={
                   stt.supported ? (
                     <button

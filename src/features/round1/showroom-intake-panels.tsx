@@ -6,6 +6,7 @@ import {
   summarizeRound1Snapshot,
   type Round1Snapshot
 } from "./snapshot";
+import { DownloadButton } from "@/features/platform/download-button";
 import "./ghost-loader.css";
 
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
@@ -152,13 +153,18 @@ export function RenderingControls({
               Outdated — please regenerate rendering to update.
             </p>
           )}
-          <div className="flex flex-col gap-4">
-            <AIChatInput />
+          <div className="relative flex flex-col gap-4">
             <img
               src={image}
               alt="Round 1 concept rendering"
-              className={`aspect-video max-w-md object-cover ${stale ? "opacity-60" : ""}`}
+              className={`aspect-video w-full rounded-lg object-cover ${stale ? "opacity-60" : ""}`}
             />
+            <div className="absolute bottom-3 right-3">
+              <DownloadButton 
+                imageBase64={image.replace("data:image/png;base64,", "")} 
+                fileName="concept-rendering.png" 
+              />
+            </div>
           </div>
         </figure>
       )}
