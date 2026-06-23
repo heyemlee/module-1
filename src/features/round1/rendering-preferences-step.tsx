@@ -61,12 +61,12 @@ export function RenderingPreferencesStep({
 }) {
   const renderingPreferences = renderingPreferencesForForm(form);
   const selectedStyle = renderingPreferences.cabinetStyle;
-  
+
   const activeColors = useMemo(
     () => activeColorsForStyle(colors, selectedStyle),
     [colors, selectedStyle]
   );
-  
+
   const selectedColor = selectedRenderingColor(colors, form);
   const preferencesComplete = renderingPreferencesComplete(colors, form);
 
@@ -117,7 +117,7 @@ export function RenderingPreferencesStep({
                   <ImageIcon className="h-12 w-12" />
                 </div>
               )}
-              
+
               {/* Overlay with details */}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-5 pt-12 text-white">
                 <p className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1">
@@ -138,7 +138,7 @@ export function RenderingPreferencesStep({
 
         {/* Right Pane: Controls */}
         <div className="lg:col-span-7 space-y-8">
-          
+
           {/* Construction Style Selection */}
           <section>
             <div className="mb-3 flex items-center justify-between">

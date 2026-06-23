@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/server/platform/auth-service";
+import { requireRole, requireUser } from "@/server/platform/auth-service";
 import { authErrorResponse } from "@/server/platform/api-errors";
 import { getProjectForUser, deleteProjectForUser } from "@/server/platform/project-repository";
 
@@ -27,6 +27,7 @@ export async function DELETE(
 ) {
   try {
     const user = await requireUser();
+    requireRole(user, ["ADMIN"]);
     const { projectId } = await params;
     const success = await deleteProjectForUser(projectId, user);
     if (!success) {

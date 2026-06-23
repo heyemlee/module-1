@@ -25,11 +25,13 @@ function mapUser(row: UserRow): AuthUser {
   };
 }
 
-export async function findUserForLogin(account: string) {
+export async function findUserForLogin(identifier: string) {
   const result = await query<UserRow>(
     `SELECT id, company_id, account, email, name, password_hash, role, disabled_at
-     FROM users WHERE lower(account) = lower($1) LIMIT 1`,
-    [account]
+     FROM users
+     WHERE lower(account) = lower($1) OR lower(email) = lower($1)
+     LIMIT 1`,
+    [identifier]
   );
   const row = result.rows[0];
   return row ? { user: mapUser(row), passwordHash: row.password_hash } : null;

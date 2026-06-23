@@ -38,7 +38,7 @@ export default function RuixenQueryBox({
         rows={2}
         className="w-full resize-none bg-transparent px-3 py-2 text-sm text-[var(--app-ink)] placeholder-[var(--app-muted)] outline-none disabled:opacity-50"
       />
-      
+
       <div className="mt-2 flex items-center justify-between px-2 pb-1">
         <div className="flex items-center gap-2">
           {controls}

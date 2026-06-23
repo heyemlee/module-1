@@ -45,6 +45,7 @@ export function ProjectDashboard({
   projects: ProjectSummary[];
 }) {
   const router = useRouter();
+  const canDeleteProjects = user.role === "ADMIN";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
@@ -64,19 +65,23 @@ export function ProjectDashboard({
   };
 
   const handleDeleteSelected = async () => {
+    if (!canDeleteProjects) return;
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} project(s)?`)) return;
     setDeleting(true);
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         Array.from(selectedIds).map(id =>
           fetch(`/api/projects/${id}`, { method: "DELETE" })
         )
       );
+      if (responses.some((response) => !response.ok)) {
+        throw new Error("Unable to delete one or more projects");
+      }
       setSelectedIds(new Set());
       router.refresh();
     } catch {
-      alert("Network error while deleting projects");
+      alert("Unable to delete one or more projects");
     } finally {
       setDeleting(false);
     }
@@ -118,7 +123,7 @@ export function ProjectDashboard({
           <form className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--app-border)] p-4">
             <h2 className="text-xl font-bold text-[var(--app-ink)]">Projects</h2>
             <div className="flex flex-1 items-center justify-end gap-4 min-w-[280px]">
-              {selectedIds.size > 0 && (
+              {canDeleteProjects && selectedIds.size > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-[var(--app-red)]">{selectedIds.size} selected</span>
                   <UiverseDeleteButton onClick={handleDeleteSelected} disabled={deleting} />
@@ -139,6 +144,7 @@ export function ProjectDashboard({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canDeleteProjects && (
                     <TableHead className="w-12">
                       <Checkbox
                         checked={projects.length > 0 && selectedIds.size === projects.length}
@@ -146,6 +152,7 @@ export function ProjectDashboard({
                         aria-label="Select all"
                       />
                     </TableHead>
+                  )}
                     <TableHead>
                       Customer
                     </TableHead>
@@ -169,6 +176,7 @@ export function ProjectDashboard({
                       key={project.id}
                       data-state={selectedIds.has(project.id) ? "selected" : undefined}
                     >
+                      {canDeleteProjects && (
                       <TableCell>
                         <Checkbox
                           checked={selectedIds.has(project.id)}
@@ -176,6 +184,7 @@ export function ProjectDashboard({
                           aria-label={`Select project ${project.projectName}`}
                         />
                       </TableCell>
+                      )}
                       <TableCell>
                         <Link
                           href={`/projects/${project.id}`}

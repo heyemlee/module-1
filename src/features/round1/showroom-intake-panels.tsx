@@ -160,9 +160,9 @@ export function RenderingControls({
               className={`aspect-video w-full rounded-lg object-cover ${stale ? "opacity-60" : ""}`}
             />
             <div className="absolute bottom-3 right-3">
-              <DownloadButton 
-                imageBase64={image.replace("data:image/png;base64,", "")} 
-                fileName="concept-rendering.png" 
+              <DownloadButton
+                imageBase64={image.replace("data:image/png;base64,", "")}
+                fileName="concept-rendering.png"
               />
             </div>
           </div>

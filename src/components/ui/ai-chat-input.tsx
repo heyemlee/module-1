@@ -1,10 +1,10 @@
-"use client" 
+"use client"
 
 import * as React from "react"
 import { useState, useEffect, useRef } from "react";
 import { Lightbulb, Mic, Globe, Paperclip, Send } from "lucide-react";
 import { AnimatePresence, motion, type Variants } from "motion/react";
- 
+
 const PLACEHOLDERS = [
   "Generate website with HextaUI",
   "Create a new project with Next.js",
@@ -13,7 +13,7 @@ const PLACEHOLDERS = [
   "How to cook a delicious meal?",
   "Summarize this article",
 ];
- 
+
 export type AIChatInputProps = {
   value: string;
   onChange: (value: string) => void;
@@ -48,7 +48,7 @@ const AIChatInput = ({
   // Cycle placeholder text when input is inactive
   useEffect(() => {
     if (isActive || inputValue) return;
- 
+
     const interval = setInterval(() => {
       setShowPlaceholder(false);
       setTimeout(() => {
@@ -56,10 +56,10 @@ const AIChatInput = ({
         setShowPlaceholder(true);
       }, 400);
     }, 3000);
- 
+
     return () => clearInterval(interval);
   }, [isActive, inputValue]);
- 
+
   // Close input when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -70,13 +70,13 @@ const AIChatInput = ({
         if (!inputValue) setIsActive(false);
       }
     };
- 
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [inputValue]);
- 
+
   const handleActivate = () => setIsActive(true);
- 
+
   const containerVariants: Variants = {
     collapsed: {
       height: 68,
@@ -89,13 +89,13 @@ const AIChatInput = ({
       transition: { type: "spring", stiffness: 120, damping: 18 },
     },
   };
- 
+
   const placeholderContainerVariants: Variants = {
     initial: {},
     animate: { transition: { staggerChildren: 0.025 } },
     exit: { transition: { staggerChildren: 0.015, staggerDirection: -1 } },
   };
- 
+
   const letterVariants: Variants = {
     initial: {
       opacity: 0,
@@ -123,7 +123,7 @@ const AIChatInput = ({
       },
     },
   };
- 
+
   return (
     <div className="w-full flex justify-center items-center text-black relative z-10">
       <motion.div
@@ -146,7 +146,7 @@ const AIChatInput = ({
             >
               <Paperclip size={20} />
             </button>
- 
+
             {/* Text Input & Placeholder */}
             <div className="relative flex-1">
               <input
@@ -193,7 +193,7 @@ const AIChatInput = ({
                 </AnimatePresence>
               </div>
             </div>
- 
+
             {controls}
             <button
               className={`p-3 rounded-full transition ${micActive ? "bg-red-100 text-red-600 hover:bg-red-200" : "hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"}`}
@@ -216,7 +216,7 @@ const AIChatInput = ({
               <Send size={18} />
             </button>
           </div>
- 
+
           {/* Expanded Controls */}
           <motion.div
             className="w-full flex justify-start px-4 items-center text-sm"
@@ -259,7 +259,7 @@ const AIChatInput = ({
                 />
                 Think
               </button>
- 
+
               {/* Deep Search Toggle */}
               <motion.button
                 className={`flex items-center px-4 gap-1 py-2 rounded-full transition font-medium whitespace-nowrap overflow-hidden justify-start  ${
@@ -299,5 +299,5 @@ const AIChatInput = ({
     </div>
   );
 };
- 
+
 export { AIChatInput };

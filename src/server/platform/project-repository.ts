@@ -136,9 +136,11 @@ export async function getProjectForUser(projectId: string, user: AuthUser) {
 }
 
 export async function deleteProjectForUser(projectId: string, user: AuthUser) {
-  const project = await getProjectForUser(projectId, user);
-  if (!project) return false;
-  // If the user can access the project, allow them to delete it.
-  await query("DELETE FROM projects WHERE id = $1", [projectId]);
-  return true;
+  const result = await query<{ id: string }>(
+    `DELETE FROM projects
+     WHERE id = $1 AND company_id = $2
+     RETURNING id`,
+    [projectId, user.companyId]
+  );
+  return Boolean(result.rows[0]);
 }
