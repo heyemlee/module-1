@@ -9,15 +9,12 @@ import {
 import {
   AccountAlreadyExistsError,
   createCompanyUser,
-  EmailAlreadyExistsError,
   isAssignableRole,
   listCompanyUsers
 } from "@/server/platform/user-admin-repository";
 
 const createSchema = z.object({
   account: z.string().trim().min(1),
-  email: z.string().trim().email(),
-  name: z.string().trim().min(1),
   role: z.string().refine(isAssignableRole, "Unknown role"),
   password: z.string().min(8)
 });
@@ -50,8 +47,6 @@ export async function POST(request: Request) {
     const created = await createCompanyUser({
       companyId: user.companyId,
       account: input.account,
-      email: input.email,
-      name: input.name,
       role: input.role,
       password: input.password
     });
@@ -61,9 +56,6 @@ export async function POST(request: Request) {
     if (auth) return auth;
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid user request", issues: error.issues }, { status: 400 });
-    }
-    if (error instanceof EmailAlreadyExistsError) {
-      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
     }
     if (error instanceof AccountAlreadyExistsError) {
       return NextResponse.json({ error: "Account already in use" }, { status: 409 });
