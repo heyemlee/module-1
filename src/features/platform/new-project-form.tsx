@@ -81,15 +81,7 @@ export function NewProjectForm({ user }: { user: AuthUser }) {
       />
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
-        <h1
-          className="max-w-[610px] text-[56px] font-bold leading-[1.08] tracking-[-0.01em] text-[#1d1d1f]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
-          Start with the customer
-        </h1>
-        <p className="mt-4 max-w-[520px] text-[16px] leading-[24px] text-[#6e6e73]">
-          A calm first step: collect only project identity before moving into Round 1.
-        </p>
+
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,620px)_minmax(0,470px)]">
           <form
