@@ -1,5 +1,6 @@
 import { query } from "@/server/db/client";
 import { hashPassword } from "./passwords";
+import { deleteSessionsForUser } from "./auth-repository";
 import type { UserRole } from "./types";
 
 export type CompanyUserSummary = {
@@ -52,6 +53,7 @@ export async function listCompanyUsers(companyId: string) {
 }
 
 export class AccountAlreadyExistsError extends Error {}
+export class CompanyUserNotFoundError extends Error {}
 
 export async function createCompanyUser(input: {
   companyId: string;
@@ -77,4 +79,23 @@ export async function createCompanyUser(input: {
     [input.companyId, input.account, internalEmail, internalName, passwordHash, input.role]
   );
   return mapCompanyUserRow(result.rows[0]);
+}
+
+export async function setCompanyUserDisabled(input: {
+  companyId: string;
+  userId: string;
+  disabled: boolean;
+}) {
+  const result = await query<CompanyUserRow>(
+    `UPDATE users
+     SET disabled_at = CASE WHEN $3 THEN now() ELSE NULL END,
+         updated_at = now()
+     WHERE id = $1 AND company_id = $2
+     RETURNING id, account, email, name, role, disabled_at, created_at`,
+    [input.userId, input.companyId, input.disabled]
+  );
+  const row = result.rows[0];
+  if (!row) throw new CompanyUserNotFoundError("User not found");
+  if (input.disabled) await deleteSessionsForUser(input.userId);
+  return mapCompanyUserRow(row);
 }

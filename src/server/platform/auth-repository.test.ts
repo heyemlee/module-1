@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { query } from "@/server/db/client";
 import {
   deleteSession,
+  deleteSessionsForUser,
   findUserForLogin,
   getUserBySession,
   invalidateSessionCache
@@ -131,5 +132,50 @@ describe("auth repository", () => {
     expect(query).toHaveBeenCalledTimes(3);
     expect(vi.mocked(query).mock.calls[1][0]).toContain("DELETE FROM sessions");
     invalidateSessionCache(sessionId);
+  });
+
+  test("deletes a user's sessions and immediately evicts only that user's cached sessions", async () => {
+    const firstSessionId = `session-user-1-a-${crypto.randomUUID()}`;
+    const secondSessionId = `session-user-1-b-${crypto.randomUUID()}`;
+    const otherSessionId = `session-user-2-${crypto.randomUUID()}`;
+    const userOneRow = {
+      id: "user-1",
+      company_id: "company-1",
+      account: "sales-one",
+      email: "sales-one@example.com",
+      name: "Sales One",
+      password_hash: "hash",
+      role: "SALES",
+      disabled_at: null
+    };
+    const userTwoRow = {
+      ...userOneRow,
+      id: "user-2",
+      account: "sales-two",
+      email: "sales-two@example.com",
+      name: "Sales Two"
+    };
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [userOneRow] } as never)
+      .mockResolvedValueOnce({ rows: [userOneRow] } as never)
+      .mockResolvedValueOnce({ rows: [userTwoRow] } as never)
+      .mockResolvedValueOnce({ rows: [] } as never)
+      .mockResolvedValueOnce({ rows: [userOneRow] } as never)
+      .mockResolvedValueOnce({ rows: [userOneRow] } as never);
+
+    await getUserBySession(firstSessionId);
+    await getUserBySession(secondSessionId);
+    await getUserBySession(otherSessionId);
+    await deleteSessionsForUser("user-1");
+    await getUserBySession(firstSessionId);
+    await getUserBySession(secondSessionId);
+    await getUserBySession(otherSessionId);
+
+    expect(query).toHaveBeenCalledTimes(6);
+    expect(vi.mocked(query).mock.calls[3][0]).toContain("DELETE FROM sessions WHERE user_id = $1");
+    expect(vi.mocked(query).mock.calls[3][1]).toEqual(["user-1"]);
+    invalidateSessionCache(firstSessionId);
+    invalidateSessionCache(secondSessionId);
+    invalidateSessionCache(otherSessionId);
   });
 });
