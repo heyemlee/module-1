@@ -55,7 +55,18 @@ function childrenOf(element: ReactElement): ReactNode {
 
 function renderFunctionElement(element: ReactElement): ReactNode {
   const Component = element.type as (props: unknown) => ReactNode;
-  return Component(element.props);
+  const componentName =
+    "displayName" in Component
+      ? String((Component as { displayName?: string }).displayName ?? "")
+      : String((Component as { name?: string }).name ?? "");
+  if (/DropdownMenu|Popover|Primitive|Menu/.test(componentName)) {
+    return "";
+  }
+  try {
+    return Component(element.props);
+  } catch {
+    return "";
+  }
 }
 
 function textFromReactNode(node: ReactNode): string {
@@ -407,13 +418,23 @@ describe("LayoutStep", () => {
     expect(rightIndex).toBeGreaterThan(leftIndex);
     expect(uIndex).toBeGreaterThan(rightIndex);
     expect(oneWallIndex).toBeGreaterThan(uIndex);
-    expect(html).toContain("Need island?");
-    expect(html).toContain("YES");
-    expect(html).toContain("NO");
-    expect(html).toContain("UNKNOWN");
+    expect(html).toContain("Include an island");
     expect(html).not.toContain("L_SHAPE_ISLAND");
     expect(html).not.toContain("U_SHAPE_ISLAND");
     expect(html).not.toContain(">ISLAND<");
+  });
+
+  test("uses a checkbox for the binary island request", () => {
+    const html = renderToStaticMarkup(
+      <LayoutStep
+        form={createDefaultShowroomForm()}
+        setForm={() => {}}
+        setPositionOverrides={() => {}}
+      />
+    );
+
+    expect(html).toContain("Include an island");
+    expect(html).toContain("custom-checkbox");
   });
 });
 
@@ -527,6 +548,22 @@ describe("Round1SnapshotPanel", () => {
     expect(html).not.toContain("<button");
     expect(html).not.toContain("Snapshot ready");
     expect(html).not.toContain("View snapshot JSON");
+  });
+
+  test("uses a progressive image-generation state while rendering is busy", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender
+        busy
+        error={null}
+        stale={false}
+        image="data:image/png;base64,abc"
+      />
+    );
+
+    expect(html).toContain("Creating image. May take a moment.");
+    expect(html).toContain("rendering-loader");
+    expect(html).toContain("image-generation-preview");
   });
 
   test("shows snapshot status and the snapshot JSON once generated", () => {

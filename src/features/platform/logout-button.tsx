@@ -23,7 +23,7 @@ export function LogoutButton() {
       type="button"
       onClick={logout}
       disabled={busy}
-      className="rounded border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 disabled:opacity-60"
+      className="uiverse-fill-button px-3 py-2"
     >
       {busy ? "Signing out..." : "Sign out"}
     </button>

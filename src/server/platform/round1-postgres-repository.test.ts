@@ -95,6 +95,7 @@ describe("round1 postgres mappers", () => {
       user: {
         id: "user-1",
         companyId: "company-1",
+        account: "ada",
         email: "ada@example.com",
         name: "Ada",
         role: "SALES",

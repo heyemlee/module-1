@@ -5,6 +5,7 @@ import type { AuthUser, SessionRecord, UserRole } from "./types";
 type UserRow = {
   id: string;
   company_id: string;
+  account: string;
   email: string;
   name: string;
   password_hash: string;
@@ -16,6 +17,7 @@ function mapUser(row: UserRow): AuthUser {
   return {
     id: row.id,
     companyId: row.company_id,
+    account: row.account,
     email: row.email,
     name: row.name,
     role: row.role,
@@ -23,11 +25,13 @@ function mapUser(row: UserRow): AuthUser {
   };
 }
 
-export async function findUserForLogin(email: string) {
+export async function findUserForLogin(identifier: string) {
   const result = await query<UserRow>(
-    `SELECT id, company_id, email, name, password_hash, role, disabled_at
-     FROM users WHERE lower(email) = lower($1) LIMIT 1`,
-    [email]
+    `SELECT id, company_id, account, email, name, password_hash, role, disabled_at
+     FROM users
+     WHERE lower(account) = lower($1) OR lower(email) = lower($1)
+     LIMIT 1`,
+    [identifier]
   );
   const row = result.rows[0];
   return row ? { user: mapUser(row), passwordHash: row.password_hash } : null;
@@ -35,7 +39,7 @@ export async function findUserForLogin(email: string) {
 
 export async function getUserBySession(sessionId: string) {
   const result = await query<UserRow>(
-    `SELECT users.id, users.company_id, users.email, users.name, users.password_hash, users.role, users.disabled_at
+    `SELECT users.id, users.company_id, users.account, users.email, users.name, users.password_hash, users.role, users.disabled_at
      FROM sessions
      JOIN users ON users.id = sessions.user_id
      WHERE sessions.id = $1 AND sessions.expires_at > now()

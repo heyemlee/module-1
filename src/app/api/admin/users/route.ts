@@ -7,6 +7,7 @@ import {
   UnauthorizedError
 } from "@/server/platform/auth-service";
 import {
+  AccountAlreadyExistsError,
   createCompanyUser,
   EmailAlreadyExistsError,
   isAssignableRole,
@@ -14,6 +15,7 @@ import {
 } from "@/server/platform/user-admin-repository";
 
 const createSchema = z.object({
+  account: z.string().trim().min(1),
   email: z.string().trim().email(),
   name: z.string().trim().min(1),
   role: z.string().refine(isAssignableRole, "Unknown role"),
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
     const input = createSchema.parse(await request.json());
     const created = await createCompanyUser({
       companyId: user.companyId,
+      account: input.account,
       email: input.email,
       name: input.name,
       role: input.role,
@@ -61,6 +64,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof EmailAlreadyExistsError) {
       return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    }
+    if (error instanceof AccountAlreadyExistsError) {
+      return NextResponse.json({ error: "Account already in use" }, { status: 409 });
     }
     return NextResponse.json({ error: "Unable to create user" }, { status: 500 });
   }

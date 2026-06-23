@@ -1,10 +1,19 @@
 import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 export function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <h2 className="text-xl font-black tracking-normal">{title}</h2>
-      <p className="mb-5 mt-2 text-sm leading-6 text-slate-600">
+      <h2 className="text-xl font-bold tracking-normal text-[var(--app-ink)]">{title}</h2>
+      <p className="mb-5 mt-2 text-sm leading-6 text-[var(--app-muted)]">
         Unknown or rough answers are allowed. They stay visible as Confirmation Required.
       </p>
       {children}
@@ -14,8 +23,8 @@ export function Step({ title, children }: { title: string; children: ReactNode }
 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-slate-700">
+    <section className="app-panel-flat p-4">
+      <h2 className="mb-3 text-sm font-bold text-[var(--app-ink)]">
         {title}
       </h2>
       {children}
@@ -34,14 +43,13 @@ export function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-bold text-slate-700">{label}</span>
-      <input
+      <span className="mb-1 block text-sm font-semibold text-[var(--app-muted)]">{label}</span>
+      <Input
         type="number"
         value={value ?? ""}
         onChange={(event) =>
           onChange(event.target.value ? Number(event.target.value) : null)
         }
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-700"
       />
     </label>
   );
@@ -60,11 +68,13 @@ export function SelectField<T extends string>({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-bold text-slate-700">{label}</span>
+      <span className="mb-1 block text-sm font-semibold text-[var(--app-muted)]">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
-        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-700"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -72,7 +82,61 @@ export function SelectField<T extends string>({
           </option>
         ))}
       </select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="h-[42px] w-full justify-between">
+            {value}
+            <ChevronDown
+              className="-me-1 ms-2 opacity-60"
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="min-w-[--radix-dropdown-menu-trigger-width]">
+          {options.map((option) => (
+            <DropdownMenuItem
+              key={option}
+              onSelect={() => onChange(option)}
+            >
+              {option}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </label>
+  );
+}
+
+export function CheckboxField({
+  label,
+  checked,
+  onChange,
+  help
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  help?: string;
+}) {
+  return (
+    <div>
+      <label className="custom-checkbox">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span className="checkmark" />
+        <span>{label}</span>
+      </label>
+      {help ? (
+        <p className="mt-1 pl-[34px] text-xs leading-5 text-[var(--app-muted)]">
+          {help}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -84,11 +148,11 @@ export function StatusPill({
   tone: "red" | "amber" | "green";
 }) {
   const classes = {
-    red: "bg-red-50 text-red-700",
-    amber: "bg-amber-50 text-amber-800",
-    green: "bg-emerald-50 text-emerald-700"
+    red: "bg-[var(--app-red-soft)] text-[var(--app-red)]",
+    amber: "bg-[var(--app-amber-soft)] text-[var(--app-amber)]",
+    green: "bg-[var(--app-green-soft)] text-[var(--app-green)]"
   };
-  return <span className={`rounded px-2.5 py-1 ${classes[tone]}`}>{label}</span>;
+  return <span className={`rounded-full px-2.5 py-1 ${classes[tone]}`}>{label}</span>;
 }
 
 export function parseNullableSize(value: string) {

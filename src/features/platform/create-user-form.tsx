@@ -7,6 +7,7 @@ import type { UserRole } from "@/server/platform/types";
 const ROLES: UserRole[] = ["SALES", "DESIGNER", "ADMIN"];
 
 export function CreateUserForm() {
+  const [account, setAccount] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<UserRole>("SALES");
@@ -23,17 +24,18 @@ export function CreateUserForm() {
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), name: name.trim(), role, password })
+        body: JSON.stringify({ account: account.trim(), email: email.trim(), name: name.trim(), role, password })
       });
       if (!response.ok) {
         if (response.status === 409) {
-          setError("Email already in use");
+          setError("Account or email already in use");
         } else {
           setError("Unable to create user. Check the fields and try again.");
         }
         return;
       }
       router.refresh();
+      setAccount("");
       setEmail("");
       setName("");
       setPassword("");
@@ -45,11 +47,16 @@ export function CreateUserForm() {
     }
   }
 
-  const canSubmit = email.trim() && name.trim() && password.length >= 8;
+  const canSubmit = account.trim() && email.trim() && name.trim() && password.length >= 8;
 
   return (
     <form onSubmit={submit} className="space-y-4 rounded border border-stone-300 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold">Add user</h2>
+      <label className="block text-sm font-medium">
+        Account
+        <span className="ml-1 font-normal text-stone-500">Account is used for sign in</span>
+        <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={account} onChange={(event) => setAccount(event.target.value)} />
+      </label>
       <label className="block text-sm font-medium">
         Email
         <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />

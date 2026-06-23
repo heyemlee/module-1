@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
 import { LogoutButton } from "./logout-button";
 
 export function NewProjectForm() {
@@ -44,36 +45,36 @@ export function NewProjectForm() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-6 py-8 text-stone-950">
+    <main className="app-page px-6 py-8">
       <div className="mx-auto max-w-xl">
         <div className="flex items-center justify-between">
-          <Link href="/projects" className="text-sm text-stone-600">Back to projects</Link>
+          <Link href="/projects" className="text-sm font-semibold text-[var(--app-blue)]">Back to projects</Link>
           <LogoutButton />
         </div>
-        <h1 className="mt-4 text-2xl font-semibold">New customer project</h1>
-        <form onSubmit={submit} className="mt-6 space-y-4 rounded border border-stone-300 bg-white p-6 shadow-sm">
-          <label className="block text-sm font-medium">
+        <h1 className="mt-4 text-4xl font-bold tracking-normal text-[var(--app-ink)]">New customer project</h1>
+        <form onSubmit={submit} className="app-panel mt-6 space-y-4 p-6">
+          <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Customer name
-            <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+            <Input className="mt-1" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
           </label>
-          <label className="block text-sm font-medium">
+          <label className="block text-sm font-semibold text-[var(--app-ink)]">
             Project name
-            <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={projectName} onChange={(event) => setProjectName(event.target.value)} />
+            <Input className="mt-1" value={projectName} onChange={(event) => setProjectName(event.target.value)} />
           </label>
-          <label className="block text-sm font-medium">
-            Phone <span className="font-normal text-stone-500">(optional)</span>
-            <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
+          <label className="block text-sm font-semibold text-[var(--app-ink)]">
+            Phone <span className="font-normal text-[var(--app-muted)]">(optional)</span>
+            <Input className="mt-1" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
           </label>
-          <label className="block text-sm font-medium">
-            Email <span className="font-normal text-stone-500">(optional)</span>
-            <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
+          <label className="block text-sm font-semibold text-[var(--app-ink)]">
+            Email <span className="font-normal text-[var(--app-muted)]">(optional)</span>
+            <Input className="mt-1" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
           </label>
-          <label className="block text-sm font-medium">
-            Address <span className="font-normal text-stone-500">(optional)</span>
-            <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} />
+          <label className="block text-sm font-semibold text-[var(--app-ink)]">
+            Address <span className="font-normal text-[var(--app-muted)]">(optional)</span>
+            <Input className="mt-1" value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} />
           </label>
-          {error && <p className="text-sm text-red-700">{error}</p>}
-          <button disabled={busy || !customerName.trim() || !projectName.trim()} className="w-full rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          {error && <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-sm text-[var(--app-red)]">{error}</p>}
+          <button disabled={busy || !customerName.trim() || !projectName.trim()} className="uiverse-fill-button w-full px-4 py-3 disabled:opacity-60">
             {busy ? "Creating..." : "Create project"}
           </button>
         </form>

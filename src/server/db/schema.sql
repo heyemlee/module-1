@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS companies (
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  account TEXT,
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
@@ -18,6 +19,13 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   disabled_at TIMESTAMPTZ
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account TEXT;
+UPDATE users
+SET account = lower(replace(email, '@', '_'))
+WHERE account IS NULL;
+ALTER TABLE users ALTER COLUMN account SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_account_lower_key ON users (lower(account));
 
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,

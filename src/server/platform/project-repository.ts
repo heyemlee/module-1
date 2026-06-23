@@ -134,3 +134,13 @@ export async function getProjectForUser(projectId: string, user: AuthUser) {
   const project = mapProject(row);
   return canAccessProject(user, project) ? project : null;
 }
+
+export async function deleteProjectForUser(projectId: string, user: AuthUser) {
+  const result = await query<{ id: string }>(
+    `DELETE FROM projects
+     WHERE id = $1 AND company_id = $2
+     RETURNING id`,
+    [projectId, user.companyId]
+  );
+  return Boolean(result.rows[0]);
+}

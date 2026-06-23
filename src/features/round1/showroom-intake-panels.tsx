@@ -1,10 +1,13 @@
 import {
   type PreliminaryCabinetEstimateSummary
 } from "@/domain/round1";
+import { AIChatInput } from "@/components/ui/ai-chat-input";
 import {
   summarizeRound1Snapshot,
   type Round1Snapshot
 } from "./snapshot";
+import { DownloadButton } from "@/features/platform/download-button";
+import "./ghost-loader.css";
 
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
 
@@ -122,41 +125,92 @@ export function RenderingControls({
   image: string | null;
 }) {
   return (
-    <div className="space-y-2 mt-4">
+    <div className="mt-4 space-y-2">
       {busy ? (
-        <p className="rounded-md bg-sky-50 px-3 py-2 text-xs font-bold leading-5 text-sky-800">
-          Generating rendering...
-        </p>
+        <div className="rendering-loader rounded-lg border border-[var(--app-border)] bg-white p-3">
+          <GhostLoader />
+          <p className="mt-2 bg-[linear-gradient(110deg,var(--app-muted),35%,var(--app-ink),50%,var(--app-muted),75%,var(--app-muted))] bg-[length:200%_100%] bg-clip-text text-sm font-semibold text-transparent [animation:rendering-shimmer_3s_linear_infinite]">
+            Creating image. May take a moment.
+          </p>
+        </div>
       ) : null}
       {!canRender ? (
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-xs leading-5 text-[var(--app-muted)]">
           {image
             ? "Regenerate cabinet fill and confirm rendering preferences, then re-run to refresh this preview."
             : "Available after cabinet fill is generated and a cabinet color is confirmed."}
         </p>
       ) : null}
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+        <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-xs leading-5 text-[var(--app-red)]">
           Could not generate the rendering: {error}
         </p>
       )}
       {image && (
-        <figure className="space-y-1 mt-3">
+        <figure className="image-generation-preview mt-3 space-y-1">
           {stale && (
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] font-bold leading-4 text-amber-800">
+            <p className="rounded-lg bg-[var(--app-amber-soft)] px-3 py-2 text-[11px] font-bold leading-4 text-[var(--app-amber)]">
               Outdated — please regenerate rendering to update.
             </p>
           )}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt="Round 1 concept rendering"
-            className={`w-full rounded-md border border-slate-200 ${
-              stale ? "opacity-60" : ""
-            }`}
-          />
+          <div className="relative flex flex-col gap-4">
+            <img
+              src={image}
+              alt="Round 1 concept rendering"
+              className={`aspect-video w-full rounded-lg object-cover ${stale ? "opacity-60" : ""}`}
+            />
+            <div className="absolute bottom-3 right-3">
+              <DownloadButton
+                imageBase64={image.replace("data:image/png;base64,", "")}
+                fileName="concept-rendering.png"
+              />
+            </div>
+          </div>
         </figure>
       )}
+    </div>
+  );
+}
+
+function GhostLoader() {
+  return (
+    <div className="gl-ghost" aria-hidden>
+      <div className="gl-red">
+        <div className="gl-top0"></div>
+        <div className="gl-top1"></div>
+        <div className="gl-top2"></div>
+        <div className="gl-top3"></div>
+        <div className="gl-top4"></div>
+        <div className="gl-st0"></div>
+        <div className="gl-st1"></div>
+        <div className="gl-st2"></div>
+        <div className="gl-st3"></div>
+        <div className="gl-st4"></div>
+        <div className="gl-st5"></div>
+        <div className="gl-an1"></div>
+        <div className="gl-an2"></div>
+        <div className="gl-an3"></div>
+        <div className="gl-an4"></div>
+        <div className="gl-an5"></div>
+        <div className="gl-an6"></div>
+        <div className="gl-an7"></div>
+        <div className="gl-an8"></div>
+        <div className="gl-an9"></div>
+        <div className="gl-an10"></div>
+        <div className="gl-an11"></div>
+        <div className="gl-an12"></div>
+        <div className="gl-an13"></div>
+        <div className="gl-an14"></div>
+        <div className="gl-an15"></div>
+        <div className="gl-an16"></div>
+        <div className="gl-an17"></div>
+        <div className="gl-an18"></div>
+        <div className="gl-eye"></div>
+        <div className="gl-eye1"></div>
+        <div className="gl-pupil"></div>
+        <div className="gl-pupil1"></div>
+      </div>
+      <div className="gl-shadow"></div>
     </div>
   );
 }

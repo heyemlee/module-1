@@ -1,6 +1,6 @@
 # AI Context: Module 1 Round 1 MVP
 
-Date: 2026-06-22
+Date: 2026-06-23
 Scope: Module 1 only: Round 1 showroom intake, deterministic layout generation, preliminary cabinet sales estimate, and non-authoritative customer concept rendering.
 Status: Module 1 Round 1 MVP is feature-complete for the current scope; next priority is deployment readiness and real-use validation.
 
@@ -126,6 +126,12 @@ Deterministic code must own:
   - Admin batch editor for existing cabinet colors, with compact swatches, dirty-row tracking, and one Save All action.
 - `src/features/platform/renderings-view.tsx`
   - Read-only project renderings history page.
+- `src/features/platform/login-form.tsx` / `src/app/api/auth/login/route.ts` / `src/server/platform/auth-repository.ts`
+  - Account/password login flow. Login uses `account`, not email-format validation.
+- `src/features/platform/create-user-form.tsx` / `src/server/platform/user-admin-repository.ts`
+  - Admin user creation and company user listing, including the required login `account`.
+- `src/components/ui/button.tsx` / `src/app/globals.css` / `tailwind.config.ts`
+  - Shared UI theme and button styling. The app shell is currently black/white/neutral, not blue/white.
 - `src/features/round1/showroom-intake-controls.tsx`
   - Shared intake UI primitives such as `Step`, `Panel`, `NumberField`, `SelectField`, `StatusPill`, and `parseNullableSize`.
 - `src/features/round1/showroom-intake-data.ts`
@@ -140,10 +146,12 @@ Deterministic code must own:
   - Shared API auth/body error mapping for project, Round 1, cabinet color, and admin routes.
 - `scripts/prepare-cabinet-colors.mjs` / `scripts/seed-cabinet-colors.mjs`
   - Regenerable EU cabinet color swatch preparation and idempotent seed tooling.
+- `scripts/seed-admin.mjs` / `scripts/seed-user.mjs`
+  - Idempotent user seed tooling. Supports `SEED_ADMIN_ACCOUNT` / `SEED_USER_ACCOUNT`; falls back to the email prefix when omitted.
 
 ## Current Implementation
 
-Implemented and verified through 2026-06-22:
+Implemented and verified through 2026-06-23:
 
 - Round 1 form schema and normalized JSON schema.
 - `Confirmation Required` item model.
@@ -204,9 +212,11 @@ Implemented and verified through 2026-06-22:
 - Cabinet color admin + sales color-library performance (2026-06-22): the Admin Cabinet Colors page now uses `CabinetColorsManager` instead of one heavy form per existing color. Existing colors are edited inline with compact swatches, per-row dirty state, and one Save All action. Uploaded swatches/hover examples are downscaled client-side before storage; image tags use lazy/async decoding. `listCabinetColors` supports omitting `hover_example_image_url` for list views, and both `/admin/cabinet-colors` and the Sales `/api/cabinet-colors` route use the lightweight mode so initial color-library payloads avoid the large hover-example image data. Production active color payload measurement after this fix: full image fields were ~73.60MB (swatches ~2.16MB + hover examples ~71.44MB); lightweight list payload keeps the swatches and drops hover examples to ~2.16MB. Seed scripts can prepare and idempotently load the 30 in-stock EU colors into `cabinet_colors`.
 - Rendering color fidelity and history (2026-06-22, merged to `main`): `Generate Rendering` now sends the selected cabinet color swatch as an additional material reference image (`rasterizeImageSourceToPngBase64`) alongside the deterministic spatial reference. `/projects/[projectId]/renderings` shows persisted rendering history, and the project-detail Renderings card links there.
 - Flow, auth, and resilience hardening (2026-06-22, merged to `main`): removed unauthenticated legacy `/api/round1/projects/*` and `/api/round1/layout-image` routes, added auth to the live Round 1 agent API, centralized API auth error handling with `authErrorResponse`, added app-level `not-found`/`error` pages, snapshot save retry, unsaved-edit guard, rendering request timeouts, safer form error handling, and sign-out controls across app surfaces.
+- Account login + black/white UI polish (2026-06-23): the platform login is now explicitly account-based. `/api/auth/login` accepts `{ account, password }`; `loginWithPassword` and `findUserForLogin` query `users.account` case-insensitively. `users.account` was added to `schema.sql`, backfilled from existing emails as `lower(replace(email, '@', '_'))`, made `NOT NULL`, and protected by `CREATE UNIQUE INDEX IF NOT EXISTS users_account_lower_key ON users (lower(account))`. Admin user creation now requires an `Account` field and lists accounts in the Users view. Email remains stored as profile/contact data and still uses email-format validation during user creation, but production login does not require entering an email-format identifier. The shared button/theme palette was also moved from blue/purple accents to black/white/neutral (`--app-blue` now maps to app ink, Tailwind `primary`/`ring` use app ink, `uiverse-fill-button` uses black border/fill, and remaining hardcoded sky-blue UI accents were neutralized).
 
 Latest known verification:
 
+- 2026-06-23 after account-login and black/white UI polish: `npm test` 240 passing, `npm run build` exit 0. Local `db:migrate` was run successfully after sourcing `.env.local`. Browser QA on `http://localhost:3000/login` passed for desktop and 390px mobile: account input is `type="text"`, accepts `sales-one`, button styling is black/white, no runtime error overlay, and no mobile horizontal overflow.
 - 2026-06-22 after cabinet-color lightweight payload fixes for Admin and Sales Rendering Preferences: `npm test` 235 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
 - 2026-06-22 after PR #11 / cabinet-color performance branch: `npm test` 233 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
 - 2026-06-22 after Admin Add Color upload simplification: `npm test` 251 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
@@ -230,7 +240,8 @@ The layout engine (`plan-geometry.ts`) enforces physical realism in the determin
 Current Module 1 status:
 
 - Module 1 Round 1 MVP is feature-complete for the current scope, including Rendering Preferences, admin-managed cabinet colors, swatch-as-material rendering references, rendering history, and non-authoritative customer concept rendering.
-- Latest automated verification (2026-06-22): after cabinet-color lightweight payload fixes for Admin and Sales Rendering Preferences, `npm test` 235 passing, `npx tsc --noEmit` exit 0, `npm run build` exit 0.
+- Latest automated verification (2026-06-23): after account-login and black/white UI polish, `npm test` 240 passing and `npm run build` exit 0.
+- Latest browser QA (2026-06-23): `/login` rendered correctly at desktop and 390px mobile after `db:migrate`; account login input is plain text and accepts non-email account identifiers.
 - Latest manual QA (2026-06-22): Rendering Preferences end-to-end QA passed, Admin Add Color upload form QA passed, and the production migration was applied successfully through the Railway public TCP proxy. The Admin Cabinet Colors and Sales Rendering Preferences color-library payload bottleneck was identified as large `hover_example_image_url` data and fixed by lightweight list queries; browser smoke testing after deploy remains useful for `/admin/cabinet-colors`, Round 1 Rendering Preferences, and `/projects/[projectId]/renderings`.
 - The 2026-06-19 prior baseline (before rendering preferences) also passed `npm test` / `npx tsc --noEmit` / `npm run build` / end-to-end browser QA.
 - Treat old implementation plans under `docs/superpowers/plans/` as historical unless `ai_ctx.md` explicitly reactivates them. The rendering-preferences plan (`2026-06-19-round1-rendering-preferences.md`) is complete and historical.
@@ -249,6 +260,8 @@ Current Module 1 guardrails:
 - Do not add pricing/quote functionality yet; leave it reserved for a later step.
 - Keep first-round form questions layout-critical. Oven / microwave belongs in Appliances. Detailed corner cabinet type questions belong in Module 2.
 - Do not expose detailed per-cabinet editing, cabinet codes, production-style dimensions, or internal prompt/debug output in the default Round 1 UI.
+- Login should remain account/password based. Do not reintroduce email-format login validation. Admin user creation may still collect email as contact/profile data, but the sign-in identifier is `users.account`.
+- The current shared UI theme should stay black/white/neutral. Avoid adding blue/purple primary buttons or hardcoded sky-blue action accents unless a future design pass explicitly changes the palette.
 
 Recently completed: the full dated changelog of completed Module 1 work (snapshot + persistence, concept rendering + spatial-prompt/locked-reference accuracy, the optional conversational intake agent + voice STT, rough wall elevations, cooktop-vs-range, layout-shape/island split, oven/microwave arrangement, appliance auto-layout, Rendering Preferences, cabinet color libraries, seed tooling, flow/security hardening, rendering history, and admin performance fixes) now lives in `docs/round1-context-archive.md` under "Module 1 Round 1 — Completed Work Log". The current state of all of it is summarized above in "Current Implementation"; consult the archive only when you need the per-change rationale or history.
 
@@ -256,6 +269,7 @@ Next implementation TODO:
 
 - Recommended next priority: production smoke test the pulled `main` state, then do UI polish from real sales/customer feedback, then open Module 2 detailed measured design as a separate scoped effort.
 - Production smoke should cover login/session expiry behavior, project create/open, Round 1 snapshot save/retry, Rendering Preferences, color batch editing, selected swatch fidelity in generated renderings, renderings history, and logout from each main surface.
+- For production deploys after 2026-06-23, ensure the account migration has run before smoke testing login. Existing users get non-email account values from their email via `lower(replace(email, '@', '_'))`; new seeded users can set `SEED_ADMIN_ACCOUNT` / `SEED_USER_ACCOUNT`.
 - UI adjustment is the second priority: keep it limited to deployment feedback, responsiveness, copy clarity, performance, and workflow friction. Do not add pricing/quote or production-style cabinet editing during this pass.
 - Module 2 detailed measured design is third priority and should start only with a separate context/spec. It can cover dimension strings, cabinet codes, production-style views, exact filler placement, and measured cabinet-by-cabinet design.
 - No outstanding Module 1 rendering work. The optional conversational Round 1 agent is now implemented; `src/server/llm/` and `POST /api/round1/agent` exist.
@@ -411,6 +425,7 @@ Use the current renderer constants and tests as source of truth for exact stylin
 
 ## Visual & Styling Guidelines
 
+- Platform UI controls should follow the current black/white/neutral theme. Shared `Button` primary, focus rings, and `uiverse-fill-button` are intentionally black/white now. Keep buttons visually consistent across pages unless a scoped feature has a clear reason to differ.
 - **Style:** European spec, modern frameless, flat slab, press-to-open (no visible handles).
 - **Wall Cabinets:** Must be full-height single panel doors with no splits, NO crown molding, NO top fascia boards, NO soffit trim.
 - **Toe Kicks:** Must be continuously recessed across adjacent cabinets without vertical segment lines separating individual cabinets.
@@ -434,6 +449,8 @@ For layout/UI changes, also do browser QA at:
 ```text
 http://127.0.0.1:3000/
 ```
+
+For auth/account changes, browser QA should include `/login` while signed out and verify the account field accepts a non-email identifier.
 
 Expected preview server name in prior sessions:
 

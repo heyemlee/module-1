@@ -1,15 +1,29 @@
-import { describe, expect, test } from "vitest";
-import { canAccessProject, projectListWhereClause } from "./project-repository";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { query } from "@/server/db/client";
+import {
+  canAccessProject,
+  deleteProjectForUser,
+  projectListWhereClause
+} from "./project-repository";
 import type { AuthUser } from "./types";
+
+vi.mock("@/server/db/client", () => ({
+  query: vi.fn()
+}));
 
 const sales: AuthUser = {
   id: "sales-1",
   companyId: "company-1",
+  account: "sales",
   email: "sales@example.com",
   name: "Sales",
   role: "SALES",
   disabledAt: null
 };
+
+afterEach(() => {
+  vi.mocked(query).mockReset();
+});
 
 describe("project authorization helpers", () => {
   test("sales can access projects they created", () => {
@@ -34,5 +48,21 @@ describe("project authorization helpers", () => {
       text: "projects.company_id = $1 AND projects.created_by_user_id = $2",
       values: ["company-1", "sales-1"]
     });
+  });
+
+  test("deletes projects only inside the user's company boundary", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [{ id: "project-1" }] } as never);
+
+    await expect(deleteProjectForUser("project-1", { ...sales, role: "ADMIN" })).resolves.toBe(true);
+
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("company_id = $2");
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("RETURNING id");
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(["project-1", "company-1"]);
+  });
+
+  test("reports false when no project was deleted", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [] } as never);
+
+    await expect(deleteProjectForUser("missing-project", { ...sales, role: "ADMIN" })).resolves.toBe(false);
   });
 });

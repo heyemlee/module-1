@@ -4,6 +4,7 @@ import type { UserRole } from "./types";
 
 export type CompanyUserSummary = {
   id: string;
+  account: string;
   email: string;
   name: string;
   role: UserRole;
@@ -13,6 +14,7 @@ export type CompanyUserSummary = {
 
 type CompanyUserRow = {
   id: string;
+  account: string;
   email: string;
   name: string;
   role: UserRole;
@@ -29,6 +31,7 @@ export function isAssignableRole(role: string): role is UserRole {
 export function mapCompanyUserRow(row: CompanyUserRow): CompanyUserSummary {
   return {
     id: row.id,
+    account: row.account,
     email: row.email,
     name: row.name,
     role: row.role,
@@ -39,7 +42,7 @@ export function mapCompanyUserRow(row: CompanyUserRow): CompanyUserSummary {
 
 export async function listCompanyUsers(companyId: string) {
   const result = await query<CompanyUserRow>(
-    `SELECT id, email, name, role, disabled_at, created_at
+    `SELECT id, account, email, name, role, disabled_at, created_at
      FROM users
      WHERE company_id = $1
      ORDER BY created_at ASC`,
@@ -49,21 +52,29 @@ export async function listCompanyUsers(companyId: string) {
 }
 
 export class EmailAlreadyExistsError extends Error {}
+export class AccountAlreadyExistsError extends Error {}
 
 export async function createCompanyUser(input: {
   companyId: string;
+  account: string;
   email: string;
   name: string;
   role: UserRole;
   password: string;
 }) {
+  const accountResult = await query<{ id: string }>(
+    `SELECT id FROM users WHERE lower(account) = lower($1) LIMIT 1`,
+    [input.account]
+  );
+  if (accountResult.rows[0]) throw new AccountAlreadyExistsError("Account already in use");
+
   const passwordHash = await hashPassword(input.password);
   const result = await query<CompanyUserRow>(
-    `INSERT INTO users (company_id, email, name, password_hash, role)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO users (company_id, account, email, name, password_hash, role)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (email) DO NOTHING
-     RETURNING id, email, name, role, disabled_at, created_at`,
-    [input.companyId, input.email, input.name, passwordHash, input.role]
+     RETURNING id, account, email, name, role, disabled_at, created_at`,
+    [input.companyId, input.account, input.email, input.name, passwordHash, input.role]
   );
   const row = result.rows[0];
   if (!row) throw new EmailAlreadyExistsError("Email already in use");

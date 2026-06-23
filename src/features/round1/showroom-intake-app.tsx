@@ -1,5 +1,7 @@
 "use client";
 
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   generatePreliminaryCabinetList,
@@ -46,6 +48,8 @@ import {
   RenderingControls,
   type SnapshotPersistState
 } from "./showroom-intake-panels";
+
+gsap.registerPlugin(useGSAP);
 
 export const SHOWROOM_STEPS = [
   "Room",
@@ -104,6 +108,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localSessionChangedRef = useRef(false);
+  const shellRef = useRef<HTMLElement | null>(null);
 
   // Concept rendering is a non-authoritative customer preview derived from the
   // frozen snapshot. It is persisted separately (never part of the snapshot) so
@@ -528,12 +533,28 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     setStep(index);
   }, [maxAccessibleStep]);
 
+  useGSAP(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+    gsap.fromTo(
+      ".round1-animate",
+      { autoAlpha: 0, y: 14 },
+      {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.42,
+        ease: "power2.out",
+        stagger: 0.04
+      }
+    );
+  }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
+
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="border-b border-slate-200 bg-white px-6 py-5">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+    <main ref={shellRef} className="app-page min-h-screen text-[var(--app-ink)]">
+      <header className="border-b border-[var(--app-border)] bg-white/80 px-6 py-5 backdrop-blur">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-sky-700">
+            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-[var(--app-blue)]">
               <a href="/projects" className="hover:underline">
                 ← Back to projects
               </a>
@@ -543,7 +564,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                 </a>
               ) : null}
             </div>
-            <h1 className="mt-1 text-2xl font-black tracking-normal">
+            <h1 className="mt-1 text-3xl font-bold tracking-normal">
               Showroom Intake + Layout Preview
             </h1>
           </div>
@@ -551,20 +572,20 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[260px_minmax(0,1fr)_430px]">
-        <aside className="h-fit rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="mx-auto grid max-w-[1800px] gap-6 px-6 py-6 lg:grid-cols-[220px_minmax(450px,1fr)_minmax(450px,1.2fr)] xl:grid-cols-[250px_minmax(500px,1fr)_minmax(550px,1.25fr)]">
+        <aside className="round1-animate app-panel h-fit p-3">
           {SHOWROOM_STEPS.map((label, index) => (
             <button
               key={label}
               type="button"
               onClick={() => goToStep(index)}
               disabled={index > maxAccessibleStep}
-              className={`mb-2 flex w-full items-center justify-between rounded-md px-3 py-3 text-left text-sm font-bold ${
+              className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-bold transition ${
                 step === index
-                  ? "bg-sky-700 text-white"
+                  ? "bg-[var(--app-blue)] text-white shadow-sm"
                   : index > maxAccessibleStep
-                    ? "cursor-not-allowed bg-slate-50 text-slate-300"
-                    : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                    ? "cursor-not-allowed bg-black/[0.025] text-[var(--app-quiet)]"
+                    : "bg-white text-[var(--app-ink)] hover:bg-black/[0.035]"
               }`}
             >
               <span>{label}</span>
@@ -573,7 +594,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
           ))}
         </aside>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="round1-animate app-panel p-5">
           {step === 0 && <RoomStep form={form} setForm={updateForm} />}
           {step === 1 && <OpeningsStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 2 && <LayoutStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
@@ -606,7 +627,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               renderingBusy={renderingBusy}
             />
           )}
-          <div className="mt-6 flex justify-between border-t border-slate-200 pt-4">
+          <div className="mt-6 flex justify-between border-t border-[var(--app-border)] pt-4">
             <button
               type="button"
               onClick={() => {
@@ -614,7 +635,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                 setStep(Math.max(0, step - 1));
               }}
               disabled={step === 0}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+              className="uiverse-fill-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
@@ -622,14 +643,36 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               type="button"
               onClick={goToNextStep}
               disabled={step === SHOWROOM_STEPS.length - 1}
-              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="uiverse-fill-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="round1-animate space-y-4">
+          {(renderingBusy || renderingImage !== null) && (
+            <RenderingControls
+              canRender={
+                persistState === "saved" &&
+                renderingPreferencesComplete(cabinetColors, form)
+              }
+              busy={renderingBusy}
+              error={renderingError}
+              stale={
+                renderingImage !== null &&
+                (!snapshot ||
+                  renderingBasedOn !== snapshot.generatedAt ||
+                  !renderingPreferenceStampMatches(
+                    renderingPreferencesBasedOn,
+                    form,
+                    cabinetColors
+                  ))
+              }
+              image={renderingImage}
+            />
+          )}
+
           <LayoutPreview
             normalized={result.normalized}
             cabinets={preliminaryEstimate.cabinets}
@@ -644,25 +687,28 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
 
           {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
 
-          <RenderingControls
-            canRender={
-              persistState === "saved" &&
-              renderingPreferencesComplete(cabinetColors, form)
-            }
-            busy={renderingBusy}
-            error={renderingError}
-            stale={
-              renderingImage !== null &&
-              (!snapshot ||
-                renderingBasedOn !== snapshot.generatedAt ||
-                !renderingPreferenceStampMatches(
-                  renderingPreferencesBasedOn,
-                  form,
-                  cabinetColors
-                ))
-            }
-            image={renderingImage}
-          />
+          {!(renderingBusy || renderingImage !== null) && (
+            <RenderingControls
+              canRender={
+                persistState === "saved" &&
+                renderingPreferencesComplete(cabinetColors, form)
+              }
+              busy={renderingBusy}
+              error={renderingError}
+              stale={
+                renderingImage !== null &&
+                (!snapshot ||
+                  renderingBasedOn !== snapshot.generatedAt ||
+                  !renderingPreferenceStampMatches(
+                    renderingPreferencesBasedOn,
+                    form,
+                    cabinetColors
+                  ))
+              }
+              image={renderingImage}
+            />
+          )}
+
 
           {/*
             Hidden, clean reference render bound to the frozen snapshot geometry.
@@ -743,7 +789,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
       {showAdjustPositionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-950">
               Adjust Positions
             </p>
             <h2 className="mt-2 text-lg font-black text-slate-950">
@@ -760,7 +806,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                   setShowAdjustPositionsModal(false);
                   startDraggableHighlightCue();
                 }}
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
+                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white"
               >
                 Got It
               </button>

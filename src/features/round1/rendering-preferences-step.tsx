@@ -1,6 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Info, Image as ImageIcon } from "lucide-react";
+import {
+  CabinetConstructionStylePicker,
+  type CabinetConstructionOption
+} from "@/components/ui/cabinet-construction-style-picker";
 import type { CabinetStyle, Round1FormInput } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import {
@@ -12,10 +17,23 @@ import {
   selectedRenderingColor
 } from "./rendering-preferences";
 import { Step } from "./showroom-intake-controls";
+import { cn } from "@/lib/utils";
 
-const CABINET_STYLES: CabinetStyle[] = [
-  "EUROPEAN_FRAMELESS",
-  "AMERICAN_FRAMED"
+const CABINET_STYLE_OPTIONS: CabinetConstructionOption<CabinetStyle>[] = [
+  {
+    value: "EUROPEAN_FRAMELESS",
+    label: CABINET_STYLE_LABELS.EUROPEAN_FRAMELESS,
+    image:
+      "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=1200&q=80",
+    description: "Clean slab lines, concealed hardware, modern frameless."
+  },
+  {
+    value: "AMERICAN_FRAMED",
+    label: CABINET_STYLE_LABELS.AMERICAN_FRAMED,
+    image:
+      "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?auto=format&fit=crop&w=1200&q=80",
+    description: "Classic face-frame proportions, framed doors."
+  }
 ];
 
 export function RenderingPreferencesStep({
@@ -41,229 +59,230 @@ export function RenderingPreferencesStep({
   canGenerateRendering: boolean;
   renderingBusy: boolean;
 }) {
-  const [pendingColor, setPendingColor] = useState<CabinetColor | null>(null);
   const renderingPreferences = renderingPreferencesForForm(form);
   const selectedStyle = renderingPreferences.cabinetStyle;
+
   const activeColors = useMemo(
     () => activeColorsForStyle(colors, selectedStyle),
     [colors, selectedStyle]
   );
+
   const selectedColor = selectedRenderingColor(colors, form);
   const preferencesComplete = renderingPreferencesComplete(colors, form);
+
+  const [hoveredColor, setHoveredColor] = useState<CabinetColor | null>(null);
 
   const setStyle = (style: CabinetStyle) => {
     onFormChange({
       ...form,
       renderingPreferences: nextRenderingPreferencesForStyle(form, colors, style)
     });
-    setPendingColor(null);
   };
 
-  const confirmColor = () => {
-    if (!pendingColor) return;
+  const selectColor = (color: CabinetColor) => {
     onFormChange({
       ...form,
       renderingPreferences: {
         ...renderingPreferences,
-        cabinetStyle: pendingColor.cabinetStyle,
-        doorColorId: pendingColor.id
+        cabinetStyle: color.cabinetStyle,
+        doorColorId: color.id
       }
     });
-    setPendingColor(null);
   };
+
+  // Determine which preview image to show
+  const previewColor = hoveredColor || selectedColor;
+  const previewImageUrl = previewColor?.hoverExampleImageUrl || previewColor?.swatchImageUrl;
+  const fallbackImageUrl = CABINET_STYLE_OPTIONS.find(opt => opt.value === selectedStyle)?.image;
+  const displayImage = previewImageUrl || fallbackImageUrl;
 
   return (
     <Step title="6. Rendering Preferences">
-      <div className="space-y-6">
-        <div>
-          <p className="mb-2 text-sm font-bold text-slate-700">
-            Cabinet construction style
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {CABINET_STYLES.map((style) => {
-              const selected = style === selectedStyle;
-              return (
-                <button
-                  key={style}
-                  type="button"
-                  onClick={() => setStyle(style)}
-                  className={`rounded-md border px-4 py-3 text-left text-sm font-black ${
-                    selected
-                      ? "border-sky-700 bg-sky-50 text-sky-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  {CABINET_STYLE_LABELS[style]}
-                </button>
-              );
-            })}
+      <div className="grid gap-8 lg:grid-cols-12">
+        {/* Left Pane: Preview Area */}
+        <div className="lg:col-span-5 order-last lg:order-first">
+          <div className="sticky top-6 overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] shadow-sm">
+            <div className="aspect-[4/3] w-full bg-slate-100 relative">
+              {displayImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={displayImage}
+                  alt="Preview"
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-300">
+                  <ImageIcon className="h-12 w-12" />
+                </div>
+              )}
+
+              {/* Overlay with details */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-5 pt-12 text-white">
+                <p className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1">
+                  {previewColor ? "Cabinet Finish" : "Construction Style"}
+                </p>
+                <h3 className="text-xl font-bold leading-tight">
+                  {previewColor ? previewColor.name : CABINET_STYLE_LABELS[selectedStyle]}
+                </h3>
+                {previewColor?.colorCode && (
+                  <p className="mt-1 text-sm font-medium text-white/70">
+                    {previewColor.colorCode}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {activeColors.length === 0 ? (
-          colorsError ? (
-            <div className="rounded-md border border-dashed border-red-300 bg-red-50 p-5">
-              <p className="text-sm font-black text-red-700">
-                Couldn’t load cabinet colors
+        {/* Right Pane: Controls */}
+        <div className="lg:col-span-7 space-y-8">
+
+          {/* Construction Style Selection */}
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-[var(--app-ink)]">
+                1. Construction Style
+              </h4>
+            </div>
+            <CabinetConstructionStylePicker
+              value={selectedStyle}
+              options={CABINET_STYLE_OPTIONS}
+              onRequestSelect={setStyle}
+            />
+          </section>
+
+          {/* Color Selection */}
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-[var(--app-ink)]">
+                2. Cabinet Finish
+              </h4>
+              <span className="text-xs font-medium text-[var(--app-muted)]">
+                {activeColors.length} available
+              </span>
+            </div>
+
+            {activeColors.length === 0 ? (
+              colorsError ? (
+                <div className="rounded-xl border border-dashed border-red-300 bg-red-50 p-5">
+                  <p className="text-sm font-bold text-red-800">
+                    Couldn’t load cabinet colors
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-red-700/80">
+                    There was a problem loading the cabinet color library. Check your
+                    connection and try again.
+                  </p>
+                  {onRetryLoadColors && (
+                    <button
+                      type="button"
+                      onClick={onRetryLoadColors}
+                      className="mt-3 rounded-md bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 transition"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                  <div className="flex gap-3">
+                    <Info className="h-5 w-5 text-slate-400 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">
+                        Ask an Admin to configure cabinet colors
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        Active cabinet colors are required before a sales rendering can be
+                        generated for this style.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
+                {activeColors.map((color) => {
+                  const isSelected = selectedColor?.id === color.id;
+                  return (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => selectColor(color)}
+                      onMouseEnter={() => setHoveredColor(color)}
+                      onMouseLeave={() => setHoveredColor(null)}
+                      aria-label={`Select ${color.name}`}
+                      className={cn(
+                        "group relative aspect-square w-full overflow-hidden rounded-full transition-all duration-200",
+                        isSelected
+                          ? "ring-2 ring-[var(--app-blue)] ring-offset-2 scale-110 shadow-md"
+                          : "ring-1 ring-slate-200 hover:ring-slate-400 hover:scale-105"
+                      )}
+                      style={{
+                        backgroundColor: color.swatchImageUrl
+                          ? undefined
+                          : color.swatchHex ?? "#e2e8f0"
+                      }}
+                    >
+                      {color.swatchImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={color.swatchImageUrl}
+                          alt={color.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* Summary and Actions */}
+          <div className="rounded-xl border border-[var(--app-border)] bg-slate-50/50 p-5 space-y-5">
+            <div>
+              <p className="text-xs font-bold text-[var(--app-muted)] uppercase tracking-wider mb-1">
+                {selectedColor ? "Current Selection" : "Action Required"}
               </p>
-              <p className="mt-2 text-sm leading-6 text-red-700">
-                There was a problem loading the cabinet color library. Check your
-                connection and try again.
+              <p className="text-sm font-semibold text-[var(--app-ink)]">
+                {selectedColor
+                  ? `${selectedColor.name} · ${CABINET_STYLE_LABELS[selectedStyle]}`
+                  : "Choose a cabinet finish to unlock rendering."}
               </p>
-              {onRetryLoadColors ? (
+            </div>
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onGenerateCabinetFill}
+                disabled={!canGenerateCabinetFill}
+                className="uiverse-fill-button px-5 py-2.5 text-sm"
+              >
+                Generate Cabinet Fill
+              </button>
+              <span className={cn("inline-block", preferencesComplete && canGenerateRendering ? "rendering-glow-wrapper" : "")}>
                 <button
                   type="button"
-                  onClick={onRetryLoadColors}
-                  className="mt-3 rounded-md bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700"
+                  onClick={onGenerateRendering}
+                  disabled={!preferencesComplete || !canGenerateRendering || renderingBusy}
+                  className={cn(
+                    "px-6 py-2.5 rounded-lg text-sm font-bold transition-all",
+                    preferencesComplete && canGenerateRendering && !renderingBusy
+                      ? "bg-[var(--app-blue)] text-white hover:bg-blue-600 shadow-md rendering-glow-button"
+                      : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                  )}
                 >
-                  Retry
+                  {renderingBusy ? "Generating..." : "Generate Rendering"}
                 </button>
-              ) : null}
+              </span>
             </div>
-          ) : (
-            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-5">
-              <p className="text-sm font-black text-slate-700">
-                Ask an Admin to configure cabinet colors
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Active cabinet colors are required before a sales rendering can be
-                generated for this style.
-              </p>
-            </div>
-          )
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {activeColors.map((color) => {
-              const isSelected = selectedColor?.id === color.id;
-              return (
-                <button
-                  key={color.id}
-                  type="button"
-                  onClick={() => setPendingColor(color)}
-                  className={`group rounded-md border bg-white p-3 text-left shadow-sm ${
-                    isSelected
-                      ? "border-sky-700 ring-2 ring-sky-100"
-                      : "border-slate-200 hover:border-sky-300"
-                  }`}
-                >
-                  <span
-                    className="block aspect-square w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100"
-                    style={{
-                      backgroundColor: color.swatchImageUrl
-                        ? undefined
-                        : color.swatchHex ?? "#e2e8f0"
-                    }}
-                  >
-                    {color.swatchImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={color.swatchImageUrl}
-                        alt={`${color.name} swatch`}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
-                  </span>
-                  <span className="mt-3 block text-base font-black text-slate-950">
-                    {color.name}
-                  </span>
-                  {color.colorCode ? (
-                    <span className="mt-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
-                      {color.colorCode}
-                    </span>
-                  ) : null}
-                  {color.hoverExampleImageUrl ? (
-                    <span className="mt-3 block overflow-hidden rounded-md border border-slate-200 bg-slate-50 opacity-75 transition group-hover:opacity-100">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={color.hoverExampleImageUrl}
-                        alt={`${color.name} kitchen example`}
-                        loading="lazy"
-                        decoding="async"
-                        className="aspect-video w-full object-cover"
-                      />
-                    </span>
-                  ) : null}
-                  <span className="mt-3 inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-black text-white">
-                    Confirm Color
-                  </span>
-                </button>
-              );
-            })}
           </div>
-        )}
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Selected finish
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-800">
-            {selectedColor
-              ? `${selectedColor.name} · ${
-                  CABINET_STYLE_LABELS[selectedColor.cabinetStyle]
-                }`
-              : "Choose and confirm a cabinet color before rendering."}
-          </p>
         </div>
-
-        <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4">
-          <button
-            type="button"
-            onClick={onGenerateCabinetFill}
-            disabled={!canGenerateCabinetFill}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Generate Cabinet Fill
-          </button>
-          <button
-            type="button"
-            onClick={onGenerateRendering}
-            disabled={!preferencesComplete || !canGenerateRendering || renderingBusy}
-            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {renderingBusy ? "Generating Rendering..." : "Generate Rendering"}
-          </button>
-        </div>
-
-        {!preferencesComplete ? (
-          <p className="text-xs leading-5 text-slate-500">
-            Confirm a cabinet color before generating the rendering.
-          </p>
-        ) : null}
       </div>
-
-      {pendingColor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-sky-700">
-              Confirm cabinet color
-            </p>
-            <h3 className="mt-2 text-lg font-black text-slate-950">
-              {pendingColor.name}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Save this finish for the sales rendering preferences.
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setPendingColor(null)}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmColor}
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-bold text-white"
-              >
-                Confirm Color
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </Step>
   );
 }
