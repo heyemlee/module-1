@@ -230,3 +230,56 @@ Expected: exit 0.
 Run: `git diff --check && git status --short`
 
 Expected: no whitespace errors; only planned files are modified or added.
+
+### Task 7: Require a valid color before locking rendering preferences
+
+**Files:**
+- Create: `src/features/round1/rendering-preferences-lock.test.tsx`
+- Modify: `src/features/round1/showroom-intake-app.tsx`
+- Delete: `docs/superpowers/specs/2026-06-23-admin-user-status-and-autofill-design.md`
+
+- [ ] **Step 1: Write failing lock-control tests**
+
+Render the lock control in three states:
+
+```tsx
+expect(renderLock({ preferencesLocked: false, canLock: false })).toContain("Select a cabinet color before locking.");
+expect(renderLock({ preferencesLocked: false, canLock: false })).toContain('disabled=""');
+expect(renderLock({ preferencesLocked: false, canLock: true })).not.toContain('disabled=""');
+expect(renderLock({ preferencesLocked: true, canLock: true })).toContain('disabled=""');
+expect(renderLock({ preferencesLocked: true, canLock: true })).not.toContain("Unlock preferences");
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npm test -- src/features/round1/rendering-preferences-lock.test.tsx`
+
+Expected: FAIL because the dedicated lock control does not exist.
+
+- [ ] **Step 3: Implement the one-way lock control**
+
+Export `RenderingPreferencesLockControl` from `showroom-intake-app.tsx`. Disable it when preferences are already locked or `canLock` is false. Show `Select a cabinet color before locking.` only when unlocked and incomplete. The click handler may only lock; it never unlocks.
+
+- [ ] **Step 4: Use complete rendering preferences as the lock condition**
+
+Compute:
+
+```ts
+const canLockPreferences = renderingPreferencesComplete(cabinetColors, form);
+```
+
+Pass that value to the lock control. Keep `updateRenderingPreferencesForm()` setting `preferencesLocked` to `false`, so any style or color change automatically unlocks.
+
+- [ ] **Step 5: Run focused and full verification**
+
+Run:
+
+```bash
+npm test -- src/features/round1/rendering-preferences-lock.test.tsx src/features/round1/rendering-preferences-step.test.tsx
+npm test
+npx tsc --noEmit
+npm run build
+git diff --check
+```
+
+Expected: all commands exit 0.

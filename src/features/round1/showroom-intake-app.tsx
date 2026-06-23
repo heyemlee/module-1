@@ -102,6 +102,59 @@ export function shouldApplySnapshotRestore({
   return !cancelled && hasSavedSnapshot && !localSessionChanged;
 }
 
+export function RenderingPreferencesLockControl({
+  preferencesLocked,
+  canLock,
+  onLock
+}: {
+  preferencesLocked: boolean;
+  canLock: boolean;
+  onLock: () => void;
+}) {
+  const disabled = preferencesLocked || !canLock;
+  const title = preferencesLocked
+    ? "Preferences locked. Change the selection to unlock automatically."
+    : canLock
+      ? "Lock preferences"
+      : "Select a cabinet color before locking.";
+
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <button
+        type="button"
+        className={cn("lock-button", preferencesLocked ? "locked" : "unlocked")}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onLock();
+        }}
+        title={title}
+      >
+        {preferencesLocked ? (
+          <svg viewBox="0 0 24 24" className="lock-svgIcon">
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" className="lock-svgIcon">
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
+          </svg>
+        )}
+      </button>
+      {!preferencesLocked && !canLock && (
+        <p className="max-w-44 text-center text-[11px] font-semibold text-[#b42318]">
+          Select a cabinet color before locking.
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function renderingPreferencesStateAfterChange(form: Round1FormInput) {
+  return {
+    form,
+    preferencesLocked: false
+  };
+}
+
 export function ShowroomIntakeApp({
   projectId,
   customerName,
@@ -179,10 +232,11 @@ export function ShowroomIntakeApp({
   }, []);
 
   const updateRenderingPreferencesForm = useCallback((next: Round1FormInput) => {
+    const nextState = renderingPreferencesStateAfterChange(next);
     localSessionChangedRef.current = true;
-    setPreferencesLocked(false);
+    setPreferencesLocked(nextState.preferencesLocked);
     setHasRenderedConcept(false);
-    setForm(next);
+    setForm(nextState.form);
     setRenderingError(null);
     if (!projectId) return;
 
@@ -338,9 +392,8 @@ export function ShowroomIntakeApp({
   );
   const previewStage = PREVIEW_STAGES[step] ?? "room";
 
-  const canRenderConcept =
-    persistState === "saved" &&
-    renderingPreferencesComplete(cabinetColors, form);
+  const preferencesComplete = renderingPreferencesComplete(cabinetColors, form);
+  const canRenderConcept = persistState === "saved" && preferencesComplete;
   const nextAction = NEXT_ACTIONS[step] ?? "";
 
   // `Generate Cabinet Fill` is the authoritative snapshot point for Module 1.
@@ -801,6 +854,12 @@ export function ShowroomIntakeApp({
                     background-color: rgb(230, 50, 50);
                   }
 
+                  .lock-button:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.45;
+                    box-shadow: none;
+                  }
+
                   .lock-svgIcon {
                     width: 17px;
                     transition-duration: 0.3s;
@@ -835,28 +894,16 @@ export function ShowroomIntakeApp({
                     transition-duration: 0.3s;
                   }
                 `}</style>
-                <button
-                  type="button"
-                  className={cn("lock-button", preferencesLocked ? "locked" : "unlocked")}
-                  onClick={() => {
-                    const locked = !preferencesLocked;
-                    setPreferencesLocked(locked);
-                    if (locked && fixedPositionsConfirmed && !cabinetFillGenerated) {
+                <RenderingPreferencesLockControl
+                  preferencesLocked={preferencesLocked}
+                  canLock={preferencesComplete}
+                  onLock={() => {
+                    setPreferencesLocked(true);
+                    if (fixedPositionsConfirmed && !cabinetFillGenerated) {
                       handleGenerateCabinetFill();
                     }
                   }}
-                  title={preferencesLocked ? "Unlock preferences" : "Lock preferences"}
-                >
-                  {preferencesLocked ? (
-                    <svg viewBox="0 0 24 24" className="lock-svgIcon">
-                      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" className="lock-svgIcon">
-                      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
-                    </svg>
-                  )}
-                </button>
+                />
                 <div className={cn("inline-block", canRenderConcept && preferencesLocked && !hasRenderedConcept ? "rendering-glow-wrapper" : "")}>
                   <button
                     type="button"
