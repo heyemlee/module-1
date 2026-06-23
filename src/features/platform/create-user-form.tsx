@@ -51,13 +51,20 @@ export function CreateUserForm() {
   return (
     <form
       onSubmit={submit}
+      autoComplete="off"
       className="h-fit rounded-[18px] border border-[#d2d2d7] bg-white p-8"
     >
       <h2 className="text-[28px] font-bold text-[#1d1d1f]">Create user</h2>
       <div className="mt-6 space-y-4">
         <label className="block">
           <span className="text-[12px] font-semibold text-[#6e6e73]">Account</span>
-          <input className={FIELD} value={account} onChange={(event) => setAccount(event.target.value)} />
+          <input
+            className={FIELD}
+            name="account"
+            autoComplete="off"
+            value={account}
+            onChange={(event) => setAccount(event.target.value)}
+          />
         </label>
         <label className="block">
           <span className="text-[12px] font-semibold text-[#6e6e73]">Role</span>
@@ -71,7 +78,14 @@ export function CreateUserForm() {
         </label>
         <label className="block">
           <span className="text-[12px] font-semibold text-[#6e6e73]">Password</span>
-          <input className={FIELD} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <input
+            className={FIELD}
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
         </label>
       </div>
       {error && (

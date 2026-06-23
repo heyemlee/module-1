@@ -20,5 +20,9 @@ describe("CreateUserForm", () => {
     expect(html).not.toContain(">Name<");
     expect(html).not.toContain("Temporary password");
     expect(html).not.toContain("min 8 characters");
+    expect(html).toContain('autoComplete="off"');
+    expect(html).toContain('autoComplete="new-password"');
+    expect(html).toMatch(/<input[^>]*name="account"[^>]*value=""/);
+    expect(html).toMatch(/<input[^>]*name="password"[^>]*value=""/);
   });
 });
