@@ -16,8 +16,7 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 const FIELD =
   "mt-2 w-full rounded-xl border border-[#d2d2d7] bg-white px-3.5 text-[14px] text-[#1d1d1f] outline-none focus:border-[#1d1d1f]/40 focus:ring-2 focus:ring-[#1d1d1f]/10";
-const FILE_INPUT =
-  "text-[12px] text-[#6e6e73] file:mr-3 file:rounded-full file:border file:border-[#d2d2d7] file:bg-white file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-[#1d1d1f]";
+const FILE_INPUT = "uiverse-file-input";
 
 type CabinetColorPayloadFields = {
   cabinetStyle: CabinetStyle;

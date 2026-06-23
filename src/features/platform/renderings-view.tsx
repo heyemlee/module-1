@@ -53,16 +53,6 @@ export function RenderingsView({
       />
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
-        <h1
-          className="text-[58px] font-bold leading-[1.05] tracking-[-0.01em] text-[#1d1d1f]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
-          Concept renderings
-        </h1>
-        <p className="mt-4 max-w-[620px] text-[15px] leading-[23px] text-[#6e6e73]">
-          {project.customerName} · {project.projectName} — sales-estimate concept images
-          only, not for production. Most recent first.
-        </p>
 
         {renderings.length === 0 ? (
           <div className="mt-8 rounded-[18px] border border-dashed border-[#d2d2d7] bg-white p-12 text-center">
