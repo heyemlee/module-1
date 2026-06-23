@@ -13,5 +13,5 @@ export default async function ProjectPage({
   const { projectId } = await params;
   const project = await getProjectForUser(projectId, user);
   if (!project) notFound();
-  return <ProjectDetail project={project} />;
+  return <ProjectDetail project={project} user={user} />;
 }

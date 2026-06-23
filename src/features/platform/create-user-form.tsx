@@ -6,6 +6,9 @@ import type { UserRole } from "@/server/platform/types";
 
 const ROLES: UserRole[] = ["SALES", "DESIGNER", "ADMIN"];
 
+const FIELD =
+  "mt-2 h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-3.5 text-[14px] text-[#1d1d1f] outline-none placeholder:text-[#86868b] focus:border-[#1d1d1f]/40 focus:ring-2 focus:ring-[#1d1d1f]/10";
+
 export function CreateUserForm() {
   const [account, setAccount] = useState("");
   const [email, setEmail] = useState("");
@@ -50,35 +53,51 @@ export function CreateUserForm() {
   const canSubmit = account.trim() && email.trim() && name.trim() && password.length >= 8;
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded border border-stone-300 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold">Add user</h2>
-      <label className="block text-sm font-medium">
-        Account
-        <span className="ml-1 font-normal text-stone-500">Account is used for sign in</span>
-        <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={account} onChange={(event) => setAccount(event.target.value)} />
-      </label>
-      <label className="block text-sm font-medium">
-        Email
-        <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-      </label>
-      <label className="block text-sm font-medium">
-        Name
-        <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <label className="block text-sm font-medium">
-        Role
-        <select className="mt-1 w-full rounded border border-stone-300 px-3 py-2" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
-      </label>
-      <label className="block text-sm font-medium">
-        Temporary password <span className="font-normal text-stone-500">(min 8 characters)</span>
-        <input className="mt-1 w-full rounded border border-stone-300 px-3 py-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-      </label>
-      {error && <p className="text-sm text-red-700">{error}</p>}
-      <button disabled={busy || !canSubmit} className="w-full rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+    <form
+      onSubmit={submit}
+      className="h-fit rounded-[18px] border border-[#d2d2d7] bg-white p-8"
+    >
+      <h2 className="text-[28px] font-bold text-[#1d1d1f]">Create user</h2>
+      <div className="mt-6 space-y-4">
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Name</span>
+          <input className={FIELD} value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">
+            Account{" "}
+            <span className="font-normal text-[#86868b]">— Account is used for sign in</span>
+          </span>
+          <input className={FIELD} value={account} onChange={(event) => setAccount(event.target.value)} />
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Email</span>
+          <input className={FIELD} type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Role</span>
+          <select className={FIELD} value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">
+            Temporary password <span className="font-normal text-[#86868b]">(min 8 characters)</span>
+          </span>
+          <input className={FIELD} type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        </label>
+      </div>
+      {error && (
+        <p className="mt-4 rounded-lg bg-[#fdeceb] px-3 py-2 text-sm text-[#b42318]">{error}</p>
+      )}
+      <button
+        disabled={busy || !canSubmit}
+        className="mt-6 inline-flex h-[42px] w-full items-center justify-center rounded-full bg-[#1d1d1f] text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
         {busy ? "Creating..." : "Create user"}
       </button>
     </form>

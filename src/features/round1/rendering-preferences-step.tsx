@@ -22,17 +22,15 @@ import { cn } from "@/lib/utils";
 const CABINET_STYLE_OPTIONS: CabinetConstructionOption<CabinetStyle>[] = [
   {
     value: "EUROPEAN_FRAMELESS",
-    label: CABINET_STYLE_LABELS.EUROPEAN_FRAMELESS,
+    label: "European",
     image:
-      "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=1200&q=80",
-    description: "Clean slab lines, concealed hardware, modern frameless."
+      "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=1200&q=80"
   },
   {
     value: "AMERICAN_FRAMED",
-    label: CABINET_STYLE_LABELS.AMERICAN_FRAMED,
+    label: "American",
     image:
-      "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?auto=format&fit=crop&w=1200&q=80",
-    description: "Classic face-frame proportions, framed doors."
+      "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?auto=format&fit=crop&w=1200&q=80"
   }
 ];
 
@@ -42,22 +40,13 @@ export function RenderingPreferencesStep({
   colorsError = false,
   onRetryLoadColors,
   onFormChange,
-  onGenerateCabinetFill,
-  onGenerateRendering,
-  canGenerateCabinetFill,
-  canGenerateRendering,
-  renderingBusy
+
 }: {
   form: Round1FormInput;
   colors: CabinetColor[];
   colorsError?: boolean;
   onRetryLoadColors?: () => void;
   onFormChange: (form: Round1FormInput) => void;
-  onGenerateCabinetFill: () => void;
-  onGenerateRendering: () => void;
-  canGenerateCabinetFill: boolean;
-  canGenerateRendering: boolean;
-  renderingBusy: boolean;
 }) {
   const renderingPreferences = renderingPreferencesForForm(form);
   const selectedStyle = renderingPreferences.cabinetStyle;
@@ -97,12 +86,12 @@ export function RenderingPreferencesStep({
   const displayImage = previewImageUrl || fallbackImageUrl;
 
   return (
-    <Step title="6. Rendering Preferences">
-      <div className="grid gap-8 lg:grid-cols-12">
+    <Step>
+      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {/* Left Pane: Preview Area */}
-        <div className="lg:col-span-5 order-last lg:order-first">
-          <div className="sticky top-6 overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] shadow-sm">
-            <div className="aspect-[4/3] w-full bg-slate-100 relative">
+        <div className="lg:col-start-1 lg:row-start-1">
+          <div className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] shadow-sm">
+            <div className="aspect-[4/3] w-full bg-[#e8e8ed] relative">
               {displayImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -113,21 +102,19 @@ export function RenderingPreferencesStep({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-300">
+                <div className="flex h-full w-full items-center justify-center text-[#aeaeb2]">
                   <ImageIcon className="h-12 w-12" />
                 </div>
               )}
 
               {/* Overlay with details */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-5 pt-12 text-white">
-                <p className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1">
-                  {previewColor ? "Cabinet Finish" : "Construction Style"}
-                </p>
-                <h3 className="text-xl font-bold leading-tight">
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent p-3 pt-8 text-white">
+
+                <h3 className="text-sm font-bold truncate">
                   {previewColor ? previewColor.name : CABINET_STYLE_LABELS[selectedStyle]}
                 </h3>
                 {previewColor?.colorCode && (
-                  <p className="mt-1 text-sm font-medium text-white/70">
+                  <p className="mt-0.5 text-xs font-medium text-white/70 truncate">
                     {previewColor.colorCode}
                   </p>
                 )}
@@ -136,41 +123,30 @@ export function RenderingPreferencesStep({
           </div>
         </div>
 
-        {/* Right Pane: Controls */}
-        <div className="lg:col-span-7 space-y-8">
-
-          {/* Construction Style Selection */}
+        {/* Construction Style Selection */}
+        <div className="lg:col-start-2 lg:row-start-1">
           <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-[var(--app-ink)]">
-                1. Construction Style
-              </h4>
-            </div>
+
             <CabinetConstructionStylePicker
               value={selectedStyle}
               options={CABINET_STYLE_OPTIONS}
               onRequestSelect={setStyle}
             />
           </section>
+        </div>
 
-          {/* Color Selection */}
+        {/* Color Selection */}
+        <div className="lg:col-span-2 lg:row-start-2 overflow-hidden">
           <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-[var(--app-ink)]">
-                2. Cabinet Finish
-              </h4>
-              <span className="text-xs font-medium text-[var(--app-muted)]">
-                {activeColors.length} available
-              </span>
-            </div>
+
 
             {activeColors.length === 0 ? (
               colorsError ? (
-                <div className="rounded-xl border border-dashed border-red-300 bg-red-50 p-5">
-                  <p className="text-sm font-bold text-red-800">
+                <div className="rounded-xl border border-dashed border-[#f0c9c4] bg-[#fdeceb] p-5">
+                  <p className="text-sm font-bold text-[#b42318]">
                     Couldn’t load cabinet colors
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-red-700/80">
+                  <p className="mt-1 text-sm leading-6 text-[#b42318]/80">
                     There was a problem loading the cabinet color library. Check your
                     connection and try again.
                   </p>
@@ -178,21 +154,21 @@ export function RenderingPreferencesStep({
                     <button
                       type="button"
                       onClick={onRetryLoadColors}
-                      className="mt-3 rounded-md bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 transition"
+                      className="mt-3 rounded-md bg-[#b42318] px-4 py-2 text-xs font-bold text-white hover:bg-[#9a1d14] transition"
                     >
                       Retry
                     </button>
                   )}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                <div className="rounded-xl border border-dashed border-[#d2d2d7] bg-[#f5f5f7] p-5">
                   <div className="flex gap-3">
-                    <Info className="h-5 w-5 text-slate-400 shrink-0" />
+                    <Info className="h-5 w-5 text-[#86868b] shrink-0" />
                     <div>
-                      <p className="text-sm font-bold text-slate-700">
+                      <p className="text-sm font-bold text-[#1d1d1f]">
                         Ask an Admin to configure cabinet colors
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                      <p className="mt-1 text-sm leading-6 text-[#6e6e73]">
                         Active cabinet colors are required before a sales rendering can be
                         generated for this style.
                       </p>
@@ -201,7 +177,7 @@ export function RenderingPreferencesStep({
                 </div>
               )
             ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
+              <div className="grid grid-rows-3 grid-flow-col gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-[#d2d2d7] scrollbar-track-transparent">
                 {activeColors.map((color) => {
                   const isSelected = selectedColor?.id === color.id;
                   return (
@@ -213,10 +189,10 @@ export function RenderingPreferencesStep({
                       onMouseLeave={() => setHoveredColor(null)}
                       aria-label={`Select ${color.name}`}
                       className={cn(
-                        "group relative aspect-square w-full overflow-hidden rounded-full transition-all duration-200",
+                        "group relative shrink-0 w-16 h-16 overflow-hidden rounded-lg transition-all duration-200",
                         isSelected
-                          ? "ring-2 ring-[var(--app-blue)] ring-offset-2 scale-110 shadow-md"
-                          : "ring-1 ring-slate-200 hover:ring-slate-400 hover:scale-105"
+                          ? "ring-2 ring-[var(--app-ink)] ring-offset-2 scale-105 shadow-md"
+                          : "ring-1 ring-[#d2d2d7] hover:ring-[#6e6e73]"
                       )}
                       style={{
                         backgroundColor: color.swatchImageUrl
@@ -240,47 +216,6 @@ export function RenderingPreferencesStep({
               </div>
             )}
           </section>
-
-          {/* Summary and Actions */}
-          <div className="rounded-xl border border-[var(--app-border)] bg-slate-50/50 p-5 space-y-5">
-            <div>
-              <p className="text-xs font-bold text-[var(--app-muted)] uppercase tracking-wider mb-1">
-                {selectedColor ? "Current Selection" : "Action Required"}
-              </p>
-              <p className="text-sm font-semibold text-[var(--app-ink)]">
-                {selectedColor
-                  ? `${selectedColor.name} · ${CABINET_STYLE_LABELS[selectedStyle]}`
-                  : "Choose a cabinet finish to unlock rendering."}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3 pt-2">
-              <button
-                type="button"
-                onClick={onGenerateCabinetFill}
-                disabled={!canGenerateCabinetFill}
-                className="uiverse-fill-button px-5 py-2.5 text-sm"
-              >
-                Generate Cabinet Fill
-              </button>
-              <span className={cn("inline-block", preferencesComplete && canGenerateRendering ? "rendering-glow-wrapper" : "")}>
-                <button
-                  type="button"
-                  onClick={onGenerateRendering}
-                  disabled={!preferencesComplete || !canGenerateRendering || renderingBusy}
-                  className={cn(
-                    "px-6 py-2.5 rounded-lg text-sm font-bold transition-all",
-                    preferencesComplete && canGenerateRendering && !renderingBusy
-                      ? "bg-[var(--app-blue)] text-white hover:bg-blue-600 shadow-md rendering-glow-button"
-                      : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-                  )}
-                >
-                  {renderingBusy ? "Generating..." : "Generate Rendering"}
-                </button>
-              </span>
-            </div>
-          </div>
-
         </div>
       </div>
     </Step>

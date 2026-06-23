@@ -22,6 +22,11 @@ export default async function ProjectRenderingsPage({
   ]);
 
   return (
-    <RenderingsView project={project} renderings={renderings} colors={colors} />
+    <RenderingsView
+      project={project}
+      renderings={renderings}
+      colors={colors}
+      user={user}
+    />
   );
 }

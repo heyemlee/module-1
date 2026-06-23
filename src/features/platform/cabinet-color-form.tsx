@@ -14,6 +14,11 @@ const STYLES = [
 // the file size to keep rows (and the colors API payload) reasonable.
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
+const FIELD =
+  "mt-2 w-full rounded-xl border border-[#d2d2d7] bg-white px-3.5 text-[14px] text-[#1d1d1f] outline-none focus:border-[#1d1d1f]/40 focus:ring-2 focus:ring-[#1d1d1f]/10";
+const FILE_INPUT =
+  "text-[12px] text-[#6e6e73] file:mr-3 file:rounded-full file:border file:border-[#d2d2d7] file:bg-white file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-[#1d1d1f]";
+
 type CabinetColorPayloadFields = {
   cabinetStyle: CabinetStyle;
   name: string;
@@ -161,93 +166,104 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded border border-stone-300 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold">{color ? "Edit color" : "Add color"}</h2>
+    <form
+      onSubmit={submit}
+      className="h-fit rounded-[18px] border border-[#d2d2d7] bg-white p-8"
+    >
+      <h2 className="text-[28px] font-bold text-[#1d1d1f]">
+        {color ? "Edit color" : "Add finish"}
+      </h2>
 
-      <label className="block text-sm font-medium">
-        Cabinet style
-        <select
-          value={cabinetStyle}
-          onChange={(event) => setCabinetStyle(event.target.value as CabinetStyle)}
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2"
-        >
-          {STYLES.map((style) => (
-            <option key={style.value} value={style.value}>{style.label}</option>
-          ))}
-        </select>
-      </label>
-
-      <label className="block text-sm font-medium">
-        Color name
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2"
-        />
-      </label>
-
-      <div className="text-sm font-medium">
-        Swatch image
-        <div className="mt-1 flex items-center gap-3">
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
-            {swatchPreview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={swatchPreview} alt="Swatch preview" className="h-full w-full object-cover" />
-            )}
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(event) => handleFile(event.target.files?.[0], setSwatchData, setSwatchPreview)}
-            className="text-sm"
-          />
-        </div>
-      </div>
-
-      <div className="text-sm font-medium">
-        Hover example image (optional)
-        <div className="mt-1 flex items-center gap-3">
-          <div className="h-16 w-24 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
-            {hoverPreview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={hoverPreview} alt="Hover example preview" className="h-full w-full object-cover" />
-            )}
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(event) => handleFile(event.target.files?.[0], setHoverData, setHoverPreview)}
-            className="text-sm"
-          />
-        </div>
-      </div>
-
-      <label className="block text-sm font-medium">
-        AI description (optional)
-        <textarea
-          value={promptDescription}
-          onChange={(event) => setPromptDescription(event.target.value)}
-          rows={3}
-          placeholder="Leave blank to use the color name"
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2"
-        />
-      </label>
-
-      {isEdit && (
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={active}
-            onChange={(event) => setActive(event.target.checked)}
-          />
-          Active
+      <div className="mt-6 space-y-4">
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Cabinet style</span>
+          <select
+            value={cabinetStyle}
+            onChange={(event) => setCabinetStyle(event.target.value as CabinetStyle)}
+            className={`${FIELD} h-11`}
+          >
+            {STYLES.map((style) => (
+              <option key={style.value} value={style.value}>{style.label}</option>
+            ))}
+          </select>
         </label>
-      )}
 
-      {error && <p className="text-sm text-red-700">{error}</p>}
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Color name</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className={`${FIELD} h-11`}
+          />
+        </label>
+
+        <div>
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Swatch image</span>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#d2d2d7] bg-[#e8e8ed]">
+              {swatchPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={swatchPreview} alt="Swatch preview" className="h-full w-full object-cover" />
+              )}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => handleFile(event.target.files?.[0], setSwatchData, setSwatchPreview)}
+              className={FILE_INPUT}
+            />
+          </div>
+        </div>
+
+        <div>
+          <span className="text-[12px] font-semibold text-[#6e6e73]">
+            Hover example image (optional)
+          </span>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-16 w-24 shrink-0 overflow-hidden rounded-xl border border-[#d2d2d7] bg-[#e8e8ed]">
+              {hoverPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={hoverPreview} alt="Hover example preview" className="h-full w-full object-cover" />
+              )}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => handleFile(event.target.files?.[0], setHoverData, setHoverPreview)}
+              className={FILE_INPUT}
+            />
+          </div>
+        </div>
+
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">AI description (optional)</span>
+          <textarea
+            value={promptDescription}
+            onChange={(event) => setPromptDescription(event.target.value)}
+            rows={3}
+            placeholder="Leave blank to use the color name"
+            className={`${FIELD} py-2.5`}
+          />
+        </label>
+
+        {isEdit && (
+          <label className="flex items-center gap-2 text-[13px] font-medium text-[#1d1d1f]">
+            <input
+              type="checkbox"
+              checked={active}
+              onChange={(event) => setActive(event.target.checked)}
+            />
+            Active
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <p className="mt-4 rounded-lg bg-[#fdeceb] px-3 py-2 text-sm text-[#b42318]">{error}</p>
+      )}
       <button
         disabled={busy || !name.trim()}
-        className="w-full rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        className="mt-6 inline-flex h-[42px] w-full items-center justify-center rounded-full bg-[#1d1d1f] text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Saving..." : "Save color"}
       </button>

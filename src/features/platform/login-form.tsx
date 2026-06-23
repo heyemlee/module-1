@@ -33,36 +33,41 @@ export function LoginForm() {
   }
 
   return (
-    <main className="app-page flex min-h-screen items-center justify-center px-6 py-16">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
-          <p className="text-sm font-semibold text-[var(--app-blue)]">
-            {process.env.NEXT_PUBLIC_COMPANY_NAME ?? "Showroom"}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-normal text-[var(--app-ink)]">
-            Sign In
+    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+      <div className="mx-auto flex min-h-screen max-w-[1280px] flex-col justify-center gap-12 px-6 py-10 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10 lg:px-16">
+        <section className="relative hidden lg:block">
+          <h1
+            className="max-w-[560px] text-[56px] font-bold leading-[1.05] text-[#1d1d1f] xl:text-[72px]"
+            style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+          >
+            Make the quote ready
           </h1>
-          <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
-            Access the internal Round 1 project workspace.
+          <p className="mt-6 max-w-[430px] text-[17px] leading-[25px] text-[#6e6e73]">
+            Internal Round 1 workspace for sales, design handoff, snapshots and concept renderings.
           </p>
-        </div>
-        <SignInForm
-          account={account}
-          password={password}
-          remember={remember}
-          busy={busy}
-          error={
-            error ? (
-              <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-sm text-[var(--app-red)]">
-                {error}
-              </p>
-            ) : null
-          }
-          onAccountChange={setAccount}
-          onPasswordChange={setPassword}
-          onRememberChange={setRemember}
-          onSubmit={submit}
-        />
+        </section>
+
+        <section className="flex w-full items-center justify-center">
+          <div className="w-full max-w-[420px]">
+            <SignInForm
+              account={account}
+              password={password}
+              remember={remember}
+              busy={busy}
+              error={
+                error ? (
+                  <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-sm text-[var(--app-red)]">
+                    {error}
+                  </p>
+                ) : null
+              }
+              onAccountChange={setAccount}
+              onPasswordChange={setPassword}
+              onRememberChange={setRemember}
+              onSubmit={submit}
+            />
+          </div>
+        </section>
       </div>
     </main>
   );

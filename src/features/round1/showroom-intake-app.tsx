@@ -34,7 +34,7 @@ import {
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
-import { LogoutButton } from "@/features/platform/logout-button";
+import { PlatformHeader, NavPill } from "@/features/platform/platform-header";
 import {
   AdjustPositionsStep,
   AppliancesStep,
@@ -48,6 +48,7 @@ import {
   RenderingControls,
   type SnapshotPersistState
 } from "./showroom-intake-panels";
+import { cn } from "@/lib/utils";
 
 gsap.registerPlugin(useGSAP);
 
@@ -59,6 +60,17 @@ export const SHOWROOM_STEPS = [
   "Adjust Positions",
   "Rendering Preferences"
 ] as const;
+
+// Short imperative cue per step for the rail's "Next action" callout.
+const NEXT_ACTIONS: Record<number, string> = {
+  0: "Enter room size & obstacles",
+  1: "Mark doors & windows",
+  2: "Choose a kitchen layout",
+  3: "Set appliances & fixtures",
+  4: "Confirm dragged constraints",
+  5: "Generate fill & rendering"
+};
+
 
 const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
 const PREVIEW_STAGES = [
@@ -90,7 +102,19 @@ export function shouldApplySnapshotRestore({
   return !cancelled && hasSavedSnapshot && !localSessionChanged;
 }
 
-export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
+export function ShowroomIntakeApp({
+  projectId,
+  customerName,
+  projectName,
+  userName = "Account",
+  isAdmin = false
+}: {
+  projectId?: string;
+  customerName?: string;
+  projectName?: string;
+  userName?: string;
+  isAdmin?: boolean;
+}) {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   const [step, setStep] = useState(0);
   const [maxAccessibleStep, setMaxAccessibleStep] = useState(0);
@@ -101,6 +125,8 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   const [cabinetColorsError, setCabinetColorsError] = useState(false);
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
+  const [preferencesLocked, setPreferencesLocked] = useState(false);
+  const [hasRenderedConcept, setHasRenderedConcept] = useState(false);
   const projectIdRef = useRef<string | null>(null);
   const prefsSaveControllerRef = useRef<AbortController | null>(null);
   const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
@@ -123,10 +149,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
   const referenceElevationRef = useRef<SVGSVGElement | null>(null);
-  const [renderingImage, setRenderingImage] = useState<string | null>(null);
-  const [renderingBasedOn, setRenderingBasedOn] = useState<string | null>(null);
-  const [renderingPreferencesBasedOn, setRenderingPreferencesBasedOn] =
-    useState<RenderingPreferenceStamp | null>(null);
+  const [renderings, setRenderings] = useState<{ id: string; url: string; doorColorId: string | null }[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
 
@@ -157,6 +180,8 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
 
   const updateRenderingPreferencesForm = useCallback((next: Round1FormInput) => {
     localSessionChangedRef.current = true;
+    setPreferencesLocked(false);
+    setHasRenderedConcept(false);
     setForm(next);
     setRenderingError(null);
     if (!projectId) return;
@@ -313,6 +338,11 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
   );
   const previewStage = PREVIEW_STAGES[step] ?? "room";
 
+  const canRenderConcept =
+    persistState === "saved" &&
+    renderingPreferencesComplete(cabinetColors, form);
+  const nextAction = NEXT_ACTIONS[step] ?? "";
+
   // `Generate Cabinet Fill` is the authoritative snapshot point for Module 1.
   // The estimate is computed inline (not read from the gated memo, which is
   // still empty at click time) so the snapshot freezes the exact rough fill.
@@ -336,11 +366,18 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     void persistSnapshot(snap);
   }, [form, persistSnapshot, positionOverrides, result]);
 
+  useEffect(() => {
+    if (step === 5 && preferencesLocked && fixedPositionsConfirmed && !cabinetFillGenerated) {
+      handleGenerateCabinetFill();
+    }
+  }, [step, preferencesLocked, fixedPositionsConfirmed, cabinetFillGenerated, handleGenerateCabinetFill]);
+
   // Non-authoritative concept rendering. Rasterizes the hidden clean reference
   // render (built from the locked snapshot) and POSTs it to the rendering route,
   // which loads the authoritative snapshot server-side by id and builds the
   // prompt — the client never sends snapshot data, only the reference image.
   const handleGenerateRendering = useCallback(async () => {
+    setHasRenderedConcept(true);
     const referenceTopDownSvg = referenceTopDownRef.current;
     const referenceElevationSvg = referenceElevationRef.current;
     if (
@@ -407,12 +444,14 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         );
       }
       const json = await response.json();
-      setRenderingImage(`data:image/png;base64,${json.imageBase64}`);
-      setRenderingBasedOn(json.basedOnSnapshotGeneratedAt ?? null);
-      setRenderingPreferencesBasedOn(
-        json.basedOnRenderingPreferences ??
-          renderingPreferenceStampForForm(form, cabinetColors)
-      );
+      setRenderings((prev) => [
+        {
+          id: json.id,
+          url: `data:image/png;base64,${json.imageBase64}`,
+          doorColorId: json.basedOnRenderingPreferences?.doorColorId || null
+        },
+        ...prev
+      ]);
     } catch (error) {
       setRenderingError(
         error instanceof Error
@@ -445,7 +484,6 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     // step with every action disabled; they must re-confirm + regenerate fill.
     setStep(ADJUST_POSITIONS_STEP_INDEX);
     setMaxAccessibleStep(ADJUST_POSITIONS_STEP_INDEX);
-    // Keep the last rendering visible; it will surface as stale.
     setRenderingError(null);
   }, []);
 
@@ -492,6 +530,23 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
         }
       } catch {
         setPersistState("error");
+      }
+
+      try {
+        const renderRes = await fetch(`/api/projects/${projectId}/round1/renderings`);
+        if (!renderRes.ok || cancelled || localSessionChangedRef.current) return;
+        const rJson = await renderRes.json();
+        if (rJson.renderings && Array.isArray(rJson.renderings)) {
+          setRenderings(
+            rJson.renderings.map((r: any) => ({
+              id: r.id,
+              url: `data:image/png;base64,${r.imageBase64}`,
+              doorColorId: r.basedOnRenderingPreferences?.doorColorId || null
+            }))
+          );
+        }
+      } catch (e) {
+        // Ignore rendering fetch errors
       }
     })();
 
@@ -549,60 +604,141 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
     );
   }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
 
-  return (
-    <main ref={shellRef} className="app-page min-h-screen text-[var(--app-ink)]">
-      <header className="border-b border-[var(--app-border)] bg-white/80 px-6 py-5 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-[var(--app-blue)]">
-              <a href="/projects" className="hover:underline">
-                ← Back to projects
-              </a>
-              {projectId ? (
-                <a href={`/projects/${projectId}`} className="hover:underline">
-                  Back to project
-                </a>
-              ) : null}
-            </div>
-            <h1 className="mt-1 text-3xl font-bold tracking-normal">
-              Showroom Intake + Layout Preview
-            </h1>
-          </div>
-          <LogoutButton />
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-[1800px] gap-6 px-6 py-6 lg:grid-cols-[220px_minmax(450px,1fr)_minmax(450px,1.2fr)] xl:grid-cols-[250px_minmax(500px,1fr)_minmax(550px,1.25fr)]">
-        <aside className="round1-animate app-panel h-fit p-3">
-          {SHOWROOM_STEPS.map((label, index) => (
+  const renderSidebar = () => (
+    <aside className="round1-animate app-panel-flat h-fit p-4">
+      <h2 className="text-[15px] font-bold text-[var(--app-ink)]">{customerName ?? projectName ?? "Showroom"}</h2>
+      <div className="mt-4 space-y-2">
+        {SHOWROOM_STEPS.map((label, index) => {
+          const done = index < step;
+          const current = index === step;
+          const locked = index > maxAccessibleStep;
+          return (
             <button
               key={label}
               type="button"
               onClick={() => goToStep(index)}
-              disabled={index > maxAccessibleStep}
-              className={`mb-2 flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-bold transition ${
-                step === index
-                  ? "bg-[var(--app-blue)] text-white shadow-sm"
-                  : index > maxAccessibleStep
-                    ? "cursor-not-allowed bg-black/[0.025] text-[var(--app-quiet)]"
-                    : "bg-white text-[var(--app-ink)] hover:bg-black/[0.035]"
+              disabled={locked}
+              className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
+                current
+                  ? "border-[var(--app-ink)] bg-[var(--app-ink)] text-white"
+                  : done
+                    ? "border-[var(--app-border)] bg-[var(--app-green-soft)] text-[var(--app-ink)]"
+                    : locked
+                      ? "cursor-not-allowed border-[var(--app-border)] bg-white text-[var(--app-quiet)]"
+                      : "border-[var(--app-border)] bg-white text-[var(--app-ink)] hover:bg-black/[0.03]"
               }`}
             >
-              <span>{label}</span>
-              <span>{index + 1}</span>
+              <span
+                className={`flex size-[22px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                  current
+                    ? "bg-white text-[var(--app-ink)]"
+                    : done
+                      ? "bg-[var(--app-green)] text-white"
+                      : "border border-[var(--app-border-strong)] text-[var(--app-muted)]"
+                }`}
+              >
+                {done ? "✓" : index + 1}
+              </span>
+              <span className="text-[13px] font-semibold">{label}</span>
             </button>
-          ))}
-        </aside>
+          );
+        })}
+      </div>
+    </aside>
+  );
 
-        <section className="round1-animate app-panel p-5">
+  return (
+    <main ref={shellRef} className="min-h-screen bg-[#f5f5f7] text-[var(--app-ink)]">
+      <PlatformHeader
+        userName={userName}
+        nav={
+          <>
+            <NavPill href="/projects">Projects</NavPill>
+            {projectId && (
+              <NavPill href={`/projects/${projectId}/round1`} active>
+                Round 1
+              </NavPill>
+            )}
+            {projectId && (
+              <NavPill href={`/projects/${projectId}/renderings`}>Renderings</NavPill>
+            )}
+            {isAdmin && <NavPill href="/admin/users">Admin</NavPill>}
+          </>
+        }
+      />
+
+      <div className={`mx-auto grid max-w-[1440px] gap-5 px-6 py-8 ${step === ADJUST_POSITIONS_STEP_INDEX ? "lg:grid-cols-[250px_minmax(0,1fr)_380px]" : "lg:grid-cols-[250px_minmax(420px,1fr)_minmax(440px,1.05fr)]"}`}>
+        {renderSidebar()}
+      {step === ADJUST_POSITIONS_STEP_INDEX ? (
+        <>
+          <div className="round1-animate flex h-fit flex-col gap-4">
+            <div className="app-panel-flat relative h-fit overflow-hidden p-0">
+              <LayoutPreview
+                normalized={result.normalized}
+                cabinets={preliminaryEstimate.cabinets}
+                confirmationItems={confirmationItems}
+                positionOverrides={positionOverrides}
+                onPositionOverridesChange={updatePositionOverrides}
+                highlightDraggableItems={highlightDraggableItems}
+                showPositionObjects={true}
+                previewStage={previewStage}
+                svgRef={floorPlanSvgRef}
+                showHeader={false}
+              />
+            </div>
+          </div>
+          
+          <aside className="round1-animate app-panel-flat flex h-fit flex-col p-6">
+            <div className="mt-6">
+              <AdjustPositionsStep
+                hasOverrides={Object.keys(positionOverrides).length > 0}
+                fixedPositionsConfirmed={fixedPositionsConfirmed}
+                cabinetFillGenerated={cabinetFillGenerated}
+              />
+            </div>
+            
+            <div className="mt-8">
+              <div className="rounded-xl border border-[#d2d2d7] bg-[#fdfdfd] p-4 shadow-sm">
+                <h3 className="text-[13px] font-bold text-[var(--app-ink)]">Assistant suggestion</h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-[#6e6e73]">
+                  Range and sink are both on the back wall. Confirm whether the window is centered over sink.
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-8 flex justify-between border-t border-[var(--app-border)] pt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  localSessionChangedRef.current = true;
+                  setStep(Math.max(0, step - 1));
+                }}
+                disabled={step === 0}
+                className="rounded-lg border border-[var(--app-border-strong)] bg-white px-5 py-2.5 text-[13px] font-semibold text-[var(--app-ink)] transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={goToNextStep}
+                disabled={step === SHOWROOM_STEPS.length - 1}
+                className="rounded-lg bg-[var(--app-ink)] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue
+              </button>
+            </div>
+          </aside>
+        </>
+      ) : (
+        <>
+        <section className="round1-animate app-panel-flat flex h-fit min-h-[560px] flex-col p-6">
+          <div className="flex-1">
           {step === 0 && <RoomStep form={form} setForm={updateForm} />}
           {step === 1 && <OpeningsStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 2 && <LayoutStep form={form} setForm={updateForm} setPositionOverrides={updatePositionOverrides} />}
           {step === 3 && <AppliancesStep form={form} setForm={updateForm} />}
           {step === 4 && (
             <AdjustPositionsStep
-              onReset={handleResetPositions}
-              onConfirmPositions={() => setFixedPositionsConfirmed(true)}
               hasOverrides={Object.keys(positionOverrides).length > 0}
               fixedPositionsConfirmed={fixedPositionsConfirmed}
               cabinetFillGenerated={cabinetFillGenerated}
@@ -615,19 +751,10 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
               colorsError={cabinetColorsError}
               onRetryLoadColors={() => void loadCabinetColors()}
               onFormChange={updateRenderingPreferencesForm}
-              onGenerateCabinetFill={handleGenerateCabinetFill}
-              onGenerateRendering={handleGenerateRendering}
-              canGenerateCabinetFill={
-                fixedPositionsConfirmed && !cabinetFillGenerated
-              }
-              canGenerateRendering={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
-              }
-              renderingBusy={renderingBusy}
             />
           )}
-          <div className="mt-6 flex justify-between border-t border-[var(--app-border)] pt-4">
+          </div>
+          <div className="mt-6 flex justify-between border-t border-[var(--app-border)] pt-5">
             <button
               type="button"
               onClick={() => {
@@ -635,41 +762,138 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                 setStep(Math.max(0, step - 1));
               }}
               disabled={step === 0}
-              className="uiverse-fill-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[var(--app-border-strong)] bg-white px-5 py-2.5 text-[13px] font-semibold text-[var(--app-ink)] transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
-            <button
-              type="button"
-              onClick={goToNextStep}
-              disabled={step === SHOWROOM_STEPS.length - 1}
-              className="uiverse-fill-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
+            
+            {step === 5 ? (
+              <div className="flex items-center gap-4">
+                <style>{`
+                  .lock-button {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    border: none;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.164);
+                    cursor: pointer;
+                    transition-duration: 0.3s;
+                    overflow: hidden;
+                    position: relative;
+                    text-decoration: none !important;
+                  }
+
+                  .lock-button.unlocked {
+                    background-color: #20cca5;
+                  }
+                  .lock-button.unlocked:hover {
+                    background-color: #1eb392;
+                  }
+
+                  .lock-button.locked {
+                    background-color: rgb(255, 69, 69);
+                  }
+                  .lock-button.locked:hover {
+                    background-color: rgb(230, 50, 50);
+                  }
+
+                  .lock-svgIcon {
+                    width: 17px;
+                    transition-duration: 0.3s;
+                  }
+
+                  .lock-svgIcon path {
+                    fill: white;
+                  }
+
+                  .lock-button:hover {
+                    border-radius: 50px;
+                    align-items: center;
+                  }
+
+                  .lock-button:hover .lock-svgIcon {
+                    width: 20px;
+                    transition-duration: 0.3s;
+                    -webkit-transform: rotate(360deg);
+                    transform: rotate(360deg);
+                  }
+
+                  .lock-button::before {
+                    display: none;
+                    color: white;
+                    transition-duration: 0.3s;
+                  }
+
+                  .lock-button:hover::before {
+                    display: block;
+                    opacity: 1;
+                    transform: translateY(0px);
+                    transition-duration: 0.3s;
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  className={cn("lock-button", preferencesLocked ? "locked" : "unlocked")}
+                  onClick={() => {
+                    const locked = !preferencesLocked;
+                    setPreferencesLocked(locked);
+                    if (locked && fixedPositionsConfirmed && !cabinetFillGenerated) {
+                      handleGenerateCabinetFill();
+                    }
+                  }}
+                  title={preferencesLocked ? "Unlock preferences" : "Lock preferences"}
+                >
+                  {preferencesLocked ? (
+                    <svg viewBox="0 0 24 24" className="lock-svgIcon">
+                      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="lock-svgIcon">
+                      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
+                    </svg>
+                  )}
+                </button>
+                <div className={cn("inline-block", canRenderConcept && preferencesLocked && !hasRenderedConcept ? "rendering-glow-wrapper" : "")}>
+                  <button
+                    type="button"
+                    onClick={handleGenerateRendering}
+                    disabled={!canRenderConcept || renderingBusy || !preferencesLocked || hasRenderedConcept}
+                    className={cn(
+                      "inline-flex h-[44px] items-center justify-center rounded-lg px-6 text-[13px] font-bold transition-all",
+                      canRenderConcept && !renderingBusy && preferencesLocked && !hasRenderedConcept
+                        ? "bg-[var(--app-ink)] text-white hover:opacity-90 shadow-md rendering-glow-button"
+                        : "bg-[#f5f5f7] text-[#a1a1a6] cursor-not-allowed border border-[#d2d2d7]"
+                    )}
+                  >
+                    {renderingBusy ? "Generating..." : "Generate Rendering"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={goToNextStep}
+                disabled={step === SHOWROOM_STEPS.length - 1}
+                className="rounded-lg bg-[var(--app-ink)] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue
+              </button>
+            )}
           </div>
         </section>
 
         <aside className="round1-animate space-y-4">
-          {(renderingBusy || renderingImage !== null) && (
+          {(renderingBusy || renderings.length > 0) && (
             <RenderingControls
-              canRender={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
-              }
+              canRender={canRenderConcept}
               busy={renderingBusy}
               error={renderingError}
-              stale={
-                renderingImage !== null &&
-                (!snapshot ||
-                  renderingBasedOn !== snapshot.generatedAt ||
-                  !renderingPreferenceStampMatches(
-                    renderingPreferencesBasedOn,
-                    form,
-                    cabinetColors
-                  ))
-              }
-              image={renderingImage}
+              renderings={renderings}
+              cabinetColors={cabinetColors}
             />
           )}
 
@@ -687,25 +911,13 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
 
           {snapshot && <ElevationPreview plan={snapshot.floorPlan} />}
 
-          {!(renderingBusy || renderingImage !== null) && (
+          {!(renderingBusy || renderings.length > 0) && (
             <RenderingControls
-              canRender={
-                persistState === "saved" &&
-                renderingPreferencesComplete(cabinetColors, form)
-              }
+              canRender={canRenderConcept}
               busy={renderingBusy}
               error={renderingError}
-              stale={
-                renderingImage !== null &&
-                (!snapshot ||
-                  renderingBasedOn !== snapshot.generatedAt ||
-                  !renderingPreferenceStampMatches(
-                    renderingPreferencesBasedOn,
-                    form,
-                    cabinetColors
-                  ))
-              }
-              image={renderingImage}
+              renderings={renderings}
+              cabinetColors={cabinetColors}
             />
           )}
 
@@ -748,12 +960,12 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
           <Panel title="Confirmation Required">
             <div className="max-h-48 space-y-2 overflow-auto pr-1">
               {confirmationItems.length === 0 ? (
-                <p className="text-sm text-slate-500">No current confirmation flags.</p>
+                <p className="text-sm text-[#6e6e73]">No current confirmation flags.</p>
               ) : (
                 confirmationItems.map((item) => (
-                  <div key={item.id} className="rounded-md bg-amber-50 p-2 text-sm">
-                    <p className="font-bold text-amber-900">{item.code}</p>
-                    <p className="text-amber-800">{item.message}</p>
+                  <div key={item.id} className="rounded-lg bg-[#fff0dc] p-2.5 text-sm">
+                    <p className="font-bold text-[#c56a16]">{item.code}</p>
+                    <p className="text-[#9a5a1e]">{item.message}</p>
                   </div>
                 ))
               )}
@@ -784,18 +996,20 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
           */}
           <AgentChatPanel form={form} onFormUpdate={updateForm} />
         </aside>
+        </>
+      )}
       </div>
 
       {showAdjustPositionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-950">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d1f]/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#d2d2d7] bg-white p-6 shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
               Adjust Positions
             </p>
-            <h2 className="mt-2 text-lg font-black text-slate-950">
+            <h2 className="mt-2 text-lg font-bold text-[#1d1d1f]">
               Door, window, and appliance locations can be dragged on the plan.
             </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
               Drag these rough positions first, then confirm them to generate
               the preliminary cabinet fill around those constraints.
             </p>
@@ -806,7 +1020,7 @@ export function ShowroomIntakeApp({ projectId }: { projectId?: string }) {
                   setShowAdjustPositionsModal(false);
                   startDraggableHighlightCue();
                 }}
-                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+                className="rounded-full bg-[#1d1d1f] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Got It
               </button>

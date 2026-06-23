@@ -1,6 +1,6 @@
 .dl-Btn {
-  width: 50px;
-  height: 50px;
+  width: 26px;
+  height: 26px;
   border: none;
   border-radius: 50%;
   background-color: rgb(27, 27, 27);
@@ -15,12 +15,14 @@
 }
 
 .dl-svgIcon {
+  width: 10px;
+  height: 10px;
   fill: rgb(214, 178, 255);
 }
 
 .dl-icon2 {
-  width: 18px;
-  height: 5px;
+  width: 10px;
+  height: 3px;
   border-bottom: 2px solid rgb(182, 143, 255);
   border-left: 2px solid rgb(182, 143, 255);
   border-right: 2px solid rgb(182, 143, 255);
@@ -40,7 +42,7 @@
   transition-duration: .2s;
   pointer-events: none;
   letter-spacing: 0.5px;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .dl-tooltip::before {

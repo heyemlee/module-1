@@ -159,7 +159,7 @@ export function AgentChatPanel({
             <button
               type="button"
               onClick={() => setCollapsed((value) => !value)}
-              className="uiverse-fill-button ml-2 shrink-0 px-2 py-1 text-xs"
+              className="ml-2 shrink-0 rounded-full border border-[#d2d2d7] bg-white px-3 py-1 text-xs font-semibold text-[#1d1d1f] transition hover:border-[#1d1d1f]/40"
             >
               {collapsed ? "Expand" : "Hide"}
             </button>

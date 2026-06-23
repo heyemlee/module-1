@@ -629,57 +629,31 @@ function RoughApplianceFields({
 }
 
 export function AdjustPositionsStep({
-  onReset,
-  onConfirmPositions,
   hasOverrides,
   fixedPositionsConfirmed,
   cabinetFillGenerated
 }: {
-  onReset: () => void;
-  onConfirmPositions: () => void;
   hasOverrides: boolean;
   fixedPositionsConfirmed: boolean;
   cabinetFillGenerated: boolean;
 }) {
   return (
-    <Step title="5. Adjust Positions">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {cabinetFillGenerated ? (
-            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-              Cabinet fill generated
-            </span>
-          ) : fixedPositionsConfirmed ? (
-            <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-              Fixed positions confirmed
-            </span>
-          ) : hasOverrides ? (
-            <span className="rounded bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
-              Adjusted manually
-            </span>
-          ) : null}
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        {cabinetFillGenerated ? (
+          <span className="rounded-full bg-[#e6f4ef] px-2.5 py-1 text-xs font-bold text-[#008060]">
+            Cabinet fill generated
+          </span>
+        ) : fixedPositionsConfirmed ? (
+          <span className="rounded-full bg-[#e6f4ef] px-2.5 py-1 text-xs font-bold text-[#008060]">
+            Fixed positions confirmed
+          </span>
+        ) : hasOverrides ? (
+          <span className="rounded-full bg-[#fff0dc] px-2.5 py-1 text-xs font-bold text-[#c56a16]">
+            Adjusted manually
+          </span>
+        ) : null}
       </div>
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onReset}
-          disabled={!hasOverrides && !fixedPositionsConfirmed && !cabinetFillGenerated}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Reset Positions
-        </button>
-        <button
-          type="button"
-          onClick={onConfirmPositions}
-          disabled={fixedPositionsConfirmed}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {fixedPositionsConfirmed
-            ? "Fixed Positions Confirmed"
-            : "Confirm Fixed Positions"}
-        </button>
-      </div>
-    </Step>
+    </div>
   );
 }

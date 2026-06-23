@@ -64,7 +64,7 @@ export type FloorPlan = {
 };
 
 const CANVAS = { w: 760, h: 560 };
-const MARGIN = { top: 56, right: 88, bottom: 78, left: 80 };
+const MARGIN = { top: 32, right: 32, bottom: 32, left: 40 };
 const DEFAULT_LENGTH_IN = 210;
 const DEFAULT_WIDTH_IN = 150;
 

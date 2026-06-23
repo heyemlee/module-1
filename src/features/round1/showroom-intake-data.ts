@@ -31,7 +31,7 @@ export function createDefaultShowroomForm(): Round1FormInput {
       doorColorId: null
     },
     fixtures: {
-      sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+      sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "UNDER_WINDOW" },
       range: {
         size: null,
         fuel: "GAS",

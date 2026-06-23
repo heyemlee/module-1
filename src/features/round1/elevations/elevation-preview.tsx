@@ -16,7 +16,7 @@ type ElevationPreviewProps = {
 const INK = "#1f2937";
 const MUTED = "#64748b";
 const GUIDE = "#cbd5e1";
-const OPENING = "#0ea5e9";
+const OPENING = "#c56a16";
 const PANEL_COLUMNS = 2;
 const PANEL_GAP_X = 28;
 const PANEL_GAP_Y = 20;
@@ -219,7 +219,7 @@ function OpeningShape({ item }: { item: ElevationItem }) {
         y={item.y}
         width={item.w}
         height={item.h}
-        fill="#f0f9ff"
+        fill="#f5f5f7"
         stroke={OPENING}
         strokeWidth="1"
       />

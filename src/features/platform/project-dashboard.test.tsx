@@ -28,8 +28,10 @@ describe("ProjectDashboard", () => {
     );
     expect(html).toContain("Projects");
     expect(html).toContain("Search customer, address, or project");
-    expect(html).toContain("New customer project");
-    expect(html).toContain("Sign out");
+    expect(html).toContain("New project");
+    // Sign out moved into the account menu (a closed Radix dropdown), so assert
+    // the account-menu trigger renders instead of the menu item itself.
+    expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain("Chen Family");
     expect(html).toContain("<table");
     expect(html).toContain("Customer");
