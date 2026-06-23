@@ -58,6 +58,7 @@ next-env.d.ts
 # Tool-specific files
 .claude/
 .superpowers/
+.worktrees/
 
 # Generated cabinet-color manifest (regenerate with: npm run db:prepare-cabinet-colors)
 /scripts/cabinet-colors-eu.json
