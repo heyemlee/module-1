@@ -5,6 +5,10 @@ import { UserStatusAction } from "./user-status-action";
 
 const COLS = "grid grid-cols-[1.5fr_1.3fr_0.8fr_auto_auto] items-center gap-3";
 
+export function canManageUserStatus(currentUserId: string, targetUserId: string) {
+  return currentUserId !== targetUserId;
+}
+
 /**
  * Status reflects the real `disabledAt` field: a user is Active until disabled.
  * (There is no invite flow — created users sign in immediately — so there is no
@@ -85,10 +89,10 @@ export function AdminUsersView({
                     {u.role}
                   </span>
                   <UserStatus disabled={u.disabledAt !== null} />
-                  {u.id === currentUserId ? (
-                    <span />
-                  ) : (
+                  {canManageUserStatus(currentUserId, u.id) ? (
                     <UserStatusAction userId={u.id} disabled={u.disabledAt !== null} />
+                  ) : (
+                    <span />
                   )}
                 </div>
               ))}
