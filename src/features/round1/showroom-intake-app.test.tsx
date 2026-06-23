@@ -566,6 +566,25 @@ describe("Round1SnapshotPanel", () => {
     expect(html).toContain("image-generation-preview");
   });
 
+  test("exposes the rendering as an enlarge trigger and keeps the zoom dialog closed in SSR", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender
+        busy={false}
+        error={null}
+        renderings={[{ id: "1", url: "data:image/png;base64,abc", doorColorId: null }]}
+        cabinetColors={[]}
+      />
+    );
+
+    // Thumbnail is a focusable button that opens the fullscreen Dialog.
+    expect(html).toContain('aria-label="Enlarge concept rendering"');
+    expect(html).toContain('alt="Round 1 concept rendering"');
+    // Radix Dialog is closed by default, so the portaled fullscreen image must
+    // not be server-rendered (this is what keeps SSR markup stable).
+    expect(html).not.toContain('alt="Fullscreen rendering"');
+  });
+
   test("shows snapshot status and the snapshot JSON once generated", () => {
     const html = renderToStaticMarkup(
       <Round1SnapshotPanel snapshot={buildFixtureSnapshot()} />
