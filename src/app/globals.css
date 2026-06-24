@@ -558,17 +558,6 @@ textarea {
   to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
 /* From Uiverse.io by WhiteNervosa */
 .user-status-switch {
   display: inline-block;

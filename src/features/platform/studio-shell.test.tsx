@@ -10,6 +10,9 @@ describe("Studio design tokens", () => {
     expect(css).toContain("--studio-danger: #e66d63");
     expect(css).toContain("--studio-radius-panel: 12px");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css.match(/@media \(prefers-reduced-motion: reduce\)/g)).toHaveLength(1);
+    expect(css).toContain("animation-duration: 0.01ms !important");
+    expect(css).not.toContain("0.001ms");
   });
 
   test("does not load the retired serif product fonts", () => {
