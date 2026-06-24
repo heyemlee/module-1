@@ -10,7 +10,7 @@
   --studio-raised: #1d2d25;
   --studio-ink: #edf2ee;
   --studio-muted: #9aa79f;
-  --studio-quiet: #6e7c74;
+  --studio-quiet: #8b9a91;
   --studio-line: rgba(231, 239, 233, 0.1);
   --studio-line-strong: rgba(231, 239, 233, 0.18);
   --studio-action: #9fcdb1;
@@ -28,24 +28,24 @@
   --studio-shadow-raised: 0 24px 64px rgba(3, 9, 6, 0.32);
 
   /* Compatibility aliases for components not yet migrated in Phase 1. */
-  --app-bg: var(--studio-void);
-  --app-surface: var(--studio-shell);
-  --app-surface-muted: var(--studio-surface);
-  --app-ink: var(--studio-ink);
-  --app-muted: var(--studio-muted);
-  --app-quiet: var(--studio-quiet);
-  --app-border: var(--studio-line);
-  --app-border-strong: var(--studio-line-strong);
-  --app-blue: var(--studio-action);
-  --app-blue-soft: rgba(159, 205, 177, 0.1);
-  --app-green: var(--studio-success);
-  --app-green-soft: rgba(159, 205, 177, 0.1);
-  --app-amber: var(--studio-warning);
-  --app-amber-soft: rgba(216, 174, 105, 0.12);
-  --app-red: var(--studio-danger);
-  --app-red-soft: rgba(230, 109, 99, 0.12);
-  --app-radius: var(--studio-radius-control);
-  --app-shadow: var(--studio-shadow-raised);
+  --app-bg: #f5f5f7;
+  --app-surface: #ffffff;
+  --app-surface-muted: #fbfbfd;
+  --app-ink: #1d1d1f;
+  --app-muted: #6e6e73;
+  --app-quiet: #86868b;
+  --app-border: rgba(0, 0, 0, 0.12);
+  --app-border-strong: rgba(0, 0, 0, 0.2);
+  --app-blue: #1d1d1f;
+  --app-blue-soft: #f0f0f2;
+  --app-green: #16823a;
+  --app-green-soft: #eaf7ee;
+  --app-amber: #b25a00;
+  --app-amber-soft: #fff3df;
+  --app-red: #b42318;
+  --app-red-soft: #fff1ef;
+  --app-radius: 8px;
+  --app-shadow: 0 16px 45px rgba(0, 0, 0, 0.08);
 }
 
 * {
