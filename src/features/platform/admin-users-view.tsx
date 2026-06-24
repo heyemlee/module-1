@@ -6,7 +6,7 @@ import type { CompanyUserSummary } from "@/server/platform/user-admin-repository
 import { CreateUserForm } from "./create-user-form";
 import { UserStatusAction } from "./user-status-action";
 import { UserQuotaAction } from "./user-quota-action";
-import { UserLogsModal } from "./user-logs-modal";
+import { UserLogsDialog } from "./user-logs-dialog";
 import { StudioPage, StudioPageHeader, StudioStat, StudioSection } from "./studio-page";
 import { userSummary } from "./admin-presentation";
 import { Button } from "@/components/ui/button";
@@ -260,10 +260,13 @@ export function AdminUsersView({
       </div>
 
       {viewingLogsUser && (
-        <UserLogsModal
+        <UserLogsDialog
+          open
           userId={viewingLogsUser.id}
           userName={viewingLogsUser.name}
-          onClose={() => setViewingLogsUser(null)}
+          onOpenChange={(open) => {
+            if (!open) setViewingLogsUser(null);
+          }}
         />
       )}
     </StudioPage>
