@@ -49,7 +49,9 @@ describe("ProjectDashboard", () => {
         projects={[projectFixture]}
       />
     );
-
+    // The "Projects" page title and the account menu (sign out) now live in the
+    // global sidebar (StudioShell), not in the dashboard itself — those are
+    // covered by studio-shell.test.
     expect(html).toContain("Search customer, address, or project");
     expect(html).toContain("New project");
     expect(html).toContain("Chen Family");
