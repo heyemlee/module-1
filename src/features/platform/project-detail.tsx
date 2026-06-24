@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ProjectSummary } from "@/server/platform/project-repository";
 import type { AuthUser } from "@/server/platform/types";
-import { PlatformHeader, NavPill } from "./platform-header";
+
 
 const STATUS_PILL: Record<
   ProjectSummary["status"],
@@ -33,20 +33,7 @@ export function ProjectDetail({
   const pill = STATUS_PILL[project.status];
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={user.name}
-        nav={
-          <>
-            <NavPill href="/projects" active>
-              Projects
-            </NavPill>
-            <NavPill href={`/projects/${project.id}/round1`}>Round 1</NavPill>
-            <NavPill href={`/projects/${project.id}/renderings`}>Renderings</NavPill>
-            {isAdmin && <NavPill href="/admin/users">Admin</NavPill>}
-          </>
-        }
-      />
+    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
         <h1

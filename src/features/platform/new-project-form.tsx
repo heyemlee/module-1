@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import type { AuthUser } from "@/server/platform/types";
-import { PlatformHeader, NavPill } from "./platform-header";
+
 
 const FIELD =
   "h-11 rounded-xl border-[#d2d2d7] bg-white text-[14px] text-[#1d1d1f] shadow-none placeholder:text-[#86868b] focus-visible:border-[#1d1d1f]/40 focus-visible:ring-[#1d1d1f]/10";
@@ -66,20 +66,7 @@ export function NewProjectForm({ user }: { user: AuthUser }) {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={user.name}
-        nav={
-          <>
-            <NavPill href="/projects" active>
-              Projects
-            </NavPill>
-            {isAdmin && <NavPill href="/admin/users">Users</NavPill>}
-            {isAdmin && <NavPill href="/admin/cabinet-colors">Cabinet Colors</NavPill>}
-          </>
-        }
-      />
-
+    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
       <div className="mx-auto max-w-[1320px] px-8 py-10">
 
 

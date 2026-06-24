@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import type { AuthUser } from "@/server/platform/types";
 import type { ProjectSummary } from "@/server/platform/project-repository";
-import { PlatformHeader, NavPill } from "./platform-header";
+
 import { UiverseDeleteButton } from "./uiverse-delete-button";
 
 const STATUS_LABELS: Record<ProjectSummary["status"], string> = {
@@ -93,20 +93,7 @@ export function ProjectDashboard({
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={user.name}
-        nav={
-          <>
-            <NavPill href="/projects" active>
-              Projects
-            </NavPill>
-            {canDeleteProjects && <NavPill href="/admin/users">Users</NavPill>}
-            {canDeleteProjects && <NavPill href="/admin/cabinet-colors">Cabinet Colors</NavPill>}
-          </>
-        }
-      />
-
+    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
       <div className="mx-auto max-w-[1320px] px-8 py-10">
 
 

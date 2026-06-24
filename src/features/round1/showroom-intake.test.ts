@@ -49,10 +49,8 @@ describe("showroom intake defaults", () => {
 
   test("uses the approved adjust-position step order without first-phase MEP", () => {
     expect(SHOWROOM_STEPS).toEqual([
-      "Room",
-      "Openings",
-      "Layout",
-      "Appliances",
+      "Room & Openings",
+      "Layout & Appliances",
       "Adjust Positions",
       "Rendering Preferences"
     ]);
@@ -60,18 +58,16 @@ describe("showroom intake defaults", () => {
     expect(SHOWROOM_STEPS).not.toContain("Cabinets");
   });
 
-  test("does not fill cabinets before door window and appliance positions are confirmed", () => {
+
+
+  test("previews openings on the first step but defers appliances", () => {
     const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
 
-    expect(html).toContain("Confirm dragged door, window, and appliance positions before cabinet fill.");
-    expect(html).not.toContain("Approximate only. The program fills standard cabinets");
-  });
-
-  test("opens with an empty room shell before the adjust positions step", () => {
-    const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
-
+    // Step 0 is "Room & Openings", so the plan previews openings as they are
+    // entered. Appliances and dishwasher panels belong to later stages and
+    // must not render yet.
+    expect(html).toContain('data-opening-symbol="');
     expect(html).not.toContain('data-appliance-symbol="');
-    expect(html).not.toContain('data-opening-symbol="');
     expect(html).not.toContain('data-dishwasher-panel="true"');
   });
 });

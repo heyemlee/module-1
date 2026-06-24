@@ -57,6 +57,24 @@ describe("RenderingPreferencesStep", () => {
     expect(html).not.toContain("Painted White");
   });
 
+  test("defaults the preview to the first active color when none is selected", () => {
+    const form = createDefaultShowroomForm();
+    expect(form.renderingPreferences?.doorColorId ?? null).toBeNull();
+
+    const html = renderToStaticMarkup(
+      <RenderingPreferencesStep
+        form={form}
+        colors={colors}
+        onFormChange={() => {}}
+      />
+    );
+
+    // The preview image and overlay fall back to the first active color
+    // instead of showing a broken/empty placeholder.
+    expect(html).toContain("https://example.com/oak-kitchen.jpg");
+    expect(html).toContain('alt="Preview"');
+  });
+
   test("marks a confirmed cabinet color as locked", () => {
     const form = {
       ...createDefaultShowroomForm(),
@@ -151,5 +169,20 @@ describe("RenderingPreferencesStep", () => {
         "EUROPEAN_FRAMELESS"
       ).doorColorId
     ).toBeNull();
+  });
+  test("uses a contextual retry action when cabinet colors fail", () => {
+    const html = renderToStaticMarkup(
+      <RenderingPreferencesStep
+        form={createDefaultShowroomForm()}
+        colors={[]}
+        colorsError
+        onRetryLoadColors={() => {}}
+        onFormChange={() => {}}
+      />
+    );
+
+    expect(html).toContain("Cabinet colors could not be loaded");
+    expect(html).toContain("Try again");
+    expect(html).toContain('role="alert"');
   });
 });

@@ -16,37 +16,17 @@ function Shimmer({ className }: { className?: string }) {
   );
 }
 
-/** Static placeholder matching PlatformHeader so there is no shift on load. */
-function HeaderSkeleton() {
-  return (
-    <header className="sticky top-0 z-10 border-b border-[#d2d2d7] bg-[#f5f5f7]/95 backdrop-blur">
-      <div className="mx-auto flex h-[74px] max-w-[1320px] items-center gap-6 px-8">
-        <Shimmer className="h-4 w-24" />
-        <div className="flex items-center gap-2">
-          <Shimmer className="h-7 w-20 rounded-full" />
-          <Shimmer className="h-7 w-20 rounded-full" />
-          <Shimmer className="h-7 w-24 rounded-full" />
-        </div>
-        <div className="ml-auto">
-          <Shimmer className="h-8 w-32 rounded-full" />
-        </div>
-      </div>
-    </header>
-  );
-}
 
-type SkeletonVariant = "dashboard" | "detail" | "table" | "plain";
+type SkeletonVariant = "dashboard" | "detail" | "table" | "plain" | "round1";
 
 export function RouteSkeleton({
   variant = "plain",
-  withHeader = true
 }: {
   variant?: SkeletonVariant;
-  withHeader?: boolean;
 }) {
   return (
-    <main className="min-h-screen bg-[#f5f5f7]" aria-busy>
-      {withHeader && <HeaderSkeleton />}
+    <main className="min-h-[100dvh] bg-[#f5f5f7]" aria-busy>
+
       <div className="mx-auto max-w-[1320px] px-8 py-10">
         <Shimmer className="h-9 w-64" />
         <Shimmer className="mt-3 h-4 w-80" />
