@@ -35,7 +35,7 @@ function HeaderSkeleton() {
   );
 }
 
-type SkeletonVariant = "dashboard" | "detail" | "table" | "plain";
+type SkeletonVariant = "dashboard" | "detail" | "table" | "plain" | "round1";
 
 export function RouteSkeleton({
   variant = "plain",
