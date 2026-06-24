@@ -270,3 +270,28 @@ describe("buildRound1RenderingPrompt", () => {
     expect(buildPrompt(snapshot)).toBe(buildPrompt(snapshot));
   });
 });
+
+// Phase 1 of docs/ai-eval-plan.md: a deterministic golden matrix over the
+// representative layouts. Pins each shape's prompt language and guarantees the
+// non-authoritative safety markers survive for EVERY shape (not just the
+// default), so a prompt edit can't silently break one layout or drop the
+// sales-concept boundary. Free regression net; no image model called.
+describe("golden layout-phrase matrix", () => {
+  const LAYOUTS: Array<[Round1FormInput["layoutPreference"], string]> = [
+    ["ONE_WALL", "single-wall (one-wall) kitchen"],
+    ["GALLEY", "galley kitchen with two parallel runs"],
+    ["LEFT_L_SHAPE", "left L-shaped kitchen"],
+    ["RIGHT_L_SHAPE", "right L-shaped kitchen"],
+    ["U_SHAPE", "U-shaped kitchen"],
+    ["PENINSULA", "kitchen with a peninsula"]
+  ];
+
+  for (const [layout, phrase] of LAYOUTS) {
+    test(`${layout}: right shape language + safety markers intact`, () => {
+      const prompt = buildPrompt(buildSnapshot(layout));
+      expect(prompt).toContain(phrase);
+      expect(prompt).toContain("sales-estimate concept image only");
+      expect(prompt.toLowerCase()).toContain("not a production drawing");
+    });
+  }
+});
