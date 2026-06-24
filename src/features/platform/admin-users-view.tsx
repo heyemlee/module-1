@@ -153,7 +153,7 @@ export function AdminUsersView({
                 <td className="p-4 text-studio-secondary">{u.account}</td>
                 <td className="p-4 font-medium text-studio-secondary">{u.role}</td>
                 <td className="p-4">
-                  <UserQuotaAction userId={u.id} initialQuota={u.monthlyRenderQuota} />
+                  <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
                 </td>
                 <td className="p-4">
                   {u.disabledAt !== null ? "Disabled" : "Active"}
@@ -165,7 +165,7 @@ export function AdminUsersView({
                 </td>
                 <td className="p-4 text-right">
                   {canManageUserStatus(currentUserId, u.id) && (
-                    <UserStatusAction userId={u.id} disabled={u.disabledAt !== null} />
+                    <UserStatusAction userId={u.id} userName={u.name} disabled={u.disabledAt !== null} />
                   )}
                 </td>
               </tr>
@@ -216,7 +216,7 @@ export function AdminUsersView({
               
               <div className="text-studio-secondary">Quota</div>
               <div className="flex justify-end">
-                <UserQuotaAction userId={u.id} initialQuota={u.monthlyRenderQuota} />
+                <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
               </div>
             </div>
 
@@ -225,7 +225,7 @@ export function AdminUsersView({
                 View usage
               </Button>
               {canManageUserStatus(currentUserId, u.id) && (
-                <UserStatusAction userId={u.id} disabled={u.disabledAt !== null} />
+                <UserStatusAction userId={u.id} userName={u.name} disabled={u.disabledAt !== null} />
               )}
             </div>
           </div>
