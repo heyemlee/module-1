@@ -42,14 +42,16 @@ export function UserStatusAction({
 
   return (
     <div className="flex min-w-[76px] flex-col items-end gap-1">
-      <button
-        type="button"
-        disabled={busy}
-        onClick={updateStatus}
-        className="inline-flex h-7 items-center justify-center rounded-full border border-[#d2d2d7] bg-white px-3 text-[11px] font-bold text-[#1d1d1f] transition hover:border-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy ? (disabled ? "Activating..." : "Pausing...") : actionLabel}
-      </button>
+      <label className="user-status-switch" title={actionLabel}>
+        <input
+          type="checkbox"
+          checked={!disabled}
+          disabled={busy}
+          onChange={updateStatus}
+          aria-label={actionLabel}
+        />
+        <span className="user-status-slider" />
+      </label>
       {error && <span className="text-[10px] font-semibold text-[#b42318]">{error}</span>}
     </div>
   );

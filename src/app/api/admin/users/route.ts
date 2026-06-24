@@ -17,7 +17,8 @@ import {
 const createSchema = z.object({
   account: z.string().trim().min(1),
   role: z.string().refine(isAssignableRole, "Unknown role"),
-  password: z.string().min(8)
+  password: z.string().min(8),
+  monthlyRenderQuota: z.number().int().min(0).default(50)
 });
 
 function authError(error: unknown) {
@@ -49,7 +50,8 @@ export async function POST(request: Request) {
       companyId: user.companyId,
       account: input.account,
       role: input.role,
-      password: input.password
+      password: input.password,
+      monthlyRenderQuota: input.monthlyRenderQuota
     });
     return NextResponse.json({ user: created }, { status: 201 });
   } catch (error) {

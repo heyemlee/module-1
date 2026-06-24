@@ -8,6 +8,7 @@ export type AuthUser = {
   name: string;
   role: UserRole;
   disabledAt: string | null;
+  monthlyRenderQuota: number;
 };
 
 export type SessionRecord = {

@@ -11,6 +11,7 @@ export type CompanyUserSummary = {
   role: UserRole;
   disabledAt: string | null;
   createdAt: string;
+  monthlyRenderQuota: number;
 };
 
 type CompanyUserRow = {
@@ -21,6 +22,7 @@ type CompanyUserRow = {
   role: UserRole;
   disabled_at: Date | null;
   created_at: Date;
+  monthly_render_quota: number;
 };
 
 const ASSIGNABLE_ROLES: UserRole[] = ["ADMIN", "SALES", "DESIGNER"];
@@ -37,15 +39,16 @@ export function mapCompanyUserRow(row: CompanyUserRow): CompanyUserSummary {
     name: row.name,
     role: row.role,
     disabledAt: row.disabled_at?.toISOString() ?? null,
-    createdAt: row.created_at.toISOString()
+    createdAt: row.created_at.toISOString(),
+    monthlyRenderQuota: row.monthly_render_quota
   };
 }
 
 export async function listCompanyUsers(companyId: string) {
   const result = await query<CompanyUserRow>(
-    `SELECT id, account, email, name, role, disabled_at, created_at
+    `SELECT id, account, email, name, role, disabled_at, created_at, monthly_render_quota
      FROM users
-     WHERE company_id = $1
+     WHERE company_id = $1 AND deleted_at IS NULL
      ORDER BY created_at ASC`,
     [companyId]
   );
@@ -60,6 +63,7 @@ export async function createCompanyUser(input: {
   account: string;
   role: UserRole;
   password: string;
+  monthlyRenderQuota: number;
 }) {
   const accountResult = await query<{ id: string }>(
     `SELECT id FROM users WHERE lower(account) = lower($1) LIMIT 1`,
@@ -73,10 +77,10 @@ export async function createCompanyUser(input: {
   const internalEmail = `${input.account.toLowerCase()}@users.internal`;
   const passwordHash = await hashPassword(input.password);
   const result = await query<CompanyUserRow>(
-    `INSERT INTO users (company_id, account, email, name, password_hash, role)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, account, email, name, role, disabled_at, created_at`,
-    [input.companyId, input.account, internalEmail, internalName, passwordHash, input.role]
+    `INSERT INTO users (company_id, account, email, name, password_hash, role, monthly_render_quota)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
+    [input.companyId, input.account, internalEmail, internalName, passwordHash, input.role, input.monthlyRenderQuota]
   );
   return mapCompanyUserRow(result.rows[0]);
 }
@@ -91,11 +95,69 @@ export async function setCompanyUserDisabled(input: {
      SET disabled_at = CASE WHEN $3 THEN now() ELSE NULL END,
          updated_at = now()
      WHERE id = $1 AND company_id = $2
-     RETURNING id, account, email, name, role, disabled_at, created_at`,
+     RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
     [input.userId, input.companyId, input.disabled]
   );
   const row = result.rows[0];
   if (!row) throw new CompanyUserNotFoundError("User not found");
   if (input.disabled) await deleteSessionsForUser(input.userId);
   return mapCompanyUserRow(row);
+}
+
+export async function setCompanyUserQuota(input: {
+  companyId: string;
+  userId: string;
+  monthlyRenderQuota: number;
+}) {
+  const result = await query<CompanyUserRow>(
+    `UPDATE users
+     SET monthly_render_quota = $3,
+         updated_at = now()
+     WHERE id = $1 AND company_id = $2
+     RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
+    [input.userId, input.companyId, input.monthlyRenderQuota]
+  );
+  const row = result.rows[0];
+  if (!row) throw new CompanyUserNotFoundError("User not found");
+  return mapCompanyUserRow(row);
+}
+
+export async function deleteCompanyUser(input: {
+  companyId: string;
+  userId: string;
+}) {
+  await deleteSessionsForUser(input.userId);
+  const result = await query(
+    `UPDATE users
+     SET deleted_at = now(),
+         updated_at = now()
+     WHERE id = $1 AND company_id = $2
+     RETURNING id`,
+    [input.userId, input.companyId]
+  );
+  if (result.rows.length === 0) throw new CompanyUserNotFoundError("User not found");
+}
+
+export type RenderingStat = {
+  date: string;
+  calls: number;
+};
+
+export async function getUserRenderingStats(userId: string): Promise<RenderingStat[]> {
+  const result = await query<{
+    date: Date;
+    count: string;
+  }>(
+    `SELECT date_trunc('minute', created_at) AS date, count(*) as count
+     FROM renderings
+     WHERE created_by_user_id = $1
+     GROUP BY date_trunc('minute', created_at)
+     ORDER BY date DESC`,
+    [userId]
+  );
+  
+  return result.rows.map(row => ({
+    date: row.date.toISOString(),
+    calls: parseInt(row.count, 10)
+  }));
 }

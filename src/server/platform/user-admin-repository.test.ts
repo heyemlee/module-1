@@ -37,7 +37,8 @@ describe("user admin helpers", () => {
       name: "Sales One",
       role: "SALES",
       disabled_at: null,
-      created_at: new Date("2026-06-19T00:00:00.000Z")
+      created_at: new Date("2026-06-19T00:00:00.000Z"),
+      monthly_render_quota: 50
     });
     expect(user).toEqual({
       id: "u1",
@@ -46,7 +47,8 @@ describe("user admin helpers", () => {
       name: "Sales One",
       role: "SALES",
       disabledAt: null,
-      createdAt: "2026-06-19T00:00:00.000Z"
+      createdAt: "2026-06-19T00:00:00.000Z",
+      monthlyRenderQuota: 50
     });
     expect("passwordHash" in user).toBe(false);
   });
@@ -70,7 +72,8 @@ describe("user admin helpers", () => {
             name: "sales-two",
             role: "SALES",
             disabled_at: null,
-            created_at: new Date("2026-06-23T00:00:00.000Z")
+            created_at: new Date("2026-06-23T00:00:00.000Z"),
+            monthly_render_quota: 50
           }
         ]
       } as never);
@@ -80,7 +83,8 @@ describe("user admin helpers", () => {
       companyId: "company-1",
       account: "sales-two",
       role: "SALES",
-      password: "password123"
+      password: "password123",
+      monthlyRenderQuota: 50
     });
 
     expect(vi.mocked(query).mock.calls[1][1]).toEqual([
@@ -89,7 +93,8 @@ describe("user admin helpers", () => {
       "sales-two@users.internal",
       "sales-two",
       "hashed-password",
-      "SALES"
+      "SALES",
+      50
     ]);
     expect(created.account).toBe("sales-two");
   });
@@ -104,7 +109,8 @@ describe("user admin helpers", () => {
           name: "sales-two",
           role: "SALES",
           disabled_at: new Date("2026-06-23T22:00:00.000Z"),
-          created_at: new Date("2026-06-23T00:00:00.000Z")
+          created_at: new Date("2026-06-23T00:00:00.000Z"),
+          monthly_render_quota: 50
         }
       ]
     } as never);
@@ -132,7 +138,8 @@ describe("user admin helpers", () => {
           name: "sales-two",
           role: "SALES",
           disabled_at: null,
-          created_at: new Date("2026-06-23T00:00:00.000Z")
+          created_at: new Date("2026-06-23T00:00:00.000Z"),
+          monthly_render_quota: 50
         }
       ]
     } as never);

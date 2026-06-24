@@ -11,6 +11,7 @@ type UserRow = {
   password_hash: string;
   role: UserRole;
   disabled_at: Date | null;
+  monthly_render_quota: number;
 };
 
 function mapUser(row: Omit<UserRow, "password_hash">): AuthUser {
@@ -21,13 +22,14 @@ function mapUser(row: Omit<UserRow, "password_hash">): AuthUser {
     email: row.email,
     name: row.name,
     role: row.role,
-    disabledAt: row.disabled_at?.toISOString() ?? null
+    disabledAt: row.disabled_at?.toISOString() ?? null,
+    monthlyRenderQuota: row.monthly_render_quota
   };
 }
 
 export async function findUserForLogin(identifier: string) {
   const result = await query<UserRow>(
-    `SELECT id, company_id, account, email, name, password_hash, role, disabled_at
+    `SELECT id, company_id, account, email, name, password_hash, role, disabled_at, monthly_render_quota
      FROM users
      WHERE lower(account) = lower($1) OR lower(email) = lower($1)
      LIMIT 1`,
@@ -64,9 +66,10 @@ export async function getUserBySession(sessionId: string) {
   if (cached && cached.expiresAtMs > Date.now()) return cached.user;
 
   // No password_hash here: session resolution never needs it, so don't pull the
-  // secret into memory on every page navigation.
+  // secret into memory on every page navigation. monthly_render_quota IS needed —
+  // mapUser maps it into AuthUser for the rendering quota check.
   const result = await query<Omit<UserRow, "password_hash">>(
-    `SELECT users.id, users.company_id, users.account, users.email, users.name, users.role, users.disabled_at
+    `SELECT users.id, users.company_id, users.account, users.email, users.name, users.role, users.disabled_at, users.monthly_render_quota
      FROM sessions
      JOIN users ON users.id = sessions.user_id
      WHERE sessions.id = $1 AND sessions.expires_at > now()

@@ -13,6 +13,7 @@ export function CreateUserForm() {
   const [account, setAccount] = useState("");
   const [role, setRole] = useState<UserRole>("SALES");
   const [password, setPassword] = useState("");
+  const [monthlyRenderQuota, setMonthlyRenderQuota] = useState("50");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -25,7 +26,7 @@ export function CreateUserForm() {
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account: account.trim(), role, password })
+        body: JSON.stringify({ account: account.trim(), role, password, monthlyRenderQuota: parseInt(monthlyRenderQuota, 10) })
       });
       if (!response.ok) {
         if (response.status === 409) {
@@ -39,6 +40,7 @@ export function CreateUserForm() {
       setAccount("");
       setPassword("");
       setRole("SALES");
+      setMonthlyRenderQuota("50");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -85,6 +87,17 @@ export function CreateUserForm() {
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold text-[#6e6e73]">Monthly Quota</span>
+          <input
+            className={FIELD}
+            name="monthlyRenderQuota"
+            type="number"
+            min="0"
+            value={monthlyRenderQuota}
+            onChange={(event) => setMonthlyRenderQuota(event.target.value)}
           />
         </label>
       </div>

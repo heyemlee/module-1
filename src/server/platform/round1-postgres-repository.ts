@@ -260,3 +260,11 @@ export async function getRenderingImage(projectId: string, renderingId: string) 
   const row = result.rows[0];
   return row ? Buffer.from(row.image_base64, "base64") : null;
 }
+
+export async function getRenderCountForCurrentMonth(userId: string): Promise<number> {
+  const result = await query<{ count: string }>(
+    `SELECT count(*) FROM renderings WHERE created_by_user_id = $1 AND created_at >= date_trunc('month', current_date)`,
+    [userId]
+  );
+  return parseInt(result.rows[0].count, 10);
+}

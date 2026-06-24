@@ -18,7 +18,8 @@ const sales: AuthUser = {
   email: "sales@example.com",
   name: "Sales",
   role: "SALES",
-  disabledAt: null
+  disabledAt: null,
+  monthlyRenderQuota: 50
 };
 
 afterEach(() => {

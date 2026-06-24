@@ -10,7 +10,8 @@ const user: AuthUser = {
   email: "tester@example.com",
   name: "Tester",
   role: "SALES",
-  disabledAt: null
+  disabledAt: null,
+  monthlyRenderQuota: 50
 };
 
 describe("NewProjectForm", () => {

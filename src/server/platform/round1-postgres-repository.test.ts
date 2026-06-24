@@ -101,7 +101,8 @@ describe("round1 postgres mappers", () => {
         email: "ada@example.com",
         name: "Ada",
         role: "SALES",
-        disabledAt: null
+        disabledAt: null,
+        monthlyRenderQuota: 50
       },
       rendering: {
         model: "gpt-image-test",

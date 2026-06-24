@@ -12,7 +12,7 @@ describe("UserStatusAction", () => {
       <UserStatusAction userId="user-2" disabled={false} />
     );
 
-    expect(html).toContain(">Pause<");
+    expect(html).toContain('title="Pause"');
   });
 
   test("offers Activate for a disabled user", () => {
@@ -20,7 +20,7 @@ describe("UserStatusAction", () => {
       <UserStatusAction userId="user-2" disabled />
     );
 
-    expect(html).toContain(">Activate<");
+    expect(html).toContain('title="Activate"');
   });
 
   test("targets the selected user's status endpoint", () => {
