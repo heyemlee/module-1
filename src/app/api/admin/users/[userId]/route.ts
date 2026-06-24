@@ -1,21 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  ForbiddenError,
-  requireRole,
-  requireUser,
-  UnauthorizedError
-} from "@/server/platform/auth-service";
+import { requireRole, requireUser } from "@/server/platform/auth-service";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { deleteCompanyUser } from "@/server/platform/user-admin-repository";
-
-function authError(error: unknown) {
-  if (error instanceof UnauthorizedError) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
-  if (error instanceof ForbiddenError) {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
-  return null;
-}
 
 export async function DELETE(
   request: NextRequest,
@@ -37,9 +23,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    const auth = authError(error);
-    if (auth) return auth;
-    console.error("Failed to delete user:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return authErrorResponse(error, "Admins only") ?? serverError("admin/user:delete", error, "Unable to delete user");
   }
 }

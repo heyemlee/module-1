@@ -9,12 +9,15 @@ import { ForbiddenError, UnauthorizedError } from "./auth-service";
  * the admin routes, so a mid-session cookie expiry yields a clean 401 the client
  * can act on rather than a generic "Internal Server Error".
  */
-export function authErrorResponse(error: unknown): NextResponse | null {
+export function authErrorResponse(
+  error: unknown,
+  forbiddenMessage = "Forbidden"
+): NextResponse | null {
   if (error instanceof UnauthorizedError) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   if (error instanceof ForbiddenError) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: forbiddenMessage }, { status: 403 });
   }
   return null;
 }
