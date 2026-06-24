@@ -166,7 +166,7 @@ export async function saveRound1Snapshot(input: {
     [input.projectId, JSON.stringify(input.snapshot), input.snapshot.generatedAt, input.user.id]
   );
   await query(
-    `UPDATE projects SET status = 'ROUND1_SNAPSHOT_READY', updated_at = now() WHERE id = $1`,
+    `UPDATE projects SET status = 'INTAKE', updated_at = now() WHERE id = $1`,
     [input.projectId]
   );
   return result.rows[0].id;
@@ -221,7 +221,7 @@ export async function saveRenderingHistory(input: {
     ]
   );
   await query(
-    `UPDATE projects SET status = 'ROUND1_RENDERING_READY', updated_at = now() WHERE id = $1`,
+    `UPDATE projects SET status = 'RENDERING_READY', updated_at = now() WHERE id = $1`,
     [input.projectId]
   );
   return {
