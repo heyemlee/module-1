@@ -20,6 +20,10 @@ describe("StudioRail", () => {
     expect(html).toContain("Renderings");
     expect(html).not.toContain("Users");
     expect(html).not.toContain("Cabinet colors");
+    // The account menu (with sign out) now lives in the rail; assert its
+    // closed Radix dropdown trigger renders.
+    expect(html).toContain("Maya");
+    expect(html).toContain('aria-haspopup="menu"');
   });
 
   test("adds administration destinations for admins", () => {

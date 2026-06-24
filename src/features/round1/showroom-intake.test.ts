@@ -60,11 +60,14 @@ describe("showroom intake defaults", () => {
 
 
 
-  test("opens with an empty room shell before the adjust positions step", () => {
+  test("previews openings on the first step but defers appliances", () => {
     const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
 
+    // Step 0 is "Room & Openings", so the plan previews openings as they are
+    // entered. Appliances and dishwasher panels belong to later stages and
+    // must not render yet.
+    expect(html).toContain('data-opening-symbol="');
     expect(html).not.toContain('data-appliance-symbol="');
-    expect(html).not.toContain('data-opening-symbol="');
     expect(html).not.toContain('data-dishwasher-panel="true"');
   });
 });

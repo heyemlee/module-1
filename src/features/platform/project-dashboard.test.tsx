@@ -26,12 +26,11 @@ describe("ProjectDashboard", () => {
         ]}
       />
     );
-    expect(html).toContain("Projects");
+    // The "Projects" page title and the account menu (sign out) now live in the
+    // global sidebar (StudioShell), not in the dashboard itself — those are
+    // covered by studio-shell.test.
     expect(html).toContain("Search customer, address, or project");
     expect(html).toContain("New project");
-    // Sign out moved into the account menu (a closed Radix dropdown), so assert
-    // the account-menu trigger renders instead of the menu item itself.
-    expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain("Chen Family");
     expect(html).toContain("<table");
     expect(html).toContain("Customer");
