@@ -23,7 +23,32 @@ const config: Config = {
         accent: "var(--app-surface-muted)",
         "accent-foreground": "var(--app-ink)",
         destructive: "var(--app-red)",
-        "destructive-foreground": "#ffffff"
+        "destructive-foreground": "#ffffff",
+        studio: {
+          void: "var(--studio-void)",
+          shell: "var(--studio-shell)",
+          surface: "var(--studio-surface)",
+          raised: "var(--studio-raised)",
+          ink: "var(--studio-ink)",
+          muted: "var(--studio-muted)",
+          quiet: "var(--studio-quiet)",
+          action: "var(--studio-action)",
+          "action-strong": "var(--studio-action-strong)",
+          "action-ink": "var(--studio-action-ink)",
+          paper: "var(--studio-paper)",
+          "paper-muted": "var(--studio-paper-muted)",
+          "paper-ink": "var(--studio-paper-ink)",
+          line: "var(--studio-line)",
+          "line-strong": "var(--studio-line-strong)",
+          danger: "var(--studio-danger)",
+          warning: "var(--studio-warning)",
+          success: "var(--studio-success)"
+        }
+      },
+      borderRadius: {
+        "studio-panel": "var(--studio-radius-panel)",
+        "studio-control": "var(--studio-radius-control)",
+        "studio-small": "var(--studio-radius-small)"
       }
     }
   },
