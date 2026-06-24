@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { useMemo, useState } from "react";
 import { Info, Image as ImageIcon } from "lucide-react";
 import {
@@ -79,19 +81,21 @@ export function RenderingPreferencesStep({
     });
   };
 
-  // Determine which preview image to show
-  const previewColor = hoveredColor || selectedColor;
+  // Determine which preview image to show.
+  // Fall back to the first active color so the preview is never empty/broken
+  // when nothing has been selected yet.
+  const previewColor = hoveredColor || selectedColor || activeColors[0] || null;
   const previewImageUrl = previewColor?.hoverExampleImageUrl || previewColor?.swatchImageUrl;
   const fallbackImageUrl = CABINET_STYLE_OPTIONS.find(opt => opt.value === selectedStyle)?.image;
   const displayImage = previewImageUrl || fallbackImageUrl;
 
   return (
     <Step>
-      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="block after:clear-both after:block after:content-['']">
         {/* Left Pane: Preview Area */}
-        <div className="lg:col-start-1 lg:row-start-1">
+        <div className="mb-6 lg:mb-3 lg:float-left lg:w-[408px] lg:pr-3">
           <div className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] shadow-sm">
-            <div className="aspect-[4/3] w-full bg-[#e8e8ed] relative">
+            <div className="relative aspect-[16/9] w-full bg-[#e8e8ed]">
               {displayImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -124,9 +128,8 @@ export function RenderingPreferencesStep({
         </div>
 
         {/* Construction Style Selection */}
-        <div className="lg:col-start-2 lg:row-start-1">
+        <div className="mb-4 lg:float-right lg:w-[calc(100%-408px)]">
           <section>
-
             <CabinetConstructionStylePicker
               value={selectedStyle}
               options={CABINET_STYLE_OPTIONS}
@@ -136,29 +139,28 @@ export function RenderingPreferencesStep({
         </div>
 
         {/* Color Selection */}
-        <div className="lg:col-span-2 lg:row-start-2 overflow-hidden">
+        <div className="block">
           <section>
-
-
             {activeColors.length === 0 ? (
               colorsError ? (
-                <div className="rounded-xl border border-dashed border-[#f0c9c4] bg-[#fdeceb] p-5">
-                  <p className="text-sm font-bold text-[#b42318]">
-                    Couldn’t load cabinet colors
+                <div
+                  role="alert"
+                  className="rounded-studio-control border border-studio-danger/25 bg-studio-danger/10 p-4"
+                >
+                  <p className="text-[13px] font-semibold text-[#8e312b]">
+                    Cabinet colors could not be loaded
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-[#b42318]/80">
-                    There was a problem loading the cabinet color library. Check your
-                    connection and try again.
+                  <p className="mt-1 text-[12px] text-[#6f4b47]">
+                    Check the connection and try loading the catalog again.
                   </p>
-                  {onRetryLoadColors && (
-                    <button
-                      type="button"
-                      onClick={onRetryLoadColors}
-                      className="mt-3 rounded-md bg-[#b42318] px-4 py-2 text-xs font-bold text-white hover:bg-[#9a1d14] transition"
-                    >
-                      Retry
-                    </button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="inspector"
+                    className="mt-3"
+                    onClick={onRetryLoadColors}
+                  >
+                    Try again
+                  </Button>
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-[#d2d2d7] bg-[#f5f5f7] p-5">
@@ -177,7 +179,7 @@ export function RenderingPreferencesStep({
                 </div>
               )
             ) : (
-              <div className="grid grid-rows-3 grid-flow-col gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-[#d2d2d7] scrollbar-track-transparent">
+              <div className="pb-3 after:clear-both after:block after:content-['']">
                 {activeColors.map((color) => {
                   const isSelected = selectedColor?.id === color.id;
                   return (
@@ -189,7 +191,7 @@ export function RenderingPreferencesStep({
                       onMouseLeave={() => setHoveredColor(null)}
                       aria-label={`Select ${color.name}`}
                       className={cn(
-                        "group relative shrink-0 w-16 h-16 overflow-hidden rounded-lg transition-all duration-200",
+                        "float-left mr-3 mb-3 group relative shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-lg transition-all duration-200",
                         isSelected
                           ? "ring-2 ring-[var(--app-ink)] ring-offset-2 scale-105 shadow-md"
                           : "ring-1 ring-[#d2d2d7] hover:ring-[#6e6e73]"
@@ -207,7 +209,7 @@ export function RenderingPreferencesStep({
                           alt={color.name}
                           loading="lazy"
                           decoding="async"
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover rounded-lg"
                         />
                       ) : null}
                     </button>

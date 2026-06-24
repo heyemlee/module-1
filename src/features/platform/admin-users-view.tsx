@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompanyUserSummary } from "@/server/platform/user-admin-repository";
 import { CreateUserForm } from "./create-user-form";
-import { PlatformHeader, NavPill } from "./platform-header";
+
 import { UserStatusAction } from "./user-status-action";
 import { UserQuotaAction } from "./user-quota-action";
 import { UserLogsModal } from "./user-logs-modal";
@@ -79,20 +79,7 @@ export function AdminUsersView({
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={userName}
-        nav={
-          <>
-            <NavPill href="/projects">Projects</NavPill>
-            <NavPill href="/admin/users" active>
-              Users
-            </NavPill>
-            <NavPill href="/admin/cabinet-colors">Cabinet Colors</NavPill>
-          </>
-        }
-      />
-
+    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
       <div className="mx-auto max-w-[1320px] px-8 py-10">
         <section className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
           <div className="rounded-[18px] border border-[#d2d2d7] bg-white p-5">

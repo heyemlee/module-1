@@ -18,4 +18,15 @@ describe("LoginForm", () => {
     expect(html).not.toContain("Forgot password");
     expect(html).not.toContain("Sign Up");
   });
+
+  test("uses the Studio theme without retired serif variables", () => {
+    const html = renderToStaticMarkup(<LoginForm />);
+
+    expect(html).toContain("ABCabinet Studio");
+    expect(html).toContain("Make the quote ready");
+    expect(html).toContain("bg-studio-void");
+    expect(html).not.toContain("--font-playfair");
+    expect(html).not.toContain("--font-instrument-serif");
+    expect(html).not.toContain("Secure");
+  });
 });

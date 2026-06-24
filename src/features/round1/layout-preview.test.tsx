@@ -105,7 +105,7 @@ describe("LayoutPreview", () => {
       />
     );
 
-    expect(html).toContain("Round 1");
+    expect(html).toContain("Kitchen floor plan editor");
   });
 
   test("renders dishwasher as an integrated base-cabinet panel", () => {
@@ -184,7 +184,8 @@ describe("LayoutPreview", () => {
 
     expect(html).toContain(">window<");
     expect(html).toContain(">door<");
-    expect(html).toContain('stroke="#c56a16"');
+    expect(html).not.toContain('stroke="#c56a16"');
+    expect(html).toContain('stroke="var(--studio-action)"');
   });
 
   test("renders an open passage without door leaf or swing arc", () => {
@@ -264,4 +265,13 @@ describe("LayoutPreview", () => {
       staticApplianceLabelPattern("Wall oven + microwave stack")
     );
   });
+
+  test("uses Studio canvas semantics for draggable position objects", () => {
+    const html = renderPreview({ previewStage: "adjust" });
+
+    expect(html).toContain('data-canvas-theme="studio"');
+    expect(html).toContain('data-drag-state="idle"');
+    expect(html).toContain('aria-label="Kitchen floor plan editor"');
+  });
+
 });

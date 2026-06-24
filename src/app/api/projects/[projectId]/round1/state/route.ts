@@ -11,7 +11,9 @@ const requestSchema = z.object({
   showroomForm: round1FormSchema,
   positionOverrides: z.record(z.string(), z.unknown()),
   fixedPositionsConfirmed: z.boolean(),
-  cabinetFillGenerated: z.boolean()
+  cabinetFillGenerated: z.boolean(),
+  currentStep: z.number().int().min(0).default(0),
+  maxAccessibleStep: z.number().int().min(0).default(0)
 });
 
 export async function GET(
@@ -47,7 +49,9 @@ export async function PUT(
       showroomForm: input.showroomForm,
       positionOverrides: input.positionOverrides as PositionOverrides,
       fixedPositionsConfirmed: input.fixedPositionsConfirmed,
-      cabinetFillGenerated: input.cabinetFillGenerated
+      cabinetFillGenerated: input.cabinetFillGenerated,
+      currentStep: input.currentStep,
+      maxAccessibleStep: input.maxAccessibleStep
     });
     return NextResponse.json({ state });
   } catch (error) {

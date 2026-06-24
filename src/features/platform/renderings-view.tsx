@@ -1,7 +1,12 @@
 import Link from "next/link";
-import type { AuthUser } from "@/server/platform/types";
+import { Button } from "@/components/ui/button";
+import {
+  StudioEmptyState,
+  StudioPage,
+  StudioPageHeader,
+  StudioSection
+} from "./studio-page";
 import { DownloadButton } from "./download-button";
-import { PlatformHeader, NavPill } from "./platform-header";
 
 const STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -18,108 +23,105 @@ type RenderingHistoryItem = {
   } | null;
 };
 
-/**
- * Read-only gallery of a project's saved Round 1 concept renderings (history).
- * Concept images are non-authoritative, sales-estimate previews only.
- */
 export function RenderingsView({
   project,
   renderings,
-  colors,
-  user
+  colors
 }: {
   project: { id: string; customerName: string; projectName: string };
   renderings: RenderingHistoryItem[];
   colors: { id: string; name: string }[];
-  user: AuthUser;
 }) {
   const colorNameById = new Map(colors.map((color) => [color.id, color.name]));
-  const isAdmin = user.role === "ADMIN";
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={user.name}
-        nav={
-          <>
-            <NavPill href="/projects">Projects</NavPill>
-            <NavPill href={`/projects/${project.id}/round1`}>Round 1</NavPill>
-            <NavPill href={`/projects/${project.id}/renderings`} active>
-              Renderings
-            </NavPill>
-            {isAdmin && <NavPill href="/admin/users">Admin</NavPill>}
-          </>
+    <StudioPage>
+      <StudioPageHeader
+        title="Renderings"
+        description={`${project.customerName}. ${project.projectName}`}
+        action={
+          <Button asChild variant="secondary">
+            <Link href={`/projects/${project.id}/round1`}>
+              Open Round 1
+            </Link>
+          </Button>
         }
       />
 
-      <div className="mx-auto max-w-[1320px] px-8 py-10">
+      {renderings.length === 0 ? (
+        <StudioSection className="mt-6">
+          <StudioEmptyState
+            title="No renderings yet"
+            description="Complete Round 1 preferences and generate the first concept rendering."
+            action={
+              <Button asChild>
+                <Link href={`/projects/${project.id}/round1`}>
+                  Open Round 1
+                </Link>
+              </Button>
+            }
+          />
+        </StudioSection>
+      ) : (
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3">
+          {renderings.map((rendering, index) => {
+            const prefs = rendering.basedOnRenderingPreferences;
+            const colorName = prefs
+              ? colorNameById.get(prefs.doorColorId) ?? "Unknown color"
+              : "Finish not recorded";
+            const style = prefs
+              ? STYLE_LABELS[prefs.cabinetStyle] ?? prefs.cabinetStyle
+              : null;
+            const imageUrl = `/api/projects/${project.id}/round1/renderings/${rendering.id}/image`;
+            const dateObj = new Date(rendering.createdAt);
 
-        {renderings.length === 0 ? (
-          <div className="mt-8 rounded-[18px] border border-dashed border-[#d2d2d7] bg-white p-12 text-center">
-            <p className="text-[14px] font-semibold text-[#1d1d1f]">No renderings yet</p>
-            <p className="mt-2 text-[13px] text-[#6e6e73]">
-              Generate a concept rendering from the{" "}
-              <Link
-                href={`/projects/${project.id}/round1`}
-                className="font-semibold text-[#1d1d1f] underline"
+            return (
+              <figure
+                key={rendering.id}
+                className="group overflow-hidden rounded-studio-panel border border-studio-line bg-studio-shell"
               >
-                Round 1 Intake
-              </Link>{" "}
-              step and it will appear here.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {renderings.map((rendering, index) => {
-              const prefs = rendering.basedOnRenderingPreferences;
-              const colorName = prefs
-                ? colorNameById.get(prefs.doorColorId) ?? "Unknown color"
-                : "—";
-              const style = prefs
-                ? STYLE_LABELS[prefs.cabinetStyle] ?? prefs.cabinetStyle
-                : null;
-              const imageUrl = `/api/projects/${project.id}/round1/renderings/${rendering.id}/image`;
-              return (
-                <figure
-                  key={rendering.id}
-                  className="group overflow-hidden rounded-[18px] border border-[#d2d2d7] bg-white"
-                >
-                  <div className="relative overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imageUrl}
-                      alt={`Concept rendering for ${project.customerName}`}
-                      loading="lazy"
-                      decoding="async"
-                      className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
-                    />
-                    {index === 0 && (
-                      <span className="absolute left-3 top-3 inline-flex h-7 items-center rounded-full bg-[#e6f4ef] px-3 text-[11px] font-bold text-[#008060]">
-                        LATEST
-                      </span>
+                <div className="relative overflow-hidden border-b border-studio-line bg-studio-void">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageUrl}
+                    alt={`Concept rendering for ${project.customerName}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+                  />
+                  {index === 0 && (
+                    <span className="absolute left-3 top-3 inline-flex h-6 items-center rounded-full bg-studio-action/10 px-2.5 text-[10px] font-bold text-studio-action">
+                      Latest
+                    </span>
+                  )}
+                </div>
+                <figcaption className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="truncate text-[13px] font-semibold text-studio-ink">
+                      {colorName}
+                    </p>
+                    {style && (
+                      <p className="truncate text-[13px] text-studio-muted">
+                        {style}
+                      </p>
                     )}
+                    <time
+                      dateTime={rendering.createdAt}
+                      className="block truncate text-[11px] text-studio-quiet"
+                    >
+                      {dateObj.toLocaleString()}
+                    </time>
                   </div>
-                  <figcaption className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-bold text-[#1d1d1f]">
-                        {colorName}
-                        {style ? ` · ${style}` : ""}
-                      </p>
-                      <p className="text-[11px] text-[#6e6e73]">
-                        {new Date(rendering.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <DownloadButton
-                      href={imageUrl}
-                      fileName={`rendering_${project.projectName.replace(/\s+/g, "_")}_${new Date(rendering.createdAt).getTime()}.png`}
-                    />
-                  </figcaption>
-                </figure>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </main>
+                  <DownloadButton
+                    href={imageUrl}
+                    fileName={`rendering_${project.projectName.replace(/\s+/g, "_")}_${dateObj.getTime()}.png`}
+                  />
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      )}
+    </StudioPage>
   );
 }

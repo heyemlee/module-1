@@ -31,6 +31,8 @@ export type Round1State = {
   positionOverrides: PositionOverrides;
   fixedPositionsConfirmed: boolean;
   cabinetFillGenerated: boolean;
+  currentStep: number;
+  maxAccessibleStep: number;
   updatedAt: string;
 };
 
@@ -40,6 +42,8 @@ type Round1StateRow = {
   position_overrides_json: unknown;
   fixed_positions_confirmed: boolean;
   cabinet_fill_generated: boolean;
+  current_step: number;
+  max_accessible_step: number;
   updated_at: Date;
 };
 
@@ -66,6 +70,8 @@ export function mapRound1StateRow(row: Round1StateRow): Round1State {
     positionOverrides: row.position_overrides_json as PositionOverrides,
     fixedPositionsConfirmed: row.fixed_positions_confirmed,
     cabinetFillGenerated: row.cabinet_fill_generated,
+    currentStep: row.current_step,
+    maxAccessibleStep: row.max_accessible_step,
     updatedAt: row.updated_at.toISOString()
   };
 }
@@ -130,7 +136,8 @@ export function mapRenderingHistoryRow(
 export async function getRound1State(projectId: string) {
   const result = await query<Round1StateRow>(
     `SELECT project_id, showroom_form_json, position_overrides_json,
-            fixed_positions_confirmed, cabinet_fill_generated, updated_at
+            fixed_positions_confirmed, cabinet_fill_generated,
+            current_step, max_accessible_step, updated_at
      FROM round1_states WHERE project_id = $1`,
     [projectId]
   );
@@ -145,28 +152,38 @@ export async function saveRound1State(input: {
   positionOverrides: PositionOverrides;
   fixedPositionsConfirmed: boolean;
   cabinetFillGenerated: boolean;
+  currentStep?: number;
+  maxAccessibleStep?: number;
 }) {
+  const currentStep = input.currentStep ?? 0;
+  const maxAccessibleStep = input.maxAccessibleStep ?? currentStep;
   const result = await query<Round1StateRow>(
     `INSERT INTO round1_states (
        project_id, showroom_form_json, position_overrides_json,
-       fixed_positions_confirmed, cabinet_fill_generated, updated_by_user_id
+       fixed_positions_confirmed, cabinet_fill_generated,
+       current_step, max_accessible_step, updated_by_user_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (project_id) DO UPDATE SET
        showroom_form_json = EXCLUDED.showroom_form_json,
        position_overrides_json = EXCLUDED.position_overrides_json,
        fixed_positions_confirmed = EXCLUDED.fixed_positions_confirmed,
        cabinet_fill_generated = EXCLUDED.cabinet_fill_generated,
+       current_step = EXCLUDED.current_step,
+       max_accessible_step = EXCLUDED.max_accessible_step,
        updated_by_user_id = EXCLUDED.updated_by_user_id,
        updated_at = now()
      RETURNING project_id, showroom_form_json, position_overrides_json,
-               fixed_positions_confirmed, cabinet_fill_generated, updated_at`,
+               fixed_positions_confirmed, cabinet_fill_generated,
+               current_step, max_accessible_step, updated_at`,
     [
       input.projectId,
       JSON.stringify(input.showroomForm),
       JSON.stringify(input.positionOverrides),
       input.fixedPositionsConfirmed,
       input.cabinetFillGenerated,
+      currentStep,
+      maxAccessibleStep,
       input.user.id
     ]
   );

@@ -33,40 +33,42 @@ export function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <div className="mx-auto flex min-h-screen max-w-[1280px] flex-col justify-center gap-12 px-6 py-10 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10 lg:px-16">
-        <section className="relative hidden lg:block">
-          <h1
-            className="max-w-[560px] text-[56px] font-bold leading-[1.05] text-[#1d1d1f] xl:text-[72px]"
-            style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-          >
-            Make the quote ready
+    <main className="min-h-[100dvh] bg-studio-void text-studio-ink">
+      <div className="mx-auto grid min-h-[100dvh] max-w-[1180px] items-center gap-10 px-5 py-10 lg:grid-cols-[1fr_420px] lg:px-10">
+        <section className="hidden lg:block">
+          <div className="flex items-center gap-3">
+            <span className="size-9 rounded-[10px] bg-studio-action" />
+            <span className="text-[14px] font-semibold">ABCabinet Studio</span>
+          </div>
+          <h1 className="mt-12 max-w-[560px] text-[54px] font-semibold leading-[1.02] tracking-[-0.055em]">
+            Make the quote ready.
           </h1>
-          <p className="mt-6 max-w-[430px] text-[17px] leading-[25px] text-[#6e6e73]">
-            Internal Round 1 workspace for sales, design handoff, snapshots and concept renderings.
+          <p className="mt-5 max-w-[48ch] text-[15px] leading-6 text-studio-muted">
+            Capture the room, confirm the layout, and produce a concept rendering in one project workspace.
           </p>
         </section>
 
-        <section className="flex w-full items-center justify-center">
-          <div className="w-full max-w-[420px]">
-            <SignInForm
-              account={account}
-              password={password}
-              remember={remember}
-              busy={busy}
-              error={
-                error ? (
-                  <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-sm text-[var(--app-red)]">
-                    {error}
-                  </p>
-                ) : null
-              }
-              onAccountChange={setAccount}
-              onPasswordChange={setPassword}
-              onRememberChange={setRemember}
-              onSubmit={submit}
-            />
-          </div>
+        <section className="w-full">
+          <SignInForm
+            account={account}
+            password={password}
+            remember={remember}
+            busy={busy}
+            error={
+              error ? (
+                <p
+                  role="alert"
+                  className="rounded-studio-control border border-studio-danger/30 bg-studio-danger/10 px-3 py-2 text-[13px] text-studio-danger"
+                >
+                  {error}
+                </p>
+              ) : null
+            }
+            onAccountChange={setAccount}
+            onPasswordChange={setPassword}
+            onRememberChange={setRemember}
+            onSubmit={submit}
+          />
         </section>
       </div>
     </main>

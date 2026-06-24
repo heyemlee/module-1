@@ -93,7 +93,7 @@ export function RoomStep({
   setForm: (form: Round1FormInput) => void;
 }) {
   return (
-    <Step title="1. Room Size And Obstacles">
+    <Step>
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
           label="Room length (inches)"
@@ -179,7 +179,7 @@ export function OpeningsStep({
     });
   };
   return (
-    <Step title="2. Openings">
+    <Step>
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
           label="Any doors or open passages?"
@@ -275,7 +275,7 @@ export function MepStep({
   setForm: (form: Round1FormInput) => void;
 }) {
   return (
-    <Step title="3. MEP">
+    <Step>
       <div className="grid gap-4 sm:grid-cols-2">
         {(["water", "gas", "electric", "vent"] as const).map((key) => (
           <SelectField
@@ -309,7 +309,7 @@ export function LayoutStep({
   setPositionOverrides: Dispatch<SetStateAction<PositionOverrides>>;
 }) {
   return (
-    <Step title="3. Layout Preference">
+    <Step>
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
           label="Kitchen shape"
@@ -504,7 +504,7 @@ export function AppliancesStep({
     cooking.microwaveOvenCombo.status === "YES";
 
   return (
-    <Step title="4. Core Appliances And Fixtures">
+    <Step>
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
           label="Sink included?"
