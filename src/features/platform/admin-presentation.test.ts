@@ -11,7 +11,7 @@ import {
 const users: CompanyUserSummary[] = [
   {
     id: "admin-1",
-    companyId: "company-1",
+    email: "admin@example.com",
     account: "admin",
     name: "Admin",
     role: "ADMIN",
@@ -21,7 +21,7 @@ const users: CompanyUserSummary[] = [
   },
   {
     id: "sales-1",
-    companyId: "company-1",
+    email: "sales@example.com",
     account: "sales",
     name: "Sales",
     role: "SALES",
