@@ -20,13 +20,24 @@ export function CreateUserForm() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    const formData = new FormData(event.currentTarget as HTMLFormElement);
+    const nextAccount = String(formData.get("account") ?? "").trim();
+    const nextRole = String(formData.get("role") ?? role) as UserRole;
+    const nextPassword = String(formData.get("password") ?? "");
+    const nextMonthlyRenderQuota = String(formData.get("monthlyRenderQuota") ?? "50");
+
     setBusy(true);
     setError(null);
     try {
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account: account.trim(), role, password, monthlyRenderQuota: parseInt(monthlyRenderQuota, 10) })
+        body: JSON.stringify({
+          account: nextAccount,
+          role: nextRole,
+          password: nextPassword,
+          monthlyRenderQuota: parseInt(nextMonthlyRenderQuota, 10)
+        })
       });
       if (!response.ok) {
         if (response.status === 409) {
@@ -48,8 +59,6 @@ export function CreateUserForm() {
     }
   }
 
-  const canSubmit = account.trim() && password.length >= 8;
-
   return (
     <form
       onSubmit={submit}
@@ -64,13 +73,14 @@ export function CreateUserForm() {
             className={FIELD}
             name="account"
             autoComplete="off"
+            required
             value={account}
             onChange={(event) => setAccount(event.target.value)}
           />
         </label>
         <label className="block">
           <span className="text-[12px] font-semibold text-[#6e6e73]">Role</span>
-          <select className={FIELD} value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+          <select className={FIELD} name="role" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -85,6 +95,8 @@ export function CreateUserForm() {
             name="password"
             type="password"
             autoComplete="new-password"
+            minLength={8}
+            required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
@@ -96,6 +108,7 @@ export function CreateUserForm() {
             name="monthlyRenderQuota"
             type="number"
             min="0"
+            required
             value={monthlyRenderQuota}
             onChange={(event) => setMonthlyRenderQuota(event.target.value)}
           />
@@ -105,7 +118,7 @@ export function CreateUserForm() {
         <p className="mt-4 rounded-lg bg-[#fdeceb] px-3 py-2 text-sm text-[#b42318]">{error}</p>
       )}
       <button
-        disabled={busy || !canSubmit}
+        disabled={busy}
         className="mt-6 inline-flex h-[42px] w-full items-center justify-center rounded-full bg-[#1d1d1f] text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Creating..." : "Create user"}

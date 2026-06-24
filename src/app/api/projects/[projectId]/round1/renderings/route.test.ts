@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { __resetRateLimits } from "@/server/platform/rate-limit";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { POST } from "./route";
@@ -86,6 +87,7 @@ function request() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetRateLimits();
   mocks.requireUser.mockResolvedValue(user);
   mocks.getProjectForUser.mockResolvedValue({ id: "project-1" });
   mocks.getRound1State.mockResolvedValue({
@@ -174,5 +176,26 @@ describe("POST /api/projects/[projectId]/round1/renderings", () => {
         snapshotId: "snapshot-1"
       })
     );
+  });
+
+  test("returns QUOTA_EXCEEDED 403 when the user is at their monthly limit", async () => {
+    mocks.getRenderCountForCurrentMonth.mockResolvedValue(user.monthlyRenderQuota);
+
+    const response = await request();
+    const json = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(json.reason).toBe("QUOTA_EXCEEDED");
+    expect(mocks.generateRound1Rendering).not.toHaveBeenCalled();
+  });
+
+  test("rate-limits a user after 20 renders in the window (429)", async () => {
+    for (let i = 0; i < 20; i++) {
+      expect((await request()).status).toBe(200);
+    }
+    const limited = await request();
+
+    expect(limited.status).toBe(429);
+    expect(mocks.generateRound1Rendering).toHaveBeenCalledTimes(20);
   });
 });

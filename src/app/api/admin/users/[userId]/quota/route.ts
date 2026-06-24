@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser, requireRole } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { setCompanyUserQuota, CompanyUserNotFoundError } from "@/server/platform/user-admin-repository";
 
 const requestSchema = z.object({
@@ -36,6 +36,6 @@ export async function PUT(
     if (error instanceof CompanyUserNotFoundError) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-    return authErrorResponse(error) ?? NextResponse.json({ error: "Unable to update user quota" }, { status: 500 });
+    return authErrorResponse(error) ?? serverError("admin/user:quota", error, "Unable to update user quota");
   }
 }

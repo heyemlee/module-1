@@ -48,4 +48,15 @@ describe("Postgres schema", () => {
       "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ"
     );
   });
+
+  test("stores editable Round 1 draft navigation state", () => {
+    expect(schema).toContain("current_step INTEGER NOT NULL DEFAULT 0");
+    expect(schema).toContain("max_accessible_step INTEGER NOT NULL DEFAULT 0");
+    expect(schema).toContain(
+      "ALTER TABLE round1_states ADD COLUMN IF NOT EXISTS current_step INTEGER NOT NULL DEFAULT 0"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE round1_states ADD COLUMN IF NOT EXISTS max_accessible_step INTEGER NOT NULL DEFAULT 0"
+    );
+  });
 });
