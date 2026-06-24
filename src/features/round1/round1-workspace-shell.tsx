@@ -9,12 +9,14 @@ export function Round1WorkspaceShell({
   mode,
   projectBar,
   stepNavigation,
+  mobileStepNavigation,
   canvas,
   inspector
 }: {
   mode: WorkspaceMode;
   projectBar: ReactNode;
   stepNavigation: ReactNode;
+  mobileStepNavigation?: ReactNode;
   canvas: ReactNode;
   inspector: ReactNode;
 }) {
@@ -56,7 +58,7 @@ export function Round1WorkspaceShell({
           data-workspace-region="canvas"
           className="relative min-h-[560px] min-w-0 overflow-hidden bg-studio-void p-3 md:min-h-[calc(100dvh-56px)]"
         >
-          <div className="mb-3 xl:hidden">{stepNavigation}</div>
+          <div className="mb-3 xl:hidden">{mobileStepNavigation ?? stepNavigation}</div>
           {canvas}
         </motion.section>
 

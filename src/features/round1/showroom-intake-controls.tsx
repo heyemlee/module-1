@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +22,7 @@ export function Step({ title, children }: { title?: string; children: ReactNode 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="app-panel-flat p-4">
-      <h2 className="mb-3 text-sm font-bold text-[var(--app-ink)]">
+      <h2 className="mb-3 text-sm font-bold text-studio-paper-ink">
         {title}
       </h2>
       {children}
@@ -40,9 +41,10 @@ export function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-[var(--app-muted)]">{label}</span>
+      <span className="mb-1 block text-[13px] font-medium text-studio-paper-ink">{label}</span>
       <Input
         type="number"
+        data-surface="inspector"
         value={value ?? ""}
         onChange={(event) =>
           onChange(event.target.value ? Number(event.target.value) : null)
@@ -65,7 +67,7 @@ export function SelectField<T extends string>({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-[var(--app-muted)]">{label}</span>
+      <span className="mb-1 block text-[13px] font-medium text-studio-paper-ink">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
@@ -81,12 +83,10 @@ export function SelectField<T extends string>({
       </select>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="h-[42px] w-full justify-between">
+          <Button variant="inspector" className="h-[42px] w-full justify-between">
             {value}
-            <ChevronDown
+            <ChevronDownIcon
               className="-me-1 ms-2 opacity-60"
-              size={16}
-              strokeWidth={2}
               aria-hidden="true"
             />
           </Button>
@@ -118,22 +118,23 @@ export function CheckboxField({
   help?: string;
 }) {
   return (
-    <div>
-      <label className="custom-checkbox">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <span className="checkmark" />
-        <span>{label}</span>
-      </label>
-      {help ? (
-        <p className="mt-1 pl-[34px] text-xs leading-5 text-[var(--app-muted)]">
-          {help}
-        </p>
-      ) : null}
-    </div>
+    <label className="flex items-start gap-3">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+        className="mt-0.5 border-[#9aa79f] bg-white data-[state=checked]:border-studio-action data-[state=checked]:bg-studio-action"
+      />
+      <span>
+        <span className="block text-[13px] font-medium text-studio-paper-ink">
+          {label}
+        </span>
+        {help && (
+          <span className="mt-1 block text-[11px] leading-4 text-[#607067]">
+            {help}
+          </span>
+        )}
+      </span>
+    </label>
   );
 }
 

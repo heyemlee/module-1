@@ -434,7 +434,7 @@ describe("LayoutStep", () => {
     );
 
     expect(html).toContain("Include an island");
-    expect(html).toContain("custom-checkbox");
+    expect(html).toContain("checkbox");
   });
 });
 
@@ -603,7 +603,7 @@ describe("ShowroomIntakeApp snapshot gating", () => {
   test("starts with no snapshot before cabinet fill is generated", () => {
     const html = renderToStaticMarkup(<ShowroomIntakeApp />);
 
-    expect(html).toContain("No snapshot yet");
+    expect(html).toContain("Changes not frozen");
     expect(html).not.toContain("Snapshot ready");
     expect(html).not.toContain("View snapshot JSON");
   });

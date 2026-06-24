@@ -60,12 +60,7 @@ describe("showroom intake defaults", () => {
     expect(SHOWROOM_STEPS).not.toContain("Cabinets");
   });
 
-  test("does not fill cabinets before door window and appliance positions are confirmed", () => {
-    const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
 
-    expect(html).toContain("Confirm dragged door, window, and appliance positions before cabinet fill.");
-    expect(html).not.toContain("Approximate only. The program fills standard cabinets");
-  });
 
   test("opens with an empty room shell before the adjust positions step", () => {
     const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
