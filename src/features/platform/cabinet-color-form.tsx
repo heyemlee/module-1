@@ -12,7 +12,7 @@ const STYLES = [
 
 // Inline uploads are stored as data URLs in the existing text columns, so cap
 // the file size to keep rows (and the colors API payload) reasonable.
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_CABINET_IMAGE_BYTES = 4 * 1024 * 1024;
 
 const FIELD =
   "mt-2 w-full rounded-xl border border-[#d2d2d7] bg-white px-3.5 text-[14px] text-[#1d1d1f] outline-none focus:border-[#1d1d1f]/40 focus:ring-2 focus:ring-[#1d1d1f]/10";
@@ -101,7 +101,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
     setPreview: (value: string) => void
   ) {
     if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) {
+    if (file.size > MAX_CABINET_IMAGE_BYTES) {
       setError("Image is too large. Please choose an image under 4MB.");
       return;
     }
