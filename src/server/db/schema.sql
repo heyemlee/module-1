@@ -17,10 +17,12 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL CHECK (role IN ('ADMIN', 'SALES', 'DESIGNER')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  disabled_at TIMESTAMPTZ
+  disabled_at TIMESTAMPTZ,
+  monthly_render_quota INTEGER NOT NULL DEFAULT 50
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS account TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_render_quota INTEGER NOT NULL DEFAULT 50;
 UPDATE users
 SET account = lower(replace(email, '@', '_'))
 WHERE account IS NULL;

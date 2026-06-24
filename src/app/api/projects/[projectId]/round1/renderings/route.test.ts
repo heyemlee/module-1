@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   getLatestRound1Snapshot: vi.fn(),
   saveRenderingHistory: vi.fn(),
   generateRound1Rendering: vi.fn(),
-  createOpenAIImageAdapterFromEnv: vi.fn()
+  createOpenAIImageAdapterFromEnv: vi.fn(),
+  getRenderCountForCurrentMonth: vi.fn()
 }));
 
 vi.mock("@/server/platform/auth-service", () => ({
@@ -35,7 +36,8 @@ vi.mock("@/server/platform/round1-postgres-repository", () => ({
   getLatestRound1Snapshot: mocks.getLatestRound1Snapshot,
   getRound1State: mocks.getRound1State,
   listRenderings: vi.fn(),
-  saveRenderingHistory: mocks.saveRenderingHistory
+  saveRenderingHistory: mocks.saveRenderingHistory,
+  getRenderCountForCurrentMonth: mocks.getRenderCountForCurrentMonth
 }));
 
 vi.mock("@/server/round1/rendering-service", () => ({
@@ -52,7 +54,8 @@ const user = {
   email: "ada@example.com",
   name: "Ada",
   role: "SALES",
-  disabledAt: null
+  disabledAt: null,
+  monthlyRenderQuota: 50
 };
 
 const europeanOak: CabinetColor = {
@@ -115,6 +118,7 @@ beforeEach(() => {
     dimensionConfidence: "ROUGH"
   });
   mocks.saveRenderingHistory.mockResolvedValue({ id: "rendering-1" });
+  mocks.getRenderCountForCurrentMonth.mockResolvedValue(0);
 });
 
 describe("POST /api/projects/[projectId]/round1/renderings", () => {

@@ -10,7 +10,7 @@ describe("ProjectDashboard", () => {
   test("renders project search and new project controls", () => {
     const html = renderToStaticMarkup(
       <ProjectDashboard
-        user={{ id: "u1", companyId: "c1", account: "sales", email: "s@example.com", name: "Sales", role: "SALES", disabledAt: null }}
+        user={{ id: "u1", companyId: "c1", account: "sales", email: "s@example.com", name: "Sales", role: "SALES", disabledAt: null, monthlyRenderQuota: 50 }}
         projects={[
           {
             id: "p1",
@@ -43,7 +43,7 @@ describe("ProjectDashboard", () => {
   test("does not show bulk delete selection controls to sales users", () => {
     const html = renderToStaticMarkup(
       <ProjectDashboard
-        user={{ id: "u1", companyId: "c1", account: "sales", email: "s@example.com", name: "Sales", role: "SALES", disabledAt: null }}
+        user={{ id: "u1", companyId: "c1", account: "sales", email: "s@example.com", name: "Sales", role: "SALES", disabledAt: null, monthlyRenderQuota: 50 }}
         projects={[
           {
             id: "p1",

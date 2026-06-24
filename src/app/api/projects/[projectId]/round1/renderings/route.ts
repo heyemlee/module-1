@@ -14,7 +14,8 @@ import {
   getLatestRound1Snapshot,
   getRound1State,
   listRenderings,
-  saveRenderingHistory
+  saveRenderingHistory,
+  getRenderCountForCurrentMonth
 } from "@/server/platform/round1-postgres-repository";
 
 const requestSchema = z.object({
@@ -91,6 +92,14 @@ export async function POST(
   const adapter = createOpenAIImageAdapterFromEnv(process.env);
   if (!adapter) {
     return NextResponse.json({ error: "OpenAI image generation is not configured", reason: "OPENAI_API_KEY_NOT_CONFIGURED" }, { status: 503 });
+  }
+
+  const currentMonthRenders = await getRenderCountForCurrentMonth(user.id);
+  if (currentMonthRenders >= user.monthlyRenderQuota) {
+    return NextResponse.json(
+      { error: "You have exceeded your monthly rendering quota", reason: "QUOTA_EXCEEDED" },
+      { status: 403 }
+    );
   }
 
   // Surface the real failure reason instead of an opaque 500: image-model
