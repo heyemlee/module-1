@@ -1,7 +1,8 @@
-import { useMemo, useState, useRef, useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { Cabinet, ConfirmationItem, Round1Normalized } from "@/domain/round1";
 import {
   allowedDragWallsForLayout,
+  isPositionValid,
   buildFloorPlan,
   type ApplianceShape,
   type FloorPlan,
@@ -52,6 +53,8 @@ type LayoutPreviewProps = {
 };
 
 type PreviewStage = "room" | "openings" | "layout" | "appliances" | "adjust";
+
+type DragState = "idle" | "dragging" | "snapping" | "invalid";
 
 const INK = "#1f2937";
 const LINE = "#334155";
@@ -122,6 +125,19 @@ export function LayoutPreview({
     axisOffset: number;
   };
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
+  const [dragState, setDragState] = useState<DragState>("idle");
+  const [selectedPositionId, setSelectedPositionId] = useState<string | null>(() => {
+    if (plan.appliances.length > 0) return plan.appliances[0].key;
+    if (plan.window) return "window";
+    if (plan.door) return "door";
+    return null;
+  });
+  const dragTimeoutRef = useRef<number | null>(null);
+
+  // Clear timeout on unmount
+  useEffect(() => () => {
+    if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
+  }, []);
 
   const handlePointerDown = useCallback((id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => {
     e.preventDefault();
@@ -135,12 +151,17 @@ export function LayoutPreview({
       startSvgPt: pt,
       axisOffset: (horizontal ? pt.x : pt.y) - currentVal
     });
+    setSelectedPositionId(id);
+    setDragState("dragging");
+    if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
   }, [getSvgPoint]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragInfo) return;
     const pt = getSvgPoint(e.clientX, e.clientY);
     const nextOverride = overrideFromPointer(plan, dragInfo.id, pt, dragInfo.axisOffset);
+    const nextPositionIsValid = isPositionValid(plan, dragInfo.id, nextOverride);
+    setDragState(nextPositionIsValid ? "dragging" : "invalid");
     onPositionOverridesChange((prev) => ({ ...prev, [dragInfo.id]: nextOverride }));
   }, [dragInfo, getSvgPoint, onPositionOverridesChange, plan]);
 
@@ -149,9 +170,30 @@ export function LayoutPreview({
       try {
         (e.target as Element).releasePointerCapture(e.pointerId);
       } catch (err) {}
+      if (dragState === "invalid") {
+        setDragState("invalid");
+        dragTimeoutRef.current = window.setTimeout(() => setDragState("idle"), 180);
+      } else {
+        setDragState("snapping");
+        dragTimeoutRef.current = window.setTimeout(() => setDragState("idle"), 220);
+      }
       setDragInfo(null);
     }
-  }, [dragInfo]);
+  }, [dragInfo, dragState]);
+
+  const moveSelected = useCallback((id: string, delta: number) => {
+    const obj = plan.appliances.find(a => a.key === id) || 
+                (id === "window" && plan.window ? { ...plan.window, key: "window" } : null) || 
+                (id === "door" && plan.door ? { ...plan.door, key: "door" } : null);
+    if (!obj) return;
+    const isHorizontal = obj.wall === "TOP" || obj.wall === "BOTTOM";
+    const currentPosition = isHorizontal ? (("x" in obj) ? obj.x : obj.cx) : (("y" in obj) ? obj.y : obj.cy);
+    const nextPos = currentPosition + delta;
+    const nextOverride = { wall: obj.wall, position: nextPos };
+    if (isPositionValid(plan, id, nextOverride)) {
+      onPositionOverridesChange((prev) => ({ ...prev, [id]: nextOverride }));
+    }
+  }, [plan, onPositionOverridesChange]);
 
   const handlePrint = useCallback(() => {
     if (!svgRef.current) return;
@@ -188,7 +230,11 @@ export function LayoutPreview({
   }, []);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white relative">
+    <section
+      data-canvas-theme="studio"
+      data-drag-state={dragState}
+      className="relative h-full min-h-[540px] overflow-hidden bg-studio-shell"
+    >
       {showHeader && !referenceMode && (
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
@@ -231,9 +277,9 @@ export function LayoutPreview({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${plan.canvas.w} ${plan.canvas.h}`}
+        aria-label="Kitchen floor plan editor"
         role="img"
-        aria-label="Round 1 top-down kitchen layout plan, black and white"
-        className="block h-auto w-full bg-white touch-none"
+        className="h-full min-h-[540px] w-full touch-none select-none bg-[#203128]"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
@@ -323,6 +369,7 @@ export function LayoutPreview({
             plan={plan}
             onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
             draggingId={dragInfo?.id}
+            onKeyboardMove={moveSelected}
             highlighted={enablePositionDragging && highlightDraggableItems}
             referenceMode={referenceMode}
             interactive={enablePositionDragging}
@@ -341,7 +388,17 @@ export function LayoutPreview({
         <Legend plan={plan} />
         <Stamp plan={plan} />
       </svg>
-    </div>
+      {selectedPositionId && (
+        <div className="absolute bottom-4 right-4 rounded-studio-control border border-studio-line bg-studio-shell/95 p-3 shadow-[0_16px_36px_rgba(0,0,0,0.28)] backdrop-blur">
+          <p className="text-[11px] font-semibold text-studio-ink">
+            Fine-tune selected position
+          </p>
+          <p className="mt-1 text-[10px] text-studio-muted">
+            Use arrow keys for 1-inch adjustments.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -460,7 +517,7 @@ function DragFeedback({ plan, draggingId }: { plan: FloorPlan; draggingId?: stri
 
   const insets = thickness;
   const strokeW = 6;
-  const color = "#c56a16";
+  const color = "var(--studio-action)";
   
   return (
     <g pointerEvents="none" opacity="0.4">
@@ -523,10 +580,12 @@ function Appliance({
   referenceMode,
   interactive,
   canvasWidth,
-  roomY
+  roomY,
+  onKeyboardMove
 }: {
   appliance: ApplianceShape;
   onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
+  onKeyboardMove?: (id: string, delta: number) => void;
   dragging?: boolean;
   highlighted?: boolean;
   referenceMode?: boolean;
@@ -573,13 +632,32 @@ function Appliance({
           ? (e) => onPointerDown(isHood ? "range" : appliance.key, appliance.wall, currentVal, e)
           : undefined
       }
-      style={{ 
-        cursor: interactive ? (dragging ? "grabbing" : "grab") : "default",
-        pointerEvents: "auto" 
-      }}
-      className={`transition-opacity duration-100 ${interactive ? "group" : ""} ${dragging ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
+      onKeyDown={interactive && onKeyboardMove ? (e) => {
+        let delta = 0;
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") delta = -1;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") delta = 1;
+        if (delta !== 0) {
+          e.preventDefault();
+          onKeyboardMove(isHood ? "range" : appliance.key, delta * (e.shiftKey ? 6 : 1));
+        }
+      } : undefined}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? `Move ${appliance.label}` : undefined}
+      data-position-object={isHood ? "range" : appliance.key}
+      className={`transition-opacity duration-100 ${interactive ? "group cursor-grab outline-none active:cursor-grabbing" : ""} ${dragging ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
       data-appliance-symbol={appliance.symbol}
     >
+      {interactive && (
+        <rect
+          x={appliance.x - 14}
+          y={appliance.y - 14}
+          width={appliance.w + 28}
+          height={appliance.h + 28}
+          fill="transparent"
+          pointerEvents="all"
+        />
+      )}
       {interactive && (
       <rect
         x={appliance.x - 4}
@@ -588,7 +666,7 @@ function Appliance({
         height={appliance.h + 8}
         rx="4"
         fill="none"
-        stroke="#c56a16"
+        stroke="var(--studio-action)"
         strokeWidth="2"
         className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
         pointerEvents="none"
@@ -602,7 +680,7 @@ function Appliance({
           height={appliance.h + 10}
           rx="5"
           fill="none"
-          stroke="#c56a16"
+          stroke="var(--studio-action)"
           strokeWidth="2.2"
           strokeDasharray="5 4"
           pointerEvents="none"
@@ -638,7 +716,7 @@ function Appliance({
       )}
       {interactive && appliance.label && (
         <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none drop-shadow-sm" style={{ pointerEvents: 'none' }}>
-          <rect x={tRectX} y={tRectY} width={tooltipW} height={tooltipH} rx="4" fill="#0f172a" />
+          <rect x={tRectX} y={tRectY} width={tooltipW} height={tooltipH} rx="4" fill="#c56a16" />
           <text x={tTextX} y={tTextY} textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="700" className="pointer-events-none tracking-wide">
             {appliance.label}
           </text>
@@ -944,10 +1022,12 @@ function Openings({
   draggingId,
   highlighted,
   referenceMode,
-  interactive
+  interactive,
+  onKeyboardMove
 }: {
   plan: FloorPlan;
   onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
+  onKeyboardMove?: (id: string, delta: number) => void;
   draggingId?: string;
   highlighted?: boolean;
   referenceMode?: boolean;
@@ -963,9 +1043,31 @@ function Openings({
               ? (e) => onPointerDown("window", plan.window!.wall, plan.window!.wall === "TOP" || plan.window!.wall === "BOTTOM" ? plan.window!.x : plan.window!.y, e)
               : undefined
           }
-          style={{ cursor: interactive ? (draggingId === "window" ? "grabbing" : "grab") : "default" }}
-          className={`transition-opacity duration-100 ${interactive ? "group" : ""} ${draggingId === "window" ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
+          onKeyDown={interactive && onKeyboardMove ? (e) => {
+            let delta = 0;
+            if (e.key === "ArrowLeft" || e.key === "ArrowUp") delta = -1;
+            if (e.key === "ArrowRight" || e.key === "ArrowDown") delta = 1;
+            if (delta !== 0) {
+              e.preventDefault();
+              onKeyboardMove("window", delta * (e.shiftKey ? 6 : 1));
+            }
+          } : undefined}
+          role={interactive ? "button" : undefined}
+          tabIndex={interactive ? 0 : undefined}
+          aria-label={interactive ? `Move window` : undefined}
+          data-position-object="window"
+          className={`transition-opacity duration-100 ${interactive ? "group cursor-grab outline-none active:cursor-grabbing" : ""} ${draggingId === "window" ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
         >
+          {interactive && (
+            <rect
+              x={plan.window!.x - 14}
+              y={plan.window!.y - 14}
+              width={plan.window!.w + 28}
+              height={plan.window!.h + 28}
+              fill="transparent"
+              pointerEvents="all"
+            />
+          )}
           {!referenceMode && interactive && (
           <rect
             x={plan.window.x - 4}
@@ -974,7 +1076,7 @@ function Openings({
             height={plan.window.h + 8}
             rx="4"
             fill="none"
-            stroke="#c56a16"
+            stroke="var(--studio-action)"
             strokeWidth="2"
             className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
             pointerEvents="none"
@@ -988,7 +1090,7 @@ function Openings({
               height={plan.window.h + 10}
               rx="5"
               fill="none"
-              stroke="#c56a16"
+              stroke="var(--studio-action)"
               strokeWidth="2.2"
               strokeDasharray="5 4"
               pointerEvents="none"
@@ -1053,7 +1155,7 @@ function Openings({
             height={plan.door.breakRect.h + 8}
             rx="4"
             fill="none"
-            stroke="#c56a16"
+            stroke="var(--studio-action)"
             strokeWidth="2"
             className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`}
             pointerEvents="none"
@@ -1067,7 +1169,7 @@ function Openings({
               height={plan.door.breakRect.h + 10}
               rx="5"
               fill="none"
-              stroke="#c56a16"
+              stroke="var(--studio-action)"
               strokeWidth="2.2"
               strokeDasharray="5 4"
               pointerEvents="none"
