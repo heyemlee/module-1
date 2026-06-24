@@ -182,4 +182,32 @@ describe("Round 1 full flow (per scenario)", () => {
     );
     expect(uShape.snapshot.floorPlan).not.toEqual(oneWall.snapshot.floorPlan);
   });
+
+  // Dialogue scenario 1 (docs/test-dialogues.md): "大平层", feet typed as inches.
+  test("oversized room dimensions are clamped + flagged, not turned into absurd geometry", () => {
+    const huge: Round1FormInput = {
+      ...withLayout("U_SHAPE"),
+      room: {
+        length: 12000,
+        width: 8000,
+        dimensionsKnown: true,
+        ceilingHeight: null,
+        obstacles: []
+      }
+    };
+    const { result, snapshot } = runFullFlow(huge);
+
+    // clamped to the realistic ceiling, never the raw 12000"/8000"
+    expect(snapshot.normalized.room.length.value).toBeLessThanOrEqual(600);
+    expect(snapshot.normalized.room.width.value).toBeLessThanOrEqual(600);
+    // surfaced as a confirmation item, not silently swallowed
+    expect(
+      result.confirmationItems.some(
+        (item) => item.code === "ROOM_DIMENSION_OUT_OF_RANGE"
+      )
+    ).toBe(true);
+    // and still a valid, frozen, rough snapshot
+    expect(snapshot.salesEstimateOnly).toBe(true);
+    expect(snapshot.dimensionConfidence).toBe("ROUGH");
+  });
 });
