@@ -21,4 +21,24 @@ describe("NewProjectForm", () => {
     expect(html).toContain("Project name");
     expect(html).toContain("Create project");
   });
+
+  test("uses a focused Studio form without a decorative preview", () => {
+    const html = renderToStaticMarkup(<NewProjectForm user={user} />);
+
+    expect(html).toContain("<h1");
+    expect(html).toContain("New project");
+    expect(html).toContain("Customer name");
+    expect(html).toContain("Project name");
+    expect(html).not.toContain("Project card preview");
+    expect(html).not.toContain(">customer<");
+    expect(html).not.toContain(">site<");
+  });
+
+  test("marks required fields and keeps optional fields secondary", () => {
+    const html = renderToStaticMarkup(<NewProjectForm user={user} />);
+
+    expect(html).toContain('required=""');
+    expect(html).toContain("Contact details");
+    expect(html).toContain("Optional");
+  });
 });

@@ -60,13 +60,14 @@ describe("showroom intake defaults", () => {
 
 
 
-  test("previews openings on the first step but defers appliances", () => {
+  test("opens the combined room and openings step without later-stage objects", () => {
     const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
 
     // Step 0 is "Room & Openings", so the plan previews openings as they are
     // entered. Appliances and dishwasher panels belong to later stages and
     // must not render yet.
-    expect(html).toContain('data-opening-symbol="');
+    expect(html).toContain('data-opening-symbol="window"');
+    expect(html).toContain('data-opening-symbol="door"');
     expect(html).not.toContain('data-appliance-symbol="');
     expect(html).not.toContain('data-dishwasher-panel="true"');
   });

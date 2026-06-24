@@ -26,7 +26,6 @@ export default async function ProjectRenderingsPage({
       project={project}
       renderings={renderings}
       colors={colors}
-      user={user}
     />
   );
 }

@@ -1,103 +1,144 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { ProjectSummary } from "@/server/platform/project-repository";
-import type { AuthUser } from "@/server/platform/types";
-
-
-const STATUS_PILL: Record<
-  ProjectSummary["status"],
-  { label: string; tone: "green" | "amber" | "muted" }
-> = {
-  INTAKE: { label: "Intake", tone: "muted" },
-  RENDERING_READY: { label: "Rendering ready", tone: "green" },
-  ROUND2_MEASURING: { label: "Round 2 measuring", tone: "green" },
-  ARCHIVED: { label: "Archived", tone: "muted" }
-};
-
-const PILL_TONE = {
-  green: "bg-[#e6f4ef] text-[#008060]",
-  amber: "bg-[#fff0dc] text-[#c56a16]",
-  muted: "bg-black/[0.05] text-[#6e6e73]"
-};
-
-const CARD_BASE =
-  "rounded-[18px] border border-[#d2d2d7] bg-white p-7 min-h-[290px]";
+import {
+  StudioEmptyState,
+  StudioPage,
+  StudioPageHeader,
+  StudioSection
+} from "./studio-page";
+import {
+  projectNextAction,
+  projectStatusPresentation
+} from "./project-presentation";
 
 export function ProjectDetail({
   project,
-  user
+  progress
 }: {
   project: ProjectSummary;
-  user: AuthUser;
+  progress: {
+    hasRound1State: boolean;
+    hasSnapshot: boolean;
+    latestRendering: {
+      id: string;
+      createdAt: string;
+    } | null;
+  };
 }) {
-  const isAdmin = user.role === "ADMIN";
-  const pill = STATUS_PILL[project.status];
+  const status = projectStatusPresentation(project.status);
+  const nextAction = projectNextAction({
+    hasRound1State: progress.hasRound1State,
+    hasSnapshot: progress.hasSnapshot,
+    hasRendering: Boolean(progress.latestRendering)
+  });
+  const nextHref =
+    nextAction.destination === "renderings"
+      ? `/projects/${project.id}/renderings`
+      : `/projects/${project.id}/round1`;
+
+  const metaPill = (
+    <span
+      data-project-status={project.status}
+      data-status-tone={status.tone}
+      className={cn(
+        "inline-flex min-h-7 items-center rounded-full px-2.5 text-[11px] font-semibold",
+        status.tone === "success" && "bg-studio-action/10 text-studio-action",
+        status.tone === "action" && "bg-studio-action text-studio-action-ink",
+        status.tone === "muted" && "bg-white/[0.05] text-studio-muted"
+      )}
+    >
+      {status.label}
+    </span>
+  );
 
   return (
-    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
+    <StudioPage>
+      <StudioPageHeader
+        title={project.projectName}
+        description={project.customerName}
+        meta={metaPill}
+        action={
+          <Button asChild size="lg">
+            <Link href={nextHref}>{nextAction.label}</Link>
+          </Button>
+        }
+      />
 
-      <div className="mx-auto max-w-[1320px] px-8 py-10">
-        <h1
-          className="text-[62px] font-bold leading-[1.05] tracking-[-0.01em] text-[#1d1d1f]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
-          {project.customerName}
-        </h1>
-        <p className="mt-3 text-[16px] text-[#6e6e73]">{project.projectName}</p>
-        <div className="mt-5">
-          <span
-            className={`inline-flex h-7 items-center rounded-full px-3 text-[11px] font-bold ${PILL_TONE[pill.tone]}`}
-          >
-            {pill.label}
-          </span>
-        </div>
-
-        <section className="mt-10 grid gap-5 md:grid-cols-3">
-          <Link
-            href={`/projects/${project.id}/round1`}
-            className={`${CARD_BASE} block transition-transform hover:-translate-y-1`}
-          >
-            <h2 className="text-[24px] font-bold text-[#1d1d1f]">Round 1 Intake</h2>
-            <p className="mt-3 max-w-[270px] text-[14px] leading-[21px] text-[#6e6e73]">
-              Showroom intake, rough layout, snapshot and rendering.
-            </p>
-            <PlanGlyph />
-          </Link>
-
-          <Link
-            href={`/projects/${project.id}/renderings`}
-            className={`${CARD_BASE} block transition-transform hover:-translate-y-1`}
-          >
-            <h2 className="text-[24px] font-bold text-[#1d1d1f]">Renderings</h2>
-            <div className="relative mt-5 h-[150px] overflow-hidden rounded-[14px] bg-[#e8e8ed]">
-              <div className="absolute left-5 top-5 h-[10px] w-[160px] rounded-full bg-white/45" />
+      <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
+        {/* Project Phases */}
+        <section>
+          <h2 className="text-[16px] font-semibold text-studio-ink">Project phases</h2>
+          <div className="mt-4 flex flex-col rounded-studio-panel border border-studio-line bg-studio-shell">
+            <Link
+              href={`/projects/${project.id}/round1`}
+              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-black/[0.02]"
+            >
+              <div>
+                <p className="text-[14px] font-medium text-studio-ink">Round 1</p>
+                <p className="mt-1 text-[13px] text-studio-muted">Showroom preferences and measurements</p>
+              </div>
+              <span className="text-[12px] font-medium text-studio-quiet">
+                {project.status === "INTAKE" ? "In progress" : "Completed"}
+              </span>
+            </Link>
+            <Link
+              href={`/projects/${project.id}/renderings`}
+              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-black/[0.02]"
+            >
+              <div>
+                <p className="text-[14px] font-medium text-studio-ink">Rendering</p>
+                <p className="mt-1 text-[13px] text-studio-muted">Concept visualizations</p>
+              </div>
+              <span className="text-[12px] font-medium text-studio-quiet">
+                {progress.latestRendering ? "Completed" : "Pending"}
+              </span>
+            </Link>
+            <div className="flex items-center justify-between px-6 py-4 opacity-60">
+              <div>
+                <p className="text-[14px] font-medium text-studio-ink">Round 2</p>
+                <p className="mt-1 text-[13px] text-studio-muted">Detailed measured design</p>
+              </div>
+              <span className="text-[12px] font-medium text-studio-quiet">
+                {project.status === "ROUND2_MEASURING" ? "In progress" : "Pending"}
+              </span>
             </div>
-            <p className="mt-3 text-[13px] font-bold text-[#1d1d1f]">latest concept</p>
-          </Link>
-
-          <div className={`${CARD_BASE} opacity-80`}>
-            <h2 className="text-[24px] font-bold text-[#1d1d1f]">Round 2</h2>
-            <p className="mt-3 max-w-[260px] text-[14px] leading-[21px] text-[#6e6e73]">
-              Reserved for detailed measured design.
-            </p>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-/** Decorative top-down plan thumbnail for the Round 1 card (matches the mock). */
-function PlanGlyph() {
-  return (
-    <div className="relative mt-6 h-[130px] rounded-[14px] border border-[#d2d2d7] bg-white">
-      <div className="absolute left-1/2 top-1/2 h-[68px] w-[216px] -translate-x-1/2 -translate-y-1/2 rounded border border-[#1d1d1f]">
-        <div className="absolute left-[8px] right-[8px] top-[8px] h-[12px] rounded-sm border border-[#1d1d1f] bg-[#f5f5f7]" />
-        <div className="absolute bottom-[8px] left-[8px] h-[22px] w-[16px] rounded-sm border border-[#1d1d1f] bg-[#f5f5f7]" />
-        <div className="absolute bottom-[8px] right-[8px] h-[22px] w-[16px] rounded-sm border border-[#1d1d1f] bg-[#f5f5f7]" />
-        <div className="absolute bottom-[10px] left-1/2 h-[20px] w-[48px] -translate-x-1/2 rounded border border-[#1d1d1f] bg-[#f5f5f7]" />
-        <div className="absolute left-1/2 top-[-5px] h-[10px] w-[68px] -translate-x-1/2 rounded-full border border-[#1d1d1f] bg-[#e8e8ed]" />
-        <div className="absolute bottom-[-5px] left-[16px] h-[10px] w-[64px] rounded-full border border-[#c56a16] bg-[#fff0dc]" />
+        {/* Latest Rendering */}
+        <section>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[16px] font-semibold text-studio-ink">Latest concept</h2>
+            {progress.latestRendering && (
+              <Button asChild variant="link" className="h-auto p-0 text-[13px]">
+                <Link href={`/projects/${project.id}/renderings`}>View history</Link>
+              </Button>
+            )}
+          </div>
+          <StudioSection className="mt-4 overflow-hidden">
+            {progress.latestRendering ? (
+              <Link
+                href={`/projects/${project.id}/renderings`}
+                className="group block"
+              >
+                <img
+                  src={`/api/projects/${project.id}/round1/renderings/${progress.latestRendering.id}/image`}
+                  alt="Latest concept rendering"
+                  className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+                />
+              </Link>
+            ) : (
+              <StudioEmptyState
+                title="No rendering available"
+                description="Complete the Round 1 intake and capture a snapshot to generate the first concept."
+                className="min-h-[300px]"
+              />
+            )}
+          </StudioSection>
+        </section>
       </div>
-    </div>
+    </StudioPage>
   );
 }
