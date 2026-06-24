@@ -1,5 +1,6 @@
-import { Button } from "@/components/ui/button";
 "use client";
+
+import { Button } from "@/components/ui/button";
 
 import { useMemo, useState } from "react";
 import { Info, Image as ImageIcon } from "lucide-react";
