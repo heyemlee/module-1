@@ -67,41 +67,42 @@ export function ProjectDetail({
       />
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:items-start">
-        {/* Workflow */}
+        {/* Project Phases */}
         <section>
-          <h2 className="text-[16px] font-semibold text-studio-ink">Workflow progress</h2>
-          <div className="mt-4 rounded-studio-panel border border-studio-line bg-studio-shell px-6 py-2">
-            <div className="flex items-center justify-between border-b border-studio-line py-4">
+          <h2 className="text-[16px] font-semibold text-studio-ink">Project phases</h2>
+          <div className="mt-4 flex flex-col rounded-studio-panel border border-studio-line bg-studio-shell">
+            <Link
+              href={`/projects/${project.id}/round1`}
+              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-black/[0.02]"
+            >
               <div>
-                <p className="text-[14px] font-medium text-studio-ink">Project created</p>
-                <p className="mt-1 text-[13px] text-studio-muted">Workspace initialized</p>
-              </div>
-              <span className="text-[12px] font-medium text-studio-quiet">Completed</span>
-            </div>
-            <div className="flex items-center justify-between border-b border-studio-line py-4">
-              <div>
-                <p className="text-[14px] font-medium text-studio-ink">Round 1 state</p>
-                <p className="mt-1 text-[13px] text-studio-muted">Customer preferences</p>
+                <p className="text-[14px] font-medium text-studio-ink">Round 1</p>
+                <p className="mt-1 text-[13px] text-studio-muted">Showroom preferences and measurements</p>
               </div>
               <span className="text-[12px] font-medium text-studio-quiet">
-                {progress.hasRound1State ? "Saved" : "Not started"}
+                {project.status === "INTAKE" ? "In progress" : "Completed"}
               </span>
-            </div>
-            <div className="flex items-center justify-between py-4">
+            </Link>
+            <Link
+              href={`/projects/${project.id}/renderings`}
+              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-black/[0.02]"
+            >
               <div>
-                <p className="text-[14px] font-medium text-studio-ink">Round 1 snapshot</p>
-                <p className="mt-1 text-[13px] text-studio-muted">Measured room envelope</p>
+                <p className="text-[14px] font-medium text-studio-ink">Rendering</p>
+                <p className="mt-1 text-[13px] text-studio-muted">Concept visualizations</p>
               </div>
               <span className="text-[12px] font-medium text-studio-quiet">
-                {progress.hasSnapshot ? "Captured" : "Not captured"}
+                {progress.latestRendering ? "Completed" : "Pending"}
               </span>
-            </div>
-          </div>
-
-          <div className="mt-6 flex items-center justify-between rounded-studio-panel border border-studio-line bg-studio-void px-6 py-4">
-            <div>
-              <p className="text-[14px] font-medium text-studio-ink">Round 2</p>
-              <p className="mt-1 text-[13px] text-studio-muted">Reserved for detailed measured design</p>
+            </Link>
+            <div className="flex items-center justify-between px-6 py-4 opacity-60">
+              <div>
+                <p className="text-[14px] font-medium text-studio-ink">Round 2</p>
+                <p className="mt-1 text-[13px] text-studio-muted">Detailed measured design</p>
+              </div>
+              <span className="text-[12px] font-medium text-studio-quiet">
+                {project.status === "ROUND2_MEASURING" ? "In progress" : "Pending"}
+              </span>
             </div>
           </div>
         </section>

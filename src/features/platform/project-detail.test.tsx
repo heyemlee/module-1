@@ -30,7 +30,7 @@ describe("ProjectDetail", () => {
 
     expect(html).toContain("Elm Street Kitchen");
     expect(html).toContain("Elena Park");
-    expect(html).toContain("Round 1 snapshot");
+    expect(html).toContain("Concept visualizations");
     expect(html).toContain("Generate rendering");
     expect(html).toContain('href="/projects/p1/round1"');
   });
