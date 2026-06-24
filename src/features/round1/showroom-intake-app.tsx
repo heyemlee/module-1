@@ -96,6 +96,15 @@ const EMPTY_PRELIMINARY_CABINET_ESTIMATE: PreliminaryCabinetEstimate = {
   notForProduction: true
 };
 
+type Round1DraftPayload = {
+  showroomForm: Round1FormInput;
+  positionOverrides: PositionOverrides;
+  fixedPositionsConfirmed: boolean;
+  cabinetFillGenerated: boolean;
+  currentStep: number;
+  maxAccessibleStep: number;
+};
+
 export function shouldApplySnapshotRestore({
   cancelled,
   hasSavedSnapshot,
@@ -184,10 +193,15 @@ export function ShowroomIntakeApp({
   const [cabinetColorsError, setCabinetColorsError] = useState(false);
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
+  const [draftPersistState, setDraftPersistState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [draftLoaded, setDraftLoaded] = useState(!projectId);
   const [preferencesLocked, setPreferencesLocked] = useState(false);
   const [hasRenderedConcept, setHasRenderedConcept] = useState(false);
   const projectIdRef = useRef<string | null>(null);
   const prefsSaveControllerRef = useRef<AbortController | null>(null);
+  const draftSaveControllerRef = useRef<AbortController | null>(null);
+  const currentDraftPayloadRef = useRef<Round1DraftPayload | null>(null);
+  const draftDirtyRef = useRef(false);
   const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
   const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
@@ -217,6 +231,8 @@ export function ShowroomIntakeApp({
   const updatePositionOverrides = useCallback<Dispatch<SetStateAction<PositionOverrides>>>(
     (update) => {
       localSessionChangedRef.current = true;
+      draftDirtyRef.current = true;
+      setDraftPersistState("idle");
       setPositionOverrides(update);
       setFixedPositionsConfirmed(false);
       setCabinetFillGenerated(false);
@@ -231,6 +247,8 @@ export function ShowroomIntakeApp({
   // regenerated before the snapshot is valid again.
   const updateForm = useCallback((next: Round1FormInput) => {
     localSessionChangedRef.current = true;
+    draftDirtyRef.current = true;
+    setDraftPersistState("idle");
     setForm(next);
     setCabinetFillGenerated(false);
     setSnapshot(null);
@@ -240,6 +258,8 @@ export function ShowroomIntakeApp({
   const updateRenderingPreferencesForm = useCallback((next: Round1FormInput) => {
     const nextState = renderingPreferencesStateAfterChange(next);
     localSessionChangedRef.current = true;
+    draftDirtyRef.current = true;
+    setDraftPersistState("idle");
     setPreferencesLocked(nextState.preferencesLocked);
     setHasRenderedConcept(false);
     setForm(nextState.form);
@@ -261,7 +281,9 @@ export function ShowroomIntakeApp({
             showroomForm: next,
             positionOverrides,
             fixedPositionsConfirmed,
-            cabinetFillGenerated
+            cabinetFillGenerated,
+            currentStep: step,
+            maxAccessibleStep
           }),
           signal: controller.signal
         });
@@ -278,8 +300,10 @@ export function ShowroomIntakeApp({
   }, [
     cabinetFillGenerated,
     fixedPositionsConfirmed,
+    maxAccessibleStep,
     positionOverrides,
-    projectId
+    projectId,
+    step
   ]);
 
   // Persists the frozen snapshot to the server repository. Lazily creates the
@@ -300,7 +324,9 @@ export function ShowroomIntakeApp({
           showroomForm: snap.showroomForm,
           positionOverrides: snap.positionOverrides,
           fixedPositionsConfirmed: true,
-          cabinetFillGenerated: true
+          cabinetFillGenerated: true,
+          currentStep: step,
+          maxAccessibleStep
         })
       });
       if (!savedState.ok) throw new Error("Unable to save Round 1 state");
@@ -317,7 +343,7 @@ export function ShowroomIntakeApp({
       // being stuck with rendering disabled.
       setPersistState("error");
     }
-  }, [projectId]);
+  }, [maxAccessibleStep, projectId, step]);
 
   // Re-run the snapshot save after a transient failure without rebuilding it, so
   // a network blip on save doesn't block rendering or force a destructive redo.
@@ -401,12 +427,93 @@ export function ShowroomIntakeApp({
   const preferencesComplete = renderingPreferencesComplete(cabinetColors, form);
   const canRenderConcept = persistState === "saved" && preferencesComplete;
   const nextAction = NEXT_ACTIONS[step] ?? "";
+  const draftPayload = useMemo<Round1DraftPayload>(() => ({
+    showroomForm: form,
+    positionOverrides,
+    fixedPositionsConfirmed,
+    cabinetFillGenerated,
+    currentStep: step,
+    maxAccessibleStep
+  }), [
+    cabinetFillGenerated,
+    fixedPositionsConfirmed,
+    form,
+    maxAccessibleStep,
+    positionOverrides,
+    step
+  ]);
+
+  useEffect(() => {
+    currentDraftPayloadRef.current = draftPayload;
+  }, [draftPayload]);
+
+  const saveDraftPayload = useCallback(async (
+    payload: Round1DraftPayload,
+    options?: { signal?: AbortSignal; keepalive?: boolean }
+  ) => {
+    if (!projectId) return;
+    const response = await fetch(`/api/projects/${projectId}/round1/state`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: options?.signal,
+      keepalive: options?.keepalive
+    });
+    if (!response.ok) throw new Error("Unable to save Round 1 draft");
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || !localSessionChangedRef.current || !draftDirtyRef.current) {
+      return;
+    }
+
+    setDraftPersistState("saving");
+    draftSaveControllerRef.current?.abort();
+    const controller = new AbortController();
+    draftSaveControllerRef.current = controller;
+    const timeout = setTimeout(() => {
+      void (async () => {
+        try {
+          await saveDraftPayload(draftPayload, { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          draftDirtyRef.current = false;
+          setDraftPersistState("saved");
+        } catch (error) {
+          if (error instanceof Error && error.name === "AbortError") return;
+          setDraftPersistState("error");
+        }
+      })();
+    }, 700);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [draftPayload, projectId, saveDraftPayload]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const flushDraft = () => {
+      const payload = currentDraftPayloadRef.current;
+      if (!payload || !draftDirtyRef.current) return;
+      void saveDraftPayload(payload, { keepalive: true }).catch(() => {});
+    };
+    window.addEventListener("pagehide", flushDraft);
+    window.addEventListener("visibilitychange", flushDraft);
+    return () => {
+      flushDraft();
+      window.removeEventListener("pagehide", flushDraft);
+      window.removeEventListener("visibilitychange", flushDraft);
+    };
+  }, [projectId, saveDraftPayload]);
 
   // `Generate Cabinet Fill` is the authoritative snapshot point for Module 1.
   // The estimate is computed inline (not read from the gated memo, which is
   // still empty at click time) so the snapshot freezes the exact rough fill.
   const handleGenerateCabinetFill = useCallback(() => {
     localSessionChangedRef.current = true;
+    draftDirtyRef.current = true;
+    setDraftPersistState("idle");
     const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
     const snapshotConfirmationItems = [
       ...result.confirmationItems,
@@ -461,7 +568,9 @@ export function ShowroomIntakeApp({
           showroomForm: form,
           positionOverrides,
           fixedPositionsConfirmed,
-          cabinetFillGenerated
+          cabinetFillGenerated,
+          currentStep: step,
+          maxAccessibleStep
         })
       });
       if (!savedState.ok) {
@@ -529,11 +638,15 @@ export function ShowroomIntakeApp({
     snapshot,
     positionOverrides,
     fixedPositionsConfirmed,
-    cabinetFillGenerated
+    cabinetFillGenerated,
+    maxAccessibleStep,
+    step
   ]);
 
   const handleResetPositions = useCallback(() => {
     localSessionChangedRef.current = true;
+    draftDirtyRef.current = true;
+    setDraftPersistState("idle");
     setPositionOverrides({});
     setFixedPositionsConfirmed(false);
     setCabinetFillGenerated(false);
@@ -552,6 +665,7 @@ export function ShowroomIntakeApp({
   useEffect(() => {
     if (!projectId) return;
     projectIdRef.current = projectId;
+    setDraftLoaded(false);
     let cancelled = false;
 
     (async () => {
@@ -565,6 +679,8 @@ export function ShowroomIntakeApp({
               positionOverrides: PositionOverrides;
               fixedPositionsConfirmed: boolean;
               cabinetFillGenerated: boolean;
+              currentStep?: number;
+              maxAccessibleStep?: number;
             }
           | null;
         const latestSnapshot = json.latestSnapshot?.snapshot as Round1Snapshot | undefined;
@@ -574,6 +690,18 @@ export function ShowroomIntakeApp({
           setPositionOverrides(savedState.positionOverrides);
           setFixedPositionsConfirmed(savedState.fixedPositionsConfirmed);
           setCabinetFillGenerated(savedState.cabinetFillGenerated);
+          const restoredMaxStep = Math.min(
+            SHOWROOM_STEPS.length - 1,
+            Math.max(0, savedState.maxAccessibleStep ?? savedState.currentStep ?? 0)
+          );
+          setMaxAccessibleStep(restoredMaxStep);
+          setStep(
+            Math.min(
+              restoredMaxStep,
+              Math.max(0, savedState.currentStep ?? 0)
+            )
+          );
+          setDraftPersistState("saved");
         }
         if (latestSnapshot) {
           setSnapshot(latestSnapshot);
@@ -590,6 +718,7 @@ export function ShowroomIntakeApp({
       } catch {
         setPersistState("error");
       }
+      if (!cancelled) setDraftLoaded(true);
 
       try {
         const renderRes = await fetch(`/api/projects/${projectId}/round1/renderings`);
@@ -620,8 +749,8 @@ export function ShowroomIntakeApp({
   useEffect(() => {
     const hasUnsavedEdits =
       localSessionChangedRef.current &&
-      persistState !== "saved" &&
-      persistState !== "saving";
+      draftPersistState !== "saved" &&
+      draftPersistState !== "saving";
     if (!hasUnsavedEdits) return;
     const handler = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -629,10 +758,12 @@ export function ShowroomIntakeApp({
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [persistState, cabinetFillGenerated, form, positionOverrides]);
+  }, [draftPersistState, cabinetFillGenerated, form, positionOverrides]);
 
   const goToNextStep = useCallback(() => {
     localSessionChangedRef.current = true;
+    draftDirtyRef.current = true;
+    setDraftPersistState("idle");
     if (step === ADJUST_POSITIONS_STEP_INDEX && !fixedPositionsConfirmed) {
       setFixedPositionsConfirmed(true);
     }
@@ -644,6 +775,8 @@ export function ShowroomIntakeApp({
   const goToStep = useCallback((index: number) => {
     if (index > maxAccessibleStep) return;
     localSessionChangedRef.current = true;
+    draftDirtyRef.current = true;
+    setDraftPersistState("idle");
     setStep(index);
   }, [maxAccessibleStep]);
 
@@ -662,6 +795,17 @@ export function ShowroomIntakeApp({
       }
     );
   }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
+
+  if (!draftLoaded) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] text-[var(--app-ink)]">
+        <div className="text-center">
+          <div className="mx-auto size-8 animate-spin rounded-full border-2 border-[#d2d2d7] border-t-[#1d1d1f]" />
+          <p className="mt-3 text-[13px] font-semibold text-[#6e6e73]">Loading draft...</p>
+        </div>
+      </main>
+    );
+  }
 
   const renderSidebar = () => (
     <aside className="round1-animate app-panel-flat h-fit p-4">
@@ -770,6 +914,8 @@ export function ShowroomIntakeApp({
                 type="button"
                 onClick={() => {
                   localSessionChangedRef.current = true;
+                  draftDirtyRef.current = true;
+                  setDraftPersistState("idle");
                   setStep(Math.max(0, step - 1));
                 }}
                 disabled={step === 0}
@@ -818,6 +964,8 @@ export function ShowroomIntakeApp({
               type="button"
               onClick={() => {
                 localSessionChangedRef.current = true;
+                draftDirtyRef.current = true;
+                setDraftPersistState("idle");
                 setStep(Math.max(0, step - 1));
               }}
               disabled={step === 0}

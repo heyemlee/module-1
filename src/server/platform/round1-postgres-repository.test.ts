@@ -28,11 +28,15 @@ describe("round1 postgres mappers", () => {
       position_overrides_json: { sink: { wall: "TOP", center: 40 } },
       fixed_positions_confirmed: true,
       cabinet_fill_generated: false,
+      current_step: 3,
+      max_accessible_step: 4,
       updated_at: new Date("2026-06-19T00:00:00.000Z")
     });
     expect(state.projectId).toBe("p1");
     expect(state.positionOverrides).toEqual({ sink: { wall: "TOP", center: 40 } });
     expect(state.fixedPositionsConfirmed).toBe(true);
+    expect(state.currentStep).toBe(3);
+    expect(state.maxAccessibleStep).toBe(4);
   });
 
   test("maps rendering preference metadata from history rows", () => {

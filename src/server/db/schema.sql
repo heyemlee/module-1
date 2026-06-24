@@ -74,9 +74,14 @@ CREATE TABLE IF NOT EXISTS round1_states (
   position_overrides_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   fixed_positions_confirmed BOOLEAN NOT NULL DEFAULT false,
   cabinet_fill_generated BOOLEAN NOT NULL DEFAULT false,
+  current_step INTEGER NOT NULL DEFAULT 0,
+  max_accessible_step INTEGER NOT NULL DEFAULT 0,
   updated_by_user_id UUID NOT NULL REFERENCES users(id),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE round1_states ADD COLUMN IF NOT EXISTS current_step INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE round1_states ADD COLUMN IF NOT EXISTS max_accessible_step INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS round1_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
