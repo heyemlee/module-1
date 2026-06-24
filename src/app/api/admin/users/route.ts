@@ -6,6 +6,7 @@ import {
   requireUser,
   UnauthorizedError
 } from "@/server/platform/auth-service";
+import { serverError } from "@/server/platform/api-errors";
 import {
   AccountAlreadyExistsError,
   createCompanyUser,
@@ -36,7 +37,7 @@ export async function GET() {
     requireRole(user, ["ADMIN"]);
     return NextResponse.json({ users: await listCompanyUsers(user.companyId) });
   } catch (error) {
-    return authError(error) ?? NextResponse.json({ error: "Unable to list users" }, { status: 500 });
+    return authError(error) ?? serverError("admin/users:list", error, "Unable to list users");
   }
 }
 
@@ -62,6 +63,6 @@ export async function POST(request: Request) {
     if (error instanceof AccountAlreadyExistsError) {
       return NextResponse.json({ error: "Account already in use" }, { status: 409 });
     }
-    return NextResponse.json({ error: "Unable to create user" }, { status: 500 });
+    return serverError("admin/users:create", error, "Unable to create user");
   }
 }

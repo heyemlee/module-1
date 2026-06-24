@@ -14,7 +14,7 @@ type UserRow = {
   monthly_render_quota: number;
 };
 
-function mapUser(row: UserRow): AuthUser {
+function mapUser(row: Omit<UserRow, "password_hash">): AuthUser {
   return {
     id: row.id,
     companyId: row.company_id,
@@ -46,7 +46,14 @@ export async function findUserForLogin(identifier: string) {
 // Trade-off: a role change or disable lands up to TTL_MS later; logout evicts
 // immediately via deleteSession. Bounded so a flood of bad session ids can't
 // grow it without limit.
-const SESSION_CACHE_TTL_MS = 30_000;
+//
+// ponytail: this cache (and its eviction) is per-instance. On a single instance
+// that's correct. If you scale horizontally, an admin disabling a user or
+// downgrading a role only evicts the handling pod's cache — other pods keep
+// serving the stale user for up to the TTL. Lower SESSION_CACHE_TTL_MS to
+// shrink that window, or move the cache to a shared store (Redis) for instant
+// cross-instance revocation.
+const SESSION_CACHE_TTL_MS = Number(process.env.SESSION_CACHE_TTL_MS) || 30_000;
 const SESSION_CACHE_MAX = 5_000;
 const sessionUserCache = new Map<string, { user: AuthUser; expiresAtMs: number }>();
 
@@ -58,8 +65,11 @@ export async function getUserBySession(sessionId: string) {
   const cached = sessionUserCache.get(sessionId);
   if (cached && cached.expiresAtMs > Date.now()) return cached.user;
 
-  const result = await query<UserRow>(
-    `SELECT users.id, users.company_id, users.account, users.email, users.name, users.password_hash, users.role, users.disabled_at, users.monthly_render_quota
+  // No password_hash here: session resolution never needs it, so don't pull the
+  // secret into memory on every page navigation. monthly_render_quota IS needed —
+  // mapUser maps it into AuthUser for the rendering quota check.
+  const result = await query<Omit<UserRow, "password_hash">>(
+    `SELECT users.id, users.company_id, users.account, users.email, users.name, users.role, users.disabled_at, users.monthly_render_quota
      FROM sessions
      JOIN users ON users.id = sessions.user_id
      WHERE sessions.id = $1 AND sessions.expires_at > now()

@@ -9,13 +9,16 @@ export const SESSION_COOKIE = "abc_module_session";
 export class UnauthorizedError extends Error {}
 export class ForbiddenError extends Error {}
 
+// A valid-shaped scrypt hash (32-hex salt + 128-hex key, matching the real
+// KEY_LENGTH) to verify against when the account is unknown or disabled. This
+// makes login spend the same scrypt work in every branch, so response time can't
+// be used to enumerate which accounts exist.
+const DUMMY_PASSWORD_HASH = `scrypt:${"0".repeat(32)}:${"0".repeat(128)}`;
+
 export async function loginWithPassword(account: string, password: string) {
   const record = await findUserForLogin(account);
-  if (!record || record.user.disabledAt) {
-    throw new UnauthorizedError("Invalid account or password");
-  }
-  const ok = await verifyPassword(password, record.passwordHash);
-  if (!ok) {
+  const passwordOk = await verifyPassword(password, record?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  if (!record || record.user.disabledAt || !passwordOk) {
     throw new UnauthorizedError("Invalid account or password");
   }
   return createSession(record.user.id);

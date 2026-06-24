@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole, requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import {
   CompanyUserNotFoundError,
   setCompanyUserDisabled
@@ -44,6 +44,6 @@ export async function PATCH(
     if (error instanceof CompanyUserNotFoundError) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-    return NextResponse.json({ error: "Unable to update user status" }, { status: 500 });
+    return serverError("admin/user-status", error, "Unable to update user status");
   }
 }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { round1FormSchema } from "@/domain/round1";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import { getLatestRound1Snapshot, getRound1State, saveRound1State } from "@/server/platform/round1-postgres-repository";
 
@@ -27,10 +27,7 @@ export async function GET(
     const latestSnapshot = await getLatestRound1Snapshot(projectId);
     return NextResponse.json({ state, latestSnapshot });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to load Round 1 state" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("round1-state:load", error, "Unable to load Round 1 state");
   }
 }
 
@@ -62,6 +59,6 @@ export async function PUT(
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: "Unable to save Round 1 state" }, { status: 500 });
+    return serverError("round1-state:save", error, "Unable to save Round 1 state");
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ForbiddenError, requireRole, requireUser, UnauthorizedError } from "@/server/platform/auth-service";
 import { createCabinetColor, listCabinetColors } from "@/server/platform/cabinet-color-repository";
+import { serverError } from "@/server/platform/api-errors";
 import { parseCabinetColorRequest } from "./validation";
 
 function authError(error: unknown) {
@@ -20,7 +21,7 @@ export async function GET() {
     requireRole(user, ["ADMIN"]);
     return NextResponse.json({ colors: await listCabinetColors(user.companyId, false) });
   } catch (error) {
-    return authError(error) ?? NextResponse.json({ error: "Unable to list cabinet colors" }, { status: 500 });
+    return authError(error) ?? serverError("admin/cabinet-colors:list", error, "Unable to list cabinet colors");
   }
 }
 
@@ -36,6 +37,6 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid cabinet color request", issues: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ error: "Unable to create cabinet color" }, { status: 500 });
+    return serverError("admin/cabinet-colors:create", error, "Unable to create cabinet color");
   }
 }
