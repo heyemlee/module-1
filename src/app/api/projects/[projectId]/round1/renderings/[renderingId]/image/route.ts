@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import { getRenderingImage } from "@/server/platform/round1-postgres-repository";
 
@@ -31,9 +31,6 @@ export async function GET(
       }
     });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to load rendering image" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("rendering-image", error, "Unable to load rendering image");
   }
 }

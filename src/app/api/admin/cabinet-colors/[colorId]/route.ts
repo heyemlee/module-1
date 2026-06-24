@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ForbiddenError, requireRole, requireUser, UnauthorizedError } from "@/server/platform/auth-service";
 import { cabinetColorInputSchema, updateCabinetColor } from "@/server/platform/cabinet-color-repository";
+import { serverError } from "@/server/platform/api-errors";
 
 function authError(error: unknown) {
   if (error instanceof UnauthorizedError) {
@@ -31,6 +32,6 @@ export async function PUT(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid cabinet color request", issues: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ error: "Unable to update cabinet color" }, { status: 500 });
+    return serverError("admin/cabinet-color:update", error, "Unable to update cabinet color");
   }
 }

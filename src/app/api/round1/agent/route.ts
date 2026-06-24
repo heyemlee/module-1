@@ -4,7 +4,9 @@ import { round1FormSchema } from "@/domain/round1";
 import { runRound1AgentTurn } from "@/server/round1/agent-service";
 import { LLMProviderNotConfiguredError } from "@/server/llm/provider";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import type { AuthUser } from "@/server/platform/types";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
+import { rateLimit } from "@/server/platform/rate-limit";
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(500),
@@ -26,12 +28,19 @@ const requestSchema = z.object({
 export async function POST(request: Request) {
   // The agent drives a (potentially paid) LLM turn, so it must be authenticated —
   // it is only ever called from the authed Round 1 page.
+  let user: AuthUser;
   try {
-    await requireUser();
+    user = await requireUser();
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "AGENT_ERROR" }, { status: 500 })
+    return authErrorResponse(error) ?? serverError("round1/agent", error, "AGENT_ERROR");
+  }
+
+  // Per-user throttle so a runaway client (or abuse) can't rack up paid LLM calls.
+  const limit = rateLimit(`agent:${user.id}`, 30, 60_000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
     );
   }
 

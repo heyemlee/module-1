@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import { saveRound1Snapshot } from "@/server/platform/round1-postgres-repository";
 
@@ -39,6 +39,6 @@ export async function PUT(
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: "Unable to save Round 1 snapshot" }, { status: 500 });
+    return serverError("round1-snapshot:save", error, "Unable to save Round 1 snapshot");
   }
 }

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { createOpenAIImageAdapterFromEnv } from "@/infrastructure/image/openai-rest-image-client";
 import { generateRound1Rendering } from "@/server/round1/rendering-service";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
+import { rateLimit } from "@/server/platform/rate-limit";
 import type { AuthUser } from "@/server/platform/types";
 import {
   getCabinetColor,
@@ -32,10 +33,7 @@ export async function GET(
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     return NextResponse.json({ renderings: await listRenderings(projectId) });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to list renderings" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("renderings:list", error, "Unable to list renderings");
   }
 }
 
@@ -47,11 +45,18 @@ export async function POST(
   try {
     user = await requireUser();
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to generate Round 1 concept rendering" }, { status: 500 })
+    return authErrorResponse(error) ?? serverError("renderings:create", error, "Unable to generate Round 1 concept rendering");
+  }
+
+  // Per-user throttle on the expensive image-generation call.
+  const limit = rateLimit(`rendering:${user.id}`, 20, 60_000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
     );
   }
+
   const { projectId } = await params;
   const project = await getProjectForUser(projectId, user);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });

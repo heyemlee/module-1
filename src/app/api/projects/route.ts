@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { createCustomerProject, listProjectsForUser } from "@/server/platform/project-repository";
 
 const createSchema = z.object({
@@ -19,10 +19,7 @@ export async function GET(request: Request) {
     const projects = await listProjectsForUser(user, searchParams.get("q") ?? "");
     return NextResponse.json({ projects });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to list projects" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("projects:list", error, "Unable to list projects");
   }
 }
 
@@ -48,6 +45,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: "Unable to create project" }, { status: 500 });
+    return serverError("projects:create", error, "Unable to create project");
   }
 }

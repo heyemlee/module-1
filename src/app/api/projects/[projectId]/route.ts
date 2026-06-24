@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole, requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { getProjectForUser, deleteProjectForUser } from "@/server/platform/project-repository";
 
 export async function GET(
@@ -14,10 +14,7 @@ export async function GET(
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     return NextResponse.json({ project });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to load project" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("project:load", error, "Unable to load project");
   }
 }
 
@@ -35,9 +32,6 @@ export async function DELETE(
     }
     return NextResponse.json({ success: true });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to delete project" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("project:delete", error, "Unable to delete project");
   }
 }

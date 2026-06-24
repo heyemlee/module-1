@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/platform/auth-service";
-import { authErrorResponse } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { listCabinetColors } from "@/server/platform/cabinet-color-repository";
 
 export async function GET() {
@@ -12,9 +12,6 @@ export async function GET() {
       })
     });
   } catch (error) {
-    return (
-      authErrorResponse(error) ??
-      NextResponse.json({ error: "Unable to list cabinet colors" }, { status: 500 })
-    );
+    return authErrorResponse(error) ?? serverError("cabinet-colors:list", error, "Unable to list cabinet colors");
   }
 }

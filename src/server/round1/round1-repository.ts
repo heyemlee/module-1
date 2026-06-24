@@ -1,3 +1,10 @@
+// LEGACY (effectively test-only): the file-backed / in-memory Round1Repository
+// in this module is no longer used by any route or page. Live persistence is the
+// Postgres repository in `src/server/platform/round1-postgres-repository.ts`.
+// This file is kept only for (a) the shared `Round1ProjectRendering` type that
+// repo re-uses and (b) its own unit tests.
+// ponytail: delete once the type is relocated and the test retired — left as-is
+// now to avoid a wider refactor for no behavior change.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
