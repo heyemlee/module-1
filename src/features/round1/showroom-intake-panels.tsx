@@ -8,6 +8,12 @@ import {
   type Round1Snapshot
 } from "./snapshot";
 import { DownloadButton } from "@/features/platform/download-button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle
+} from "@/components/ui/dialog";
 import "./ghost-loader.css";
 
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
@@ -133,6 +139,10 @@ export function RenderingControls({
   const index = Math.min(currentIndex, Math.max(0, renderings.length - 1));
   const currentRendering = renderings[index];
 
+  // Newest rendering is at index 0, so "previous" walks toward older (higher index).
+  const showPrev = () => setCurrentIndex((i) => Math.min(renderings.length - 1, i + 1));
+  const showNext = () => setCurrentIndex((i) => Math.max(0, i - 1));
+
   return (
     <div className="space-y-2">
       {busy ? (
@@ -158,12 +168,18 @@ export function RenderingControls({
       {currentRendering && (
         <figure className="image-generation-preview mt-3 space-y-1 relative group">
           <div className="relative flex flex-col gap-4">
-            <img
-              src={currentRendering.url}
-              alt="Round 1 concept rendering"
-              className="aspect-video w-full cursor-pointer rounded-lg object-cover transition hover:opacity-90"
+            <button
+              type="button"
               onClick={() => setIsFullscreen(true)}
-            />
+              aria-label="Enlarge concept rendering"
+              className="block w-full cursor-zoom-in overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-ink)] focus-visible:ring-offset-2"
+            >
+              <img
+                src={currentRendering.url}
+                alt="Round 1 concept rendering"
+                className="aspect-video w-full rounded-lg object-cover transition hover:opacity-90"
+              />
+            </button>
             {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
               <div className="absolute top-3 left-3 rounded bg-black/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm pointer-events-none">
                 {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
@@ -181,7 +197,7 @@ export function RenderingControls({
                 <button
                   type="button"
                   className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100 disabled:hidden"
-                  onClick={() => setCurrentIndex((i) => Math.min(renderings.length - 1, i + 1))}
+                  onClick={showPrev}
                   disabled={index === renderings.length - 1}
                   aria-label="Previous rendering"
                 >
@@ -192,7 +208,7 @@ export function RenderingControls({
                 <button
                   type="button"
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100 disabled:hidden"
-                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                  onClick={showNext}
                   disabled={index === 0}
                   aria-label="Next rendering"
                 >
@@ -214,67 +230,73 @@ export function RenderingControls({
         </figure>
       )}
 
-      {isFullscreen && currentRendering && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={() => setIsFullscreen(false)}
+      <Dialog open={isFullscreen && Boolean(currentRendering)} onOpenChange={setIsFullscreen}>
+        <DialogContent
+          className="max-h-[95vh] max-w-[95vw]"
+          onKeyDown={(e) => {
+            if (renderings.length <= 1) return;
+            if (e.key === "ArrowLeft") showPrev();
+            else if (e.key === "ArrowRight") showNext();
+          }}
         >
-          <div className="relative max-h-[95vh] max-w-[95vw]">
-            <img 
-              src={currentRendering.url} 
-              alt="Fullscreen rendering" 
-              className="max-h-[95vh] max-w-[95vw] rounded-lg object-contain shadow-2xl" 
-            />
-            {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
-              <div className="absolute top-4 left-4 rounded-md bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md pointer-events-none">
-                {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
-              </div>
-            )}
-            <button 
-              className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white transition hover:bg-black/70"
-              onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-              aria-label="Close fullscreen"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-            <div className="absolute bottom-4 right-4">
-              <DownloadButton
-                href={currentRendering.url}
-                fileName="concept-rendering.png"
+          <DialogTitle className="sr-only">Concept rendering preview</DialogTitle>
+          {currentRendering && (
+            <>
+              <img
+                src={currentRendering.url}
+                alt="Fullscreen rendering"
+                className="max-h-[95vh] max-w-[95vw] rounded-lg object-contain shadow-2xl"
               />
-            </div>
-            {renderings.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/80 disabled:hidden"
-                  onClick={(e) => { e.stopPropagation(); setCurrentIndex((i) => Math.min(renderings.length - 1, i + 1)); }}
-                  disabled={index === renderings.length - 1}
-                  aria-label="Previous rendering"
-                >
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/80 disabled:hidden"
-                  onClick={(e) => { e.stopPropagation(); setCurrentIndex((i) => Math.max(0, i - 1)); }}
-                  disabled={index === 0}
-                  aria-label="Next rendering"
-                >
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+              {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
+                <div className="absolute top-4 left-4 rounded-md bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md pointer-events-none">
+                  {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
+                </div>
+              )}
+              <DialogClose
+                className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white transition hover:bg-black/70"
+                aria-label="Close fullscreen"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </DialogClose>
+              <div className="absolute bottom-4 right-4">
+                <DownloadButton
+                  href={currentRendering.url}
+                  fileName="concept-rendering.png"
+                />
+              </div>
+              {renderings.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/80 disabled:hidden"
+                    onClick={showPrev}
+                    disabled={index === renderings.length - 1}
+                    aria-label="Previous rendering"
+                  >
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition hover:bg-black/80 disabled:hidden"
+                    onClick={showNext}
+                    disabled={index === 0}
+                    aria-label="Next rendering"
+                  >
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

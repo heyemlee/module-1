@@ -49,6 +49,12 @@ import {
   type SnapshotPersistState
 } from "./showroom-intake-panels";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 gsap.registerPlugin(useGSAP);
 
@@ -1047,34 +1053,35 @@ export function ShowroomIntakeApp({
       )}
       </div>
 
-      {showAdjustPositionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d1f]/40 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#d2d2d7] bg-white p-6 shadow-xl">
-            <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
-              Adjust Positions
-            </p>
-            <h2 className="mt-2 text-lg font-bold text-[#1d1d1f]">
-              Door, window, and appliance locations can be dragged on the plan.
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
-              Drag these rough positions first, then confirm them to generate
-              the preliminary cabinet fill around those constraints.
-            </p>
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAdjustPositionsModal(false);
-                  startDraggableHighlightCue();
-                }}
-                className="rounded-full bg-[#1d1d1f] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Got It
-              </button>
-            </div>
+      <Dialog open={showAdjustPositionsModal} onOpenChange={setShowAdjustPositionsModal}>
+        <DialogContent
+          overlayClassName="bg-[#1d1d1f]/40 backdrop-blur-none"
+          className="w-[calc(100vw-2rem)] max-w-md rounded-2xl border border-[#d2d2d7] bg-white p-6 shadow-xl"
+        >
+          <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
+            Adjust Positions
+          </p>
+          <DialogTitle className="mt-2 text-lg font-bold text-[#1d1d1f]">
+            Door, window, and appliance locations can be dragged on the plan.
+          </DialogTitle>
+          <DialogDescription className="mt-3 text-sm leading-6 text-[#6e6e73]">
+            Drag these rough positions first, then confirm them to generate
+            the preliminary cabinet fill around those constraints.
+          </DialogDescription>
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAdjustPositionsModal(false);
+                startDraggableHighlightCue();
+              }}
+              className="rounded-full bg-[#1d1d1f] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              Got It
+            </button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
