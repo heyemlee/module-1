@@ -12,6 +12,27 @@ function readRootVariables(css: string) {
   );
 }
 
+function readStyleRule(css: string, selector: string) {
+  const declarations: Record<string, string> = {};
+
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)}/g)) {
+    const selectors = match[1].split(",").map((value) => value.trim());
+
+    if (selectors.includes(selector)) {
+      Object.assign(
+        declarations,
+        Object.fromEntries(
+          [...match[2].matchAll(/([\w-]+):\s*([^;]+);/g)].map(
+            (declaration) => [declaration[1], declaration[2].trim()]
+          )
+        )
+      );
+    }
+  }
+
+  return declarations;
+}
+
 function relativeLuminance(hex: string) {
   const channels = hex
     .match(/[a-f\d]{2}/gi)!
@@ -79,6 +100,29 @@ describe("Studio design tokens", () => {
       "--app-red-soft": "#fff1ef",
       "--app-radius": "8px",
       "--app-shadow": "0 16px 45px rgba(0, 0, 0, 0.08)"
+    });
+  });
+
+  test("keeps legacy panels readable while exposing separate Studio panels", () => {
+    const css = readFileSync("src/app/globals.css", "utf8");
+
+    expect(readStyleRule(css, ".app-panel-flat")).toMatchObject({
+      border: "1px solid var(--app-border)",
+      "border-radius": "var(--app-radius)",
+      background: "var(--app-surface)",
+      color: "var(--app-ink)"
+    });
+    expect(readStyleRule(css, ".app-panel")).toMatchObject({
+      "box-shadow": "var(--app-shadow)"
+    });
+    expect(readStyleRule(css, ".studio-panel-flat")).toMatchObject({
+      border: "1px solid var(--studio-line)",
+      "border-radius": "var(--studio-radius-panel)",
+      background: "var(--studio-shell)",
+      color: "var(--studio-ink)"
+    });
+    expect(readStyleRule(css, ".studio-panel")).toMatchObject({
+      "box-shadow": "var(--studio-shadow-raised)"
     });
   });
 

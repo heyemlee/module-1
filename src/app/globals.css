@@ -94,13 +94,25 @@ textarea {
 
 .app-panel,
 .app-panel-flat {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+  color: var(--app-ink);
+}
+
+.app-panel {
+  box-shadow: var(--app-shadow);
+}
+
+.studio-panel,
+.studio-panel-flat {
   border: 1px solid var(--studio-line);
   border-radius: var(--studio-radius-panel);
   background: var(--studio-shell);
   color: var(--studio-ink);
 }
 
-.app-panel {
+.studio-panel {
   box-shadow: var(--studio-shadow-raised);
 }
 
