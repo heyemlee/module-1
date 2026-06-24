@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 "use client";
 
 import { useMemo, useState } from "react";
@@ -142,23 +143,24 @@ export function RenderingPreferencesStep({
 
             {activeColors.length === 0 ? (
               colorsError ? (
-                <div className="rounded-xl border border-dashed border-[#f0c9c4] bg-[#fdeceb] p-5">
-                  <p className="text-sm font-bold text-[#b42318]">
-                    Couldn’t load cabinet colors
+                <div
+                  role="alert"
+                  className="rounded-studio-control border border-studio-danger/25 bg-studio-danger/10 p-4"
+                >
+                  <p className="text-[13px] font-semibold text-[#8e312b]">
+                    Cabinet colors could not be loaded
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-[#b42318]/80">
-                    There was a problem loading the cabinet color library. Check your
-                    connection and try again.
+                  <p className="mt-1 text-[12px] text-[#6f4b47]">
+                    Check the connection and try loading the catalog again.
                   </p>
-                  {onRetryLoadColors && (
-                    <button
-                      type="button"
-                      onClick={onRetryLoadColors}
-                      className="mt-3 rounded-md bg-[#b42318] px-4 py-2 text-xs font-bold text-white hover:bg-[#9a1d14] transition"
-                    >
-                      Retry
-                    </button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="inspector"
+                    className="mt-3"
+                    onClick={onRetryLoadColors}
+                  >
+                    Try again
+                  </Button>
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-[#d2d2d7] bg-[#f5f5f7] p-5">

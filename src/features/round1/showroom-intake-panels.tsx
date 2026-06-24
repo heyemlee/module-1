@@ -1,3 +1,4 @@
+import { Round1Feedback } from "./round1-feedback";
 import { useState } from "react";
 import {
   type PreliminaryCabinetEstimateSummary
@@ -146,19 +147,38 @@ export function RenderingControls({
   return (
     <div className="space-y-2">
       {busy ? (
-        <div className="rendering-loader rounded-lg border border-[var(--app-border)] bg-white p-3">
-          <GhostLoader />
-          <p className="mt-2 bg-[linear-gradient(110deg,var(--app-muted),35%,var(--app-ink),50%,var(--app-muted),75%,var(--app-muted))] bg-[length:200%_100%] bg-clip-text text-sm font-semibold text-transparent [animation:rendering-shimmer_3s_linear_infinite]">
-            Creating image. May take a moment.
-          </p>
-        </div>
+        <section
+          aria-busy="true"
+          aria-label="Building concept rendering"
+          className="rounded-studio-panel border border-studio-line bg-studio-shell p-4"
+        >
+          <div className="overflow-hidden rounded-studio-control border border-studio-line bg-studio-surface">
+            <div className="aspect-[16/10] animate-pulse bg-[linear-gradient(110deg,var(--studio-surface)_8%,var(--studio-raised)_18%,var(--studio-surface)_33%)] bg-[length:200%_100%] motion-reduce:animate-none" />
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[13px] font-semibold text-studio-ink">
+                Building concept rendering
+              </p>
+              <p className="mt-1 text-[11px] text-studio-muted">
+                The frozen floor plan and finish selection are being processed.
+              </p>
+            </div>
+            <Round1Feedback state="generating" message="Generating" />
+          </div>
+        </section>
       ) : null}
       {!canRender ? (
-        <p className="text-xs leading-5 text-[var(--app-muted)]">
-          {renderings.length > 0
-            ? "Regenerate cabinet fill and confirm rendering preferences, then re-run to refresh this preview."
-            : "Available after cabinet fill is generated and a cabinet color is confirmed."}
-        </p>
+        renderings.length > 0 ? (
+          <Round1Feedback
+            state="stale"
+            message="Inputs changed. Generate a new rendering when ready."
+          />
+        ) : (
+          <p className="text-xs leading-5 text-[var(--app-muted)]">
+            Available after cabinet fill is generated and a cabinet color is confirmed.
+          </p>
+        )
       ) : null}
       {error && (
         <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-xs leading-5 text-[var(--app-red)]">

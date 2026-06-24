@@ -152,4 +152,19 @@ describe("RenderingPreferencesStep", () => {
       ).doorColorId
     ).toBeNull();
   });
+  test("uses a contextual retry action when cabinet colors fail", () => {
+    const html = renderToStaticMarkup(
+      <RenderingPreferencesStep
+        form={createDefaultShowroomForm()}
+        colors={[]}
+        colorsError
+        onRetryLoadColors={() => {}}
+        onFormChange={() => {}}
+      />
+    );
+
+    expect(html).toContain("Cabinet colors could not be loaded");
+    expect(html).toContain("Try again");
+    expect(html).toContain('role="alert"');
+  });
 });

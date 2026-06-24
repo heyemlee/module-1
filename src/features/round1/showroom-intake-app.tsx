@@ -49,6 +49,8 @@ import {
   type SnapshotPersistState
 } from "./showroom-intake-panels";
 import { useReducedMotion } from "motion/react";
+import { LockClosedIcon, LockOpen1Icon } from "@radix-ui/react-icons";
+import { Button } from "@/components/ui/button";
 import {
   DEFAULT_WORKSPACE_MODE,
   parseWorkspaceMode,
@@ -138,9 +140,9 @@ export function RenderingPreferencesLockControl({
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      <button
+      <Button
         type="button"
-        className={cn("lock-button", preferencesLocked ? "locked" : "unlocked")}
+        variant={preferencesLocked ? "secondary" : "inspector"}
         disabled={disabled}
         onClick={() => {
           if (!disabled) onLock();
@@ -148,15 +150,12 @@ export function RenderingPreferencesLockControl({
         title={title}
       >
         {preferencesLocked ? (
-          <svg viewBox="0 0 24 24" className="lock-svgIcon">
-            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
-          </svg>
+          <LockClosedIcon className="size-4" aria-hidden />
         ) : (
-          <svg viewBox="0 0 24 24" className="lock-svgIcon">
-            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
-          </svg>
+          <LockOpen1Icon className="size-4" aria-hidden />
         )}
-      </button>
+        {preferencesLocked ? "Preferences locked" : "Lock preferences"}
+      </Button>
       {!preferencesLocked && !canLock && (
         <p className="max-w-44 text-center text-[11px] font-semibold text-[#b42318]">
           Select a cabinet color before locking.

@@ -1,206 +1,32 @@
-.gl-ghost {
+
+.studio-skeleton {
   position: relative;
-  scale: 0.8;
-  display: flex;
-  justify-content: center;
+  overflow: hidden;
+  background: var(--studio-surface);
 }
 
-.gl-red {
-  animation: gl-upNDown infinite 0.5s;
-  position: relative;
-  width: 140px;
-  height: 140px;
-  display: grid;
-  grid-template-columns: repeat(14, 1fr);
-  grid-template-rows: repeat(14, 1fr);
-  grid-column-gap: 0px;
-  grid-row-gap: 0px;
-  grid-template-areas:
-    "a1  a2  a3  a4  a5  top0  top0  top0  top0  a10 a11 a12 a13 a14"
-    "b1  b2  b3  top1 top1 top1 top1 top1 top1 top1 top1 b12 b13 b14"
-    "c1 c2 top2 top2 top2 top2 top2 top2 top2 top2 top2 top2 c13 c14"
-    "d1 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 d14"
-    "e1 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 e14"
-    "f1 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 f14"
-    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
-    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
-    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
-    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
-    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
-    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
-    "st0 st0 an4 st1 an7 st2 an10 an10 st3 an13 st4 an16 st5 st5"
-    "an1 an2 an3 an5 an6 an8 an9 an9 an11 an12 an14 an15 an17 an18";
+.studio-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(237, 242, 238, 0.07),
+    transparent
+  );
+  animation: studio-skeleton-sweep 1.5s ease-in-out infinite;
 }
 
-@keyframes gl-upNDown {
-  0%,
-  49% {
-    transform: translateY(0px);
-  }
-  50%,
-  100% {
-    transform: translateY(-10px);
+@keyframes studio-skeleton-sweep {
+  to {
+    transform: translateX(100%);
   }
 }
 
-.gl-top0,
-.gl-top1,
-.gl-top2,
-.gl-top3,
-.gl-top4,
-.gl-st0,
-.gl-st1,
-.gl-st2,
-.gl-st3,
-.gl-st4,
-.gl-st5 {
-  background-color: red;
-}
-
-.gl-top0 { grid-area: top0; }
-.gl-top1 { grid-area: top1; }
-.gl-top2 { grid-area: top2; }
-.gl-top3 { grid-area: top3; }
-.gl-top4 { grid-area: top4; }
-.gl-st0 { grid-area: st0; }
-.gl-st1 { grid-area: st1; }
-.gl-st2 { grid-area: st2; }
-.gl-st3 { grid-area: st3; }
-.gl-st4 { grid-area: st4; }
-.gl-st5 { grid-area: st5; }
-
-.gl-an1 { grid-area: an1; animation: gl-flicker0 infinite 0.5s; }
-.gl-an18 { grid-area: an18; animation: gl-flicker0 infinite 0.5s; }
-.gl-an2 { grid-area: an2; animation: gl-flicker1 infinite 0.5s; }
-.gl-an17 { grid-area: an17; animation: gl-flicker1 infinite 0.5s; }
-.gl-an3 { grid-area: an3; animation: gl-flicker1 infinite 0.5s; }
-.gl-an16 { grid-area: an16; animation: gl-flicker1 infinite 0.5s; }
-.gl-an4 { grid-area: an4; animation: gl-flicker1 infinite 0.5s; }
-.gl-an15 { grid-area: an15; animation: gl-flicker1 infinite 0.5s; }
-.gl-an6 { grid-area: an6; animation: gl-flicker0 infinite 0.5s; }
-.gl-an12 { grid-area: an12; animation: gl-flicker0 infinite 0.5s; }
-.gl-an7 { grid-area: an7; animation: gl-flicker0 infinite 0.5s; }
-.gl-an13 { grid-area: an13; animation: gl-flicker0 infinite 0.5s; }
-.gl-an9 { grid-area: an9; animation: gl-flicker1 infinite 0.5s; }
-.gl-an10 { grid-area: an10; animation: gl-flicker1 infinite 0.5s; }
-.gl-an8 { grid-area: an8; animation: gl-flicker0 infinite 0.5s; }
-.gl-an11 { grid-area: an11; animation: gl-flicker0 infinite 0.5s; }
-
-@keyframes gl-flicker0 {
-  0%,
-  49% { background-color: red; }
-  50%,
-  100% { background-color: transparent; }
-}
-
-@keyframes gl-flicker1 {
-  0%,
-  49% { background-color: transparent; }
-  50%,
-  100% { background-color: red; }
-}
-
-.gl-eye {
-  width: 40px;
-  height: 50px;
-  position: absolute;
-  top: 30px;
-  left: 10px;
-}
-
-.gl-eye::before {
-  content: "";
-  background-color: white;
-  width: 20px;
-  height: 50px;
-  transform: translateX(10px);
-  display: block;
-  position: absolute;
-}
-
-.gl-eye::after {
-  content: "";
-  background-color: white;
-  width: 40px;
-  height: 30px;
-  transform: translateY(10px);
-  display: block;
-  position: absolute;
-}
-
-.gl-eye1 {
-  width: 40px;
-  height: 50px;
-  position: absolute;
-  top: 30px;
-  right: 30px;
-}
-
-.gl-eye1::before {
-  content: "";
-  background-color: white;
-  width: 20px;
-  height: 50px;
-  transform: translateX(10px);
-  display: block;
-  position: absolute;
-}
-
-.gl-eye1::after {
-  content: "";
-  background-color: white;
-  width: 40px;
-  height: 30px;
-  transform: translateY(10px);
-  display: block;
-  position: absolute;
-}
-
-.gl-pupil {
-  width: 20px;
-  height: 20px;
-  background-color: blue;
-  position: absolute;
-  top: 50px;
-  left: 10px;
-  z-index: 1;
-  animation: gl-eyesMovement infinite 3s;
-}
-
-.gl-pupil1 {
-  width: 20px;
-  height: 20px;
-  background-color: blue;
-  position: absolute;
-  top: 50px;
-  right: 50px;
-  z-index: 1;
-  animation: gl-eyesMovement infinite 3s;
-}
-
-@keyframes gl-eyesMovement {
-  0%,
-  49% { transform: translateX(0px); }
-  50%,
-  99% { transform: translateX(10px); }
-  100% { transform: translateX(0px); }
-}
-
-.gl-shadow {
-  background-color: black;
-  width: 140px;
-  height: 140px;
-  position: absolute;
-  border-radius: 50%;
-  transform: rotateX(80deg);
-  filter: blur(20px);
-  top: 80%;
-  animation: gl-shadowMovement infinite 0.5s;
-}
-
-@keyframes gl-shadowMovement {
-  0%,
-  49% { opacity: 0.5; }
-  50%,
-  100% { opacity: 0.2; }
+@media (prefers-reduced-motion: reduce) {
+  .studio-skeleton::after {
+    display: none;
+  }
 }

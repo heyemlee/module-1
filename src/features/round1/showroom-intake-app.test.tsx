@@ -185,6 +185,21 @@ describe("OpeningsStep", () => {
 
     expect(nextForm.openings.doors.items[0]?.kind).toBe("OPEN_PASSAGE");
   });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
+  });
 });
 
 describe("AppliancesStep", () => {
@@ -397,6 +412,21 @@ describe("AppliancesStep", () => {
       nextForm.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo
     ).toEqual({ status: "NO", relation: "NOT_APPLICABLE" });
   });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
+  });
 });
 
 describe("LayoutStep", () => {
@@ -436,6 +466,21 @@ describe("LayoutStep", () => {
     expect(html).toContain("Include an island");
     expect(html).toContain("checkbox");
   });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
+  });
 });
 
 describe("ShowroomIntakeApp", () => {
@@ -469,6 +514,21 @@ describe("ShowroomIntakeApp", () => {
     const html = renderToStaticMarkup(<ShowroomIntakeApp />);
 
     expect(html).toContain("Rendering Preferences");
+  });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
   });
 });
 
@@ -523,6 +583,21 @@ describe("CabinetFillSummaryPanel", () => {
     expect(html).not.toContain("sales estimate");
     expect(html).not.toContain("Approximate only");
   });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
+  });
 });
 
 describe("Round1SnapshotPanel", () => {
@@ -550,22 +625,7 @@ describe("Round1SnapshotPanel", () => {
     expect(html).not.toContain("View snapshot JSON");
   });
 
-  test("uses a progressive image-generation state while rendering is busy", () => {
-    const html = renderToStaticMarkup(
-      <RenderingControls
-        canRender
-        busy
-        error={null}
-        renderings={[{ id: "1", url: "data:image/png;base64,abc", doorColorId: null }]}
-        cabinetColors={[]}
-      />
-    );
-
-    expect(html).toContain("Creating image. May take a moment.");
-    expect(html).toContain("rendering-loader");
-    expect(html).toContain("image-generation-preview");
-  });
-
+  
   test("exposes the rendering as an enlarge trigger and keeps the zoom dialog closed in SSR", () => {
     const html = renderToStaticMarkup(
       <RenderingControls
@@ -597,6 +657,21 @@ describe("Round1SnapshotPanel", () => {
     expect(html).not.toContain("Not production");
     expect(html).not.toContain("Sales estimate only");
   });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
+  });
 });
 
 describe("ShowroomIntakeApp snapshot gating", () => {
@@ -621,6 +696,21 @@ describe("ShowroomIntakeApp snapshot gating", () => {
     expect(html).toContain("Rendering Preferences");
     expect(html).not.toContain("Generate Rendering");
   });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
+  });
 });
 
 describe("snapshot restore guard", () => {
@@ -642,5 +732,20 @@ describe("snapshot restore guard", () => {
         localSessionChanged: false
       })
     ).toBe(true);
+  });
+  test("rendering controls expose generating and stale states without a generic spinner", () => {
+    const html = renderToStaticMarkup(
+      <RenderingControls
+        canRender={false}
+        busy
+        error={null}
+        renderings={[]}
+        cabinetColors={[]}
+      />
+    );
+
+    expect(html).toContain("Building concept rendering");
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("border-t-transparent");
   });
 });
