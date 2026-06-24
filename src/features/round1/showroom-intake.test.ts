@@ -60,11 +60,12 @@ describe("showroom intake defaults", () => {
 
 
 
-  test("opens with an empty room shell before the adjust positions step", () => {
+  test("opens the combined room and openings step without later-stage objects", () => {
     const html = renderToStaticMarkup(createElement(ShowroomIntakeApp));
 
+    expect(html).toContain('data-opening-symbol="window"');
+    expect(html).toContain('data-opening-symbol="door"');
     expect(html).not.toContain('data-appliance-symbol="');
-    expect(html).not.toContain('data-opening-symbol="');
     expect(html).not.toContain('data-dishwasher-panel="true"');
   });
 });
