@@ -806,8 +806,10 @@ export function ShowroomIntakeApp({
     "Choose the cabinet finish and generate a concept rendering."
   ] as const;
 
+  const isFormInMiddle = step !== 4;
+
   const canvasContent = (
-    <div className="grid h-full min-h-[540px] min-w-0 gap-3">
+    <div className={isFormInMiddle ? "grid h-full min-h-0 min-w-0 gap-3 p-3 xl:p-4" : "grid h-full min-h-[540px] min-w-0 gap-3"}>
       <div className="min-h-0 overflow-hidden rounded-studio-panel border border-studio-line bg-studio-shell">
         <LayoutPreview
           normalized={result.normalized}
@@ -864,6 +866,27 @@ export function ShowroomIntakeApp({
     </>
   );
 
+  const inspectorContent = (
+    <Round1Inspector
+      title={SHOWROOM_STEPS[step]}
+      description={STEP_DESCRIPTIONS[step]}
+      previousDisabled={step === 0}
+      continueDisabled={step === SHOWROOM_STEPS.length - 1}
+      onPrevious={() => {
+        localSessionChangedRef.current = true;
+        setStep(Math.max(0, step - 1));
+      }}
+      onContinue={goToNextStep}
+      footerContent={step === 5 ? renderingFooter : undefined}
+      suggestion={step === 4 ? adjustPositionSuggestion : undefined}
+      className={isFormInMiddle ? "h-full overflow-hidden rounded-[16px] border border-studio-line shadow-[0_20px_40px_rgba(0,0,0,0.1)]" : "h-full"}
+    >
+      <div className={isFormInMiddle ? "mx-auto w-full max-w-3xl" : ""}>
+        {activeStepContent}
+      </div>
+    </Round1Inspector>
+  );
+
   return (
     <>
       <Round1WorkspaceShell
@@ -871,24 +894,8 @@ export function ShowroomIntakeApp({
         projectBar={projectBar}
         stepNavigation={stepNavigation}
         mobileStepNavigation={mobileStepNavigation}
-        canvas={canvasContent}
-        inspector={
-          <Round1Inspector
-            title={SHOWROOM_STEPS[step]}
-            description={STEP_DESCRIPTIONS[step]}
-            previousDisabled={step === 0}
-            continueDisabled={step === SHOWROOM_STEPS.length - 1}
-            onPrevious={() => {
-              localSessionChangedRef.current = true;
-              setStep(Math.max(0, step - 1));
-            }}
-            onContinue={goToNextStep}
-            footerContent={step === 5 ? renderingFooter : undefined}
-            suggestion={step === 4 ? adjustPositionSuggestion : undefined}
-          >
-            {activeStepContent}
-          </Round1Inspector>
-        }
+        canvas={isFormInMiddle ? inspectorContent : canvasContent}
+        inspector={isFormInMiddle ? canvasContent : inspectorContent}
       />
 
       {/*
