@@ -10,7 +10,7 @@ const CSP = [
   "default-src 'self'",
   "img-src 'self' data: blob:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline' ${process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : ""}`.trim(),
   "connect-src 'self'",
   "font-src 'self'",
   "object-src 'none'",
