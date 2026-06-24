@@ -10,7 +10,7 @@ let pool: Pool | null = null;
 // while still encrypting the wire.
 // ponytail: env-driven on/off rather than a config object — upgrade to a pinned
 // CA bundle (`ssl: { ca }`) if you need full chain verification.
-function resolveSsl(connectionString: string): PoolConfig["ssl"] {
+export function resolveSsl(connectionString: string): PoolConfig["ssl"] {
   if (/[?&]sslmode=/.test(connectionString)) return undefined; // the URL drives it
   if (process.env.NODE_ENV !== "production") return undefined; // local dev DBs are plaintext
   return { rejectUnauthorized: process.env.DATABASE_SSL_NO_VERIFY !== "true" };
