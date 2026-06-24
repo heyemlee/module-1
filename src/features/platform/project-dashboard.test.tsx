@@ -1,3 +1,4 @@
+import { readFileSync } from "fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import { ProjectDashboard } from "./project-dashboard";
@@ -13,6 +14,17 @@ const salesUser = {
   email: "s@example.com",
   name: "Sales",
   role: "SALES" as const,
+  disabledAt: null,
+  monthlyRenderQuota: 50
+};
+
+const adminUser = {
+  id: "u2",
+  companyId: "c1",
+  account: "admin" as const,
+  email: "a@example.com",
+  name: "Admin",
+  role: "ADMIN" as const,
   disabledAt: null,
   monthlyRenderQuota: 50
 };
@@ -61,5 +73,40 @@ describe("ProjectDashboard", () => {
 
     expect(html).not.toContain("Select all");
     expect(html).not.toContain("Select project Main Kitchen");
+  });
+
+  test("renders real project counts and Studio status semantics", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDashboard
+        user={adminUser}
+        projects={[
+          projectFixture,
+          {
+            ...projectFixture,
+            id: "p2",
+            projectName: "Lake House",
+            status: "RENDERING_READY"
+          }
+        ]}
+      />
+    );
+
+    expect(html).toContain("<h1");
+    expect(html).toContain("Projects");
+    expect(html).toContain("Active");
+    expect(html).toContain("Intake");
+    expect(html).toContain("Rendering ready");
+    expect(html).toContain('data-project-status="INTAKE"');
+    expect(html).toContain('data-project-status="RENDERING_READY"');
+  });
+
+  test("uses the shared destructive action instead of the expanding Uiverse control", () => {
+    const source = readFileSync(
+      "src/features/platform/project-dashboard.tsx",
+      "utf8"
+    );
+
+    expect(source).not.toContain("UiverseDeleteButton");
+    expect(source).toContain('variant="destructive"');
   });
 });
