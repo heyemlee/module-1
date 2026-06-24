@@ -18,9 +18,7 @@ export type SessionRecord = {
 };
 
 export type ProjectStatus =
-  | "DRAFT"
-  | "ROUND1_SNAPSHOT_READY"
-  | "ROUND1_RENDERING_READY"
-  | "NEEDS_CONFIRMATION"
-  | "ROUND2_READY"
+  | "INTAKE"
+  | "RENDERING_READY"
+  | "ROUND2_MEASURING"
   | "ARCHIVED";

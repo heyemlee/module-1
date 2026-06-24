@@ -20,23 +20,19 @@ import { PlatformHeader, NavPill } from "./platform-header";
 import { UiverseDeleteButton } from "./uiverse-delete-button";
 
 const STATUS_LABELS: Record<ProjectSummary["status"], string> = {
-  DRAFT: "Draft",
-  ROUND1_SNAPSHOT_READY: "Snapshot ready",
-  ROUND1_RENDERING_READY: "Rendering ready",
-  NEEDS_CONFIRMATION: "Needs review",
-  ROUND2_READY: "Round 2 ready",
+  INTAKE: "Intake",
+  RENDERING_READY: "Rendering ready",
+  ROUND2_MEASURING: "Round 2 measuring",
   ARCHIVED: "Archived"
 };
 
 const READY_STATUSES: ReadonlySet<ProjectSummary["status"]> = new Set([
-  "ROUND1_SNAPSHOT_READY",
-  "ROUND1_RENDERING_READY",
-  "ROUND2_READY"
+  "RENDERING_READY",
+  "ROUND2_MEASURING"
 ]);
 
 function statusColor(status: ProjectSummary["status"]) {
   if (READY_STATUSES.has(status)) return "#008060";
-  if (status === "NEEDS_CONFIRMATION") return "#c56a16";
   return "#1d1d1f";
 }
 
@@ -59,7 +55,6 @@ export function ProjectDashboard({
   const [deleting, setDeleting] = useState(false);
 
   const activeCount = projects.filter((p) => p.status !== "ARCHIVED").length;
-  const needReviewCount = projects.filter((p) => p.status === "NEEDS_CONFIRMATION").length;
 
   const toggleAll = () => {
     if (selectedIds.size === projects.length) {
@@ -133,11 +128,6 @@ export function ProjectDashboard({
             <span className="inline-flex h-7 items-center rounded-full bg-[#e6f4ef] px-3 text-[11px] font-bold text-[#008060]">
               {activeCount} active
             </span>
-            {needReviewCount > 0 && (
-              <span className="inline-flex h-7 items-center rounded-full bg-[#fff0dc] px-3 text-[11px] font-bold text-[#c56a16]">
-                {needReviewCount} need review
-              </span>
-            )}
           </div>
           <div className="ml-auto flex items-center gap-4 pb-1">
             {canDeleteProjects && selectedIds.size > 0 && (
@@ -179,7 +169,6 @@ export function ProjectDashboard({
               <TableBody>
                 {projects.map((project) => {
                   const ready = READY_STATUSES.has(project.status);
-                  const stale = project.status === "NEEDS_CONFIRMATION";
                   return (
                     <TableRow
                       key={project.id}
@@ -212,9 +201,6 @@ export function ProjectDashboard({
                           className="inline-flex items-center gap-1.5 font-medium"
                           style={{ color: statusColor(project.status) }}
                         >
-                          {stale && (
-                            <span className="size-1.5 animate-pulse rounded-full bg-[#c56a16]" />
-                          )}
                           {STATUS_LABELS[project.status]}
                         </span>
                       </TableCell>

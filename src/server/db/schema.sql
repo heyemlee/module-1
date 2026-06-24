@@ -56,14 +56,12 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   status TEXT NOT NULL CHECK (
     status IN (
-      'DRAFT',
-      'ROUND1_SNAPSHOT_READY',
-      'ROUND1_RENDERING_READY',
-      'NEEDS_CONFIRMATION',
-      'ROUND2_READY',
+      'INTAKE',
+      'RENDERING_READY',
+      'ROUND2_MEASURING',
       'ARCHIVED'
     )
-  ) DEFAULT 'DRAFT',
+  ) DEFAULT 'INTAKE',
   created_by_user_id UUID NOT NULL REFERENCES users(id),
   assigned_designer_id UUID REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -133,3 +131,22 @@ CREATE INDEX IF NOT EXISTS projects_company_status_idx ON projects(company_id, s
 CREATE INDEX IF NOT EXISTS projects_created_by_idx ON projects(created_by_user_id);
 CREATE INDEX IF NOT EXISTS renderings_project_created_idx ON renderings(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS cabinet_colors_company_style_idx ON cabinet_colors(company_id, cabinet_style, active, sort_order);
+
+-- Migration (2026-06-24): collapse project statuses into 4 stages
+-- (INTAKE, RENDERING_READY, ROUND2_MEASURING, ARCHIVED). Idempotent: safe to
+-- re-run, and a no-op once existing rows/constraints are already migrated.
+-- Order matters: drop the old CHECK first, otherwise the still-active old
+-- constraint rejects the new values during the UPDATEs below.
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_status_check;
+
+UPDATE projects SET status = 'INTAKE'
+  WHERE status IN ('DRAFT', 'ROUND1_SNAPSHOT_READY', 'NEEDS_CONFIRMATION');
+UPDATE projects SET status = 'RENDERING_READY'
+  WHERE status = 'ROUND1_RENDERING_READY';
+UPDATE projects SET status = 'ROUND2_MEASURING'
+  WHERE status = 'ROUND2_READY';
+
+ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK (
+  status IN ('INTAKE', 'RENDERING_READY', 'ROUND2_MEASURING', 'ARCHIVED')
+);
+ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'INTAKE';

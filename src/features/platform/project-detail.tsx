@@ -7,11 +7,9 @@ const STATUS_PILL: Record<
   ProjectSummary["status"],
   { label: string; tone: "green" | "amber" | "muted" }
 > = {
-  DRAFT: { label: "Draft", tone: "muted" },
-  ROUND1_SNAPSHOT_READY: { label: "Snapshot saved", tone: "green" },
-  ROUND1_RENDERING_READY: { label: "Rendering ready", tone: "green" },
-  NEEDS_CONFIRMATION: { label: "Needs confirmation", tone: "amber" },
-  ROUND2_READY: { label: "Round 2 ready", tone: "green" },
+  INTAKE: { label: "Intake", tone: "muted" },
+  RENDERING_READY: { label: "Rendering ready", tone: "green" },
+  ROUND2_MEASURING: { label: "Round 2 measuring", tone: "green" },
   ARCHIVED: { label: "Archived", tone: "muted" }
 };
 

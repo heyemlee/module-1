@@ -18,7 +18,7 @@ describe("ProjectDashboard", () => {
             customerId: "cust1",
             customerName: "Chen Family",
             projectName: "Main Kitchen",
-            status: "DRAFT",
+            status: "INTAKE",
             createdByUserId: "u1",
             assignedDesignerId: null,
             updatedAt: "2026-06-19T00:00:00.000Z"
@@ -51,7 +51,7 @@ describe("ProjectDashboard", () => {
             customerId: "cust1",
             customerName: "Chen Family",
             projectName: "Main Kitchen",
-            status: "DRAFT",
+            status: "INTAKE",
             createdByUserId: "u1",
             assignedDesignerId: null,
             updatedAt: "2026-06-19T00:00:00.000Z"
