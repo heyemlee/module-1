@@ -17,6 +17,7 @@ export function cabinetColorSummary(colors: CabinetColor[]) {
   return {
     total: colors.length,
     active: colors.filter((color) => color.active).length,
+    hidden: colors.filter((color) => !color.active).length,
     european: colors.filter(
       (color) => color.cabinetStyle === "EUROPEAN_FRAMELESS"
     ).length,

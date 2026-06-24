@@ -10,5 +10,5 @@ export default async function AdminCabinetColorsPage() {
   const colors = await listCabinetColors(user.companyId, false, {
     includeHoverExampleImages: false
   });
-  return <CabinetColorsAdminView colors={colors} userName={user.name} />;
+  return <CabinetColorsAdminView colors={colors} />;
 }

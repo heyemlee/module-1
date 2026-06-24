@@ -1,26 +1,36 @@
+"use client";
+
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { CabinetColorForm } from "./cabinet-color-form";
 import { CabinetColorsManager } from "./cabinet-colors-manager";
-
+import { StudioPage, StudioPageHeader, StudioStat, StudioSection } from "./studio-page";
+import { cabinetColorSummary } from "./admin-presentation";
 
 export function CabinetColorsAdminView({
-  colors,
-  userName
+  colors
 }: {
   colors: CabinetColor[];
-  userName: string;
 }) {
+  const summary = cabinetColorSummary(colors);
+
   return (
-    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
-
-      <div className="mx-auto max-w-[1320px] px-8 py-10">
-
-
-        <section className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <StudioPage>
+      <StudioPageHeader
+        title="Cabinet Colors"
+        description="Manage your inventory of cabinet finishes and metadata."
+        meta={
+          <div className="grid max-w-sm grid-cols-2 gap-4">
+            <StudioStat label="Active" value={summary.active} />
+            <StudioStat label="Hidden" value={summary.hidden} tone="warning" />
+          </div>
+        }
+      />
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <StudioSection aria-label="Cabinet colors list">
           <CabinetColorsManager colors={colors} />
-          <CabinetColorForm />
-        </section>
+        </StudioSection>
+        <CabinetColorForm />
       </div>
-    </main>
+    </StudioPage>
   );
 }
