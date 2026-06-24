@@ -1,5 +1,42 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { StudioRail } from "./studio-shell";
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+
+
+describe("StudioRail", () => {
+  test("shows project navigation for regular users", () => {
+    const html = renderToStaticMarkup(
+      <StudioRail
+        userName="Maya"
+        isAdmin={false}
+        activeItem="round1"
+        projectId="project-1"
+      />
+    );
+
+    expect(html).toContain("Projects");
+    expect(html).toContain("Round 1");
+    expect(html).toContain("Renderings");
+    expect(html).not.toContain("Users");
+    expect(html).not.toContain("Cabinet colors");
+  });
+
+  test("adds administration destinations for admins", () => {
+    const html = renderToStaticMarkup(
+      <StudioRail
+        userName="Admin"
+        isAdmin
+        activeItem="round1"
+        projectId="project-1"
+      />
+    );
+
+    expect(html).toContain("Users");
+    expect(html).toContain("Cabinet colors");
+  });
+});
+
 
 function readRootVariables(css: string) {
   const rootBlock = css.match(/:root\s*{([\s\S]*?)}/)?.[1] ?? "";

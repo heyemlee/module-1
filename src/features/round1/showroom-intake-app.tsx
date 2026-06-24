@@ -59,6 +59,7 @@ import {
 } from "./workspace-mode";
 import { WorkspaceModeSwitch } from "./workspace-mode-switch";
 import { Round1WorkspaceShell } from "./round1-workspace-shell";
+import { StudioRail } from "@/features/platform/studio-shell";
 import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { Round1Feedback } from "./round1-feedback";
