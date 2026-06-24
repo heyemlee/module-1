@@ -12,7 +12,6 @@ export function Round1WorkspaceShell({
   mobileStepNavigation,
   canvas,
   inspector,
-  rail
 }: {
   mode: WorkspaceMode;
   projectBar: ReactNode;
@@ -20,7 +19,6 @@ export function Round1WorkspaceShell({
   mobileStepNavigation?: ReactNode;
   canvas: ReactNode;
   inspector: ReactNode;
-  rail?: ReactNode;
 }) {
   const reduceMotion = useReducedMotion();
   const transition = reduceMotion
@@ -28,13 +26,10 @@ export function Round1WorkspaceShell({
     : { duration: 0.26, ease: [0.2, 0.8, 0.2, 1] as const };
 
   return (
-    <div className="grid min-h-[100dvh] grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-[188px_minmax(0,1fr)]">
-      <div className="hidden md:block">{rail}</div>
-      <div className="min-w-0">
-        <main
-          data-workspace-mode={mode}
-          className="min-h-[100dvh] bg-studio-void text-studio-ink"
-        >
+    <main
+      data-workspace-mode={mode}
+      className="min-h-[100dvh] bg-studio-void text-studio-ink min-w-0"
+    >
           <div className="sticky top-0 z-30 border-b border-studio-line bg-studio-shell/95 backdrop-blur-xl">
         {projectBar}
       </div>
@@ -44,8 +39,8 @@ export function Round1WorkspaceShell({
           "grid min-h-[calc(100dvh-56px)] grid-cols-1 bg-studio-void",
           "md:grid-cols-[minmax(0,1fr)]",
           mode === "guided"
-            ? "xl:grid-cols-[176px_minmax(0,1fr)_320px]"
-            : "xl:grid-cols-[56px_minmax(0,1fr)_320px]"
+            ? "xl:grid-cols-[176px_minmax(0,1fr)_480px]"
+            : "xl:grid-cols-[56px_minmax(0,1fr)_480px]"
         )}
       >
         <motion.aside
@@ -83,7 +78,5 @@ export function Round1WorkspaceShell({
         </motion.div>
       </div>
         </main>
-      </div>
-    </div>
   );
 }

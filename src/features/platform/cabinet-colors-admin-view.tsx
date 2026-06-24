@@ -1,7 +1,7 @@
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { CabinetColorForm } from "./cabinet-color-form";
 import { CabinetColorsManager } from "./cabinet-colors-manager";
-import { PlatformHeader, NavPill } from "./platform-header";
+
 
 export function CabinetColorsAdminView({
   colors,
@@ -11,19 +11,7 @@ export function CabinetColorsAdminView({
   userName: string;
 }) {
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={userName}
-        nav={
-          <>
-            <NavPill href="/projects">Projects</NavPill>
-            <NavPill href="/admin/users">Users</NavPill>
-            <NavPill href="/admin/cabinet-colors" active>
-              Cabinet Colors
-            </NavPill>
-          </>
-        }
-      />
+    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
 

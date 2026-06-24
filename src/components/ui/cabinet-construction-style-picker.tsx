@@ -20,7 +20,7 @@ export function CabinetConstructionStylePicker<T extends string>({
   onRequestSelect: (value: T) => void;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="flex flex-col items-stretch gap-3">
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -29,18 +29,18 @@ export function CabinetConstructionStylePicker<T extends string>({
             type="button"
             onClick={() => onRequestSelect(option.value)}
             className={cn(
-              "group relative flex items-center justify-between rounded-xl border bg-white p-4 text-left transition",
+              "group relative flex items-center gap-4 rounded-xl border bg-white px-5 py-3 text-left transition",
               selected
                 ? "border-[var(--app-ink)] bg-black/[0.02]"
                 : "border-[var(--app-border)] hover:border-slate-300 hover:shadow-sm"
             )}
           >
-            <span className="flex-1 overflow-hidden pr-4">
-              <span className={cn("block truncate text-sm font-bold", selected ? "text-[var(--app-ink)]" : "text-[var(--app-ink)]")}>
+            <span className="overflow-hidden flex-1">
+              <span className={cn("block truncate text-[14px] font-bold", selected ? "text-[var(--app-ink)]" : "text-[var(--app-ink)]")}>
                 {option.label}
               </span>
               {option.description && (
-                <span className="mt-1 block truncate text-xs text-[var(--app-muted)]">
+                <span className="mt-0.5 block truncate text-[11px] text-[var(--app-muted)]">
                   {option.description}
                 </span>
               )}

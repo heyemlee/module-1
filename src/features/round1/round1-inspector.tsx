@@ -13,7 +13,8 @@ export function Round1Inspector({
   onPrevious,
   onContinue,
   footerContent,
-  className
+  className,
+  hideHeader
 }: {
   title: string;
   description?: string;
@@ -26,6 +27,7 @@ export function Round1Inspector({
   onContinue?: () => void;
   footerContent?: ReactNode;
   className?: string;
+  hideHeader?: boolean;
 }) {
   return (
     <aside
@@ -35,16 +37,18 @@ export function Round1Inspector({
         className
       )}
     >
-      <header className="border-b border-black/10 px-5 py-5">
-        <h2 className="text-[17px] font-semibold tracking-[-0.02em]">
-          {title}
-        </h2>
-        {description && (
-          <p className="mt-1.5 text-[12px] leading-5 text-[#607067]">
-            {description}
-          </p>
-        )}
-      </header>
+      {!hideHeader && (
+        <header className="border-b border-black/10 px-5 py-5">
+          <h2 className="text-[17px] font-semibold tracking-[-0.02em]">
+            {title}
+          </h2>
+          {description && (
+            <p className="mt-1.5 text-[12px] leading-5 text-[#607067]">
+              {description}
+            </p>
+          )}
+        </header>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {children}
         {suggestion && (

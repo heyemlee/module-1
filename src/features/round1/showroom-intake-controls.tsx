@@ -12,7 +12,7 @@ import {
 
 export function Step({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <div>
+    <div className="pt-4">
       {title && <h2 className="mb-5 text-[26px] font-bold leading-[32px] tracking-tight text-[var(--app-ink)]">{title}</h2>}
       {children}
     </div>

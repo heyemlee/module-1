@@ -7,7 +7,6 @@ describe("Round1WorkspaceShell", () => {
     const html = renderToStaticMarkup(
       <Round1WorkspaceShell
         mode="guided"
-        rail={<div>Rail</div>}
         projectBar={<div>Project</div>}
         stepNavigation={<div>Steps</div>}
         canvas={<div>Canvas</div>}
@@ -25,7 +24,6 @@ describe("Round1WorkspaceShell", () => {
     const html = renderToStaticMarkup(
       <Round1WorkspaceShell
         mode="canvas"
-        rail={<div>Rail</div>}
         projectBar={<div>Project</div>}
         stepNavigation={<div>Steps</div>}
         canvas={<div>Canvas</div>}

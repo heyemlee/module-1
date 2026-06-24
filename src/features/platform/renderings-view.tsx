@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { AuthUser } from "@/server/platform/types";
 import { DownloadButton } from "./download-button";
-import { PlatformHeader, NavPill } from "./platform-header";
+
 
 const STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -37,20 +37,7 @@ export function RenderingsView({
   const isAdmin = user.role === "ADMIN";
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-      <PlatformHeader
-        userName={user.name}
-        nav={
-          <>
-            <NavPill href="/projects">Projects</NavPill>
-            <NavPill href={`/projects/${project.id}/round1`}>Round 1</NavPill>
-            <NavPill href={`/projects/${project.id}/renderings`} active>
-              Renderings
-            </NavPill>
-            {isAdmin && <NavPill href="/admin/users">Admin</NavPill>}
-          </>
-        }
-      />
+    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
 
       <div className="mx-auto max-w-[1320px] px-8 py-10">
 

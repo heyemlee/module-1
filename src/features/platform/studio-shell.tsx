@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ColorWheelIcon,
@@ -9,6 +10,12 @@ import {
   PersonIcon
 } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 type StudioNavItem =
   | "projects"
@@ -30,6 +37,19 @@ export function StudioRail({
   projectId?: string;
   compact?: boolean;
 }) {
+  const [signingOut, setSigningOut] = useState(false);
+
+  const logout = async () => {
+    setSigningOut(true);
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) throw new Error("Logout failed");
+      window.location.href = "/login";
+    } catch {
+      setSigningOut(false);
+    }
+  };
+
   const items = [
     {
       id: "projects" as const,
@@ -69,7 +89,7 @@ export function StudioRail({
   ];
 
   return (
-    <aside className="flex h-full min-h-[100dvh] flex-col border-r border-studio-line bg-[#0e1713] p-3">
+    <aside className="sticky top-0 flex h-[100dvh] flex-col border-r border-studio-line bg-[#0e1713] p-3">
       <Link
         href="/projects"
         className={cn(
@@ -104,17 +124,24 @@ export function StudioRail({
           );
         })}
       </nav>
-      <div
-        className={cn(
-          "mt-auto flex min-h-10 items-center gap-2 border-t border-studio-line px-2 pt-3 text-[11px] text-studio-muted",
-          compact && "justify-center"
-        )}
-      >
-        <span className="flex size-7 items-center justify-center rounded-full bg-studio-surface text-studio-action">
-          <PersonIcon className="size-3.5" aria-hidden />
-        </span>
-        {!compact && <span className="truncate">{userName}</span>}
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            "mt-auto flex min-h-10 items-center gap-2 rounded-studio-control border-t border-studio-line px-2 pt-3 text-[11px] text-studio-muted transition-colors hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-white/20 outline-none",
+            compact ? "justify-center" : "w-full"
+          )}
+        >
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-studio-surface text-studio-action">
+            <PersonIcon className="size-3.5" aria-hidden />
+          </span>
+          {!compact && <span className="truncate">{userName}</span>}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={compact ? "center" : "end"} side="right" sideOffset={8} className="min-w-[160px]">
+          <DropdownMenuItem disabled={signingOut} onSelect={() => void logout()}>
+            {signingOut ? "Signing out..." : "Sign out"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </aside>
   );
 }

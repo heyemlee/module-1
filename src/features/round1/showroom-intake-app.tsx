@@ -59,7 +59,7 @@ import {
 } from "./workspace-mode";
 import { WorkspaceModeSwitch } from "./workspace-mode-switch";
 import { Round1WorkspaceShell } from "./round1-workspace-shell";
-import { StudioRail } from "@/features/platform/studio-shell";
+
 import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { Round1Feedback } from "./round1-feedback";
@@ -74,30 +74,24 @@ import {
 gsap.registerPlugin(useGSAP);
 
 export const SHOWROOM_STEPS = [
-  "Room",
-  "Openings",
-  "Layout",
-  "Appliances",
+  "Room & Openings",
+  "Layout & Appliances",
   "Adjust Positions",
   "Rendering Preferences"
 ] as const;
 
 // Short imperative cue per step for the rail's "Next action" callout.
 const NEXT_ACTIONS: Record<number, string> = {
-  0: "Enter room size & obstacles",
-  1: "Mark doors & windows",
-  2: "Choose a kitchen layout",
-  3: "Set appliances & fixtures",
-  4: "Confirm dragged constraints",
-  5: "Generate fill & rendering"
+  0: "Enter room size, obstacles & openings",
+  1: "Choose layout & set appliances",
+  2: "Confirm dragged constraints",
+  3: "Generate fill & rendering"
 };
 
 
 const ADJUST_POSITIONS_STEP_INDEX = SHOWROOM_STEPS.indexOf("Adjust Positions");
 const PREVIEW_STAGES = [
-  "room",
   "openings",
-  "layout",
   "appliances",
   "adjust",
   "adjust"
@@ -693,12 +687,6 @@ export function ShowroomIntakeApp({
 
   const projectBar = (
     <div className="flex h-14 items-center gap-3 px-4 md:px-5">
-      <a
-        href={projectId ? `/projects/${projectId}` : "/projects"}
-        className="rounded-studio-small px-2 py-1 text-[12px] text-studio-muted transition-colors hover:bg-white/[0.05] hover:text-studio-ink"
-      >
-        Back
-      </a>
       <div className="min-w-0">
         <p className="truncate text-[12px] font-semibold text-studio-ink">
           {projectName ?? "Round 1"}
@@ -762,30 +750,34 @@ export function ShowroomIntakeApp({
 
   const activeStepContent = (
     <>
-      {step === 0 && <RoomStep form={form} setForm={updateForm} />}
+      {step === 0 && (
+        <>
+          <RoomStep form={form} setForm={updateForm} />
+          <OpeningsStep
+            form={form}
+            setForm={updateForm}
+            setPositionOverrides={updatePositionOverrides}
+          />
+        </>
+      )}
       {step === 1 && (
-        <OpeningsStep
-          form={form}
-          setForm={updateForm}
-          setPositionOverrides={updatePositionOverrides}
-        />
+        <>
+          <LayoutStep
+            form={form}
+            setForm={updateForm}
+            setPositionOverrides={updatePositionOverrides}
+          />
+          <AppliancesStep form={form} setForm={updateForm} />
+        </>
       )}
       {step === 2 && (
-        <LayoutStep
-          form={form}
-          setForm={updateForm}
-          setPositionOverrides={updatePositionOverrides}
-        />
-      )}
-      {step === 3 && <AppliancesStep form={form} setForm={updateForm} />}
-      {step === 4 && (
         <AdjustPositionsStep
           hasOverrides={Object.keys(positionOverrides).length > 0}
           fixedPositionsConfirmed={fixedPositionsConfirmed}
           cabinetFillGenerated={cabinetFillGenerated}
         />
       )}
-      {step === 5 && (
+      {step === 3 && (
         <RenderingPreferencesStep
           form={form}
           colors={cabinetColors}
@@ -797,19 +789,15 @@ export function ShowroomIntakeApp({
     </>
   );
 
-  const STEP_DESCRIPTIONS = [
-    "Set the room dimensions and fixed obstacles.",
-    "Place doors, passages, and windows.",
-    "Choose the closest starting kitchen layout.",
-    "Add the appliances and fixtures that affect placement.",
-    "Fine-tune positions and confirm spatial constraints.",
-    "Choose the cabinet finish and generate a concept rendering."
-  ] as const;
+  const STEP_DESCRIPTIONS: Record<number, string> = {
+    2: "Fine-tune positions and confirm spatial constraints.",
+    3: "Choose the cabinet finish and generate a concept rendering."
+  };
 
-  const isFormInMiddle = step !== 4;
+  const isFormInMiddle = step !== 2;
 
   const canvasContent = (
-    <div className={isFormInMiddle ? "grid h-full min-h-0 min-w-0 gap-3 p-3 xl:p-4" : "grid h-full min-h-[540px] min-w-0 gap-3"}>
+    <div className={isFormInMiddle ? "grid h-full min-h-0 min-w-0 gap-3 p-3 xl:p-4" : "grid h-full min-h-0 min-w-0 gap-3"}>
       <div className="min-h-0 overflow-hidden rounded-studio-panel border border-studio-line bg-studio-shell">
         <LayoutPreview
           normalized={result.normalized}
@@ -870,6 +858,7 @@ export function ShowroomIntakeApp({
     <Round1Inspector
       title={SHOWROOM_STEPS[step]}
       description={STEP_DESCRIPTIONS[step]}
+      hideHeader={step !== 2}
       previousDisabled={step === 0}
       continueDisabled={step === SHOWROOM_STEPS.length - 1}
       onPrevious={() => {
@@ -877,11 +866,11 @@ export function ShowroomIntakeApp({
         setStep(Math.max(0, step - 1));
       }}
       onContinue={goToNextStep}
-      footerContent={step === 5 ? renderingFooter : undefined}
-      suggestion={step === 4 ? adjustPositionSuggestion : undefined}
+      footerContent={step === 3 ? renderingFooter : undefined}
+      suggestion={step === 2 ? adjustPositionSuggestion : undefined}
       className={isFormInMiddle ? "h-full overflow-hidden rounded-[16px] border border-studio-line shadow-[0_20px_40px_rgba(0,0,0,0.1)]" : "h-full"}
     >
-      <div className={isFormInMiddle ? "mx-auto w-full max-w-3xl" : ""}>
+      <div className={isFormInMiddle ? "mx-auto w-full max-w-4xl" : ""}>
         {activeStepContent}
       </div>
     </Round1Inspector>

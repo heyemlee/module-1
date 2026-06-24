@@ -49,10 +49,8 @@ describe("showroom intake defaults", () => {
 
   test("uses the approved adjust-position step order without first-phase MEP", () => {
     expect(SHOWROOM_STEPS).toEqual([
-      "Room",
-      "Openings",
-      "Layout",
-      "Appliances",
+      "Room & Openings",
+      "Layout & Appliances",
       "Adjust Positions",
       "Rendering Preferences"
     ]);

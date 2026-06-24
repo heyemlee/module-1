@@ -274,9 +274,4 @@ describe("LayoutPreview", () => {
     expect(html).toContain('aria-label="Kitchen floor plan editor"');
   });
 
-  test("keeps a non-drag position control available", () => {
-    const html = renderPreview({ previewStage: "adjust" });
-
-    expect(html).toContain("Fine-tune selected position");
-  });
 });

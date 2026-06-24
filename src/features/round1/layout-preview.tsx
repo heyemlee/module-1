@@ -233,7 +233,7 @@ export function LayoutPreview({
     <section
       data-canvas-theme="studio"
       data-drag-state={dragState}
-      className="relative h-full min-h-[540px] overflow-hidden bg-studio-shell"
+      className="relative w-full aspect-[4/3] overflow-hidden bg-studio-shell"
     >
       {showHeader && !referenceMode && (
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -279,7 +279,7 @@ export function LayoutPreview({
         viewBox={`0 0 ${plan.canvas.w} ${plan.canvas.h}`}
         aria-label="Kitchen floor plan editor"
         role="img"
-        className="h-full min-h-[540px] w-full touch-none select-none bg-[#203128]"
+        className="h-full w-full touch-none select-none bg-[#203128]"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
@@ -388,16 +388,6 @@ export function LayoutPreview({
         <Legend plan={plan} />
         <Stamp plan={plan} />
       </svg>
-      {selectedPositionId && (
-        <div className="absolute bottom-4 right-4 rounded-studio-control border border-studio-line bg-studio-shell/95 p-3 shadow-[0_16px_36px_rgba(0,0,0,0.28)] backdrop-blur">
-          <p className="text-[11px] font-semibold text-studio-ink">
-            Fine-tune selected position
-          </p>
-          <p className="mt-1 text-[10px] text-studio-muted">
-            Use arrow keys for 1-inch adjustments.
-          </p>
-        </div>
-      )}
     </section>
   );
 }
