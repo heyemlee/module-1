@@ -2,9 +2,28 @@ import { query } from "@/server/db/client";
 import { round1FormSchema, type Round1FormInput } from "@/domain/round1";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
-import type { Round1ProjectRendering } from "@/server/round1/round1-repository";
 import type { Round1RenderingPreferenceStamp } from "@/server/round1/rendering-service";
 import type { AuthUser } from "./types";
+
+/**
+ * Non-authoritative concept rendering stored alongside a project. Customer-facing
+ * preview only — deliberately kept OUT of `Round1Snapshot` (never affects snapshot
+ * validity/readiness or any cabinet/dimension/geometry/quote data). Retained so the
+ * last preview survives a reload; `basedOnSnapshotGeneratedAt` flags it stale once
+ * the snapshot is regenerated.
+ */
+export type Round1ProjectRendering = {
+  model: string;
+  imageBase64: string;
+  prompt: string;
+  size: string;
+  basedOnSnapshotGeneratedAt: string;
+  basedOnRenderingPreferences: Round1RenderingPreferenceStamp | null;
+  salesEstimateOnly: true;
+  notForProduction: true;
+  dimensionConfidence: "ROUGH";
+  createdAt: string;
+};
 
 export type Round1State = {
   projectId: string;

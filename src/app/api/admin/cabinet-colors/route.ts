@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ForbiddenError, requireRole, requireUser, UnauthorizedError } from "@/server/platform/auth-service";
+import { requireRole, requireUser } from "@/server/platform/auth-service";
 import { createCabinetColor, listCabinetColors } from "@/server/platform/cabinet-color-repository";
-import { serverError } from "@/server/platform/api-errors";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { parseCabinetColorRequest } from "./validation";
-
-function authError(error: unknown) {
-  if (error instanceof UnauthorizedError) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
-  if (error instanceof ForbiddenError) {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
-  return null;
-}
 
 export async function GET() {
   try {
@@ -21,7 +11,7 @@ export async function GET() {
     requireRole(user, ["ADMIN"]);
     return NextResponse.json({ colors: await listCabinetColors(user.companyId, false) });
   } catch (error) {
-    return authError(error) ?? serverError("admin/cabinet-colors:list", error, "Unable to list cabinet colors");
+    return authErrorResponse(error, "Admins only") ?? serverError("admin/cabinet-colors:list", error, "Unable to list cabinet colors");
   }
 }
 
@@ -32,7 +22,7 @@ export async function POST(request: Request) {
     const input = parseCabinetColorRequest(await request.json());
     return NextResponse.json({ color: await createCabinetColor(user.companyId, input) }, { status: 201 });
   } catch (error) {
-    const auth = authError(error);
+    const auth = authErrorResponse(error, "Admins only");
     if (auth) return auth;
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid cabinet color request", issues: error.issues }, { status: 400 });

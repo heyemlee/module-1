@@ -1,18 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ForbiddenError, requireRole, requireUser, UnauthorizedError } from "@/server/platform/auth-service";
+import { requireRole, requireUser } from "@/server/platform/auth-service";
 import { cabinetColorInputSchema, updateCabinetColor } from "@/server/platform/cabinet-color-repository";
-import { serverError } from "@/server/platform/api-errors";
-
-function authError(error: unknown) {
-  if (error instanceof UnauthorizedError) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
-  if (error instanceof ForbiddenError) {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
-  return null;
-}
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 
 export async function PUT(
   request: Request,
@@ -27,7 +17,7 @@ export async function PUT(
     if (!color) return NextResponse.json({ error: "Cabinet color not found" }, { status: 404 });
     return NextResponse.json({ color });
   } catch (error) {
-    const auth = authError(error);
+    const auth = authErrorResponse(error, "Admins only");
     if (auth) return auth;
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid cabinet color request", issues: error.issues }, { status: 400 });

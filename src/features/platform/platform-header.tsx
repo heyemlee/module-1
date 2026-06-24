@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { PersonIcon } from "@radix-ui/react-icons";
+import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -61,7 +61,7 @@ export function PlatformHeader({ userName, nav }: { userName: string; nav: React
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#1d1d1f]/15">
               <span className="flex size-8 items-center justify-center rounded-full bg-[#1d1d1f] text-white">
-                <PersonIcon className="size-4" />
+                <User className="size-4" />
               </span>
               <span className="text-[13px] font-semibold text-[#1d1d1f]">{userName}</span>
             </DropdownMenuTrigger>

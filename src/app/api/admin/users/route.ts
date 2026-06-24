@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  ForbiddenError,
-  requireRole,
-  requireUser,
-  UnauthorizedError
-} from "@/server/platform/auth-service";
-import { serverError } from "@/server/platform/api-errors";
+import { requireRole, requireUser } from "@/server/platform/auth-service";
+import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import {
   AccountAlreadyExistsError,
   createCompanyUser,
@@ -21,23 +16,13 @@ const createSchema = z.object({
   monthlyRenderQuota: z.number().int().min(0).default(50)
 });
 
-function authError(error: unknown) {
-  if (error instanceof UnauthorizedError) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
-  if (error instanceof ForbiddenError) {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
-  return null;
-}
-
 export async function GET() {
   try {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
     return NextResponse.json({ users: await listCompanyUsers(user.companyId) });
   } catch (error) {
-    return authError(error) ?? serverError("admin/users:list", error, "Unable to list users");
+    return authErrorResponse(error, "Admins only") ?? serverError("admin/users:list", error, "Unable to list users");
   }
 }
 
@@ -55,7 +40,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ user: created }, { status: 201 });
   } catch (error) {
-    const auth = authError(error);
+    const auth = authErrorResponse(error, "Admins only");
     if (auth) return auth;
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid user request", issues: error.issues }, { status: 400 });
