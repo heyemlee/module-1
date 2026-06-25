@@ -55,13 +55,13 @@ describe("Studio Color System", () => {
     const variables = readRootVariables(css);
 
     expect(variables).toMatchObject({
-      "--studio-void": "#0b120f",
-      "--studio-surface": "#17241e",
+      "--studio-void": "#eef1ec",
+      "--studio-surface": "#ffffff",
       "--studio-paper": "#eef1ec",
-      "--studio-action": "#9fcdb1",
-      "--studio-danger": "#e66d63",
-      "--studio-action-ink": "#102019",
-      "--studio-danger-ink": "#2b0d0a",
+      "--studio-action": "#16823a",
+      "--studio-danger": "#b42318",
+      "--studio-action-ink": "#ffffff",
+      "--studio-danger-ink": "#ffffff",
       "--studio-paper-muted-ink": "#607067"
     });
 

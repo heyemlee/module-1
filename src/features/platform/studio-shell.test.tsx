@@ -101,11 +101,11 @@ describe("Studio design tokens", () => {
     const css = readFileSync("src/app/globals.css", "utf8");
     const variables = readRootVariables(css);
 
-    expect(variables["--studio-void"]).toBe("#0b120f");
-    expect(variables["--studio-action"]).toBe("#9fcdb1");
-    expect(variables["--studio-danger"]).toBe("#e66d63");
+    expect(variables["--studio-void"]).toBe("#eef1ec");
+    expect(variables["--studio-action"]).toBe("#16823a");
+    expect(variables["--studio-danger"]).toBe("#b42318");
     expect(variables["--studio-radius-panel"]).toBe("12px");
-    expect(variables["--studio-quiet"]).toBe("#8b9a91");
+    expect(variables["--studio-quiet"]).toBe("#677669");
     expect(
       contrastRatio(
         variables["--studio-quiet"],
@@ -124,10 +124,10 @@ describe("Studio design tokens", () => {
 
     expect(variables).toMatchObject({
       "--studio-paper-muted-ink": "#607067",
-      "--studio-rail": "#0e1713",
-      "--studio-canvas": "#203128",
-      "--studio-danger-ink": "#2b0d0a",
-      "--studio-warning-ink": "#2d2110"
+      "--studio-rail": "#dfe5df",
+      "--studio-canvas": "#f5f5f7",
+      "--studio-danger-ink": "#ffffff",
+      "--studio-warning-ink": "#ffffff"
     });
     expect(css).not.toMatch(/--app-[\w-]+:/);
   });
