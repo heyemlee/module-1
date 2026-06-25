@@ -71,7 +71,7 @@ export function AdminUsersView({
   }
 
   const userList = (
-    <div className="space-y-4">
+    <div className="space-y-4 p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <h2 className="sr-only">Users List</h2>
         {isDeleteMode ? (

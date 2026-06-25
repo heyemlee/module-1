@@ -194,7 +194,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
 
   return (
     <StudioSection aria-label={color ? "Edit color" : "Add finish"}>
-      <form ref={formRef} onSubmit={submit} className="flex flex-col gap-6" aria-busy={busy}>
+      <form ref={formRef} onSubmit={submit} className="flex flex-col gap-6 p-6 lg:p-8" aria-busy={busy}>
         <h2 className="text-xl font-bold text-studio-ink">
           {color ? "Edit color" : "Add finish"}
         </h2>

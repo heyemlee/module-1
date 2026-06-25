@@ -26,9 +26,9 @@ export function CabinetColorsAdminView({
         }
       />
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <StudioSection aria-label="Cabinet colors list">
+        <div aria-label="Cabinet colors list">
           <CabinetColorsManager colors={colors} />
-        </StudioSection>
+        </div>
         <CabinetColorForm />
       </div>
     </StudioPage>

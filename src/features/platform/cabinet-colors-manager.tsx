@@ -174,14 +174,15 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
 
         return (
           <StudioSection key={style.value} aria-label={style.label}>
-            <h2 className="mb-4 text-base font-bold text-studio-ink">{style.label}</h2>
-            {styleColors.length === 0 ? (
-              <StudioEmptyState
-                title={`No ${style.label} finishes`}
-                description={`Add the first ${style.label} finish with the form.`}
-              />
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="p-6 lg:p-8">
+              <h2 className="mb-4 text-base font-bold text-studio-ink">{style.label}</h2>
+              {styleColors.length === 0 ? (
+                <StudioEmptyState
+                  title={`No ${style.label} finishes`}
+                  description={`Add the first ${style.label} finish with the form.`}
+                />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {styleColors.map((color) => {
                   const draft = drafts[color.id] || toDraft(color);
                   const isColorDirty = isDirty(color, draft);
@@ -305,6 +306,7 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                 })}
               </div>
             )}
+            </div>
           </StudioSection>
         );
       })}

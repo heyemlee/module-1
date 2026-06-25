@@ -68,7 +68,7 @@ export function CreateUserForm() {
         onSubmit={submit}
         autoComplete="off"
         aria-busy={busy}
-        className="flex flex-col h-full"
+        className="flex flex-col h-full p-6 lg:p-8"
       >
         <div className="mb-6">
           <h2 className="text-xl font-bold text-studio-ink">Create user</h2>
