@@ -78,6 +78,7 @@ describe("admin presentation", () => {
     expect(cabinetColorSummary(colors)).toEqual({
       total: 2,
       active: 1,
+      hidden: 1,
       european: 1,
       american: 1
     });
