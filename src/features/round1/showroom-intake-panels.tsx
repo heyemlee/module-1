@@ -30,11 +30,11 @@ export function CabinetFillSummaryPanel({
 }) {
   if (!positionsConfirmed) {
     return (
-      <div className="rounded-md bg-[#f5f5f7] p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
+      <div className="rounded-studio-control bg-studio-paper-muted p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-studio-paper-muted-ink">
           Position setup first
         </p>
-        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+        <p className="mt-2 text-sm leading-6 text-studio-paper-muted-ink">
           Confirm dragged door, window, and appliance positions before cabinet fill.
         </p>
       </div>
@@ -43,11 +43,11 @@ export function CabinetFillSummaryPanel({
 
   if (!cabinetFillGenerated) {
     return (
-      <div className="rounded-md bg-[#f5f5f7] p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
+      <div className="rounded-studio-control bg-studio-paper-muted p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-studio-paper-muted-ink">
           Fixed positions confirmed
         </p>
-        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+        <p className="mt-2 text-sm leading-6 text-studio-paper-muted-ink">
           Generate cabinet fill when the fixed positions are ready.
         </p>
       </div>
@@ -56,8 +56,8 @@ export function CabinetFillSummaryPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-[#f5f5f7] p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
+      <div className="rounded-studio-control bg-studio-paper-muted p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-studio-paper-muted-ink">
           Rough cabinet fill
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
@@ -76,21 +76,21 @@ export function CabinetFillSummaryPanel({
             count={summary.tallCabinets.count}
             linearFeet={summary.tallCabinets.linearFeet}
           />
-          <div className="rounded-md border border-[#d2d2d7] bg-white p-2">
-            <p className="text-xs font-black uppercase tracking-wide text-[#6e6e73]">
+          <div className="rounded-studio-small border border-studio-paper-line bg-studio-paper p-2">
+            <p className="text-xs font-black uppercase tracking-wide text-studio-paper-muted-ink">
               Filler
             </p>
-            <p className="mt-1 text-lg font-black text-[#1d1d1f]">
+            <p className="mt-1 text-lg font-black text-studio-paper-ink">
               ~{summary.estimatedFillerWidth}"
             </p>
-            <p className="text-xs font-bold text-[#6e6e73]">allowance</p>
+            <p className="text-xs font-bold text-studio-paper-muted-ink">allowance</p>
           </div>
         </div>
-        <div className="mt-3 rounded-md border border-dashed border-[#d2d2d7] bg-white px-3 py-2">
-          <p className="text-xs font-black uppercase tracking-wide text-[#6e6e73]">
+        <div className="mt-3 rounded-studio-small border border-dashed border-studio-paper-line bg-studio-paper px-3 py-2">
+          <p className="text-xs font-black uppercase tracking-wide text-studio-paper-muted-ink">
             Pricing reserved
           </p>
-          <p className="mt-1 text-xs leading-5 text-[#6e6e73]">
+          <p className="mt-1 text-xs leading-5 text-studio-paper-muted-ink">
             Dollar pricing is intentionally left for a later quote step.
           </p>
         </div>
@@ -109,12 +109,12 @@ function CabinetSummaryMetric({
   linearFeet: number;
 }) {
   return (
-    <div className="rounded-md border border-[#d2d2d7] bg-white p-2">
-      <p className="text-xs font-black uppercase tracking-wide text-[#6e6e73]">
+    <div className="rounded-studio-small border border-studio-paper-line bg-studio-paper p-2">
+      <p className="text-xs font-black uppercase tracking-wide text-studio-paper-muted-ink">
         {label}
       </p>
-      <p className="mt-1 text-lg font-black text-[#1d1d1f]">{count}</p>
-      <p className="text-xs font-bold text-[#6e6e73]">~{linearFeet} lf</p>
+      <p className="mt-1 text-lg font-black text-studio-paper-ink">{count}</p>
+      <p className="text-xs font-bold text-studio-paper-muted-ink">~{linearFeet} lf</p>
     </div>
   );
 }
@@ -175,13 +175,13 @@ export function RenderingControls({
             message="Inputs changed. Generate a new rendering when ready."
           />
         ) : (
-          <p className="text-xs leading-5 text-[var(--app-muted)]">
+          <p className="text-xs leading-5 text-studio-muted">
             Available after cabinet fill is generated and a cabinet color is confirmed.
           </p>
         )
       ) : null}
       {error && (
-        <p className="rounded-lg bg-[var(--app-red-soft)] px-3 py-2 text-xs leading-5 text-[var(--app-red)]">
+        <p className="rounded-studio-control bg-studio-danger/15 px-3 py-2 text-xs leading-5 text-studio-danger">
           Could not generate the rendering: {error}
         </p>
       )}
@@ -192,7 +192,7 @@ export function RenderingControls({
               type="button"
               onClick={() => setIsFullscreen(true)}
               aria-label="Enlarge concept rendering"
-              className="block w-full cursor-zoom-in overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-ink)] focus-visible:ring-offset-2"
+              className="block w-full cursor-zoom-in overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-studio-action focus-visible:ring-offset-2 focus-visible:ring-offset-studio-void"
             >
               <img
                 src={currentRendering.url}
@@ -376,11 +376,11 @@ export function Round1SnapshotPanel({
   if (!snapshot) {
     return (
       <div className="space-y-3">
-        <div className="rounded-md bg-[#f5f5f7] p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
+        <div className="rounded-studio-control bg-studio-paper-muted p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-studio-paper-muted-ink">
             No snapshot yet
           </p>
-          <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+          <p className="mt-2 text-sm leading-6 text-studio-paper-muted-ink">
             Generate cabinet fill to freeze the authoritative Round 1 sales
             snapshot. Until then, form and position changes stay draft only.
           </p>
@@ -393,32 +393,32 @@ export function Round1SnapshotPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-[#e6f4ef] p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-[#008060]">
+      <div className="rounded-studio-control bg-studio-action/30 p-3 text-studio-action-ink">
+        <p className="text-xs font-bold uppercase tracking-wide">
           Snapshot ready
         </p>
-        <p className="mt-1 text-xs font-bold text-[#008060]">
+        <p className="mt-1 text-xs font-bold">
           Generated {snapshot.generatedAt}
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-bold">
-          <span className="rounded bg-white px-2 py-1 text-[#1d1d1f]">
+          <span className="rounded-studio-small bg-studio-paper px-2 py-1 text-studio-paper-ink">
             {summary.totalCabinets} cabinets
           </span>
-          <span className="rounded bg-white px-2 py-1 text-[#1d1d1f]">
+          <span className="rounded-studio-small bg-studio-paper px-2 py-1 text-studio-paper-ink">
             {summary.confirmationCount} to confirm
           </span>
-          <span className="rounded bg-white px-2 py-1 text-[#1d1d1f]">
+          <span className="rounded-studio-small bg-studio-paper px-2 py-1 text-studio-paper-ink">
             ~{summary.estimatedFillerWidth}&quot; filler
           </span>
         </div>
         <SnapshotPersistStatus persistState={persistState} onRetrySave={onRetrySave} />
       </div>
 
-      <details className="rounded-md border border-[#d2d2d7]">
-        <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-[#1d1d1f]">
+      <details className="rounded-studio-control border border-studio-paper-line">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-studio-paper-ink">
           View snapshot JSON
         </summary>
-        <pre className="max-h-64 overflow-auto border-t border-[#d2d2d7] bg-[#f5f5f7] px-3 py-2 text-[11px] leading-4 text-[#1d1d1f]">
+        <pre className="max-h-64 overflow-auto border-t border-studio-paper-line bg-studio-paper-muted px-3 py-2 text-[11px] leading-4 text-studio-paper-ink">
 {JSON.stringify(snapshot, null, 2)}
         </pre>
       </details>
@@ -438,14 +438,14 @@ function SnapshotPersistStatus({
   if (persistState === "error") {
     return (
       <div className="mt-2 space-y-2">
-        <p className="text-[11px] font-bold text-[#c56a16]">
+        <p className="text-[11px] font-bold text-studio-warning-ink">
           Couldn’t reach the server — snapshot kept locally.
         </p>
         {onRetrySave ? (
           <button
             type="button"
             onClick={onRetrySave}
-            className="rounded-md bg-[#c56a16] px-3 py-1.5 text-[11px] font-bold text-white hover:bg-[#a85a13]"
+            className="rounded-studio-small bg-studio-warning px-3 py-1.5 text-[11px] font-bold text-studio-warning-ink hover:brightness-105"
           >
             Retry save
           </button>
@@ -455,8 +455,8 @@ function SnapshotPersistStatus({
   }
 
   const config = {
-    saving: { text: "Saving to server…", className: "text-[#6e6e73]" },
-    saved: { text: "Saved to server", className: "text-[#008060]" }
+    saving: { text: "Saving to server…", className: "text-studio-paper-muted-ink" },
+    saved: { text: "Saved to server", className: "text-studio-action-ink" }
   }[persistState];
 
   return (

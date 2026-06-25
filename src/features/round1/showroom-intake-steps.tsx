@@ -641,15 +641,15 @@ export function AdjustPositionsStep({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         {cabinetFillGenerated ? (
-          <span className="rounded-full bg-[#e6f4ef] px-2.5 py-1 text-xs font-bold text-[#008060]">
+          <span className="rounded-full bg-studio-action/30 px-2.5 py-1 text-xs font-bold text-studio-action-ink">
             Cabinet fill generated
           </span>
         ) : fixedPositionsConfirmed ? (
-          <span className="rounded-full bg-[#e6f4ef] px-2.5 py-1 text-xs font-bold text-[#008060]">
+          <span className="rounded-full bg-studio-action/30 px-2.5 py-1 text-xs font-bold text-studio-action-ink">
             Fixed positions confirmed
           </span>
         ) : hasOverrides ? (
-          <span className="rounded-full bg-[#fff0dc] px-2.5 py-1 text-xs font-bold text-[#c56a16]">
+          <span className="rounded-full bg-studio-warning/25 px-2.5 py-1 text-xs font-bold text-studio-warning-ink">
             Adjusted manually
           </span>
         ) : null}

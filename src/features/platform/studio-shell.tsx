@@ -89,7 +89,7 @@ export function StudioRail({
   ];
 
   return (
-    <aside className="sticky top-0 flex h-[100dvh] flex-col border-r border-studio-line bg-[#0e1713] p-3">
+    <aside className="sticky top-0 flex h-[100dvh] flex-col border-r border-studio-line bg-studio-rail p-3">
       <Link
         href="/projects"
         className={cn(

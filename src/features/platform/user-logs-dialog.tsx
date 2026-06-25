@@ -21,7 +21,7 @@ export function UsageLogContent({
         <DialogTitle className="text-xl font-bold text-studio-ink">
           Usage for {userName}
         </DialogTitle>
-        <DialogDescription className="text-sm text-studio-secondary">
+        <DialogDescription className="text-sm text-studio-muted">
           Rendering API calls by date.
         </DialogDescription>
       </div>
@@ -39,7 +39,7 @@ export function UsageLogContent({
             <div className="h-8 w-3/4 rounded-md bg-studio-line-strong studio-skeleton" />
           </div>
         ) : stats.length === 0 ? (
-          <div className="flex h-[200px] items-center justify-center text-sm text-studio-secondary">
+          <div className="flex h-[200px] items-center justify-center text-sm text-studio-muted">
             No rendering usage yet
           </div>
         ) : (
@@ -51,8 +51,8 @@ export function UsageLogContent({
               <table className="w-full text-left text-sm">
                 <thead className="bg-studio-shell border-b border-studio-line">
                   <tr>
-                    <th className="p-3 font-semibold text-studio-secondary">Date</th>
-                    <th className="p-3 font-semibold text-studio-secondary text-right">Calls</th>
+                    <th className="p-3 font-semibold text-studio-muted">Date</th>
+                    <th className="p-3 text-right font-semibold text-studio-muted">Calls</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-studio-line bg-studio-void">

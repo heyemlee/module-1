@@ -56,7 +56,7 @@ export function UserStatusAction({
       >
         <span
           aria-hidden
-          className="pointer-events-none inline-block size-5 transform rounded-full bg-white shadow ring-0 transition-transform motion-reduce:transition-none data-[state=active]:translate-x-5 data-[state=disabled]:translate-x-0"
+          className="pointer-events-none inline-block size-5 transform rounded-full bg-studio-paper shadow ring-0 transition-transform motion-reduce:transition-none data-[state=active]:translate-x-5 data-[state=disabled]:translate-x-0"
           data-state={!disabled ? "active" : "disabled"}
         />
       </button>
