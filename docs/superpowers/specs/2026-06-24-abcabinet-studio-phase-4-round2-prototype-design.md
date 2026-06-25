@@ -1,6 +1,6 @@
 # ABCabinet Studio Phase 4: Round 2 AI Agent Design
 
-**Status:** Revised draft for user review
+**Status:** Revised interaction design for user review
 **Revised:** June 25, 2026
 **Branch:** `phase-4`
 
@@ -10,21 +10,19 @@ Round 2 is not a cabinet design application.
 
 It is an AI-assisted workflow that helps Sales, field staff, Designers, and customers move from site measurements to a reviewed kitchen design package with fewer handoffs and less repetitive drafting.
 
-The intended workflow is:
+The intended user-facing workflow is:
 
 ```text
-Field measurements and evidence
-  → AI organizes the material
-  → Designer or staff verifies normalized data
-  → AI proposes the cabinet arrangement
-  → deterministic code generates standard drawings
-  → staff make limited corrections
-  → issues are assigned and resolved
-  → Admin or Designer performs final review
-  → reviewed drawings + JSON + prompt generate renderings
+Measurement data
+  → Design proposal
+  → Drawings and review
 ```
 
-The AI Agent should perform as much routine coordination and drafting work as possible. The Designer should not need to recreate every wall, opening, appliance, cabinet, dimension chain, and elevation manually.
+Standard measurement entry is the only authoritative intake workflow. Uploading existing evidence is an optional assistant inside that workflow. AI may extract information from evidence and prefill the standard fields, but it does not create a separate product mode or a separate source of truth.
+
+Behind the three user-facing tasks, the system performs extraction, confirmation, deterministic validation, structured design generation, drawing generation, issue tracking, and version review.
+
+The AI Agent should perform as much routine extraction, coordination, and drafting work as possible. The Designer should not need to recreate every wall, opening, appliance, cabinet, dimension chain, and elevation manually.
 
 Human responsibility is concentrated on:
 
@@ -99,11 +97,19 @@ Every extracted or proposed value records:
 - Last editor
 - Last edit time
 
-### 3.5 Exceptions become tasks
+### 3.5 AI assists the standard workflow
+
+AI extraction is not a separate mode, inbox, or workflow stage. It fills empty standard fields, attaches evidence and confidence, and asks targeted questions when a value cannot be determined safely.
+
+AI never overwrites a human-confirmed value. A disagreement becomes a visible conflict.
+
+### 3.6 Exceptions appear in context
 
 Missing measurements, conflicting evidence, design-rule failures, and human review comments become explicit issues with owners and status.
 
-### 3.6 Final review remains human
+Issues appear beside the affected field, object, design decision, or drawing marker. A global issue list may be available as a secondary drawer, but issue resolution is not a separate primary workflow stage.
+
+### 3.7 Final review remains human
 
 Only Admin and Designer may complete final review.
 
@@ -158,42 +164,70 @@ Every change must appear in the future append-only activity history. There are n
 
 ## 5. End-to-End Workflow
 
-Round 2 uses six workflow stages:
+Round 2 presents three primary tasks.
+
+### Task 1: Measurement data
+
+Users enter the standard site-measurement schema.
+
+They may begin immediately or upload existing evidence first. Uploading evidence starts AI extraction and prefills eligible fields. In either case, the user arrives at the same standard-entry workspace.
+
+This task includes:
+
+- Room and wall measurements
+- Openings
+- Utilities
+- Appliances
+- Project design standards
+- AI-prefilled values awaiting confirmation
+- Missing values
+- Conflicting values
+- Remeasurement requests
+
+Completion condition:
 
 ```text
-1. Collect
-2. Organize
-3. Verify
-4. Generate
-5. Resolve
-6. Review & Render
+All required measurement values exist and are human-confirmed.
 ```
 
-These are task stages, not drawing-tool modes.
+### Task 2: Design proposal
 
-### Stage 1: Collect
+The Agent uses confirmed measurement JSON, appliance specifications, Round 1 preferences, design standards, and deterministic rule-check results to propose a structured cabinet layout.
 
-Gather field measurements and evidence.
+The user reviews:
 
-### Stage 2: Organize
+- Plan and elevation previews
+- Cabinet sequence and nominal dimensions
+- AI rationale
+- Assumptions
+- Decisions requiring review
+- Blocking design conflicts
 
-AI maps unstructured evidence into the standard measurement schema.
+The user may make limited structured corrections. This is not a freeform CAD workspace.
 
-### Stage 3: Verify
+Completion condition:
 
-People confirm extracted values, resolve conflicts, and complete required fields.
+```text
+The proposal has no unresolved blocking design issue.
+```
 
-### Stage 4: Generate
+### Task 3: Drawings and review
 
-The Agent proposes a cabinet design and deterministic code generates the drawing package.
+Deterministic code generates the standard drawing package from the confirmed measurement version and accepted cabinet-layout version.
 
-### Stage 5: Resolve
+Users review drawings, handle issues beside the relevant drawing or object, and complete final review for a specific version.
 
-System conflicts and human review comments are assigned, remeasured, corrected, and rechecked.
+Completion condition:
 
-### Stage 6: Review & Render
+```text
+An Admin or Designer reviews the current drawing version.
+```
 
-Admin or Designer reviews a specific drawing version. Reviewed drawings become eligible to seed rendering generation.
+Reviewed drawings may seed rendering generation.
+
+### Internal states
+
+The implementation may still track states such as collecting, extracting, confirming, generating, resolving, and reviewing. These are system states and progress indicators, not left-navigation destinations.
 
 ## 6. Entry and Project Integration
 
@@ -227,24 +261,39 @@ Reference only · Field verification required
 
 Round 2 can also start without a Round 1 snapshot when field measurement data is supplied independently.
 
-## 7. Dual Intake
+## 7. Single Intake with Optional AI Prefill
 
-The approved intake model is dual-track:
+Round 2 has one intake model:
 
 ```text
-Standard entry
-AI organize evidence
+Standard measurement entry
 ```
 
-Both paths write into the same normalized Round 2 schema.
+The entry screen does not ask the user to choose a mode.
 
-### 7.1 Standard entry
+It presents:
 
-Designers or staff enter measurements directly into structured forms.
+- Primary action: `Enter measurement data`
+- Optional action: `Upload evidence to prefill`
+- A concise explanation of supported evidence
 
-### 7.2 AI organize evidence
+Users who do not upload evidence go directly to standard entry.
 
-The future AI intake accepts:
+Users who upload evidence follow:
+
+```text
+Upload evidence
+  → AI extracts eligible values
+  → standard fields are prefilled
+  → user enters the same standard-entry workspace
+  → user confirms, corrects, and completes the data
+```
+
+Uploading evidence remains available inside the standard-entry workspace so additional material can be added later.
+
+### 7.1 Supported evidence
+
+The future upload assistant accepts:
 
 - Free-form notes
 - Voice transcription
@@ -255,45 +304,103 @@ The future AI intake accepts:
 - Appliance specification documents
 - Customer or Sales messages
 
-AI does not send extracted data directly to drawing generation.
+The UI explains the accepted categories before file selection. The product does not require every source file to use a single rigid template.
 
-It creates a review queue:
+### 7.2 AI prefill contract
 
-```text
-Original evidence
-  ↔ extracted field
-  ↔ confidence and source
-  ↔ confirm / correct / reject
-```
+AI extraction must follow these rules:
 
-All AI-extracted values default to `NEEDS_CONFIRMATION`.
+- AI writes only into the defined standard measurement schema.
+- AI may prefill empty fields.
+- AI may not invent additional authoritative fields outside the schema.
+- AI may not overwrite a human-confirmed value.
+- A disagreement with a confirmed value becomes `CONFLICT`.
+- An uncertain or unreadable value remains empty.
+- AI attaches source evidence, source location where available, extraction method, and confidence.
+- Every AI-prefilled value starts as `NEEDS_CONFIRMATION`.
+- High confidence does not bypass human confirmation.
+- AI may ask a targeted follow-up question or suggest a remeasurement task.
+- AI-extracted data cannot pass the drawing-generation gate until confirmed by a person.
 
 ## 8. Measurement Entry Experience
 
-The measurement interface is object-based rather than one long form.
+The interface should present the work in business terms rather than expose the internal object model.
 
-### Workspace layout
+Do not use `Object Navigator` as the primary user-facing label or make an empty plan canvas the first screen.
+
+### 8.1 Entry screen
+
+The first Round 2 screen introduces the task:
+
+```text
+Enter site measurement data
+```
+
+Primary card:
+
+```text
+Enter measurement data
+```
+
+Secondary card:
+
+```text
+Upload evidence to prefill
+```
+
+The secondary card lists supported sources and explains that AI only prefills the standard form.
+
+### 8.2 Standard-entry workspace
 
 Desktop and iPad landscape use:
 
 ```text
-Object navigator | live measured-plan preview | current-object form
+Data checklist | current form | completion summary
 ```
 
-The navigator groups:
+The data checklist uses recognizable categories:
 
-- Project and visit
-- Room shell
+- Site visit and room
 - Walls
 - Openings
 - Utilities
 - Appliances
 - Design standards
-- Evidence
 
-The center preview updates from valid draft values.
+Each category shows a plain-language status such as:
 
-The form shows only fields relevant to the selected object.
+- Complete
+- `1 of 2 complete`
+- `2 required values missing`
+- `3 AI values awaiting confirmation`
+- Conflict
+
+The current form shows one understandable data group at a time. AI-prefilled values appear in the form, not in a separate AI inbox.
+
+The completion summary shows:
+
+- Overall completion
+- Confirmed values
+- AI values awaiting confirmation
+- Required missing values
+- Conflicts
+- The condition preventing design generation
+
+`Generate design proposal` remains disabled until the required gate passes.
+
+### 8.3 Inline AI confirmation
+
+An AI-prefilled field displays:
+
+- Proposed value
+- Confidence
+- Source file or note
+- Source location when available
+- Confirm action
+- Edit action
+- View-source action
+
+The interface must make it obvious that the value is proposed rather than confirmed.
 
 ### Fast-entry patterns
 
@@ -305,7 +412,7 @@ The form shows only fields relevant to the selected object.
 - Repeat last offset or height
 - Common appliance-size presets
 - Add another similar utility point
-- Previous/next object navigation
+- Previous/next data-group navigation
 - Save-and-add-next behavior in the future persistent version
 - Inline source and confirmation state
 - Immediate missing-field feedback
@@ -409,12 +516,12 @@ Each normalized field has:
 ```ts
 type Round2FieldState =
   | "MISSING"
-  | "AI_EXTRACTED"
   | "NEEDS_CONFIRMATION"
   | "CONFIRMED"
-  | "CONFLICT"
-  | "MANUALLY_CHANGED";
+  | "CONFLICT";
 ```
+
+Whether a confirmed value was manually entered or edited remains available through provenance and activity history rather than requiring a separate visual state.
 
 Each field records:
 
@@ -442,40 +549,36 @@ type Round2FieldProvenance = {
 
 The interface displays provenance without forcing users to open a separate audit page.
 
-## 11. AI Evidence Inbox
+## 11. Evidence and AI Assistance
 
-Phase 4 includes a complete frontend prototype of the future AI evidence workflow.
+Phase 4 does not include a separate `Organize` stage or AI Evidence Inbox in the primary navigation.
 
-### Inbox
+Evidence is managed from the measurement-data task.
 
-Show all uploaded or pasted evidence with:
+### 11.1 Evidence list
+
+A secondary evidence panel or drawer may show:
 
 - File or note name
 - Submitted by
 - Submitted time
 - Processing status
-- Fields extracted
+- Fields prefilled
 - Warnings
 
-### Evidence review
+Selecting `View source` from a field opens the relevant evidence and highlights its location where possible.
 
-Use a split view:
+### 11.2 Evidence actions
 
-```text
-Evidence preview | extracted fields
-```
-
-Selecting a field highlights its evidence location where possible.
-
-Actions:
-
-- Confirm
+- Upload more evidence
+- View source
+- Confirm proposed value
 - Edit and confirm
 - Reject extraction
 - Mark unreadable
 - Create remeasurement task
 
-### Agent follow-up questions
+### 11.3 Agent follow-up questions
 
 The Agent should produce targeted questions rather than a generic failure:
 
@@ -485,6 +588,8 @@ Which value should be remeasured?
 ```
 
 Questions become tasks and remain linked to the affected fields.
+
+The Agent must not guess a value merely to complete the form.
 
 ## 12. AI Design Agent
 
@@ -665,7 +770,11 @@ The primary correction method is structured form editing. Selecting a drawing ob
 
 ## 16. Validation and Conflict Detection
 
-### 16.1 System-detected hard conflicts
+Problem detection uses three explicit sources. The UI labels the source so users understand why the warning exists.
+
+### 16.1 Deterministic system checks
+
+These checks do not require an LLM.
 
 Deterministic rules detect:
 
@@ -684,7 +793,21 @@ Deterministic rules detect:
 
 The system creates issues but does not silently alter measured data.
 
-### 16.2 Human-raised design issues
+Deterministic code owns whether a known numerical, geometric, schema, or clearance rule passes. LLM output must not determine authoritative geometry validity or blocking status.
+
+### 16.2 AI evidence-understanding alerts
+
+An LLM or vision model may identify uncertainty or inconsistency in unstructured evidence, for example:
+
+- A handwritten value may be `72` or `77`
+- A photograph is too blurred to read safely
+- A note mentions an appliance but no specification is supplied
+- A PDF and a text message appear to disagree
+- A source contains a measurement that cannot be mapped confidently to a standard field
+
+These alerts are suggestions requiring human review. They do not silently change data or independently establish a blocking geometry failure.
+
+### 16.3 Human-raised design issues
 
 Admin or Designer may click a drawing object or location and create an issue.
 
@@ -709,6 +832,25 @@ Example:
 Sink centerline does not align with the window centerline.
 Confirm the window opening offset from Wall A start.
 ```
+
+### 16.4 Problem presentation
+
+Problems appear beside their context:
+
+- A missing value appears in its form group.
+- An evidence conflict appears on the affected field.
+- A design-rule failure appears beside the affected proposal object.
+- A drawing comment appears on or beside its drawing marker.
+
+A global problem-list drawer may aggregate all open items for assignment and tracking. It is a secondary utility, not a main workflow stage.
+
+Labels distinguish:
+
+- `System check`
+- `AI evidence alert`
+- `Designer comment`
+
+An LLM may optionally rewrite an already-detected problem into a concise action-oriented explanation. It cannot decide whether a deterministic rule passed.
 
 ## 17. Issue Assignment and Remeasurement Loop
 
@@ -759,6 +901,18 @@ new normalized-data version
 
 Every edit becomes an append-only event in the future persistent implementation.
 
+The primary navigation shows only:
+
+```text
+Measurement data
+Design proposal
+Drawings and review
+```
+
+It may show completion, current status, and blockers for each task.
+
+The interface must not present the former six internal stages as equally selectable navigation items.
+
 Record:
 
 - Actor
@@ -790,20 +944,14 @@ Old versions are read-only and cannot be deleted through the normal interface.
 
 ### Progress display
 
-Do not use an arbitrary percentage.
+A completion percentage may be shown only when it is derived from required-field completion and confirmation. It must be accompanied by explicit counts for confirmed, missing, pending, and conflicting values.
 
-Use explicit milestones:
+Use explicit task status:
 
 ```text
-Evidence collected
-Data organized
-Measurements confirmed
-Design proposed
-Drawings generated
-Issues resolved
-Waiting for final review
-Designer reviewed
-Rendering available
+Measurement data · In progress / Blocked / Complete
+Design proposal · Not started / In review / Blocked / Complete
+Drawings and review · Not started / Draft / Review required / Reviewed
 ```
 
 The activity timeline explains:
@@ -838,7 +986,7 @@ Changing drawing-affecting data:
 
 ## 20. Final Review
 
-Final review is a dedicated stage, not a checkbox hidden inside drawing generation.
+Final review is a dedicated workspace inside `Drawings and review`, not a checkbox hidden inside drawing generation.
 
 Only Admin and Designer can complete it.
 
@@ -944,35 +1092,24 @@ Renderings are versioned against the reviewed drawing package. A new reviewed dr
 
 ## 22. Phase 4 Frontend Screens
 
-### 22.1 Round 2 overview
+### 22.1 Measurement-data entry
 
-- Current milestone
-- Next responsible person
-- Evidence summary
-- Data-confirmation summary
-- Latest drawing version
-- Open issue count
-- Final-review status
-- Latest rendering
-- Activity timeline
+- Primary `Enter measurement data` action
+- Optional `Upload evidence to prefill` action
+- Supported-evidence explanation
+- Prototype notice
 
 ### 22.2 Measurement workspace
 
-- Object navigator
-- Live measured-plan preview
-- Current-object form
-- Field provenance and state
-- Missing/conflict summary
+- Data checklist
+- Current data-group form
+- Completion summary
+- Inline AI-prefill confirmation
+- Missing and conflict messages
+- Upload-more-evidence action
+- Secondary source-evidence viewer
 
-### 22.3 AI evidence inbox
-
-- Evidence list
-- Evidence preview
-- Extracted-field review
-- Agent follow-up questions
-- Confirm/reject/correct actions
-
-### 22.4 Design proposal
+### 22.3 Design proposal
 
 - Agent-proposed cabinet arrangement
 - Rationale
@@ -980,7 +1117,7 @@ Renderings are versioned against the reviewed drawing package. A new reviewed dr
 - Decisions requiring review
 - Structured correction controls
 
-### 22.5 Drawing package
+### 22.4 Drawings and review
 
 - Sheet navigator
 - Measured plan
@@ -990,25 +1127,15 @@ Renderings are versioned against the reviewed drawing package. A new reviewed dr
 - Dimension and issue overlays
 - Regenerate action
 - Version selector
-
-### 22.6 Issue center
-
-- Open issues
-- Drawing markers
-- Assignee
-- Status
-- Site evidence
-- Design-review actions
-
-### 22.7 Final review
-
 - Version comparison
 - Review checklist
 - Open non-blocking issues
 - Accepted exceptions
 - Approve/return actions
+- Contextual problem handling
+- Secondary problem-list drawer
 
-### 22.8 Rendering
+### 22.5 Rendering
 
 - Reviewed source summary
 - Prompt summary
@@ -1033,7 +1160,7 @@ Renderings are versioned against the reviewed drawing package. A new reviewed dr
 
 ### iPad portrait
 
-- Stage navigation becomes a compact top control
+- Three-task navigation becomes a compact top control
 - Main drawing/evidence surface remains primary
 - Current form or issue details become a bottom sheet
 - All actions use 44px minimum targets
@@ -1146,9 +1273,10 @@ It does not persist these actions.
 
 ### Markup tests
 
-- Dual intake entry
+- Single standard-entry workflow
+- Optional upload-to-prefill action
 - Field provenance
-- Progress milestones
+- Three-task navigation
 - Drawing version
 - Activity actor and time
 - Review role restrictions
@@ -1158,34 +1286,46 @@ It does not persist these actions.
 
 ### Browser acceptance
 
-1. Enter measurements through standard entry.
-2. Review an AI-extracted fixture.
-3. Resolve an extraction conflict.
-4. Generate a cabinet proposal.
-5. Generate measured plan and elevations.
-6. Correct one cabinet width.
-7. Confirm a new drawing version appears.
-8. Create a drawing issue.
-9. Assign it to Sales for remeasurement.
-10. Submit new field evidence as Sales.
-11. Resolve it as Admin or Designer.
-12. Complete final review.
-13. Change a reviewed dimension and confirm review is invalidated.
-14. Re-review and generate a rendering preview.
-15. Confirm no Phase 4 Round 2 mutation API is called.
+1. Open Round 2 and confirm direct entry is the primary action.
+2. Skip evidence upload and enter the standard measurement workspace.
+3. Return to entry, upload an evidence fixture, and confirm it prefills the same workspace.
+4. Confirm an AI-prefilled value shows source, confidence, and confirmation controls.
+5. Confirm an AI-prefilled value cannot bypass human confirmation.
+6. Resolve an extraction conflict in the affected field.
+7. Complete required measurements and generate a cabinet proposal.
+8. Generate measured plan and elevations.
+9. Correct one cabinet width.
+10. Confirm a new drawing version appears.
+11. Create a drawing issue beside the affected drawing object.
+12. Assign it to Sales for remeasurement.
+13. Submit new field evidence as Sales.
+14. Resolve it as Admin or Designer.
+15. Complete final review.
+16. Change a reviewed dimension and confirm review is invalidated.
+17. Re-review and generate a rendering preview.
+18. Confirm no Phase 4 Round 2 mutation API is called.
 
 ## 28. Acceptance Criteria
 
 Phase 4 is accepted when:
 
 - The experience reads as an Agent-led workflow, not CAD software.
-- Standard measurement entry is fast and object-based.
-- AI evidence organization has a complete review prototype.
-- Every extracted value has provenance and confirmation state.
+- The first screen clearly offers direct standard entry as the primary action.
+- Evidence upload is optional AI prefill assistance, not a separate mode.
+- Uploading evidence and skipping upload both lead to the same standard-entry workspace.
+- Standard measurement entry uses a business-readable data checklist rather than an `Object Navigator`.
+- Every AI-prefilled value has provenance, confidence, and confirmation controls.
+- Human confirmation is required for every AI-prefilled value.
+- Users can upload additional evidence while standard entry is in progress.
+- The main workflow contains only Measurement data, Design proposal, and Drawings and review.
 - The Agent proposal is structured data, not a raster drawing.
 - Deterministic code generates a measured plan, wall elevations, island elevations, dimensions, and cabinet schedule.
 - Corrections are constrained and data-driven.
-- System and human issues share one assignment workflow.
+- Missing data, conflicts, and review comments appear beside the relevant context.
+- A global problem list is secondary and does not become a separate primary stage.
+- The UI distinguishes deterministic system checks, AI evidence alerts, and human comments.
+- Deterministic validation, not an LLM, controls numerical and geometric blocking rules.
+- System, AI-assisted, and human-raised problems share one assignment workflow where assignment is required.
 - All edits appear in activity history with actor and before/after values.
 - Admin and Designer can complete final review.
 - Sales cannot close design conflicts or complete final review.
