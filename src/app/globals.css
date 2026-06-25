@@ -3,49 +3,35 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  --studio-void: #0b120f;
-  --studio-shell: #111b16;
-  --studio-surface: #17241e;
-  --studio-raised: #1d2d25;
-  --studio-ink: #edf2ee;
-  --studio-muted: #9aa79f;
-  --studio-quiet: #8b9a91;
-  --studio-line: rgba(231, 239, 233, 0.1);
-  --studio-line-strong: rgba(231, 239, 233, 0.18);
-  --studio-action: #9fcdb1;
-  --studio-action-strong: #78b895;
-  --studio-action-ink: #102019;
+  color-scheme: light;
+  --studio-void: #eef1ec;
+  --studio-shell: #dfe5df;
+  --studio-surface: #ffffff;
+  --studio-raised: #f5f5f7;
+  --studio-ink: #18251f;
+  --studio-muted: #607067;
+  --studio-quiet: #677669;
+  --studio-line: rgba(24, 37, 31, 0.1);
+  --studio-line-strong: rgba(24, 37, 31, 0.18);
+  --studio-action: #16823a;
+  --studio-action-strong: #0f5a28;
+  --studio-action-ink: #ffffff;
   --studio-paper: #eef1ec;
   --studio-paper-muted: #dfe5df;
   --studio-paper-ink: #18251f;
-  --studio-danger: #e66d63;
-  --studio-warning: #d8ae69;
-  --studio-success: #9fcdb1;
+  --studio-paper-muted-ink: #607067;
+  --studio-paper-line: rgba(24, 37, 31, 0.16);
+  --studio-rail: #dfe5df;
+  --studio-canvas: #f5f5f7;
+  --studio-danger: #b42318;
+  --studio-danger-ink: #ffffff;
+  --studio-warning: #b25a00;
+  --studio-warning-ink: #ffffff;
+  --studio-success: #16823a;
   --studio-radius-panel: 12px;
   --studio-radius-control: 8px;
   --studio-radius-small: 6px;
   --studio-shadow-raised: 0 24px 64px rgba(3, 9, 6, 0.32);
-
-  /* Compatibility aliases for components not yet migrated in Phase 1. */
-  --app-bg: #f5f5f7;
-  --app-surface: #ffffff;
-  --app-surface-muted: #fbfbfd;
-  --app-ink: #1d1d1f;
-  --app-muted: #6e6e73;
-  --app-quiet: #86868b;
-  --app-border: rgba(0, 0, 0, 0.12);
-  --app-border-strong: rgba(0, 0, 0, 0.2);
-  --app-blue: #1d1d1f;
-  --app-blue-soft: #f0f0f2;
-  --app-green: #16823a;
-  --app-green-soft: #eaf7ee;
-  --app-amber: #b25a00;
-  --app-amber-soft: #fff3df;
-  --app-red: #b42318;
-  --app-red-soft: #fff1ef;
-  --app-radius: 8px;
-  --app-shadow: 0 16px 45px rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -86,24 +72,6 @@ textarea {
   color: var(--studio-ink);
 }
 
-.app-page {
-  min-height: 100dvh;
-  background: var(--studio-void);
-  color: var(--studio-ink);
-}
-
-.app-panel,
-.app-panel-flat {
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: var(--app-surface);
-  color: var(--app-ink);
-}
-
-.app-panel {
-  box-shadow: var(--app-shadow);
-}
-
 .studio-panel,
 .studio-panel-flat {
   border: 1px solid var(--studio-line);
@@ -114,10 +82,6 @@ textarea {
 
 .studio-panel {
   box-shadow: var(--studio-shadow-raised);
-}
-
-.app-muted {
-  color: var(--studio-muted);
 }
 
 :focus-visible {
@@ -134,176 +98,8 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-.apple-dropdown {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: var(--app-surface);
-  color: var(--app-ink);
-  padding: 0 2.35rem 0 0.78rem;
-  font-size: 0.9rem;
-  outline: none;
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease;
-}
-
-.apple-input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: var(--app-surface);
-  color: var(--app-ink);
-  padding: 0 0.78rem;
-  font-size: 0.9rem;
-  outline: none;
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease;
-}
-
-.apple-dropdown:focus,
-.apple-input:focus,
-.apple-textarea:focus {
-  border-color: rgba(0, 113, 227, 0.72);
-  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
-}
-
-.apple-textarea {
-  width: 100%;
-  resize: none;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: var(--app-surface);
-  color: var(--app-ink);
-  padding: 0.75rem;
-  font-size: 0.9rem;
-  outline: none;
-}
-
-
-@keyframes image_reveal {
-  0% {
-    clip-path: polygon(0 0%, 100% 0%, 100% 100%, 0 100%);
-    opacity: 1;
-    mask-image: linear-gradient(to bottom, black -5%, black 100%);
-  }
-  100% {
-    clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%);
-    opacity: 0;
-    mask-image: linear-gradient(to bottom, transparent 95%, black 100%);
-  }
-}
-
-.loader {
-  display: flex;
-  width: fit-content;
-  height: fit-content;
-  align-items: center;
-  justify-content: center;
-}
-
-.truckWrapper {
-  position: relative;
-  display: flex;
-  width: 160px;
-  height: 78px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  overflow-x: hidden;
-}
-
-.truckBody {
-  width: 112px;
-  height: fit-content;
-  margin-bottom: 6px;
-  animation: truck-motion 1s linear infinite;
-}
-
-@keyframes truck-motion {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(3px);
-  }
-}
-
-.truckTires {
-  position: absolute;
-  bottom: 0;
-  display: flex;
-  width: 112px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px 0 15px;
-}
-
-.truckTires span {
-  width: 18px;
-  height: 18px;
-  border: 4px solid var(--app-ink);
-  border-radius: 999px;
-  background: white;
-}
-
-.road {
-  position: relative;
-  bottom: 0;
-  width: 100%;
-  height: 1.5px;
-  align-self: flex-end;
-  border-radius: 3px;
-  background-color: #282828;
-}
-
-.road::before {
-  content: "";
-  position: absolute;
-  right: -50%;
-  width: 20px;
-  height: 100%;
-  animation: roadAnimation 1.4s linear infinite;
-  border-left: 10px solid white;
-  border-radius: 3px;
-  background-color: #282828;
-}
-
-.road::after {
-  content: "";
-  position: absolute;
-  right: -65%;
-  width: 10px;
-  height: 100%;
-  animation: roadAnimation 1.4s linear infinite;
-  border-left: 4px solid white;
-  border-radius: 3px;
-  background-color: #282828;
-}
-
-.lampPost {
-  position: absolute;
-  right: -90%;
-  bottom: 0;
-  width: 8px;
-  height: 70px;
-  animation: roadAnimation 1.4s linear infinite;
-  border-radius: 999px;
-  background: #282828;
-}
-
-@keyframes roadAnimation {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-350px);
+  .studio-skeleton::after {
+    display: none;
   }
 }
 
@@ -324,103 +120,30 @@ textarea {
   to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
 }
 
-/* From Uiverse.io by WhiteNervosa */
-.user-status-switch {
-  display: inline-block;
+
+
+.studio-skeleton {
   position: relative;
-  width: 36px;
-  height: 20px;
+  overflow: hidden;
+  background: var(--studio-surface);
 }
 
-.user-status-switch input[type="checkbox"] {
-  display: none;
-}
-
-.user-status-slider {
-  background-color: #ffffff2b;
-  border-radius: 100px;
-  padding: 1px;
-  margin: 0;
-  cursor: pointer;
-  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0s;
-  align-items: center;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  box-shadow: rgba(0, 0, 0, 0.62) 0px 0px 5px inset, rgba(0, 0, 0, 0.21) 0px 0px 0px 24px inset,
-        #22cc3f 0px 0px 0px 0px inset, rgba(224, 224, 224, 0.45) 0px 1px 0px 0px;
-}
-
-.user-status-slider::after {
+.studio-skeleton::after {
   content: "";
-  display: flex;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background-color: #e3e3e3;
-  border-radius: 200px;
   position: absolute;
-  box-shadow: transparent 0px 0px 0px 2px, rgba(0, 0, 0, 0.3) 0px 6px 6px;
-  transition: left 300ms cubic-bezier(0.4, 0, 0.2, 1) 0s, background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0s;
-  will-change: left, background-color;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(237, 242, 238, 0.07),
+    transparent
+  );
+  animation: studio-skeleton-sweep 1.5s ease-in-out infinite;
 }
 
-.user-status-switch input[type="checkbox"]:checked + .user-status-slider {
-  box-shadow: rgba(0, 0, 0, 0.62) 0px 0px 5px inset, #22cc3f 0px 0px 0px 2px inset, #22cc3f 0px 0px 0px 24px inset,
-        rgba(224, 224, 224, 0.45) 0px 1px 0px 0px;
-}
-
-.user-status-switch input[type="checkbox"]:checked + .user-status-slider::after {
-  left: 18px;
-}
-
-.user-status-switch input[type="checkbox"]:disabled + .user-status-slider {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* From Uiverse.io by SpatexDEV */
-.uiverse-file-input {
-  color: #6e6e73;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.uiverse-file-input::file-selector-button {
-  border: none;
-  display: inline-flex;
-  padding: 0.75rem 1.5rem;
-  background-color: #488aec;
-  color: #ffffff;
-  font-size: 0.75rem;
-  line-height: 1rem;
-  font-weight: 700;
-  text-align: center;
-  cursor: pointer;
-  text-transform: uppercase;
-  vertical-align: middle;
-  align-items: center;
-  border-radius: 0.5rem;
-  user-select: none;
-  gap: 0.75rem;
-  box-shadow:
-    0 4px 6px -1px #488aec31,
-    0 2px 4px -1px #488aec17;
-  transition: all 0.6s ease;
-  margin-right: 1rem;
-}
-
-.uiverse-file-input::file-selector-button:hover {
-  box-shadow:
-    0 10px 15px -3px #488aec4f,
-    0 4px 6px -2px #488aec17;
-}
-
-.uiverse-file-input::file-selector-button:focus,
-.uiverse-file-input::file-selector-button:active {
-  opacity: 0.85;
-  box-shadow: none;
+@keyframes studio-skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
 }

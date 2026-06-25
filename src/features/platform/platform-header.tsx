@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { User } from "lucide-react";
+import { PersonIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -24,10 +24,10 @@ export function NavPill({
     <Link
       href={href}
       className={cn(
-        "inline-flex h-7 items-center rounded-full px-4 text-[11px] font-bold transition-colors",
+        "inline-flex h-8 items-center rounded-studio-control px-4 text-[11px] font-semibold transition-colors",
         active
-          ? "bg-[#1d1d1f] text-white"
-          : "border border-[#d2d2d7] bg-white text-[#1d1d1f] hover:border-[#1d1d1f]/40"
+          ? "bg-studio-action text-studio-action-ink"
+          : "border border-studio-line bg-studio-surface text-studio-muted hover:border-studio-line-strong hover:bg-studio-raised hover:text-studio-ink"
       )}
     >
       {children}
@@ -35,7 +35,7 @@ export function NavPill({
   );
 }
 
-/** Cream "Motion Style" top bar: brand · nav pills · account menu with sign out. */
+/** Studio project bar: brand · project navigation · account menu. */
 export function PlatformHeader({ userName, nav }: { userName: string; nav: ReactNode }) {
   const [signingOut, setSigningOut] = useState(false);
 
@@ -51,19 +51,19 @@ export function PlatformHeader({ userName, nav }: { userName: string; nav: React
   };
 
   return (
-    <header className="sticky top-0 z-10 border-b border-[#d2d2d7] bg-[#f5f5f7]/95 backdrop-blur">
+    <header className="border-b border-studio-line bg-studio-shell/95 text-studio-ink backdrop-blur">
       <div className="mx-auto flex h-[74px] max-w-[1320px] items-center gap-6 px-8">
-        <Link href="/projects" className="text-[16px] font-bold text-[#1d1d1f]">
+        <Link href="/projects" className="text-[16px] font-bold text-studio-ink">
           ABCabinet
         </Link>
         <nav className="flex items-center gap-2">{nav}</nav>
         <div className="ml-auto">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#1d1d1f]/15">
-              <span className="flex size-8 items-center justify-center rounded-full bg-[#1d1d1f] text-white">
-                <User className="size-4" />
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-studio-control py-1 pl-1 pr-3 outline-none transition-colors hover:bg-studio-raised focus-visible:ring-2 focus-visible:ring-studio-action/70">
+              <span className="flex size-8 items-center justify-center rounded-full bg-studio-surface text-studio-action">
+                <PersonIcon className="size-4" />
               </span>
-              <span className="text-[13px] font-semibold text-[#1d1d1f]">{userName}</span>
+              <span className="text-[13px] font-semibold text-studio-ink">{userName}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
               <DropdownMenuItem disabled={signingOut} onSelect={() => void logout()}>

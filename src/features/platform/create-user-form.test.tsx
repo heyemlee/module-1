@@ -27,5 +27,11 @@ describe("CreateUserForm", () => {
     expect(html).toMatch(/<input[^>]*minLength="8"[^>]*required=""[^>]*name="password"[^>]*value=""/);
     expect(html).toMatch(/<input[^>]*min="0"[^>]*required=""[^>]*name="monthlyRenderQuota"[^>]*value="50"/);
     expect(html).not.toMatch(/<button[^>]*disabled=""/);
+    expect(html).toContain('aria-describedby="create-user-password-hint"');
+    expect(html).toContain('id="create-user-password-hint"');
+    expect(html).toContain("At least 8 characters");
+    expect(html).toContain("Monthly quota");
+    expect(html).toContain("studio");
+    expect(html).not.toContain("#1d1d1f");
   });
 });

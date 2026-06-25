@@ -73,7 +73,7 @@ export function ProjectDetail({
           <div className="mt-4 flex flex-col rounded-studio-panel border border-studio-line bg-studio-shell">
             <Link
               href={`/projects/${project.id}/round1`}
-              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-black/[0.02]"
+              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-white/[0.025]"
             >
               <div>
                 <p className="text-[14px] font-medium text-studio-ink">Round 1</p>
@@ -85,7 +85,7 @@ export function ProjectDetail({
             </Link>
             <Link
               href={`/projects/${project.id}/renderings`}
-              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-black/[0.02]"
+              className="group flex items-center justify-between border-b border-studio-line px-6 py-4 transition-colors hover:bg-white/[0.025]"
             >
               <div>
                 <p className="text-[14px] font-medium text-studio-ink">Rendering</p>

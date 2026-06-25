@@ -3,17 +3,19 @@ import { cn } from "@/lib/utils";
 
 export function StudioPage({
   children,
-  className
+  className,
+  ...props
 }: {
   children: ReactNode;
   className?: string;
-}) {
+} & React.HTMLAttributes<HTMLElement>) {
   return (
     <main
       className={cn(
         "min-h-[100dvh] bg-studio-void px-4 py-6 text-studio-ink sm:px-6 lg:px-8 lg:py-8",
         className
       )}
+      {...props}
     >
       <div className="mx-auto w-full max-w-[1320px]">{children}</div>
     </main>

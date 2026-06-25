@@ -140,11 +140,11 @@ export function AgentChatPanel({
   return (
     <Panel title="AI Intake Assistant">
       {notConfigured ? (
-        <div className="rounded-lg bg-[var(--app-surface-muted)] p-3">
-          <span className="inline-block rounded-full bg-black/10 px-2 py-1 text-xs font-bold text-[var(--app-muted)]">
+        <div className="rounded-studio-control bg-studio-paper-muted p-3">
+          <span className="inline-block rounded-full bg-studio-paper-line px-2 py-1 text-xs font-bold text-studio-paper-muted-ink">
             Not configured
           </span>
-          <p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">
+          <p className="mt-2 text-xs leading-5 text-studio-paper-muted-ink">
             The conversational assistant is optional. Set <code>LLM_PROVIDER</code>{" "}
             and the matching API key to enable it.
           </p>
@@ -152,14 +152,14 @@ export function AgentChatPanel({
       ) : (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[var(--app-muted)]">
+            <p className="text-xs text-studio-paper-muted-ink">
               Describe the kitchen in plain language. The assistant fills the form
               for you to review.
             </p>
             <button
               type="button"
               onClick={() => setCollapsed((value) => !value)}
-              className="ml-2 shrink-0 rounded-full border border-[#d2d2d7] bg-white px-3 py-1 text-xs font-semibold text-[#1d1d1f] transition hover:border-[#1d1d1f]/40"
+              className="ml-2 shrink-0 rounded-studio-control border border-studio-paper-line bg-studio-paper px-3 py-1 text-xs font-semibold text-studio-paper-ink transition hover:border-studio-action-strong"
             >
               {collapsed ? "Expand" : "Hide"}
             </button>
@@ -169,10 +169,10 @@ export function AgentChatPanel({
             <>
               <div
                 ref={scrollRef}
-                className="max-h-64 space-y-2 overflow-auto rounded-lg bg-[var(--app-surface-muted)] p-2"
+                className="max-h-64 space-y-2 overflow-auto rounded-studio-control bg-studio-paper-muted p-2"
               >
                 {messages.length === 0 ? (
-                  <p className="px-1 py-6 text-center text-xs text-[var(--app-quiet)]">
+                  <p className="px-1 py-6 text-center text-xs text-studio-paper-muted-ink">
                     No messages yet. Try: &ldquo;12 by 10 foot kitchen, L-shape,
                     36&quot; sink, no island.&rdquo;
                   </p>
@@ -189,8 +189,8 @@ export function AgentChatPanel({
                       <div
                         className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
                           message.role === "user"
-                            ? "bg-[var(--app-blue)] text-white"
-                            : "bg-white text-[var(--app-ink)] ring-1 ring-[var(--app-border)]"
+                            ? "bg-studio-action text-studio-action-ink"
+                            : "bg-studio-paper text-studio-paper-ink ring-1 ring-studio-paper-line"
                         }`}
                       >
                         {message.content}
@@ -200,7 +200,7 @@ export function AgentChatPanel({
                 )}
                 {isLoading && (
                   <div className="flex justify-start">
-                    <div className="rounded-lg bg-white px-3 py-2 text-sm text-[var(--app-muted)] ring-1 ring-[var(--app-border)]">
+                    <div className="rounded-lg bg-studio-paper px-3 py-2 text-sm text-studio-paper-muted-ink ring-1 ring-studio-paper-line">
                       Thinking…
                     </div>
                   </div>
@@ -208,7 +208,7 @@ export function AgentChatPanel({
               </div>
 
               {(error || stt.error) && (
-                <p className="rounded-lg bg-[var(--app-red-soft)] px-2 py-1 text-xs text-[var(--app-red)]">
+                <p className="rounded-lg bg-studio-danger/15 px-2 py-1 text-xs font-medium text-studio-danger">
                   {error ?? stt.error}
                 </p>
               )}
@@ -239,7 +239,7 @@ export function AgentChatPanel({
                       }
                       disabled={isLoading || sttRecording}
                       title="Dictation language"
-                      className="rounded-full bg-gray-200 px-2.5 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full bg-studio-paper-muted px-2.5 py-2 text-xs font-bold text-studio-paper-muted-ink transition hover:bg-studio-paper-line disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {sttLang === "zh-CN" ? "中文" : "EN"}
                     </button>
@@ -247,10 +247,10 @@ export function AgentChatPanel({
                 }
               />
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-[var(--app-quiet)]">
+                <span className="text-xs text-studio-paper-muted-ink">
                   {input.length}/{MAX_INPUT_LENGTH}
                 </span>
-                <span className="text-xs text-[var(--app-muted)]">
+                <span className="text-xs text-studio-paper-muted-ink">
                   Enter to send · Shift+Enter for a new line
                 </span>
               </div>

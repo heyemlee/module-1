@@ -12,13 +12,13 @@ const buttonVariants = cva(
         default:
           "bg-studio-action text-studio-action-ink shadow-sm shadow-black/20 hover:bg-studio-action-strong",
         destructive:
-          "bg-studio-danger text-studio-action-ink shadow-sm shadow-black/20 hover:brightness-110",
+          "bg-studio-danger text-studio-danger-ink shadow-sm shadow-black/20 hover:brightness-110",
         outline:
           "border border-studio-line-strong bg-studio-surface text-studio-ink shadow-sm shadow-black/10 hover:bg-studio-raised",
         secondary:
           "bg-studio-raised text-studio-ink shadow-sm shadow-black/10 hover:bg-studio-surface",
         inspector:
-          "border border-studio-paper-muted bg-studio-paper text-studio-paper-ink shadow-sm shadow-black/10 hover:bg-studio-paper-muted focus-visible:ring-offset-studio-paper",
+          "border border-studio-paper-line bg-studio-paper text-studio-paper-ink shadow-sm shadow-black/10 hover:bg-studio-paper-muted focus-visible:ring-offset-studio-paper",
         ghost: "text-studio-ink shadow-none hover:bg-studio-raised",
         link:
           "text-studio-action underline-offset-4 shadow-none hover:text-studio-action-strong hover:underline"

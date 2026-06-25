@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
+import { StudioSection } from "./studio-page";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const STYLES = [
   { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
@@ -12,11 +17,9 @@ const STYLES = [
 
 // Inline uploads are stored as data URLs in the existing text columns, so cap
 // the file size to keep rows (and the colors API payload) reasonable.
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_CABINET_IMAGE_BYTES = 4 * 1024 * 1024;
 
-const FIELD =
-  "mt-2 w-full rounded-xl border border-[#d2d2d7] bg-white px-3.5 text-[14px] text-[#1d1d1f] outline-none focus:border-[#1d1d1f]/40 focus:ring-2 focus:ring-[#1d1d1f]/10";
-const FILE_INPUT = "uiverse-file-input";
+const selectClass = "flex h-10 w-full rounded-studio-small border border-studio-line-strong bg-studio-surface px-3 py-2 text-sm text-studio-ink ring-offset-studio-void file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-studio-quiet focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-action/80 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 type CabinetColorPayloadFields = {
   cabinetStyle: CabinetStyle;
@@ -30,78 +33,94 @@ type CabinetColorPayloadFields = {
 };
 
 export function buildCabinetColorPayload(fields: CabinetColorPayloadFields) {
-  const name = fields.name.trim();
   const payload: Record<string, unknown> = {
     cabinetStyle: fields.cabinetStyle,
-    name,
-    // The AI description feeds the rendering prompt; fall back to the name so
-    // sales never has to write one for a quick color.
-    promptDescription: fields.promptDescription.trim() || name,
+    name: fields.name.trim(),
+    promptDescription: fields.promptDescription.trim() || fields.name.trim(),
     active: fields.active,
     sortOrder: fields.sortOrder
   };
-  if (fields.swatchImageUrl !== undefined) payload.swatchImageUrl = fields.swatchImageUrl;
+
+  if (fields.swatchImageUrl !== undefined) {
+    payload.swatchImageUrl = fields.swatchImageUrl;
+  }
   if (fields.hoverExampleImageUrl !== undefined) {
     payload.hoverExampleImageUrl = fields.hoverExampleImageUrl;
   }
+
   return payload;
 }
 
-// ponytail: downscale on the client so swatch rows stay small — was storing the
-// raw upload (up to 4MB of base64) inline, which bloated every colors payload.
-export function resizeImageToDataUrl(file: File, maxDim = 512, quality = 0.82): Promise<string> {
+export function resizeImageToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Canvas unsupported"));
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", quality));
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const max = 512;
+
+        if (width > height && width > max) {
+          height = Math.round((height * max) / width);
+          width = max;
+        } else if (height > max) {
+          width = Math.round((width * max) / height);
+          height = max;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Unable to create canvas context"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = () => reject(new Error("Unable to load image"));
+      img.src = e.target?.result as string;
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Unable to read image"));
-    };
-    img.src = url;
+    reader.onerror = () => reject(new Error("Unable to read file"));
+    reader.readAsDataURL(file);
   });
 }
 
 export function CabinetColorForm({ color }: { color?: CabinetColor }) {
-  const isEdit = Boolean(color);
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [cabinetStyle, setCabinetStyle] = useState<CabinetStyle>(
     color?.cabinetStyle ?? "EUROPEAN_FRAMELESS"
   );
   const [name, setName] = useState(color?.name ?? "");
-  const [promptDescription, setPromptDescription] = useState(color?.promptDescription ?? "");
+  const [promptDescription, setPromptDescription] = useState(
+    color?.promptDescription ?? ""
+  );
   const [active, setActive] = useState(color?.active ?? true);
 
-  // `undefined` = unchanged (keep what is stored); a string = newly picked image.
-  const [swatchData, setSwatchData] = useState<string | undefined>(undefined);
-  const [hoverData, setHoverData] = useState<string | undefined>(undefined);
-  const [swatchPreview, setSwatchPreview] = useState<string | null>(color?.swatchImageUrl ?? null);
+  const [swatchData, setSwatchData] = useState<string | null | undefined>(undefined);
+  const [hoverData, setHoverData] = useState<string | null | undefined>(undefined);
+
+  const [swatchPreview, setSwatchPreview] = useState<string | null>(
+    color?.swatchImageUrl ?? null
+  );
   const [hoverPreview, setHoverPreview] = useState<string | null>(
     color?.hoverExampleImageUrl ?? null
   );
 
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   async function handleFile(
     file: File | undefined,
-    setData: (value: string) => void,
+    setData: (data: string) => void,
     setPreview: (value: string) => void
   ) {
     if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) {
+    if (file.size > MAX_CABINET_IMAGE_BYTES) {
       setError("Image is too large. Please choose an image under 4MB.");
       return;
     }
@@ -115,40 +134,48 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
     }
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("Color name is required.");
+      return;
+    }
+    if (!color && !swatchData) {
+      setError("A swatch image is required for new finishes.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
-    const payload = buildCabinetColorPayload({
-      cabinetStyle,
-      name,
-      promptDescription,
-      // On create, send null when no image was picked; on edit, omit (undefined)
-      // so the stored image is preserved unless a new one was chosen.
-      swatchImageUrl: isEdit ? swatchData : swatchData ?? null,
-      hoverExampleImageUrl: isEdit ? hoverData : hoverData ?? null,
-      active: isEdit ? active : true,
-      sortOrder: color?.sortOrder ?? 0
-    });
-
     try {
-      const response = await fetch(
-        color ? `/api/admin/cabinet-colors/${color.id}` : "/api/admin/cabinet-colors",
-        {
-          method: color ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }
-      );
-      if (!response.ok) {
-        setError("Unable to save cabinet color. Check the fields and try again.");
-        return;
+      const payload = buildCabinetColorPayload({
+        cabinetStyle,
+        name,
+        promptDescription,
+        swatchImageUrl: swatchData,
+        hoverExampleImageUrl: hoverData,
+        active,
+        sortOrder: color?.sortOrder ?? 0
+      });
+
+      const url = color
+        ? `/api/admin/cabinet-colors/${encodeURIComponent(color.id)}`
+        : `/api/admin/cabinet-colors`;
+
+      const res = await fetch(url, {
+        method: color ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error("API rejected the save request");
       }
+
       router.refresh();
-      if (!isEdit) {
-        // Clear the "Add color" form for the next entry (router.refresh keeps
-        // client state, so reset explicitly instead of relying on a full reload).
+
+      if (!color) {
         setName("");
         setPromptDescription("");
         setSwatchData(undefined);
@@ -156,6 +183,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
         setSwatchPreview(null);
         setHoverPreview(null);
         setError(null);
+        formRef.current?.reset();
       }
     } catch {
       setError("Network error. Please try again.");
@@ -165,107 +193,134 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="h-fit rounded-[18px] border border-[#d2d2d7] bg-white p-8"
-    >
-      <h2 className="text-[28px] font-bold text-[#1d1d1f]">
-        {color ? "Edit color" : "Add finish"}
-      </h2>
+    <StudioSection aria-label={color ? "Edit color" : "Add finish"}>
+      <form ref={formRef} onSubmit={submit} className="flex flex-col gap-6 p-6 lg:p-8" aria-busy={busy}>
+        <h2 className="text-xl font-bold text-studio-ink">
+          {color ? "Edit color" : "Add finish"}
+        </h2>
 
-      <div className="mt-6 space-y-4">
-        <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">Cabinet style</span>
-          <select
-            value={cabinetStyle}
-            onChange={(event) => setCabinetStyle(event.target.value as CabinetStyle)}
-            className={`${FIELD} h-11`}
-          >
-            {STYLES.map((style) => (
-              <option key={style.value} value={style.value}>{style.label}</option>
-            ))}
-          </select>
-        </label>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="cabinetStyle" className="text-xs text-studio-muted">Cabinet style</Label>
+            <select
+              id="cabinetStyle"
+              value={cabinetStyle}
+              onChange={(e) => setCabinetStyle(e.target.value as CabinetStyle)}
+              disabled={busy}
+              className={selectClass}
+            >
+              {STYLES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">Color name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className={`${FIELD} h-11`}
-          />
-        </label>
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-xs text-studio-muted">Color name</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+              placeholder="e.g. Natural Oak"
+            />
+          </div>
 
-        <div>
-          <span className="text-[12px] font-semibold text-[#6e6e73]">Swatch image</span>
-          <div className="mt-2 flex items-center gap-3">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#d2d2d7] bg-[#e8e8ed]">
-              {swatchPreview && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={swatchPreview} alt="Swatch preview" className="h-full w-full object-cover" />
-              )}
+          {color && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="active"
+                checked={active}
+                onCheckedChange={(c) => setActive(c === true)}
+                disabled={busy}
+              />
+              <Label htmlFor="active">Active</Label>
             </div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => handleFile(event.target.files?.[0], setSwatchData, setSwatchPreview)}
-              className={FILE_INPUT}
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="swatchImage" className="text-xs text-studio-muted">Swatch image</Label>
+            <div className="flex items-center gap-4">
+              {swatchPreview ? (
+                <img
+                  src={swatchPreview}
+                  alt={color ? `${name || color.name} swatch` : "Preview"}
+                  className="size-16 shrink-0 rounded-md border border-studio-line object-cover"
+                />
+              ) : (
+                <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-studio-line bg-studio-line/20 text-xs text-studio-muted">
+                  No swatch
+                </div>
+              )}
+              <Input
+                id="swatchImage"
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFile(e.target.files?.[0], setSwatchData, setSwatchPreview)}
+                disabled={busy}
+                aria-describedby="swatch-upload-hint"
+                className="h-10 text-xs text-studio-muted file:text-studio-ink"
+              />
+            </div>
+            <p id="swatch-upload-hint" className="text-xs text-studio-muted">
+              Images are resized before upload. Maximum source size: 4MB.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="hoverImage" className="text-xs text-studio-muted">Hover example image (optional)</Label>
+            <div className="flex items-center gap-4">
+              {hoverPreview ? (
+                <img
+                  src={hoverPreview}
+                  alt={color ? `${name || color.name} kitchen example` : "Preview"}
+                  className="size-16 shrink-0 rounded-md border border-studio-line object-cover"
+                />
+              ) : (
+                <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-studio-line bg-studio-line/20 text-xs text-studio-muted">
+                  No example
+                </div>
+              )}
+              <Input
+                id="hoverImage"
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFile(e.target.files?.[0], setHoverData, setHoverPreview)}
+                disabled={busy}
+                aria-describedby="swatch-upload-hint"
+                className="h-10 text-xs text-studio-muted file:text-studio-ink"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="promptDescription" className="text-xs text-studio-muted">
+              AI description
+            </Label>
+            <textarea
+              id="promptDescription"
+              rows={3}
+              value={promptDescription}
+              onChange={(e) => setPromptDescription(e.target.value)}
+              disabled={busy}
+              className={`${selectClass} resize-none h-auto`}
+              placeholder="Visual description for the AI"
             />
           </div>
         </div>
 
-        <div>
-          <span className="text-[12px] font-semibold text-[#6e6e73]">
-            Hover example image (optional)
-          </span>
-          <div className="mt-2 flex items-center gap-3">
-            <div className="h-16 w-24 shrink-0 overflow-hidden rounded-xl border border-[#d2d2d7] bg-[#e8e8ed]">
-              {hoverPreview && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={hoverPreview} alt="Hover example preview" className="h-full w-full object-cover" />
-              )}
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => handleFile(event.target.files?.[0], setHoverData, setHoverPreview)}
-              className={FILE_INPUT}
-            />
+        {error && (
+          <div role="alert" className="rounded-md bg-studio-danger/10 px-4 py-3 text-sm font-medium text-studio-danger">
+            {error}
           </div>
-        </div>
-
-        <label className="block">
-          <span className="text-[12px] font-semibold text-[#6e6e73]">AI description (optional)</span>
-          <textarea
-            value={promptDescription}
-            onChange={(event) => setPromptDescription(event.target.value)}
-            rows={3}
-            placeholder="Leave blank to use the color name"
-            className={`${FIELD} py-2.5`}
-          />
-        </label>
-
-        {isEdit && (
-          <label className="flex items-center gap-2 text-[13px] font-medium text-[#1d1d1f]">
-            <input
-              type="checkbox"
-              checked={active}
-              onChange={(event) => setActive(event.target.checked)}
-            />
-            Active
-          </label>
         )}
-      </div>
 
-      {error && (
-        <p className="mt-4 rounded-lg bg-[#fdeceb] px-3 py-2 text-sm text-[#b42318]">{error}</p>
-      )}
-      <button
-        disabled={busy || !name.trim()}
-        className="mt-6 inline-flex h-[42px] w-full items-center justify-center rounded-full bg-[#1d1d1f] text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy ? "Saving..." : "Save color"}
-      </button>
-    </form>
+        <Button type="submit" disabled={busy || (!color && !swatchPreview)} className="w-full">
+          {busy ? "Saving..." : "Save finish"}
+        </Button>
+      </form>
+    </StudioSection>
   );
 }

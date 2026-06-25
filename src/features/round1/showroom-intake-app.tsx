@@ -161,7 +161,7 @@ export function RenderingPreferencesLockControl({
         {preferencesLocked ? "Preferences locked" : "Lock preferences"}
       </Button>
       {!preferencesLocked && !canLock && (
-        <p className="max-w-44 text-center text-[11px] font-semibold text-[#b42318]">
+        <p className="max-w-44 text-center text-[11px] font-semibold text-studio-danger">
           Select a cabinet color before locking.
         </p>
       )}
@@ -819,10 +819,10 @@ export function ShowroomIntakeApp({
 
   if (!draftLoaded) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] text-[var(--app-ink)]">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-studio-void text-studio-ink">
         <div className="text-center">
-          <div className="mx-auto size-8 animate-spin rounded-full border-2 border-[#d2d2d7] border-t-[#1d1d1f]" />
-          <p className="mt-3 text-[13px] font-semibold text-[#6e6e73]">Loading draft...</p>
+          <div className="studio-skeleton mx-auto size-8 rounded-studio-control border border-studio-line-strong" />
+          <p className="mt-3 text-[13px] font-semibold text-studio-muted">Loading draft...</p>
         </div>
       </main>
     );
@@ -973,14 +973,14 @@ export function ShowroomIntakeApp({
           setRenderingError(null);
         }}
       />
-      <button
+      <Button
         type="button"
         onClick={handleGenerateRendering}
         disabled={!canRenderConcept || renderingBusy}
-        className="rounded-lg bg-[var(--app-ink)] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="px-5"
       >
         Generate Rendering
-      </button>
+      </Button>
     </div>
   );
 
@@ -1058,30 +1058,30 @@ export function ShowroomIntakeApp({
 
       <Dialog open={showAdjustPositionsModal} onOpenChange={setShowAdjustPositionsModal}>
         <DialogContent
-          overlayClassName="bg-[#1d1d1f]/40 backdrop-blur-none"
-          className="w-[calc(100vw-2rem)] max-w-md rounded-2xl border border-[#d2d2d7] bg-white p-6 shadow-xl"
+          overlayClassName="bg-studio-void/80 backdrop-blur-sm"
+          className="w-[calc(100vw-2rem)] max-w-md rounded-studio-panel border border-studio-paper-line bg-studio-paper p-6 text-studio-paper-ink shadow-[var(--studio-shadow-raised)]"
         >
-          <p className="text-xs font-bold uppercase tracking-wide text-[#6e6e73]">
+          <p className="text-xs font-bold uppercase tracking-wide text-studio-paper-muted-ink">
             Adjust Positions
           </p>
-          <DialogTitle className="mt-2 text-lg font-bold text-[#1d1d1f]">
+          <DialogTitle className="mt-2 text-lg font-bold text-studio-paper-ink">
             Door, window, and appliance locations can be dragged on the plan.
           </DialogTitle>
-          <DialogDescription className="mt-3 text-sm leading-6 text-[#6e6e73]">
+          <DialogDescription className="mt-3 text-sm leading-6 text-studio-paper-muted-ink">
             Drag these rough positions first, then confirm them to generate
             the preliminary cabinet fill around those constraints.
           </DialogDescription>
           <div className="mt-5 flex justify-end">
-            <button
+            <Button
               type="button"
+              variant="default"
               onClick={() => {
                 setShowAdjustPositionsModal(false);
                 startDraggableHighlightCue();
               }}
-              className="rounded-full bg-[#1d1d1f] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             >
               Got It
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

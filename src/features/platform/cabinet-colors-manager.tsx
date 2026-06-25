@@ -1,37 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
-import { buildCabinetColorPayload, resizeImageToDataUrl } from "./cabinet-color-form";
+import { buildCabinetColorPayload, resizeImageToDataUrl, MAX_CABINET_IMAGE_BYTES } from "./cabinet-color-form";
+import { StudioSection, StudioEmptyState } from "./studio-page";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const STYLES = [
   { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
   { value: "AMERICAN_FRAMED", label: "American Framed" }
 ] as const;
 
-const STYLE_LABELS = {
-  EUROPEAN_FRAMELESS: "European Frameless",
-  AMERICAN_FRAMED: "American Framed"
-} as const;
-
-const M_INPUT =
-  "w-full rounded-lg border border-[#d2d2d7] bg-white px-2.5 py-1.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#1d1d1f]/40";
-
 type Draft = {
   cabinetStyle: CabinetStyle;
   name: string;
   promptDescription: string;
   active: boolean;
-  // `undefined` = image unchanged; a string = newly picked (already downscaled).
   swatchData?: string;
   hoverData?: string;
   swatchPreview: string | null;
   hoverPreview: string | null;
 };
 
-function toDraft(color: CabinetColor): Draft {
+export function toDraft(color: CabinetColor): Draft {
   return {
     cabinetStyle: color.cabinetStyle,
     name: color.name,
@@ -44,13 +40,13 @@ function toDraft(color: CabinetColor): Draft {
   };
 }
 
-function buildDrafts(colors: CabinetColor[]) {
+export function buildDrafts(colors: CabinetColor[]) {
   const map: Record<string, Draft> = {};
   for (const color of colors) map[color.id] = toDraft(color);
   return map;
 }
 
-function isDirty(color: CabinetColor, draft: Draft) {
+export function isDirty(color: CabinetColor, draft: Draft) {
   return (
     draft.name.trim() !== color.name ||
     draft.cabinetStyle !== color.cabinetStyle ||
@@ -61,11 +57,14 @@ function isDirty(color: CabinetColor, draft: Draft) {
   );
 }
 
+const selectClass = "flex h-10 w-full rounded-studio-small border border-studio-line-strong bg-studio-surface px-3 py-2 text-sm text-studio-ink ring-offset-studio-void file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-studio-quiet focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-action/80 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
 export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => buildDrafts(colors));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number>(0);
 
   const dirtyIds = colors.filter((c) => drafts[c.id] && isDirty(c, drafts[c.id])).map((c) => c.id);
 
@@ -79,6 +78,10 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
     field: "swatch" | "hover"
   ) {
     if (!file) return;
+    if (file.size > MAX_CABINET_IMAGE_BYTES) {
+      setError("Image is too large. Please choose an image under 4MB.");
+      return;
+    }
     try {
       const dataUrl = await resizeImageToDataUrl(file);
       update(
@@ -98,184 +101,213 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
     setBusy(true);
     setError(null);
     try {
-      const results = await Promise.all(
-        dirtyIds.map((id) => {
-          const draft = drafts[id];
-          const color = colors.find((c) => c.id === id)!;
-          const payload = buildCabinetColorPayload({
-            cabinetStyle: draft.cabinetStyle,
-            name: draft.name,
-            promptDescription: draft.promptDescription,
-            // Omit (undefined) when unchanged so the stored image is preserved.
-            swatchImageUrl: draft.swatchData,
-            hoverExampleImageUrl: draft.hoverData,
-            active: draft.active,
-            sortOrder: color.sortOrder
-          });
-          return fetch(`/api/admin/cabinet-colors/${id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-        })
-      );
-      if (results.some((r) => !r.ok)) {
-        setError("Some colors couldn’t be saved. Check the fields and try again.");
-        return;
-      }
-      // Clear the "new image" markers so saved rows read as clean once the
-      // refreshed server data (with trimmed names etc.) flows back in.
-      setDrafts((prev) => {
-        const next = { ...prev };
-        for (const id of dirtyIds) {
-          next[id] = {
-            ...next[id],
-            name: next[id].name.trim(),
-            promptDescription: next[id].promptDescription.trim(),
-            swatchData: undefined,
-            hoverData: undefined
-          };
-        }
-        return next;
+      const requests = dirtyIds.map((id) => {
+        const color = colors.find((c) => c.id === id)!;
+        const draft = drafts[id];
+        return fetch(`/api/admin/cabinet-colors/${encodeURIComponent(id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            buildCabinetColorPayload({
+              cabinetStyle: draft.cabinetStyle,
+              name: draft.name,
+              promptDescription: draft.promptDescription,
+              swatchImageUrl: draft.swatchData,
+              hoverExampleImageUrl: draft.hoverData,
+              active: draft.active,
+              sortOrder: color.sortOrder
+            })
+          )
+        });
       });
-      router.refresh();
+
+      const results = await Promise.allSettled(requests);
+      const failed = results.filter(
+        (result) => result.status === "rejected" || !result.value.ok
+      ).length;
+
+      if (failed > 0) {
+        setError(`Failed to save ${failed} color(s).`);
+      } else {
+        router.refresh();
+        setSavedAt(Date.now());
+      }
     } catch {
-      setError("Network error. Please try again.");
+      setError("An unexpected error occurred.");
     } finally {
       setBusy(false);
     }
   }
 
+  useEffect(() => {
+    setDrafts(buildDrafts(colors));
+  }, [colors]);
+
   return (
     <div className="space-y-6">
-      <div className="sticky top-[74px] z-10 flex items-center justify-between gap-3 rounded-[14px] border border-[#d2d2d7] bg-white px-4 py-3">
-        <p className="text-[13px] text-[#6e6e73]">
-          {dirtyIds.length === 0
-            ? "No unsaved changes"
-            : `${dirtyIds.length} unsaved ${dirtyIds.length === 1 ? "change" : "changes"}`}
-        </p>
+      <div className="sticky top-[74px] z-10 flex items-center justify-between gap-3 rounded-studio-panel border border-studio-line bg-studio-void px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-studio-muted">
+            {dirtyIds.length === 0
+              ? "No unsaved changes"
+              : `${dirtyIds.length} unsaved change(s)`}
+          </p>
+          {error && <div role="alert" className="text-xs font-semibold text-studio-danger">{error}</div>}
+        </div>
         <div className="flex items-center gap-3">
-          {error && <p className="text-[13px] text-[#b42318]">{error}</p>}
-          <button
-            type="button"
+          <Button
             onClick={saveAll}
             disabled={busy || dirtyIds.length === 0}
-            className="inline-flex h-9 items-center rounded-full bg-[#1d1d1f] px-4 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            className="w-36"
           >
             {busy ? "Saving..." : "Save all changes"}
-          </button>
+          </Button>
         </div>
       </div>
+      
+      <div aria-live="polite" className="sr-only">
+        {savedAt > 0 ? "Changes saved" : ""}
+      </div>
 
-      {(["EUROPEAN_FRAMELESS", "AMERICAN_FRAMED"] as const).map((style) => {
-        const group = colors.filter((color) => color.cabinetStyle === style);
+      {STYLES.map((style) => {
+        const styleColors = colors.filter((c) => c.cabinetStyle === style.value);
+
         return (
-          <section key={style} className="rounded-[18px] border border-[#d2d2d7] bg-white p-5">
-            <h2 className="mb-4 text-[15px] font-bold text-[#1d1d1f]">{STYLE_LABELS[style]}</h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {group.map((color) => {
-                const draft = drafts[color.id];
-                if (!draft) return null;
-                const dirty = isDirty(color, draft);
-                return (
-                  <article
-                    key={color.id}
-                    className={`overflow-hidden rounded-[14px] border ${dirty ? "border-[#c56a16]" : "border-[#d2d2d7]"}`}
-                  >
-                    <div className="relative h-28 w-full bg-[#e8e8ed]">
-                      {draft.swatchPreview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={draft.swatchPreview}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-full w-full" style={{ background: color.swatchHex ?? "#e8e8ed" }} />
-                      )}
-                      {draft.active && (
-                        <span className="absolute left-2 top-2 inline-flex h-6 items-center gap-1.5 rounded-full bg-[#e6f4ef] px-2.5 text-[10px] font-bold text-[#008060]">
-                          <span className="size-1.5 rounded-full bg-[#008060]" />
-                          ACTIVE
-                        </span>
-                      )}
-                      {dirty && (
-                        <span className="absolute right-2 top-2 inline-flex h-6 items-center rounded-full bg-[#fff0dc] px-2.5 text-[10px] font-bold text-[#c56a16]">
-                          Unsaved
-                        </span>
-                      )}
-                    </div>
+          <StudioSection key={style.value} aria-label={style.label}>
+            <div className="p-6 lg:p-8">
+              <h2 className="mb-4 text-base font-bold text-studio-ink">{style.label}</h2>
+              {styleColors.length === 0 ? (
+                <StudioEmptyState
+                  title={`No ${style.label} finishes`}
+                  description={`Add the first ${style.label} finish with the form.`}
+                />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {styleColors.map((color) => {
+                  const draft = drafts[color.id] || toDraft(color);
+                  const isColorDirty = isDirty(color, draft);
 
-                    <div className="space-y-2 p-3">
-                      <input
-                        value={draft.name}
-                        onChange={(e) => update(color.id, { name: e.target.value })}
-                        className={`${M_INPUT} font-semibold`}
-                      />
-                      <label className="flex items-center gap-2 text-[11px] font-medium text-[#6e6e73]">
-                        <input
-                          type="checkbox"
-                          checked={draft.active}
-                          onChange={(e) => update(color.id, { active: e.target.checked })}
+                  return (
+                    <article
+                      key={color.id}
+                      className="flex flex-col overflow-hidden rounded-xl border border-studio-line bg-studio-void"
+                    >
+                      <div
+                        className="relative h-32 w-full shrink-0"
+                        style={{ backgroundColor: color.swatchHex || "var(--studio-paper-muted)" }}
+                      >
+                        {draft.swatchPreview && (
+                          <img
+                            src={draft.swatchPreview}
+                            alt={`${draft.name || color.name} swatch`}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        )}
+                        <div className="absolute left-2 top-2 flex flex-col gap-1">
+                          {draft.active ? (
+                            <span className="inline-flex items-center rounded-full bg-studio-success/20 px-2 py-0.5 text-xs font-semibold text-studio-success">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-studio-line-strong px-2 py-0.5 text-xs font-semibold text-studio-muted">
+                              Inactive
+                            </span>
+                          )}
+                          {isColorDirty && (
+                            <span className="inline-flex items-center rounded-full bg-studio-action/20 px-2 py-0.5 text-xs font-semibold text-studio-action">
+                              Unsaved
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-3 p-4">
+                        <Input
+                          value={draft.name}
+                          onChange={(e) => update(color.id, { name: e.target.value })}
+                          className="font-semibold"
+                          aria-label={`${color.name} name`}
+                          disabled={busy}
                         />
-                        Active
-                      </label>
-
-                      <label className="block text-[11px] font-semibold text-[#6e6e73]">
-                        Cabinet style
-                        <select
-                          value={draft.cabinetStyle}
-                          onChange={(e) =>
-                            update(color.id, { cabinetStyle: e.target.value as CabinetStyle })
-                          }
-                          className={`${M_INPUT} mt-1`}
-                        >
-                          {STYLES.map((s) => (
-                            <option key={s.value} value={s.value}>{s.label}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="block text-[11px] font-semibold text-[#6e6e73]">
-                        Swatch image
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => pickImage(color.id, e.target.files?.[0], "swatch")}
-                          className="mt-1 block w-full text-[11px] text-[#6e6e73]"
-                        />
-                      </label>
-
-                      <label className="block text-[11px] font-semibold text-[#6e6e73]">
-                        Hover example image (optional)
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => pickImage(color.id, e.target.files?.[0], "hover")}
-                          className="mt-1 block w-full text-[11px] text-[#6e6e73]"
-                        />
-                      </label>
-
-                      <label className="block text-[11px] font-semibold text-[#6e6e73]">
-                        AI description
-                        <textarea
-                          value={draft.promptDescription}
-                          onChange={(e) => update(color.id, { promptDescription: e.target.value })}
-                          rows={2}
-                          className={`${M_INPUT} mt-1`}
-                        />
-                      </label>
-                    </div>
-                  </article>
-                );
-              })}
-              {group.length === 0 && (
-                <p className="text-[13px] text-[#6e6e73]">No colors configured.</p>
-              )}
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id={`active-${color.id}`}
+                            checked={draft.active}
+                            onCheckedChange={(c) => update(color.id, { active: c === true })}
+                            disabled={busy}
+                          />
+                          <Label htmlFor={`active-${color.id}`}>Active</Label>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`style-${color.id}`} className="text-xs text-studio-muted">Cabinet style</Label>
+                          <select
+                            id={`style-${color.id}`}
+                            className={selectClass}
+                            value={draft.cabinetStyle}
+                            onChange={(e) =>
+                              update(color.id, { cabinetStyle: e.target.value as CabinetStyle })
+                            }
+                            disabled={busy}
+                          >
+                            {STYLES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`swatch-${color.id}`} className="text-xs text-studio-muted">Swatch image</Label>
+                          <Input
+                            id={`swatch-${color.id}`}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => pickImage(color.id, e.target.files?.[0], "swatch")}
+                            disabled={busy}
+                            className="h-8 text-xs text-studio-muted file:text-studio-ink"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`hover-${color.id}`} className="text-xs text-studio-muted">Hover example image (optional)</Label>
+                          {draft.hoverPreview && (
+                            <div className="mb-2 h-16 w-full overflow-hidden rounded-md border border-studio-line bg-studio-line/20">
+                              <img
+                                src={draft.hoverPreview}
+                                alt={`${draft.name || color.name} kitchen example`}
+                                loading="lazy"
+                                className="h-full w-full object-cover opacity-80"
+                              />
+                            </div>
+                          )}
+                          <Input
+                            id={`hover-${color.id}`}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => pickImage(color.id, e.target.files?.[0], "hover")}
+                            disabled={busy}
+                            className="h-8 text-xs text-studio-muted file:text-studio-ink"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`ai-${color.id}`} className="text-xs text-studio-muted">AI description</Label>
+                          <textarea
+                            id={`ai-${color.id}`}
+                            rows={2}
+                            value={draft.promptDescription}
+                            onChange={(e) => update(color.id, { promptDescription: e.target.value })}
+                            disabled={busy}
+                            className={`${selectClass} resize-none h-auto`}
+                          />
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
             </div>
-          </section>
+          </StudioSection>
         );
       })}
     </div>
