@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ABCabinet Studio · Round 2 Flow Prototype</title>
+  <style>
+    :root {
+      --shell: #f4f5f1;
+      --surface: #ffffff;
+      --surface-2: #f8f8f5;
+      --ink: #1d241f;
+      --muted: #667168;
+      --quiet: #899188;
+      --line: #dfe2dc;
+      --line-strong: #c5cbc3;
+      --action: #1e2821;
+      --action-hover: #314036;
+      --ai: #8b6d19;
+      --ai-bg: #fff8df;
+      --danger: #9a4638;
+      --danger-bg: #fff1ed;
+      --success: #426d4c;
+      --success-bg: #edf6ee;
+      --info: #466271;
+      --info-bg: #edf4f7;
+      --radius: 10px;
+      --shadow: 0 18px 50px rgba(45, 54, 47, .08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--shell);
+      color: var(--ink);
+      font: 14px/1.5 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid rgba(70, 98, 113, .25);
+      outline-offset: 2px;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    .hidden { display: none !important; }
+    .app { min-height: 100vh; display: flex; flex-direction: column; }
+
+    .prototype-bar {
+      min-height: 34px;
+      padding: 8px 20px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      background: #fff6c8;
+      border-bottom: 1px solid #eadb86;
+      color: #695a17;
+      font-size: 12px;
+    }
+    .link-button {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      text-decoration: underline;
+    }
+
+    .topbar {
+      height: 68px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 230px; }
+    .brand-mark {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: grid; place-items: center;
+      background: var(--action); color: white; font-weight: 750;
+    }
+    .brand strong { display: block; font-size: 14px; }
+    .brand span { display: block; color: var(--muted); font-size: 12px; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+
+    .task-nav { display: flex; align-items: center; gap: 8px; }
+    .task-tab {
+      display: flex; align-items: center; gap: 8px;
+      border: 0; border-radius: 8px;
+      padding: 9px 12px;
+      background: transparent; color: var(--muted);
+      white-space: nowrap;
+    }
+    .task-tab.active { background: #eef0eb; color: var(--ink); font-weight: 650; }
+    .task-tab.locked { opacity: .42; cursor: not-allowed; }
+    .task-number {
+      width: 22px; height: 22px; border: 1px solid var(--line-strong);
+      border-radius: 50%; display: grid; place-items: center; font-size: 11px;
+    }
+    .task-tab.active .task-number { background: var(--action); border-color: var(--action); color: white; }
+    .task-tab.done .task-number { background: var(--success-bg); border-color: #a9c6ae; color: var(--success); }
+
+    .btn {
+      min-height: 40px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 9px 14px;
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 620;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #f4f5f1; }
+    .btn.primary { background: var(--action); border-color: var(--action); color: white; }
+    .btn.primary:hover { background: var(--action-hover); }
+    .btn.subtle { background: transparent; }
+    .btn.small { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+    .btn:disabled { cursor: not-allowed; background: #e3e5e0; border-color: #e3e5e0; color: #8d948d; }
+
+    .screen { flex: 1; min-height: 0; }
+    .entry {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 64px 32px 80px;
+    }
+    .entry-copy { max-width: 680px; }
+    .entry h1 { max-width: 620px; margin-bottom: 14px; font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -.04em; }
+    .entry-copy > p { max-width: 620px; margin-bottom: 34px; color: var(--muted); font-size: 16px; }
+    .entry-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }
+    .entry-card {
+      min-height: 245px; padding: 28px;
+      display: flex; flex-direction: column;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 14px; box-shadow: var(--shadow);
+    }
+    .entry-card.primary-card { border: 2px solid var(--action); }
+    .entry-card h2 { margin-bottom: 8px; font-size: 22px; }
+    .entry-card p { max-width: 46ch; color: var(--muted); }
+    .card-action { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .mini-flow {
+      margin-top: 24px; padding: 18px 20px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: rgba(255,255,255,.56); border: 1px solid var(--line); border-radius: var(--radius);
+      color: var(--muted); font-size: 12px;
+    }
+    .mini-flow strong { color: var(--ink); }
+
+    .workspace {
+      height: calc(100vh - 102px);
+      min-height: 620px;
+      display: grid;
+      grid-template-columns: 252px minmax(420px, 1fr) 290px;
+    }
+    .rail, .summary { overflow: auto; padding: 22px 18px; background: var(--surface); }
+    .rail { border-right: 1px solid var(--line); }
+    .summary { border-left: 1px solid var(--line); background: var(--surface-2); }
+    .main-panel { overflow: auto; padding: 30px 36px 56px; background: var(--surface); }
+    .section-label { margin-bottom: 12px; color: var(--quiet); font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+    .checklist { display: grid; gap: 5px; }
+    .check-item {
+      width: 100%; border: 0; border-radius: 8px; padding: 11px 10px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: transparent; color: var(--ink); text-align: left;
+    }
+    .check-item:hover { background: #f4f5f1; }
+    .check-item.active { background: var(--action); color: white; }
+    .status-text { font-size: 11px; color: var(--muted); }
+    .check-item.active .status-text { color: #dce5dd; }
+    .status-text.warn { color: var(--danger); }
+    .status-text.ai { color: var(--ai); }
+    .rail-upload {
+      margin-top: 22px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+    .rail-upload p { color: var(--muted); font-size: 12px; }
+
+    .panel-heading {
+      padding-bottom: 18px; margin-bottom: 24px;
+      display: flex; justify-content: space-between; gap: 16px; align-items: flex-start;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-heading h1 { margin-bottom: 5px; font-size: 26px; letter-spacing: -.025em; }
+    .panel-heading p { margin: 0; color: var(--muted); }
+    .badge { padding: 5px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge.ai { background: var(--ai-bg); color: var(--ai); }
+    .badge.system { background: var(--info-bg); color: var(--info); }
+    .badge.human { background: #f0edf7; color: #62527c; }
+    .badge.ok { background: var(--success-bg); color: var(--success); }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 14px; }
+    .field { display: grid; gap: 7px; align-content: start; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { font-size: 12px; font-weight: 650; color: #4f5a51; }
+    .field input, .field select, .field textarea {
+      width: 100%; min-height: 42px; padding: 9px 11px;
+      border: 1px solid var(--line-strong); border-radius: 8px;
+      background: white; color: var(--ink);
+    }
+    .field textarea { min-height: 90px; resize: vertical; }
+    .field.ai-field input { background: #fffcf0; border-color: #d1b858; }
+    .field.missing input { border-color: #cb7c6e; background: #fffaf8; }
+    .helper { color: var(--muted); font-size: 11px; }
+    .helper.error { color: var(--danger); }
+    .source-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .source { color: var(--ai); font-size: 11px; }
+    .inline-actions { display: flex; gap: 7px; }
+    .notice {
+      margin-top: 22px; padding: 14px 15px;
+      border: 1px solid var(--line); border-radius: 9px;
+      background: var(--surface-2); color: var(--muted); font-size: 12px;
+    }
+    .notice.ai { border-color: #ead68d; background: var(--ai-bg); color: #6f5d21; }
+    .notice.danger { border-color: #e1a398; background: var(--danger-bg); color: #783f35; }
+    .notice.info { border-color: #b9d0da; background: var(--info-bg); color: #3f5965; }
+    .notice strong { color: inherit; }
+    .footer-actions {
+      margin-top: 30px; padding-top: 18px;
+      display: flex; justify-content: space-between; gap: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .progress-number { font-size: 38px; font-weight: 720; letter-spacing: -.04em; }
+    .progress-track { height: 7px; margin: 8px 0 21px; overflow: hidden; border-radius: 99px; background: #dfe2dc; }
+    .progress-fill { height: 100%; width: 0; border-radius: inherit; background: var(--action); transition: width .25s ease; }
+    .metric-list { display: grid; gap: 0; }
+    .metric { padding: 10px 0; display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .metric:last-child { border-bottom: 0; }
+    .metric strong.ai { color: var(--ai); }
+    .metric strong.danger { color: var(--danger); }
+    .gate { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .gate p { color: var(--muted); font-size: 12px; }
+
+    .proposal-layout, .review-layout {
+      max-width: 1240px; margin: 0 auto; padding: 32px;
+      display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px;
+    }
+    .sheet {
+      min-height: 610px; padding: 28px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+    }
+    .side-card {
+      padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    }
+    .side-stack { display: grid; gap: 14px; align-content: start; }
+    .plan-canvas {
+      margin-top: 22px; min-height: 390px; padding: 26px;
+      display: grid; place-items: center;
+      background: #fafaf7; border: 1px solid var(--line); border-radius: 8px;
+    }
+    .room {
+      width: min(78%, 620px); aspect-ratio: 1.35;
+      position: relative; border: 4px solid #59645c; background: white;
+    }
+    .window-mark {
+      position: absolute; top: -7px; left: 32%; width: 25%; height: 10px;
+      border-left: 2px solid #57738b; border-right: 2px solid #57738b; background: #dce9ef;
+    }
+    .cabinet-run { position: absolute; left: 6%; right: 6%; bottom: 6%; height: 22%; display: flex; gap: 3px; }
+    .cabinet {
+      flex: 1; min-width: 0; display: grid; place-items: center;
+      background: #d9dfd7; border: 1px solid #8c978d; color: #374239; font-size: 11px;
+    }
+    .cabinet.selected { background: #c7d6c8; border: 2px solid var(--success); }
+    .island {
+      position: absolute; width: 42%; height: 20%; left: 29%; top: 42%;
+      display: grid; place-items: center; background: #e5e0d5; border: 2px solid #9b917d; font-size: 11px;
+    }
+    .drawing-grid { margin-top: 22px; display: grid; grid-template-columns: 1.2fr .8fr; gap: 12px; }
+    .drawing {
+      min-height: 230px; position: relative; padding: 18px;
+      background: #fff; border: 1px solid #bcc4bc; border-radius: 6px;
+    }
+    .drawing h3 { font-size: 13px; }
+    .elevation-line { height: 120px; margin-top: 30px; display: flex; align-items: end; gap: 3px; border-bottom: 2px solid #59645c; }
+    .elevation-cabinet { flex: 1; height: 62%; background: #e2e6e0; border: 1px solid #9da79f; }
+    .elevation-cabinet.tall { height: 100%; }
+    .issue-marker {
+      position: absolute; right: 18%; bottom: 34%;
+      width: 24px; height: 24px; display: grid; place-items: center;
+      border: 0; border-radius: 50%; background: var(--danger); color: white; font-size: 11px; font-weight: 750;
+      box-shadow: 0 0 0 4px rgba(154,70,56,.16);
+    }
+    .reviewed-stamp {
+      position: absolute; right: 28px; top: 92px;
+      padding: 8px 11px; transform: rotate(-4deg);
+      border: 2px solid var(--success); color: var(--success); font-weight: 800; letter-spacing: .06em;
+    }
+
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 50;
+      padding: 28px; display: grid; place-items: center;
+      background: rgba(24, 31, 26, .42);
+    }
+    .modal {
+      width: min(760px, 100%); max-height: calc(100vh - 56px); overflow: auto;
+      background: white; border-radius: 14px; box-shadow: 0 28px 90px rgba(20, 28, 22, .25);
+    }
+    .modal-head, .modal-foot { padding: 20px 22px; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .modal-head { border-bottom: 1px solid var(--line); }
+    .modal-head h2 { margin: 0; font-size: 20px; }
+    .modal-body { padding: 24px 22px; }
+    .modal-foot { border-top: 1px solid var(--line); justify-content: flex-end; }
+    .upload-zone {
+      min-height: 180px; padding: 26px; display: grid; place-items: center; text-align: center;
+      border: 1.5px dashed #9da69e; border-radius: 10px; background: #fafbf8;
+    }
+    .supported { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .supported div { padding: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; font-size: 12px; }
+    .file-picker-actions { display: flex; justify-content: center; gap: 9px; flex-wrap: wrap; }
+    .file-list { margin-top: 18px; display: grid; gap: 8px; }
+    .file-row {
+      padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px; align-items: center; background: white; border: 1px solid var(--line); border-radius: 8px;
+    }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+    .file-meta { color: var(--muted); font-size: 11px; }
+    .file-route { padding: 4px 7px; border-radius: 999px; background: var(--info-bg); color: var(--info); font-size: 10px; font-weight: 700; }
+    .support-table { margin-top: 18px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+    .support-row {
+      padding: 10px 12px; display: grid; grid-template-columns: 110px 1fr 100px; gap: 12px;
+      border-bottom: 1px solid var(--line); font-size: 12px;
+    }
+    .support-row:last-child { border-bottom: 0; }
+    .support-row strong { color: var(--ink); }
+    .support-route { color: var(--muted); text-align: right; }
+    .processing { padding: 18px; background: var(--info-bg); border-radius: 9px; }
+    .processing-track { height: 7px; margin-top: 12px; border-radius: 99px; background: #d1e0e6; overflow: hidden; }
+    .processing-fill { width: 0; height: 100%; background: var(--info); transition: width .8s ease; }
+
+    .toast {
+      position: fixed; right: 22px; bottom: 22px; z-index: 80;
+      max-width: 360px; padding: 13px 15px;
+      border-radius: 9px; background: var(--action); color: white;
+      box-shadow: 0 16px 45px rgba(25,34,28,.22);
+      opacity: 0; transform: translateY(10px); pointer-events: none; transition: .18s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 980px) {
+      .task-tab span:last-child { display: none; }
+      .workspace { grid-template-columns: 220px minmax(0, 1fr); height: auto; min-height: calc(100vh - 102px); }
+      .summary { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+      .proposal-layout, .review-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      .topbar { height: auto; padding: 12px 16px; align-items: flex-start; }
+      .brand { min-width: 0; }
+      .brand-copy { display: none; }
+      .top-actions .btn { display: none; }
+      .prototype-bar { align-items: flex-start; }
+      .entry { padding: 38px 18px 60px; }
+      .entry-grid { grid-template-columns: 1fr; }
+      .workspace { display: block; }
+      .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+      .checklist { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .main-panel { padding: 24px 18px 42px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .supported { grid-template-columns: 1fr 1fr; }
+      .proposal-layout, .review-layout { padding: 18px; }
+      .drawing-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="prototype-bar">
+      <span><strong>Round 2 prototype</strong> · 所有内容仅用于交互演示，不会保存</span>
+      <button class="link-button" id="resetPrototype">重置原型</button>
+    </div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">A</div>
+        <div class="brand-copy"><strong>kitchen</strong><span>Mike · Round 2</span></div>
+      </div>
+      <nav class="task-nav" aria-label="Round 2 tasks">
+        <button class="task-tab active" data-task="measurement"><span class="task-number">1</span><span>测量资料</span></button>
+        <button class="task-tab locked" data-task="proposal"><span class="task-number">2</span><span>设计方案</span></button>
+        <button class="task-tab locked" data-task="review"><span class="task-number">3</span><span>图纸与审核</span></button>
+      </nav>
+      <div class="top-actions">
+        <button class="btn subtle small" id="openIssues">问题 1</button>
+        <button class="btn small" id="backProject">返回项目</button>
+      </div>
+    </header>
+
+    <main class="screen">
+      <section id="entryScreen" class="entry">
+        <div class="entry-copy">
+          <h1>录入现场测量资料</h1>
+          <p>直接填写标准测量表；如果已有照片、测量表或设备资料，可以先让 AI 自动预填。</p>
+        </div>
+        <div class="entry-grid">
+          <article class="entry-card primary-card">
+            <h2>开始录入</h2>
+            <p>按房间、墙体、门窗、水电和电器逐项填写。所有后续设计都使用这份标准资料。</p>
+            <div class="card-action">
+              <span class="status-text">无需准备文件</span>
+              <button class="btn primary" id="startManual">进入标准录入</button>
+            </div>
+          </article>
+          <article class="entry-card">
+            <h2>上传资料自动预填</h2>
+            <p>AI 读取已有资料，将可确认的信息填入标准表单；不确定的信息会留空或提醒复核。</p>
+            <div class="card-action">
+              <span class="status-text">可选辅助</span>
+              <button class="btn" id="startUpload">选择资料</button>
+            </div>
+          </article>
+        </div>
+        <div class="mini-flow">
+          <strong>统一流程</strong><span>资料录入</span><span>→</span><span>设计方案</span><span>→</span><span>图纸与审核</span>
+        </div>
+      </section>
+
+      <section id="measurementScreen" class="workspace hidden">
+        <aside class="rail">
+          <div class="section-label">资料清单</div>
+          <div class="checklist" id="checklist"></div>
+          <div class="rail-upload">
+            <strong>补充现场资料</strong>
+            <p>上传后，AI 只预填空白字段，不覆盖已确认数据。</p>
+            <button class="btn small" id="uploadMore">上传更多资料</button>
+          </div>
+        </aside>
+
+        <section class="main-panel">
+          <div class="panel-heading">
+            <div>
+              <div class="section-label" id="groupKicker">墙体 · WALL A</div>
+              <h1 id="groupTitle">墙体尺寸</h1>
+              <p id="groupSubtitle">填写完成后继续下一面墙</p>
+            </div>
+            <span class="badge ai" id="pendingBadge">2 项 AI 待确认</span>
+          </div>
+          <div id="formContent"></div>
+          <div class="footer-actions">
+            <button class="btn" id="previousGroup">上一项</button>
+            <button class="btn primary" id="nextGroup">保存并下一项</button>
+          </div>
+        </section>
+
+        <aside class="summary">
+          <div class="section-label">完成情况</div>
+          <div class="progress-number" id="progressNumber">38%</div>
+          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="metric-list">
+            <div class="metric"><span>已确认</span><strong id="confirmedCount">5</strong></div>
+            <div class="metric"><span>AI 待确认</span><strong class="ai" id="pendingCount">2</strong></div>
+            <div class="metric"><span>必填缺失</span><strong class="danger" id="missingCount">5</strong></div>
+            <div class="metric"><span>冲突</span><strong id="conflictCount">0</strong></div>
+          </div>
+          <div class="gate">
+            <strong>下一阶段</strong>
+            <p id="gateMessage">补齐并确认必填资料后，即可生成设计方案。</p>
+            <button class="btn primary" id="generateProposal" disabled>生成设计方案</button>
+          </div>
+        </aside>
+      </section>
+
+      <section id="proposalScreen" class="proposal-layout hidden">
+        <article class="sheet">
+          <div class="panel-heading">
+            <div><h1>AI 设计方案</h1><p>基于已确认测量资料生成的结构化橱柜配置</p></div>
+            <span class="badge system" id="proposalStatus">系统检查通过</span>
+          </div>
+          <div class="plan-canvas">
+            <div class="room" aria-label="Kitchen plan preview">
+              <div class="window-mark"></div>
+              <div class="cabinet-run" id="cabinetRun">
+                <div class="cabinet">B24</div><div class="cabinet selected" id="sinkCabinet">SB36</div><div class="cabinet">DW24</div><div class="cabinet">B30</div>
+              </div>
+              <div class="island">Island · 84 × 36</div>
+            </div>
+          </div>
+          <div class="notice info"><strong>系统检查：</strong>墙体、开口、柜体长度与通道宽度均通过确定性规则验证。</div>
+        </article>
+        <aside class="side-stack">
+          <div class="side-card">
+            <h2>设计理由</h2>
+            <p style="color:var(--muted)">水槽与窗户中心线对齐；洗碗机靠近水槽；冰箱保留在现有设备区。</p>
+          </div>
+          <div class="side-card">
+            <h2>有限调整</h2>
+            <div class="field">
+              <label for="sinkWidth">水槽柜宽度</label>
+              <select id="sinkWidth"><option value="36">36 in</option><option value="33">33 in</option><option value="30">30 in</option></select>
+              <span class="helper">修改后系统会重新检查柜体总长度。</span>
+            </div>
+            <button class="btn" style="margin-top:14px;width:100%" id="applyCorrection">应用调整</button>
+          </div>
+          <div class="side-card">
+            <h2>进入图纸</h2>
+            <p style="color:var(--muted)">方案无阻断问题，可以生成标准图纸包。</p>
+            <button class="btn primary" style="width:100%" id="generateDrawings">生成图纸</button>
+          </div>
+        </aside>
+      </section>
+
+      <section id="reviewScreen" class="review-layout hidden">
+        <article class="sheet" style="position:relative">
+          <div class="panel-heading">
+            <div><h1>图纸与审核</h1><p>Drawing v1 · 由确认后的测量资料和设计方案生成</p></div>
+            <span class="badge" id="reviewStatus">需要审核</span>
+          </div>
+          <div class="drawing-grid">
+            <div class="drawing">
+              <h3>A1 · Measured floor plan</h3>
+              <div class="room" style="width:82%;margin:34px auto 0">
+                <div class="window-mark"></div>
+                <div class="cabinet-run"><div class="cabinet">B24</div><div class="cabinet">SB36</div><div class="cabinet">DW24</div><div class="cabinet">B30</div></div>
+                <div class="island">84 × 36</div>
+              </div>
+              <button class="issue-marker" id="issueMarker" aria-label="Open issue">1</button>
+            </div>
+            <div class="drawing">
+              <h3>A2 · Wall A elevation</h3>
+              <div class="elevation-line"><div class="elevation-cabinet"></div><div class="elevation-cabinet"></div><div class="elevation-cabinet tall"></div><div class="elevation-cabinet"></div></div>
+            </div>
+          </div>
+          <div id="reviewedStamp" class="reviewed-stamp hidden">REVIEWED</div>
+          <div class="notice danger" id="drawingIssue">
+            <span class="badge system">系统检查</span>
+            <strong style="margin-left:6px">排水中心与水槽中心相差 8 in。</strong>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn small" id="correctUtility">修正资料</button>
+              <button class="btn small" id="acceptException">接受例外</button>
+            </div>
+          </div>
+        </article>
+        <aside class="side-stack">
+          <div class="side-card">
+            <h2>问题概览</h2>
+            <div class="metric"><span>系统检查</span><strong id="systemIssueCount">1</strong></div>
+            <div class="metric"><span>AI 资料提醒</span><strong>0</strong></div>
+            <div class="metric"><span>设计师意见</span><strong>0</strong></div>
+          </div>
+          <div class="side-card">
+            <h2>最终审核</h2>
+            <p id="reviewGateText" style="color:var(--muted)">处理阻断问题后，Admin 或 Designer 可以审核此版本。</p>
+            <button class="btn primary" style="width:100%" id="approveReview" disabled>审核通过</button>
+          </div>
+          <div class="side-card">
+            <h2>LLM 在这里做什么？</h2>
+            <p style="color:var(--muted)">LLM 只负责理解资料、提出不确定点和生成设计理由。尺寸闭合、碰撞、净空和阻断状态由程序规则决定。</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="uploadModal" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
+    <div class="modal">
+      <div class="modal-head"><h2 id="uploadTitle">上传资料自动预填</h2><button class="btn small" id="closeUpload">关闭</button></div>
+      <div class="modal-body">
+        <div id="uploadPicker">
+          <div class="upload-zone">
+            <div>
+              <h3>选择多个现场资料</h3>
+              <p style="color:var(--muted)">可以混合选择 PDF、Word、图片、表格和语音文件，系统会按类型分别预处理。</p>
+              <input id="fileInput" class="hidden" type="file" multiple accept=".pdf,.doc,.docx,.rtf,.odt,.ppt,.pptx,.txt,.md,.json,.html,.xml,.csv,.tsv,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm">
+              <div class="file-picker-actions">
+                <button class="btn primary" id="chooseFiles">选择多个文件</button>
+                <button class="btn" id="simulateFiles">载入示例资料包</button>
+              </div>
+            </div>
+          </div>
+          <div class="file-list hidden" id="fileList"></div>
+          <button class="btn primary hidden" style="margin-top:12px;width:100%" id="analyzeFiles">开始识别所选资料</button>
+          <div class="support-table">
+            <div class="support-row"><strong>文档</strong><span>PDF、DOC/DOCX、RTF、ODT、PPT/PPTX、TXT、MD、JSON、HTML、XML</span><span class="support-route">提取文本</span></div>
+            <div class="support-row"><strong>图片</strong><span>PNG、JPG/JPEG、WEBP、非动画 GIF</span><span class="support-route">视觉识别</span></div>
+            <div class="support-row"><strong>表格</strong><span>CSV、TSV、XLS/XLSX</span><span class="support-route">表格解析</span></div>
+            <div class="support-row"><strong>语音/录音</strong><span>MP3、MP4、MPEG、MPGA、M4A、WAV、WEBM</span><span class="support-route">先转写</span></div>
+          </div>
+          <div class="notice ai">
+            <strong>LLM 提取规范：</strong>只输出标准字段、数值、单位、来源位置、置信度和警告；禁止猜测，禁止覆盖人工确认值。
+          </div>
+          <div class="notice">
+            <strong>注意：</strong>Word、PowerPoint 等非 PDF 文档通常只抽取文字；如果测量尺寸在嵌入图片、图表或复杂版式中，应转换成 PDF 或同时上传原始图片。
+          </div>
+        </div>
+        <div id="uploadProcessing" class="processing hidden">
+          <strong id="processingLabel">正在读取资料结构…</strong>
+          <div class="processing-track"><div class="processing-fill" id="processingFill"></div></div>
+        </div>
+        <div id="uploadResult" class="hidden">
+          <h3>预填完成</h3>
+          <p id="resultSummary" style="color:var(--muted)">识别到 4 个标准字段，其中 2 个需要人工确认；1 个模糊值保持为空。</p>
+          <div class="notice ai"><strong>AI 资料提醒：</strong>墙体高度的手写值可能是 96 或 98 in，已保持为空，请人工填写。</div>
+        </div>
+      </div>
+      <div class="modal-foot"><button class="btn primary hidden" id="continueToEntry">进入标准录入</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="issueModal" role="dialog" aria-modal="true" aria-labelledby="issueTitle">
+    <div class="modal" style="width:min(560px,100%)">
+      <div class="modal-head"><h2 id="issueTitle">问题详情</h2><button class="btn small" id="closeIssue">关闭</button></div>
+      <div class="modal-body">
+        <span class="badge system">系统检查</span>
+        <h3 style="margin-top:12px">排水中心与水槽中心相差 8 in</h3>
+        <p style="color:var(--muted)">这是确定性坐标比较的结果，不由 LLM 判断。可以修正水电点位，或由设计师记录并接受例外。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const groups = [
+      { id: "room", label: "房间信息", status: "完成", required: 2, confirmed: 2, pending: 0, missing: 0 },
+      { id: "walls", label: "墙体", status: "AI 待确认", required: 4, confirmed: 1, pending: 2, missing: 1 },
+      { id: "openings", label: "门窗洞口", status: "完成", required: 2, confirmed: 2, pending: 0, missing: 0 },
+      { id: "utilities", label: "水电点位", status: "缺 2 项", required: 3, confirmed: 1, pending: 0, missing: 2 },
+      { id: "appliances", label: "电器设备", status: "缺 2 项", required: 3, confirmed: 1, pending: 0, missing: 2 },
+      { id: "standards", label: "设计标准", status: "未开始", required: 2, confirmed: 0, pending: 0, missing: 2 }
+    ];
+
+    const state = {
+      screen: "entry",
+      group: 1,
+      usedAI: false,
+      wallLengthConfirmed: false,
+      ceilingConfirmed: false,
+      wallLength: "",
+      wallHeight: "",
+      ceilingHeight: "",
+      utilitiesComplete: false,
+      appliancesComplete: false,
+      standardsComplete: false,
+      proposalReady: false,
+      drawingsReady: false,
+      issueResolved: false,
+      reviewed: false
+    };
+
+    const $ = (id) => document.getElementById(id);
+    let toastTimer;
+    let selectedFiles = [];
+
+    function toast(message) {
+      $("toast").textContent = message;
+      $("toast").classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => $("toast").classList.remove("show"), 2600);
+    }
+
+    function showScreen(name) {
+      state.screen = name;
+      ["entry", "measurement", "proposal", "review"].forEach(key => {
+        $(key + "Screen").classList.toggle("hidden", key !== name);
+      });
+      document.querySelectorAll(".task-tab").forEach(tab => {
+        const task = tab.dataset.task;
+        tab.classList.toggle("active", task === name || (name === "entry" && task === "measurement"));
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function openUpload() {
+      $("uploadModal").classList.remove("hidden");
+      $("uploadPicker").classList.remove("hidden");
+      $("uploadProcessing").classList.add("hidden");
+      $("uploadResult").classList.add("hidden");
+      $("continueToEntry").classList.add("hidden");
+      $("processingFill").style.width = "0";
+      selectedFiles = [];
+      $("fileInput").value = "";
+      renderFiles();
+    }
+
+    function closeUpload() { $("uploadModal").classList.add("hidden"); }
+
+    function fileRoute(name) {
+      const extension = name.split(".").pop().toLowerCase();
+      if (["mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm"].includes(extension)) return "语音转写 → 字段提取";
+      if (["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) return "视觉识别";
+      if (["csv", "tsv", "xls", "xlsx"].includes(extension)) return "表格解析";
+      if (extension === "pdf") return "文字 + 页面视觉";
+      return "文档文字提取";
+    }
+
+    function formatSize(bytes) {
+      if (!bytes) return "示例文件";
+      if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+      return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    }
+
+    function renderFiles() {
+      const hasFiles = selectedFiles.length > 0;
+      $("fileList").classList.toggle("hidden", !hasFiles);
+      $("analyzeFiles").classList.toggle("hidden", !hasFiles);
+      $("fileList").innerHTML = selectedFiles.map(file => `
+        <div class="file-row">
+          <div>
+            <div class="file-name">${file.name}</div>
+            <div class="file-meta">${formatSize(file.size)}</div>
+          </div>
+          <span class="file-route">${fileRoute(file.name)}</span>
+        </div>
+      `).join("");
+    }
+
+    function loadExampleFiles() {
+      selectedFiles = [
+        { name: "site-measurements.pdf", size: 1840000 },
+        { name: "kitchen-site-photo.jpg", size: 3250000 },
+        { name: "field-notes.m4a", size: 6100000 },
+        { name: "appliance-specs.docx", size: 860000 }
+      ];
+      renderFiles();
+    }
+
+    function simulateUpload() {
+      if (!selectedFiles.length) return;
+      $("uploadPicker").classList.add("hidden");
+      $("uploadProcessing").classList.remove("hidden");
+      requestAnimationFrame(() => $("processingFill").style.width = "100%");
+      setTimeout(() => {
+        const hasAudio = selectedFiles.some(file => fileRoute(file.name).startsWith("语音"));
+        $("processingLabel").textContent = hasAudio ? "正在转写语音并映射到标准字段…" : "正在映射到标准测量字段…";
+      }, 500);
+      setTimeout(() => {
+        state.usedAI = true;
+        $("uploadProcessing").classList.add("hidden");
+        $("uploadResult").classList.remove("hidden");
+        $("resultSummary").textContent = `已处理 ${selectedFiles.length} 个文件。识别到 4 个标准字段，其中 2 个需要人工确认；1 个模糊值保持为空。`;
+        $("continueToEntry").classList.remove("hidden");
+      }, 1250);
+    }
+
+    function groupData() {
+      return groups.map(group => {
+        const copy = { ...group };
+        if (copy.id === "walls") {
+          const wallLengthAvailable = state.usedAI || Boolean(state.wallLength);
+          const ceilingAvailable = state.usedAI || Boolean(state.ceilingHeight);
+          copy.confirmed = 1 + Number(state.wallLengthConfirmed) + Number(Boolean(state.wallHeight)) + Number(state.ceilingConfirmed);
+          copy.pending = (state.usedAI ? 2 : 0) - Number(state.wallLengthConfirmed) - Number(state.ceilingConfirmed);
+          copy.missing = Number(!wallLengthAvailable) + Number(!state.wallHeight) + Number(!ceilingAvailable);
+        }
+        if (copy.id === "utilities" && state.utilitiesComplete) { copy.confirmed = 3; copy.missing = 0; }
+        if (copy.id === "appliances" && state.appliancesComplete) { copy.confirmed = 3; copy.missing = 0; }
+        if (copy.id === "standards" && state.standardsComplete) { copy.confirmed = 2; copy.missing = 0; }
+        if (copy.missing > 0) copy.status = `缺 ${copy.missing} 项`;
+        else if (copy.pending > 0) copy.status = `${copy.pending} 项 AI 待确认`;
+        else copy.status = "完成";
+        return copy;
+      });
+    }
+
+    function renderChecklist() {
+      const data = groupData();
+      $("checklist").innerHTML = data.map((group, index) => `
+        <button class="check-item ${index === state.group ? "active" : ""}" data-index="${index}">
+          <span>${group.label}</span>
+          <span class="status-text ${group.pending ? "ai" : group.missing ? "warn" : ""}">${group.status}</span>
+        </button>`).join("");
+      document.querySelectorAll(".check-item").forEach(button => button.addEventListener("click", () => {
+        state.group = Number(button.dataset.index);
+        renderMeasurement();
+      }));
+    }
+
+    function renderMeasurement() {
+      renderChecklist();
+      const group = groupData()[state.group];
+      $("groupKicker").textContent = `${group.label} · ${String(state.group + 1).padStart(2, "0")}`;
+      $("groupTitle").textContent = group.label === "墙体" ? "墙体尺寸" : group.label;
+      $("groupSubtitle").textContent = group.status === "完成" ? "本组资料已完成" : "补齐并确认本组所需资料";
+      $("pendingBadge").textContent = group.pending ? `${group.pending} 项 AI 待确认` : group.missing ? `${group.missing} 项必填缺失` : "已完成";
+      $("pendingBadge").className = `badge ${group.pending ? "ai" : group.missing ? "system" : "ok"}`;
+
+      if (group.id === "walls") renderWalls();
+      else renderSimpleGroup(group);
+      updateSummary();
+    }
+
+    function renderWalls() {
+      $("formContent").innerHTML = `
+        <div class="form-grid">
+          <div class="field"><label for="wallName">墙体名称</label><input id="wallName" value="Wall A"></div>
+          <div class="field ${state.usedAI && !state.wallLengthConfirmed ? "ai-field" : ""}">
+            <label for="wallLength">墙体长度</label>
+            <input id="wallLength" value="${state.usedAI ? "144" : state.wallLength}" placeholder="输入尺寸（in）">
+            ${state.usedAI ? `<div class="source-row"><span class="source">site-measurements.pdf · 95%</span><div class="inline-actions">${state.wallLengthConfirmed ? `<span class="badge ok">已确认</span>` : `<button class="btn small" id="confirmWall">确认</button><button class="btn small" id="viewSource">查看来源</button>`}</div></div>` : `<span class="helper">必填</span>`}
+          </div>
+          <div class="field ${state.wallHeight ? "" : "missing"}"><label for="wallHeight">墙体高度</label><input id="wallHeight" value="${state.wallHeight}" placeholder="输入尺寸（in）"><span class="helper ${state.wallHeight ? "" : "error"}">${state.usedAI ? "AI 无法可靠识别，请人工填写" : "必填"}</span></div>
+          <div class="field ${state.usedAI && !state.ceilingConfirmed ? "ai-field" : ""}">
+            <label for="ceilingHeight">天花高度</label>
+            <input id="ceilingHeight" value="${state.usedAI ? "108" : state.ceilingHeight}" placeholder="输入尺寸（in）">
+            ${state.usedAI ? `<div class="source-row"><span class="source">现场照片 · 82%</span>${state.ceilingConfirmed ? `<span class="badge ok">已确认</span>` : `<button class="btn small" id="confirmCeiling">确认</button>`}</div>` : `<span class="helper">必填</span>`}
+          </div>
+          <div class="field"><label for="startCorner">起点转角</label><select id="startCorner"><option>内角</option><option>外角</option></select></div>
+          <div class="field"><label for="endCorner">终点转角</label><select id="endCorner"><option>内角</option><option>外角</option></select></div>
+        </div>
+        ${state.usedAI ? `<div class="notice ai"><strong>AI 资料提醒：</strong>墙体高度的手写值可能是 96 或 98 in，未自动填入。LLM 只报告不确定性，不猜测数值。</div>` : ""}
+      `;
+      const wallLength = $("wallLength");
+      wallLength.addEventListener("input", () => {
+        state.wallLength = wallLength.value;
+        if (!state.usedAI) state.wallLengthConfirmed = Boolean(wallLength.value);
+        updateSummary();
+        renderChecklist();
+      });
+      const wallHeight = $("wallHeight");
+      wallHeight.addEventListener("input", () => { state.wallHeight = wallHeight.value; updateSummary(); renderChecklist(); });
+      const ceilingHeight = $("ceilingHeight");
+      ceilingHeight.addEventListener("input", () => {
+        state.ceilingHeight = ceilingHeight.value;
+        if (!state.usedAI) state.ceilingConfirmed = Boolean(ceilingHeight.value);
+        updateSummary();
+        renderChecklist();
+      });
+      if ($("confirmWall")) $("confirmWall").addEventListener("click", () => { state.wallLengthConfirmed = true; renderMeasurement(); toast("墙体长度已确认"); });
+      if ($("confirmCeiling")) $("confirmCeiling").addEventListener("click", () => { state.ceilingConfirmed = true; renderMeasurement(); toast("天花高度已确认"); });
+      if ($("viewSource")) $("viewSource").addEventListener("click", () => toast("原型：已定位到 PDF 第 1 页右上角"));
+    }
+
+    function renderSimpleGroup(group) {
+      const completeKey = { utilities: "utilitiesComplete", appliances: "appliancesComplete", standards: "standardsComplete" }[group.id];
+      const completed = completeKey ? state[completeKey] : true;
+      const labels = {
+        room: ["房间名称", "测量日期"],
+        openings: ["洞口类型", "洞口宽度"],
+        utilities: ["给水水平偏移", "排水水平偏移"],
+        appliances: ["冰箱宽度", "炉灶宽度"],
+        standards: ["台面高度", "踢脚高度"]
+      }[group.id];
+      $("formContent").innerHTML = `
+        <div class="form-grid">
+          <div class="field ${completed ? "" : "missing"}"><label>${labels[0]}</label><input value="${completed ? (group.id === "room" ? "Main Kitchen" : group.id === "openings" ? "Window" : "36") : ""}" placeholder="输入资料"></div>
+          <div class="field ${completed ? "" : "missing"}"><label>${labels[1]}</label><input value="${completed ? (group.id === "room" ? "2026-06-25" : "48") : ""}" placeholder="输入资料"></div>
+        </div>
+        ${completed ? `<div class="notice"><strong>本组资料完整。</strong>你仍可以修改，修改后会重新执行相关系统检查。</div>` : `<div class="notice danger"><strong>必填资料缺失。</strong>点击下方按钮可快速填入原型示例数据。</div><button class="btn" style="margin-top:14px" id="completeGroup">填入示例数据</button>`}
+      `;
+      if ($("completeGroup")) $("completeGroup").addEventListener("click", () => {
+        state[completeKey] = true;
+        renderMeasurement();
+        toast(`${group.label}已补齐`);
+      });
+    }
+
+    function updateSummary() {
+      const data = groupData();
+      const required = data.reduce((sum, item) => sum + item.required, 0);
+      const confirmed = data.reduce((sum, item) => sum + item.confirmed, 0);
+      const pending = data.reduce((sum, item) => sum + item.pending, 0);
+      const missing = data.reduce((sum, item) => sum + item.missing, 0);
+      const percentage = Math.round((confirmed / required) * 100);
+      $("progressNumber").textContent = `${percentage}%`;
+      $("progressFill").style.width = `${percentage}%`;
+      $("confirmedCount").textContent = confirmed;
+      $("pendingCount").textContent = pending;
+      $("missingCount").textContent = missing;
+      const ready = missing === 0 && pending === 0;
+      $("generateProposal").disabled = !ready;
+      $("gateMessage").textContent = ready ? "资料已完整并确认，可以生成设计方案。" : "补齐并确认必填资料后，即可生成设计方案。";
+    }
+
+    function enterMeasurement() {
+      showScreen("measurement");
+      renderMeasurement();
+    }
+
+    function generateProposal() {
+      state.proposalReady = true;
+      const proposalTab = document.querySelector('[data-task="proposal"]');
+      proposalTab.classList.remove("locked");
+      document.querySelector('[data-task="measurement"]').classList.add("done");
+      showScreen("proposal");
+      toast("设计方案已生成");
+    }
+
+    function generateDrawings() {
+      state.drawingsReady = true;
+      const reviewTab = document.querySelector('[data-task="review"]');
+      reviewTab.classList.remove("locked");
+      document.querySelector('[data-task="proposal"]').classList.add("done");
+      showScreen("review");
+      toast("标准图纸包已生成");
+    }
+
+    function resolveIssue(message) {
+      state.issueResolved = true;
+      $("drawingIssue").classList.add("hidden");
+      $("issueMarker").classList.add("hidden");
+      $("openIssues").textContent = "问题 0";
+      $("systemIssueCount").textContent = "0";
+      $("approveReview").disabled = false;
+      $("reviewGateText").textContent = "阻断问题已处理，可以审核当前图纸版本。";
+      toast(message);
+    }
+
+    function reset() { location.reload(); }
+
+    $("startManual").addEventListener("click", enterMeasurement);
+    $("startUpload").addEventListener("click", openUpload);
+    $("uploadMore").addEventListener("click", openUpload);
+    $("closeUpload").addEventListener("click", closeUpload);
+    $("chooseFiles").addEventListener("click", () => $("fileInput").click());
+    $("fileInput").addEventListener("change", event => {
+      selectedFiles = Array.from(event.target.files || []);
+      renderFiles();
+    });
+    $("simulateFiles").addEventListener("click", loadExampleFiles);
+    $("analyzeFiles").addEventListener("click", simulateUpload);
+    $("continueToEntry").addEventListener("click", () => { closeUpload(); enterMeasurement(); });
+    $("previousGroup").addEventListener("click", () => { state.group = Math.max(0, state.group - 1); renderMeasurement(); });
+    $("nextGroup").addEventListener("click", () => { state.group = Math.min(groups.length - 1, state.group + 1); renderMeasurement(); });
+    $("generateProposal").addEventListener("click", generateProposal);
+    $("applyCorrection").addEventListener("click", () => {
+      $("sinkCabinet").textContent = `SB${$("sinkWidth").value}`;
+      $("proposalStatus").textContent = "已重新检查";
+      toast("调整已应用，系统规则重新检查通过");
+    });
+    $("generateDrawings").addEventListener("click", generateDrawings);
+    $("issueMarker").addEventListener("click", () => $("issueModal").classList.remove("hidden"));
+    $("openIssues").addEventListener("click", () => $("issueModal").classList.remove("hidden"));
+    $("closeIssue").addEventListener("click", () => $("issueModal").classList.add("hidden"));
+    $("correctUtility").addEventListener("click", () => resolveIssue("水电点位已修正，图纸检查通过"));
+    $("acceptException").addEventListener("click", () => resolveIssue("设计例外已记录"));
+    $("approveReview").addEventListener("click", () => {
+      state.reviewed = true;
+      $("reviewedStamp").classList.remove("hidden");
+      $("reviewStatus").textContent = "Designer reviewed";
+      $("reviewStatus").className = "badge ok";
+      $("approveReview").disabled = true;
+      $("approveReview").textContent = "已审核";
+      document.querySelector('[data-task="review"]').classList.add("done");
+      toast("当前图纸版本已审核");
+    });
+    $("resetPrototype").addEventListener("click", reset);
+    $("backProject").addEventListener("click", () => toast("原型：返回项目详情"));
+
+    document.querySelectorAll(".task-tab").forEach(tab => tab.addEventListener("click", () => {
+      if (tab.classList.contains("locked")) { toast("请先完成前一项任务"); return; }
+      const task = tab.dataset.task;
+      if (task === "measurement") {
+        if (state.screen === "entry") return;
+        showScreen("measurement"); renderMeasurement();
+      }
+      if (task === "proposal" && state.proposalReady) showScreen("proposal");
+      if (task === "review" && state.drawingsReady) showScreen("review");
+    }));
+  </script>
+</body>
+</html>
