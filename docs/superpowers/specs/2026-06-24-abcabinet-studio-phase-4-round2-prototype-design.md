@@ -1,1024 +1,1213 @@
-# ABCabinet Studio Phase 4 — Round 2 Interactive Prototype Design
+# ABCabinet Studio Phase 4: Round 2 AI Agent Design
 
-**Status:** Approved for implementation planning  
-**Date:** June 24, 2026  
+**Status:** Revised draft for user review
+**Revised:** June 25, 2026
 **Branch:** `phase-4`
 
-## 1. Purpose
+## 1. Product Definition
 
-Phase 4 designs and implements the frontend experience for Round 2 detailed measured design before the Round 2 backend and production rules exist.
+Round 2 is not a cabinet design application.
 
-The deliverable is a complete interactive prototype:
+It is an AI-assisted workflow that helps Sales, field staff, Designers, and customers move from site measurements to a reviewed kitchen design package with fewer handoffs and less repetitive drafting.
 
-- All five Round 2 steps are navigable.
-- All authorized project users can edit the local draft.
-- Forms, selections, view changes, issue states, undo, redo, and reset work in the browser.
-- The page reads the project's existing Round 1 snapshot as its starting reference.
-- The prototype does not call Round 2 APIs, write a database record, persist a draft, update project status, approve a design, or create a production package.
-
-The prototype serves two purposes:
-
-1. Give the company a realistic Round 2 workflow to evaluate before backend design.
-2. Establish a concrete frontend contract for later Round 2 domain, API, and persistence implementation.
-
-## 2. Non-Negotiable Product Boundary
-
-Round 2 in Phase 4 is a frontend prototype, not a production design system.
-
-The following notice remains visible in the Round 2 project bar and Review Package:
+The intended workflow is:
 
 ```text
-Prototype only · Changes are not saved · Not for production
+Field measurements and evidence
+  → AI organizes the material
+  → Designer or staff verifies normalized data
+  → AI proposes the cabinet arrangement
+  → deterministic code generates standard drawings
+  → staff make limited corrections
+  → issues are assigned and resolved
+  → Admin or Designer performs final review
+  → reviewed drawings + JSON + prompt generate renderings
 ```
 
-The UI must never claim:
+The AI Agent should perform as much routine coordination and drafting work as possible. The Designer should not need to recreate every wall, opening, appliance, cabinet, dimension chain, and elevation manually.
 
-- Saved
-- Autosaved
-- Approved
-- Released
-- Production ready
-- Ready for manufacturing
-- Export complete
-- Submitted for production
+Human responsibility is concentrated on:
 
-The strongest positive completion language allowed is:
+- Supplying trustworthy site evidence
+- Confirming extracted measurements
+- Resolving missing or conflicting information
+- Reviewing design judgment and exceptions
+- Approving the final drawing version
 
-```text
-Prototype review complete
-```
+## 2. Phase 4 Boundary
 
-This means the local browser draft has no unresolved prototype checks. It does not confer authority on any dimension, cabinet, drawing, or note.
+Phase 4 creates the complete frontend design and interaction prototype for this workflow.
 
-## 3. Scope
+It does not add:
 
-### Included
-
-- Project-level Round 2 entry
-- Read-only loading of the latest Round 1 snapshot
-- Pure conversion of Round 1 snapshot data into a local Round 2 seed
-- Complete five-step Round 2 frontend workflow
-- Guided and Canvas focus workspace modes
-- Plan, Elevations, and Details views
-- Local form editing
-- Local wall, opening, utility, cabinet, and note selection
-- Deterministic prototype plan and elevation SVGs
-- Cabinet schedule preview
-- Prototype issue derivation
-- Undo and redo
-- Reset from Round 1
-- Dirty-state warnings
-- Desktop and iPad layouts
-- Keyboard, touch, focus, and reduced-motion states
-- Automated tests and browser acceptance testing
-
-### Excluded
-
-- Round 2 database tables or migrations
-- Round 2 repositories
+- Round 2 database tables
 - Round 2 API routes
-- Saving or autosaving a Round 2 draft
-- `localStorage` or IndexedDB draft persistence
-- Project-status mutation
-- Role-specific Round 2 editing restrictions
-- Real approvals
-- Real PDF, CAD, drawing, or schedule export
-- Pricing or quoting
-- Manufacturing cabinet codes
-- Shop drawings
-- Cut lists
-- Hardware schedules
-- Ordering data
-- Production readiness
-- Dimensional authority
-- AI-generated authoritative geometry
+- Persistent task history
+- Real AI extraction
+- Real AI cabinet planning
+- Real drawing export
+- Real approval authority
+- Real rendering requests
+
+All Phase 4 interactions use local state and representative project fixtures. The UI must identify itself as a prototype and must not claim that data or approvals have been saved.
+
+The persistent notice is:
+
+```text
+Round 2 prototype · Changes are not saved
+```
+
+Generated drawing previews in Phase 4 carry:
+
+```text
+Prototype drawing · Review required
+```
+
+The prototype is nevertheless designed around the future production workflow. Its information architecture, object model, issue flow, versioning, and review states should be suitable foundations for later backend implementation.
+
+## 3. Product Principles
+
+### 3.1 Agent-led, not tool-led
+
+Users should describe, upload, verify, and review. They should not be expected to operate a general CAD system.
+
+### 3.2 Structured data before drawings
+
+AI never creates authoritative geometry directly from prose or images.
+
+The sequence is:
+
+```text
+Evidence → normalized JSON → validation → deterministic geometry → drawing
+```
+
+### 3.3 Drawings are deterministic
+
+The same reviewed JSON must always produce the same plan, elevations, dimensions, labels, and schedule.
+
+AI may propose JSON values and design decisions. Deterministic code owns drawing geometry and dimension chains.
+
+### 3.4 AI suggestions require provenance
+
+Every extracted or proposed value records:
+
+- Source evidence
+- Submitted by
+- Extraction method
+- Confidence
+- Confirmation status
+- Last editor
+- Last edit time
+
+### 3.5 Exceptions become tasks
+
+Missing measurements, conflicting evidence, design-rule failures, and human review comments become explicit issues with owners and status.
+
+### 3.6 Final review remains human
+
+Only Admin and Designer may complete final review.
+
+Any later change that affects a drawing automatically invalidates the previous review.
 
 ## 4. Users and Permissions
 
-Round 2 uses the project's existing access rules.
+Existing project access rules continue to apply.
 
-If a user can access the project, that user can open and edit the Round 2 prototype. This applies equally to:
+### Admin
 
-- Admin
-- Sales
-- Designer
+- Enter and edit measurements
+- Upload or paste field evidence
+- Confirm AI-extracted values
+- Adjust design parameters
+- Create and assign issues
+- Resolve design-review issues
+- Complete final review
 
-Phase 4 does not introduce a Designer-only workflow or new Round 2 authorization policy.
+### Designer
 
-The server route must still:
+- Enter and edit measurements
+- Upload or paste field evidence
+- Confirm AI-extracted values
+- Review the proposed cabinet design
+- Make limited design corrections
+- Create and assign issues
+- Resolve design-review issues
+- Complete final review
 
-1. Require authentication.
-2. Load the project through the existing user-scoped project lookup.
-3. return not-found for an inaccessible project.
+### Sales
 
-The frontend must not imply that one role has greater Round 2 design authority than another.
+- Enter and edit measurements
+- Upload field evidence
+- Confirm straightforward site data
+- View drawings and issues
+- Receive remeasurement tasks
+- Submit replacement measurements and evidence
+- Mark assigned field tasks as ready for design review
 
-## 5. Entry and Routing
+Sales cannot:
 
-Add the project-scoped route:
+- Close a design conflict
+- Complete final review
+- Restore a superseded approved version
+
+### Shared edit responsibility
+
+Admin, Designer, and Sales may all change input data.
+
+Every change must appear in the future append-only activity history. There are no anonymous edits and no silent overwrites.
+
+## 5. End-to-End Workflow
+
+Round 2 uses six workflow stages:
+
+```text
+1. Collect
+2. Organize
+3. Verify
+4. Generate
+5. Resolve
+6. Review & Render
+```
+
+These are task stages, not drawing-tool modes.
+
+### Stage 1: Collect
+
+Gather field measurements and evidence.
+
+### Stage 2: Organize
+
+AI maps unstructured evidence into the standard measurement schema.
+
+### Stage 3: Verify
+
+People confirm extracted values, resolve conflicts, and complete required fields.
+
+### Stage 4: Generate
+
+The Agent proposes a cabinet design and deterministic code generates the drawing package.
+
+### Stage 5: Resolve
+
+System conflicts and human review comments are assigned, remeasured, corrected, and rechecked.
+
+### Stage 6: Review & Render
+
+Admin or Designer reviews a specific drawing version. Reviewed drawings become eligible to seed rendering generation.
+
+## 6. Entry and Project Integration
+
+Add:
 
 ```text
 /projects/:projectId/round2
 ```
 
-The Project Detail page changes its Round 2 phase row from informational content into a link.
+The Project Detail Round 2 row becomes an entry point.
 
-The Round 2 entry does not change the project's stored status. In particular, opening or editing the prototype must not set `ROUND2_MEASURING`.
+Opening Round 2 must not silently change the stored project status.
 
-### With a Round 1 snapshot
+Round 1 remains a useful reference, but Round 2 does not simply copy rough Round 1 geometry and call it measured data.
 
-The server route loads the latest Round 1 snapshot and passes it to the Round 2 prototype as read-only seed input.
+Round 1 may prefill:
 
-The page opens the Site Measure step with a local Round 2 draft derived from the snapshot.
-
-### Without a Round 1 snapshot
-
-The page displays a truthful empty state:
-
-```text
-Round 2 needs a Round 1 cabinet-fill snapshot
-
-Generate Cabinet Fill in Round 1 before starting this prototype. The
-Round 1 snapshot provides the room shell, fixed conditions, appliances,
-and preliminary cabinet arrangement used as the Round 2 reference.
-```
-
-The empty state provides:
-
-- `Open Round 1`
-- `Back to project`
-
-It must not load a sample kitchen or fabricated project data.
-
-### Unsupported snapshot
-
-If the snapshot schema cannot be converted safely, display:
-
-```text
-This Round 1 reference cannot be opened in the Round 2 prototype.
-Return to Round 1 and generate a current cabinet-fill snapshot.
-```
-
-Do not guess a conversion or silently discard unsupported fields.
-
-## 6. Round 1 to Round 2 Seed
-
-The Round 2 prototype copies the latest Round 1 snapshot into a new local browser draft.
-
-It does not mutate the Round 1 snapshot.
-
-The pure seed adapter may copy:
-
-- Room length, width, and ceiling height
-- Wall identities
-- Door and window conditions
-- Appliance and fixture positions
-- Utility markers
-- Preliminary cabinet arrangement
+- Customer preferences
 - Layout preference
-- Cabinet style and finish reference where present
-- Existing Round 1 confirmation items as Round 2 reference issues
+- Appliance list
+- Cabinet style
+- Finish selection
+- Rough room and opening references
+- Existing confirmation items
 
-Every imported measurement and position begins as unverified.
+Every Round 1-derived measurement begins as:
 
-The adapter must attach source metadata:
-
-```ts
-type Round2Source = {
-  kind: "ROUND1_SNAPSHOT";
-  snapshotId: string;
-  snapshotGeneratedAt: string;
-  snapshotSchemaVersion: number;
-};
+```text
+Reference only · Field verification required
 ```
 
-The local draft must preserve an explicit prototype boundary:
+Round 2 can also start without a Round 1 snapshot when field measurement data is supplied independently.
 
-```ts
-type Round2PrototypeMeta = {
-  prototypeOnly: true;
-  persisted: false;
-  notForProduction: true;
-  dimensionAuthority: "UNVERIFIED";
-};
+## 7. Dual Intake
+
+The approved intake model is dual-track:
+
+```text
+Standard entry
+AI organize evidence
 ```
 
-## 7. Design Direction
+Both paths write into the same normalized Round 2 schema.
 
-The approved direction is **Precision Workbench**.
+### 7.1 Standard entry
 
-It extends the established Round 1 Studio workspace instead of introducing a separate CAD application.
+Designers or staff enter measurements directly into structured forms.
 
-The experience combines:
+### 7.2 AI organize evidence
 
-- Guided five-step navigation
-- A large technical canvas
-- A contextual inspector
-- Plan, Elevations, and Details views
-- A persistent local-state and prototype boundary bar
+The future AI intake accepts:
 
-The interface should feel more precise than Round 1, but remain understandable to Admin, Sales, and Designer users without CAD training.
+- Free-form notes
+- Voice transcription
+- Handwritten measurement-sheet images
+- Site photographs
+- PDF files
+- Excel or CSV files
+- Appliance specification documents
+- Customer or Sales messages
 
-### Visual continuity
+AI does not send extracted data directly to drawing generation.
 
-Reuse:
+It creates a review queue:
 
-- Studio navigation rail
-- Studio dark shell
-- Sage action color
-- Light technical drawing surface
-- Shared controls and tokens
-- Guided / Canvas focus switch
-- Apple-like restrained transition pacing
-- Existing focus and reduced-motion rules
+```text
+Original evidence
+  ↔ extracted field
+  ↔ confidence and source
+  ↔ confirm / correct / reject
+```
 
-### Increased Round 2 precision
+All AI-extracted values default to `NEEDS_CONFIRMATION`.
 
-Round 2 adds:
+## 8. Measurement Entry Experience
 
-- Dimension chains
-- Selected-object outlines
-- Wall identities
-- Verification states
-- Multi-view drawing tabs
-- Cabinet schedule
-- Issue count
-- More compact inspector fields
+The measurement interface is object-based rather than one long form.
 
-It must not add:
-
-- Command-line CAD interaction
-- Dense unlabeled toolbars
-- Tiny icon-only actions
-- Fake precision grids
-- Manufacturing-code styling
-- Decorative technical data that has no interaction meaning
-
-## 8. Workspace Structure
-
-### Persistent project bar
-
-The project bar contains:
-
-- Back to project
-- Customer and project name
-- `Round 2 prototype`
-- Guided / Canvas focus switch
-- Undo
-- Redo
-- Reset from Round 1
-- Dirty state
-- Persistent prototype notice
-
-Undo and redo operate only on local draft edits.
-
-Reset requires confirmation and reconstructs the draft from the original Round 1 seed.
-
-### Guided mode
+### Workspace layout
 
 Desktop and iPad landscape use:
 
 ```text
-Studio rail | five-step navigation | technical canvas | inspector
+Object navigator | live measured-plan preview | current-object form
 ```
 
-The canvas keeps the largest share of available width.
+The navigator groups:
 
-When width becomes constrained:
-
-1. Reduce the step-navigation width.
-2. Reduce the inspector width.
-3. Preserve a usable canvas.
-
-### Canvas focus
-
-Canvas focus:
-
-- Collapses the five-step navigation into a compact progress strip.
-- Expands the drawing surface.
-- Opens the inspector as a contextual overlay drawer.
-- Preserves current step, active view, local draft, selection, history, and scroll/zoom state.
-
-Mode switching changes layout only.
-
-### View tabs
-
-The main workspace provides:
-
-- Plan
-- Elevations
-- Details
-
-The active step may guide the default view, but users can switch views where the content exists.
-
-View switching does not create an undo-history entry.
-
-## 9. Five-Step Workflow
-
-### Step 1: Site Measure
-
-**Purpose:** Confirm the room shell and identify which imported measurements still need field verification.
-
-#### Local interactions
-
-- Select a wall from the plan or wall list.
-- Edit wall length.
-- Edit ceiling height.
-- Mark a wall measurement as verified or unverified.
-- Toggle grid.
-- Toggle dimension labels.
-- Switch display units only if conversion is deterministic; the underlying prototype draft remains inch-based.
-- Reset the draft from Round 1.
-
-#### Canvas
-
-The Plan view displays:
-
+- Project and visit
 - Room shell
-- Wall labels
-- Overall dimensions
-- Selected-wall dimension
-- Imported fixed conditions as subdued references
-- Verification styling
-
-Verification must use text or icon plus color, never color alone.
-
-#### Inspector
-
-The selected wall inspector includes:
-
-- Wall name
-- Length
-- Height
-- Verification state
-- Source: `Imported from Round 1`
-- Local-change indicator
-
-### Step 2: Openings & Utilities
-
-**Purpose:** Coordinate fixed conditions before cabinet-level work.
-
-#### Supported local objects
-
-- Door
-- Open passage
-- Window
-- Plumbing
-- Electric
-- Gas
-- Vent
-
-#### Local interactions
-
-- Select an object from the plan or object list.
-- Edit wall.
-- Edit offset along wall.
-- Edit opening width.
-- Edit sill or head height where relevant.
-- Add a local prototype utility marker.
-- Remove a locally added marker.
-- Mark an object for site verification.
-
-Imported objects may be edited locally without changing Round 1.
-
-#### Canvas
-
-Objects use a consistent icon and text legend. Hover may enhance feedback on desktop, but all information remains available through selection and labels.
-
-#### Inspector
-
-Fields depend on selected object type. Unsupported fields must not render as disabled decorative controls.
-
-### Step 3: Cabinet Layout
-
-**Purpose:** Explore a cabinet-level draft from the preliminary Round 1 arrangement.
-
-#### Local interactions
-
-- Select a cabinet from plan, elevation, or schedule.
-- Edit cabinet kind:
-  - Base
-  - Wall
-  - Tall
-- Edit nominal width.
-- Edit depth.
-- Edit a human-readable prototype label.
-- Assign the cabinet to a wall run.
-- Add a cabinet locally.
-- Duplicate a cabinet locally.
-- Remove a cabinet locally.
-- Reorder cabinets within a wall run using explicit handles or controls.
-
-The prototype does not promise drag-to-manufacture positioning or precision snapping.
-
-Every spatial edit must have a numeric or list-based alternative.
-
-#### Labels
-
-Use local prototype identifiers such as:
-
-```text
-B-01
-W-03
-T-01
-```
-
-Do not present real manufacturing codes such as product catalog or ordering codes.
-
-#### Canvas
-
-The Plan view displays:
-
-- Wall runs
-- Cabinet footprints
-- Appliances and openings
-- Selected cabinet
-- Local sequence labels
-- Basic clearances where they can be derived deterministically
-
-#### Schedule
-
-The cabinet schedule preview includes:
-
-- Prototype label
-- Kind
-- Wall
-- Nominal width
-- Depth
-- Verification or issue state
-
-It is not an order list, cut list, or production schedule.
-
-### Step 4: Elevations & Details
-
-**Purpose:** Review the local draft wall by wall and annotate visible coordination details.
-
-#### Elevation navigation
-
-Provide:
-
-- Back
-- Left
-- Right
-- Front
-
-Use the existing TOP / LEFT / RIGHT / BOTTOM wall mapping internally.
-
-#### Local interactions
-
-- Select a cabinet, opening, utility, or note.
-- Edit cabinet display height.
-- Toggle prototype panel requirement.
-- Toggle prototype filler requirement.
-- Add and edit a detail note.
-- Remove a locally added detail note.
-- Toggle dimensions.
-- Toggle labels.
-- Toggle utilities.
-
-Panel and filler flags are prototype coordination prompts only. They are not construction decisions.
-
-#### Canvas
-
-Elevation SVGs are derived deterministically from the local draft.
-
-They may show:
-
-- Wall outline
-- Floor and ceiling reference
-- Cabinet blocks
-- Openings
-- Appliances
-- Utility markers
-- Selected object
-- Prototype dimensions
-- Notes
-
-Each elevation carries:
-
-```text
-Round 2 frontend prototype · Unverified · Not for production
-```
-
-### Step 5: Review Package
-
-**Purpose:** Review frontend completeness and expose unresolved prototype issues.
-
-#### Content
-
-- Prototype summary counts
-- Unverified measurement count
-- Unresolved fixed-condition count
-- Cabinet issue count
-- Detail-note count
-- Plan thumbnail
-- Four elevation thumbnails
-- Cabinet schedule preview
-- Issue list
-
-#### Issue behavior
-
-Selecting an issue:
-
-1. Navigates to the related step.
-2. Opens the relevant view.
-3. Selects the related object when it still exists.
-4. Moves keyboard focus to the inspector heading or relevant field.
-
-Users may acknowledge a local issue. Acknowledgement is browser-memory state only.
-
-#### Completion
-
-When all required prototype checks are resolved, show:
-
-```text
-Prototype review complete
-```
-
-The Export action remains visibly unavailable with:
-
-```text
-Export will be added when Round 2 storage and production rules are implemented.
-```
-
-No downloadable fake package should be generated.
-
-## 10. Local State Architecture
-
-Round 2 has one local source of truth.
-
-Recommended top-level state:
-
-```ts
-type Round2PrototypeState = {
-  seed: Round2PrototypeSeed;
-  history: {
-    past: Round2Draft[];
-    present: Round2Draft;
-    future: Round2Draft[];
-  };
-  ui: {
-    step: Round2Step;
-    maxVisitedStep: Round2Step;
-    workspaceMode: "GUIDED" | "CANVAS_FOCUS";
-    activeView: "PLAN" | "ELEVATIONS" | "DETAILS";
-    activeElevationWall: "TOP" | "LEFT" | "RIGHT" | "BOTTOM";
-    selection: Round2Selection | null;
-    inspectorState: "CLOSED" | "COLLAPSED" | "EXPANDED";
-    showGrid: boolean;
-    showDimensions: boolean;
-    showLabels: boolean;
-    showUtilities: boolean;
-    acknowledgedIssueIds: string[];
-  };
-};
-```
-
-### Draft
-
-The editable local draft contains:
-
 - Walls
 - Openings
 - Utilities
-- Cabinets
-- Detail notes
-- Verification states
+- Appliances
+- Design standards
+- Evidence
 
-### History
+The center preview updates from valid draft values.
 
-- Store a maximum of 50 past draft states.
-- A new draft edit clears the redo stack.
-- Undo and redo do not change the original seed.
-- Step, view, selection, panel position, and workspace-mode changes do not enter draft history.
-- Reset clears history and restores the initial seed.
+The form shows only fields relevant to the selected object.
 
-### Dirty state
+### Fast-entry patterns
 
-The draft is dirty when `history.present` differs from the original seeded draft.
+- Keyboard-friendly field order
+- Numeric keypad-compatible inputs
+- Inches and fractional-inch entry
+- Feet/inches parsing
+- Copy object
+- Repeat last offset or height
+- Common appliance-size presets
+- Add another similar utility point
+- Previous/next object navigation
+- Save-and-add-next behavior in the future persistent version
+- Inline source and confirmation state
+- Immediate missing-field feedback
 
-Dirty state appears as:
+Convenience values may populate fields, but they never become `MEASURED` without human confirmation.
 
-```text
-Local changes · Not saved
-```
+## 9. Standard Measurement Schema
 
-Clean initial state appears as:
+### 9.1 Site visit
 
-```text
-Round 1 reference loaded · Not saved
-```
+- Measurement date
+- Measured by
+- Unit system
+- Site notes
+- Source files
 
-Neither state uses `Saved`.
+### 9.2 Room shell
 
-### Selection
+- Room name
+- Ceiling height
+- Finished-floor status
+- Wall sequence
+- Wall-to-wall relationships
+- Inside/outside corner types
+- Ceiling or soffit conditions
 
-Supported selection types:
+Rooms are not restricted to a four-wall rectangle. The schema supports an ordered wall polygon.
+
+### 9.3 Wall
+
+- Wall ID
+- Measured length
+- Height
+- Thickness where known
+- Start corner
+- End corner
+- Plumb/level note
+- Available cabinet zone
+- Verification status
+
+### 9.4 Opening
+
+- Type: window, door, open passage
+- Wall ID
+- Offset from wall start
+- Width
+- Height
+- Sill height
+- Header height
+- Swing direction where applicable
+- Trim or casing allowance
+- Verification status
+
+### 9.5 Utility
+
+- Type: water, drain, electric, gas, vent
+- Wall ID or floor/ceiling reference
+- Horizontal offset
+- Vertical offset
+- Diameter or service size where relevant
+- Related appliance
+- Photo or note source
+- Verification status
+
+### 9.6 Appliance and fixed equipment
+
+- Type
+- Manufacturer/model when available
+- Width
+- Height
+- Depth
+- Required clearances
+- Door or drawer swing
+- Utility requirements
+- Preferred location
+- Fixed location status
+- Specification source
+
+### 9.7 Design standards
+
+- Base cabinet depth
+- Wall cabinet depth
+- Tall cabinet depth
+- Countertop height
+- Wall cabinet top height
+- Toe-kick height
+- Standard fillers
+- Panel thickness
+- Scribe allowance
+- Island target dimensions
+- Aisle and work-clearance targets
+- Cabinet construction style
+- Finish selection
+
+These values are project design inputs, not global manufacturing rules.
+
+## 10. Field State and Provenance
+
+Each normalized field has:
 
 ```ts
-type Round2Selection =
-  | { type: "WALL"; id: string }
-  | { type: "OPENING"; id: string }
-  | { type: "UTILITY"; id: string }
-  | { type: "CABINET"; id: string }
-  | { type: "DETAIL_NOTE"; id: string };
+type Round2FieldState =
+  | "MISSING"
+  | "AI_EXTRACTED"
+  | "NEEDS_CONFIRMATION"
+  | "CONFIRMED"
+  | "CONFLICT"
+  | "MANUALLY_CHANGED";
 ```
 
-Selection rules:
+Each field records:
 
-- Canvas, list, schedule, elevation, and inspector share the same selection.
-- Deleting a selected item chooses the next sensible sibling or clears selection.
-- Jumping to a step clears a selection that cannot be displayed in that step.
-- Selection is UI state and does not make the draft dirty.
+```ts
+type Round2FieldProvenance = {
+  sourceType:
+    | "ROUND1_REFERENCE"
+    | "TEXT"
+    | "VOICE_TRANSCRIPT"
+    | "PHOTO"
+    | "MEASUREMENT_SHEET"
+    | "PDF"
+    | "SPREADSHEET"
+    | "MANUAL"
+    | "SYSTEM_CALCULATION";
+  sourceId: string | null;
+  sourceLocation: string | null;
+  submittedByUserId: string;
+  extractedBy: "HUMAN" | "AI" | "SYSTEM";
+  confidence: number | null;
+  confirmedByUserId: string | null;
+  confirmedAt: string | null;
+};
+```
 
-## 11. Component Boundaries
+The interface displays provenance without forcing users to open a separate audit page.
 
-Round 2 should be implemented as a separate feature directory:
+## 11. AI Evidence Inbox
+
+Phase 4 includes a complete frontend prototype of the future AI evidence workflow.
+
+### Inbox
+
+Show all uploaded or pasted evidence with:
+
+- File or note name
+- Submitted by
+- Submitted time
+- Processing status
+- Fields extracted
+- Warnings
+
+### Evidence review
+
+Use a split view:
 
 ```text
-src/features/round2/
+Evidence preview | extracted fields
 ```
 
-Recommended boundaries:
+Selecting a field highlights its evidence location where possible.
 
-### Server entry
+Actions:
 
-`Round2Page`
+- Confirm
+- Edit and confirm
+- Reject extraction
+- Mark unreadable
+- Create remeasurement task
 
-- Authenticates user.
-- Loads project through existing access rules.
-- Loads the latest Round 1 snapshot.
-- Passes project identity and snapshot seed to the client prototype.
-- Performs no Round 2 write.
+### Agent follow-up questions
 
-### Seed adapter
+The Agent should produce targeted questions rather than a generic failure:
 
-`round2-seed.ts`
+```text
+The sink-wall overall length is 172", but the recorded segments total 171 1/4".
+Which value should be remeasured?
+```
 
-- Validates supported Round 1 snapshot version.
-- Converts snapshot into a Round 2 prototype seed.
-- Adds source and prototype metadata.
-- Contains no React code.
+Questions become tasks and remain linked to the affected fields.
 
-### State reducer
+## 12. AI Design Agent
 
-`round2-reducer.ts`
+After required measurements are confirmed, the Agent proposes the cabinet arrangement as structured JSON.
 
-- Applies draft actions.
-- Applies UI actions.
-- Maintains bounded history.
-- Supports undo, redo, and reset.
-- Contains no DOM or network logic.
+The Agent may decide:
 
-### Derived review model
+- Cabinet sequence by wall
+- Cabinet type
+- Nominal cabinet widths
+- Fillers and panels
+- Appliance integration
+- Sink and range alignment
+- Island cabinet composition
+- Wall cabinet heights
+- Initial detail notes
 
-`round2-review.ts`
+The Agent receives:
 
-- Derives unresolved issues.
-- Derives step status.
-- Derives summary counts.
-- Maps each issue to a target step, view, selection, and focus target.
+- Reviewed measurement JSON
+- Appliance specifications
+- Customer preferences from Round 1
+- Project design standards
+- Deterministic rule-check results
 
-### Geometry
+The Agent outputs:
 
-`round2-plan-scene.ts`
+- Proposed cabinet-layout JSON
+- Design rationale
+- Assumptions
+- Unresolved decisions
+- Fields or measurements requiring confirmation
 
-- Derives technical plan geometry from the local draft.
+The Agent does not output the final drawing pixels.
 
-`round2-elevation-scene.ts`
+## 13. Deterministic Drawing Package
 
-- Derives four wall elevations from the same local draft.
+The drawing engine consumes reviewed measurement JSON plus proposed or corrected cabinet-layout JSON.
 
-The Plan and Elevations views must use the same draft source. They must not maintain separate cabinet positions.
+It generates a standard drawing package.
 
-### Workspace shell
+### 13.1 Measured floor plan
 
-`round2-prototype-app.tsx`
+Include:
 
-- Owns the reducer.
-- Coordinates step, view, mode, history, and selection.
-- Adds dirty-exit protection.
-- Contains no fetch call.
+- Room perimeter
+- Wall IDs
+- North arrow
+- Drawing title and scale
+- Doors and windows
+- Utilities
+- Appliances
+- Cabinet footprints
+- Island
+- Overall room dimensions
+- Wall dimension chains
+- Opening offsets
+- Appliance and cabinet run dimensions
+- Island overall and cabinet-segment dimensions
+- Elevation reference markers
+- Issue markers
+- Revision/version label
 
-### Presentational components
+### 13.2 Wall elevations
 
-- `round2-project-bar.tsx`
-- `round2-step-navigation.tsx`
-- `round2-workspace-shell.tsx`
-- `round2-view-tabs.tsx`
-- `round2-plan-canvas.tsx`
-- `round2-elevation-canvas.tsx`
-- `round2-inspector.tsx`
-- `round2-cabinet-schedule.tsx`
-- `round2-review-package.tsx`
-- `round2-empty-state.tsx`
-- `round2-prototype-notice.tsx`
+Generate an elevation for each active cabinet wall.
 
-Inspector fields may be split by object type when a single file becomes difficult to understand.
+Include:
 
-## 12. Network and Persistence Rules
+- Floor and ceiling
+- Doors and windows
+- Appliances
+- Base, wall, and tall cabinets
+- Fillers and panels
+- Countertop
+- Overall run width
+- Individual cabinet widths
+- Vertical dimension chains
+- Ceiling and cabinet heights
+- Opening dimensions
+- Appliance clearances
+- Detail and issue markers
+- Drawing title and scale
 
-The Round 2 client feature must contain no:
+### 13.3 Island elevations
 
-- `fetch`
-- server action
-- form action
-- mutation hook
-- storage write
-- project-status request
+Generate the required island faces.
 
-The only server data access happens while rendering the route:
+Include:
 
-- Existing project lookup
-- Existing latest Round 1 snapshot lookup
+- Overall width and height
+- Cabinet sequence
+- Individual cabinet widths
+- Panel and overhang conditions
+- Seating side where applicable
+- Appliance or sink placement
 
-The route may read from the existing database through current repositories. It must not write.
+### 13.4 Cabinet dimension schedule
 
-### Browser exit
+Include:
 
-When the draft is dirty:
+- Drawing label
+- Cabinet type
+- Wall or island run
+- Nominal width
+- Height
+- Depth
+- Quantity
+- Panel/filler notes
+- Review state
 
-- Navigating back to the project requires a discard confirmation.
-- Reset requires a confirmation.
-- Browser refresh or close uses `beforeunload`.
+This is a design schedule, not a cut list or order list.
 
-The warning must say that changes will be discarded, not that they are unsaved server changes.
+### 13.5 Drawing title block
 
-## 13. Responsive Design
+Include:
+
+- Customer
+- Project
+- Site address where permitted
+- Drawing version
+- Generated time
+- Generated from measurement version
+- Prepared by AI Agent
+- Reviewed by
+- Review status
+- Prototype notice in Phase 4
+
+## 14. Drawing Generation Gate
+
+The system may generate a draft drawing package while issues remain, but it must clearly distinguish draft and review-ready states.
+
+### Draft generation requirements
+
+- Room shell is geometrically valid
+- Required wall lengths exist
+- Openings have a wall and position
+- Appliances used in design have dimensions
+- Cabinet-layout JSON passes schema validation
+
+### Review-ready requirements
+
+- Required measurements are confirmed
+- Dimension chains close within tolerance
+- No unresolved blocking geometry conflict
+- Required appliance specifications are present
+- Cabinet runs fit their available spans
+- Required clearances pass or have an explicit accepted exception
+
+## 15. Limited Correction, Not Freeform Design
+
+The correction workspace exists to fix Agent output and field data, not to provide a general design canvas.
+
+Allowed corrections:
+
+- Change a measurement
+- Confirm or replace a source value
+- Change a cabinet nominal width
+- Change a cabinet type
+- Swap adjacent cabinets
+- Adjust filler or panel allowance
+- Move a cabinet or appliance to another valid run
+- Change alignment intent
+- Add a design note
+- Accept a documented exception
+
+Not included:
+
+- Drawing arbitrary geometry
+- Freehand drafting
+- Unconstrained object placement
+- Creating custom cabinet shapes on canvas
+- CAD commands
+- Layer management
+- Precision mouse-only drafting
+
+The primary correction method is structured form editing. Selecting a drawing object opens the corresponding data record.
+
+## 16. Validation and Conflict Detection
+
+### 16.1 System-detected hard conflicts
+
+Deterministic rules detect:
+
+- Room perimeter does not close
+- Segment dimensions do not equal overall dimensions
+- Opening exceeds wall bounds
+- Objects overlap impossibly
+- Cabinet run exceeds available wall span
+- Cabinet dimension is missing or invalid
+- Appliance does not fit its assigned opening
+- Door swing conflicts with cabinet or appliance
+- Required aisle or work clearance is below target
+- Utility and appliance relationship is inconsistent
+- Countertop or cabinet height conflicts with opening
+- Required data is missing
+
+The system creates issues but does not silently alter measured data.
+
+### 16.2 Human-raised design issues
+
+Admin or Designer may click a drawing object or location and create an issue.
+
+Issue fields:
+
+- Drawing version
+- Drawing sheet/view
+- Object or coordinate reference
+- Issue type
+- Description
+- Suggested action
+- Severity
+- Blocking status
+- Requires site remeasurement
+- Assignee
+- Due date
+- Evidence
+
+Example:
+
+```text
+Sink centerline does not align with the window centerline.
+Confirm the window opening offset from Wall A start.
+```
+
+## 17. Issue Assignment and Remeasurement Loop
+
+Issue states:
+
+```text
+OPEN
+  → ASSIGNED
+  → WAITING_FOR_SITE
+  → WAITING_FOR_DESIGN_REVIEW
+  → RESOLVED
+```
+
+### Sales or field assignee
+
+Can:
+
+- View the exact drawing marker
+- See the specific measurement requested
+- Enter replacement values
+- Upload photos, notes, or voice evidence
+- Submit for design review
+
+Cannot:
+
+- Close a design conflict
+- Mark a drawing reviewed
+
+### Admin or Designer
+
+Can:
+
+- Accept submitted evidence
+- Reject it and request another measurement
+- Update normalized data
+- Mark the issue resolved
+- Accept a documented design exception
+
+Accepted data triggers:
+
+```text
+new normalized-data version
+  → new drawing version
+  → previous final review invalidated
+```
+
+## 18. Activity History and Progress
+
+Every edit becomes an append-only event in the future persistent implementation.
+
+Record:
+
+- Actor
+- Role
+- Time
+- Workflow stage
+- Object
+- Field
+- Previous value
+- New value
+- Change source
+- Related evidence
+- Related issue
+- Affected drawing version
+
+Change source:
+
+```text
+MANUAL_ENTRY
+AI_EXTRACTION
+AI_DESIGN_PROPOSAL
+SYSTEM_CALCULATION
+ISSUE_RESOLUTION
+FINAL_REVIEW
+REVIEW_INVALIDATION
+```
+
+Old versions are read-only and cannot be deleted through the normal interface.
+
+### Progress display
+
+Do not use an arbitrary percentage.
+
+Use explicit milestones:
+
+```text
+Evidence collected
+Data organized
+Measurements confirmed
+Design proposed
+Drawings generated
+Issues resolved
+Waiting for final review
+Designer reviewed
+Rendering available
+```
+
+The activity timeline explains:
+
+- What happened
+- Who did it
+- What remains
+- Who owns the next task
+
+## 19. Versioning
+
+Version these independently:
+
+- Evidence set
+- Normalized measurement data
+- Cabinet-layout proposal
+- Drawing package
+- Final review
+- Rendering
+
+Every drawing package records the exact measurement and cabinet-layout versions used.
+
+Every rendering records the exact reviewed drawing version and design JSON used.
+
+Changing drawing-affecting data:
+
+1. Marks the current drawing stale.
+2. Invalidates final review.
+3. Invalidates rendering eligibility.
+4. Creates a new activity event.
+5. Requires drawing regeneration and review.
+
+## 20. Final Review
+
+Final review is a dedicated stage, not a checkbox hidden inside drawing generation.
+
+Only Admin and Designer can complete it.
+
+### Review workspace
+
+Review:
+
+- Measured floor plan
+- All cabinet-wall elevations
+- Island elevations
+- Cabinet dimension schedule
+- Open issues
+- Accepted exceptions
+- Data provenance
+- Version history
+
+The reviewer can:
+
+- Approve the version
+- Create an issue
+- Return it for site confirmation
+- Return it for design correction
+- Compare with the previous drawing version
+
+### Review gate
+
+Final review is enabled when:
+
+- Blocking issues equal zero
+- Required drawings exist
+- Required measurements are confirmed
+- Drawing and source versions match
+- Dimension checks pass
+
+The review record includes:
+
+- Reviewer
+- Role
+- Reviewed time
+- Drawing version
+- Measurement-data version
+- Cabinet-layout version
+- Open non-blocking issues
+- Accepted exceptions
+
+### Review invalidation
+
+Any later change to:
+
+- Confirmed measurement
+- Opening
+- Utility
+- Appliance
+- Cabinet arrangement
+- Cabinet dimensions
+- Filler/panel allowance
+- Design standard affecting geometry
+
+automatically changes the status from:
+
+```text
+Designer reviewed
+```
+
+to:
+
+```text
+Review required after changes
+```
+
+## 21. Rendering Generation
+
+Rendering is downstream of reviewed design data.
+
+The rendering request is assembled from:
+
+1. Reviewed measured floor plan image
+2. Reviewed elevation images
+3. Optional detail-sheet images
+4. Reviewed normalized measurement JSON
+5. Reviewed cabinet-layout JSON
+6. Cabinet style and finish data
+7. Appliance information
+8. Deterministic spatial summary
+9. Rendering prompt
+
+The drawing images provide spatial references.
+
+JSON provides explicit object identities, dimensions, relationships, and material choices.
+
+The prompt instructs the image model to:
+
+- Preserve the reviewed arrangement
+- Preserve door and window positions
+- Preserve appliances
+- Preserve cabinet proportions and run structure
+- Match the selected cabinet finish
+- Produce a customer-facing realistic visualization
+
+The image model never becomes the source of drawing geometry or cabinet dimensions.
+
+Renderings are versioned against the reviewed drawing package. A new reviewed drawing version marks older renderings stale but does not delete them.
+
+## 22. Phase 4 Frontend Screens
+
+### 22.1 Round 2 overview
+
+- Current milestone
+- Next responsible person
+- Evidence summary
+- Data-confirmation summary
+- Latest drawing version
+- Open issue count
+- Final-review status
+- Latest rendering
+- Activity timeline
+
+### 22.2 Measurement workspace
+
+- Object navigator
+- Live measured-plan preview
+- Current-object form
+- Field provenance and state
+- Missing/conflict summary
+
+### 22.3 AI evidence inbox
+
+- Evidence list
+- Evidence preview
+- Extracted-field review
+- Agent follow-up questions
+- Confirm/reject/correct actions
+
+### 22.4 Design proposal
+
+- Agent-proposed cabinet arrangement
+- Rationale
+- Assumptions
+- Decisions requiring review
+- Structured correction controls
+
+### 22.5 Drawing package
+
+- Sheet navigator
+- Measured plan
+- Wall elevations
+- Island elevations
+- Cabinet schedule
+- Dimension and issue overlays
+- Regenerate action
+- Version selector
+
+### 22.6 Issue center
+
+- Open issues
+- Drawing markers
+- Assignee
+- Status
+- Site evidence
+- Design-review actions
+
+### 22.7 Final review
+
+- Version comparison
+- Review checklist
+- Open non-blocking issues
+- Accepted exceptions
+- Approve/return actions
+
+### 22.8 Rendering
+
+- Reviewed source summary
+- Prompt summary
+- Generate-rendering prototype action
+- Rendering preview/history
+- Stale marker
+
+## 23. Responsive Behavior
 
 ### Desktop
 
-- Persistent Studio rail.
-- Full five-step navigation.
-- Large canvas.
-- Fixed contextual inspector.
-- Plan / Elevations / Details tabs remain visible.
-- Project bar actions stay on one line where practical.
+- Persistent Studio rail
+- Task/status navigation
+- Main evidence, form, drawing, or review surface
+- Context panel for selected field/object/issue
 
 ### iPad landscape
 
-- Preserve guided navigation, canvas, and inspector.
-- Reduce navigation and inspector widths before shrinking canvas.
-- Use 44px minimum targets.
-- Avoid controls that require hover.
+- Preserve navigator, main surface, and context panel
+- Reduce side widths before drawing area
+- Support field entry and drawing review
 
 ### iPad portrait
 
-- Studio rail uses its existing narrow behavior.
-- Steps become a horizontally scrollable progress strip.
-- Canvas remains the main surface.
-- Inspector becomes a bottom sheet.
-- Bottom sheet supports:
-  - Collapsed
-  - Expanded
-- The collapsed sheet shows selected-object identity and key values.
-- The expanded sheet shows full editing controls.
-- The primary field or action remains reachable without precise dragging.
+- Stage navigation becomes a compact top control
+- Main drawing/evidence surface remains primary
+- Current form or issue details become a bottom sheet
+- All actions use 44px minimum targets
 
-### Canvas focus on iPad
+Phone is a task and progress surface only. Full measurement entry and drawing review are not required on phone.
 
-- The step strip remains available.
-- Inspector opens as an overlay or bottom sheet.
-- Switching orientation must not reset draft or selection.
+## 24. State Architecture for Phase 4
 
-### Phone
+Phase 4 uses local fixture-backed state, but mirrors the future domain boundaries:
 
-Full Round 2 editing is not a Phase 4 target.
+```ts
+type Round2PrototypeState = {
+  evidence: EvidenceItem[];
+  measurementVersion: MeasurementVersion;
+  cabinetProposalVersion: CabinetProposalVersion | null;
+  drawingVersions: DrawingVersion[];
+  issues: Round2Issue[];
+  review: FinalReview | null;
+  renderings: RenderingPreview[];
+  activity: ActivityEvent[];
+  ui: Round2UiState;
+};
+```
 
-Phones may show:
+The prototype supports:
 
-- Prototype notice
-- Project identity
-- Current review summary
-- A message recommending desktop or iPad
+- Editing normalized fields
+- Confirming AI-extracted fields
+- Generating an Agent proposal fixture
+- Generating deterministic drawing scenes
+- Creating and assigning issues
+- Submitting remeasurement evidence
+- Resolving issues
+- Invalidating review after changes
+- Completing Admin/Designer review
+- Generating a rendering preview fixture
 
-Do not compress the full editing workspace into a phone layout.
+It does not persist these actions.
 
-## 14. Canvas Interaction Rules
+## 25. Required Prototype States
 
-- Tap or click selects.
-- Selection has a high-contrast outline and text identification.
-- Pan and zoom feedback may be prototyped.
-- Zoom controls must be keyboard accessible.
-- Touch objects and handles are at least 44px.
-- Drag is reserved for:
-  - Canvas pan
-  - Explicit reorder handles
-  - Interactions that also have a numeric alternative
-- Do not imply precision snapping if the prototype does not implement it deterministically.
-- Do not use hover as the only way to discover object identity or actions.
+- No field evidence
+- Evidence processing
+- AI extraction ready
+- AI extraction conflict
+- Missing required measurements
+- Measurement confirmation ready
+- Design proposal generating
+- Proposal ready
+- Drawing generating
+- Draft drawing
+- Drawing conflict
+- Waiting for site confirmation
+- Waiting for design review
+- Review-ready
+- Designer reviewed
+- Review invalidated
+- Rendering eligible
+- Rendering generating
+- Rendering available
+- Rendering stale
 
-## 15. Motion and Feedback
+## 26. Accessibility
 
-Continue the approved Studio motion language:
+- Every field has a visible label.
+- Measurement state is not communicated by color alone.
+- Evidence-to-field relationships are keyboard accessible.
+- Drawing objects have accessible labels.
+- Selecting a drawing object opens the corresponding record.
+- Issue markers can be reached from an issue list.
+- Issue jumps move focus to the relevant field or drawing heading.
+- All limited corrections have form-based alternatives.
+- Final-review dialogs return focus correctly.
+- Dimension text meets contrast requirements.
+- Reduced motion disables nonessential transitions.
 
-- Press feedback: 120–160ms
-- Hover/focus: 160–200ms
-- Panel and mode transitions: 240–320ms
-- Selection transition: opacity, color, and restrained transform
-- Bottom sheet: transform-based transition
+## 27. Testing Strategy
 
-Do not animate technical geometry during ordinary field edits in a way that makes dimensions appear unstable.
+### Pure model tests
 
-### Reduced motion
+- Evidence normalization fixtures
+- Field provenance and status transitions
+- Required-field checks
+- Measurement version creation
+- Cabinet-proposal schema
+- Review invalidation
+- Role permissions
+- Activity-event generation
 
-With `prefers-reduced-motion: reduce`:
+### Deterministic drawing tests
 
-- Mode changes are immediate.
-- Bottom-sheet changes are immediate.
-- No spring overshoot.
-- No pulsing selection.
-- No perpetual shimmer.
-- State remains understandable through text and static styling.
+- Same JSON produces identical scenes
+- Room perimeter closes
+- Dimension chains equal source measurements
+- Opening offsets match JSON
+- Cabinet runs equal cabinet-layout JSON
+- Elevations match plan object identities
+- Island elevations match island sequence
+- Removing/changing a cabinet updates plan, elevation, and schedule
 
-## 16. Accessibility
+### Issue tests
 
-- WCAG AA contrast for text, controls, dimensions, and selection.
-- Visible focus for every action and editable field.
-- Logical focus order: project bar, steps, view tabs, canvas/list, inspector, footer status.
-- Canvas objects have accessible labels.
-- Selection changes are announced through a polite live region.
-- Errors and invalid numeric values connect to their fields.
-- Issue jump moves focus to useful content.
-- Verification state is not conveyed by color alone.
-- Disabled Export includes an explanation.
-- Bottom sheet preserves focus when expanded or collapsed.
-- Reset and dirty-exit confirmations use accessible dialogs.
-- Keyboard users can complete every prototype interaction without dragging.
-
-## 17. Error, Empty, and Edge States
-
-### Required states
-
-- Loading latest Round 1 reference
-- No Round 1 snapshot
-- Unsupported snapshot
-- Seed conversion failure
-- Empty object list
-- No selection
-- Invalid numeric input
-- Dirty local draft
-- Reset confirmation
-- Discard-exit confirmation
-- No issues
-- Unresolved issues
-- Prototype review complete
-- Disabled Export explanation
-
-### Invalid values
-
-Invalid field input:
-
-- Remains local to the field until corrected.
-- Shows an inline message.
-- Does not update the draft scene.
-- Does not create an undo-history entry.
-
-### Removing referenced objects
-
-If an issue references an object that is later removed:
-
-- Recompute the issue list.
-- Remove obsolete derived issues.
-- Clear or move selection according to the selection rules.
-
-## 18. Testing Strategy
-
-### Pure unit tests
-
-Test the Round 1 snapshot adapter:
-
-- Supported schema converts.
-- Source metadata is retained.
-- Imported measurements are unverified.
-- Round 1 object is not mutated.
-- Unsupported schema fails explicitly.
-
-Test reducer behavior:
-
-- Field edit
-- Add object
-- Duplicate cabinet
-- Remove object
-- Reorder run
-- Verification toggle
-- Add/remove detail note
-- Undo
-- Redo
-- Redo clearing after a new edit
-- Reset
-- 50-state history bound
-- UI-only action does not enter history
-
-Test review derivation:
-
-- Unverified walls
-- Unverified fixed conditions
-- Invalid or missing cabinet values
-- Detail issue counts
-- Issue acknowledgement
-- Issue target step/view/selection
-- Prototype review complete
-
-Test geometry:
-
-- Plan is deterministic.
-- All four elevations use the same draft.
-- Selection identifiers remain stable.
-- Removing a cabinet removes it from plan, elevation, and schedule.
+- System conflict creation
+- Human issue creation
+- Assignment
+- Site-evidence submission
+- Admin/Designer resolution
+- Sales cannot close design conflict
+- Blocking issue prevents final review
 
 ### Markup tests
 
-Verify:
-
-- Persistent prototype notice
-- All five steps
-- Plan / Elevations / Details tabs
-- Empty state links
-- Disabled Export explanation
-- Review-complete wording
-- No `Saved`, `Approved`, or `Production ready`
-- Touch-target and focus classes
-- Accessible dialog labels
-
-### Source-level boundary tests
-
-The `src/features/round2` client code must contain no:
-
-```text
-fetch(
-localStorage.setItem
-indexedDB
-"use server"
-```
-
-The project route must import no Round 2 mutation service or repository.
+- Dual intake entry
+- Field provenance
+- Progress milestones
+- Drawing version
+- Activity actor and time
+- Review role restrictions
+- Review invalidation
+- Rendering source version
+- Prototype notices
 
 ### Browser acceptance
 
-Verify on:
+1. Enter measurements through standard entry.
+2. Review an AI-extracted fixture.
+3. Resolve an extraction conflict.
+4. Generate a cabinet proposal.
+5. Generate measured plan and elevations.
+6. Correct one cabinet width.
+7. Confirm a new drawing version appears.
+8. Create a drawing issue.
+9. Assign it to Sales for remeasurement.
+10. Submit new field evidence as Sales.
+11. Resolve it as Admin or Designer.
+12. Complete final review.
+13. Change a reviewed dimension and confirm review is invalidated.
+14. Re-review and generate a rendering preview.
+15. Confirm no Phase 4 Round 2 mutation API is called.
 
-- Desktop 1440 × 900
-- iPad landscape 1024 × 768
-- iPad portrait 820 × 1180
+## 28. Acceptance Criteria
 
-Required browser scenarios:
+Phase 4 is accepted when:
 
-1. Open a project with a Round 1 snapshot.
-2. Confirm initial Round 2 draft reflects the project.
-3. Edit all five steps.
-4. Synchronize selection across canvas, schedule/list, and inspector.
-5. Undo and redo.
-6. Reset with confirmation.
-7. Switch Guided and Canvas focus without losing state.
-8. Rotate between landscape and portrait without losing state.
-9. Jump from Review Package issue to the correct object.
-10. Complete all prototype checks.
-11. Confirm Export remains unavailable.
-12. Confirm dirty exit warning.
-13. Confirm reduced-motion behavior.
-14. Confirm the network panel contains no Round 2 write request.
+- The experience reads as an Agent-led workflow, not CAD software.
+- Standard measurement entry is fast and object-based.
+- AI evidence organization has a complete review prototype.
+- Every extracted value has provenance and confirmation state.
+- The Agent proposal is structured data, not a raster drawing.
+- Deterministic code generates a measured plan, wall elevations, island elevations, dimensions, and cabinet schedule.
+- Corrections are constrained and data-driven.
+- System and human issues share one assignment workflow.
+- All edits appear in activity history with actor and before/after values.
+- Admin and Designer can complete final review.
+- Sales cannot close design conflicts or complete final review.
+- Drawing-affecting changes invalidate review.
+- Renderings are generated from reviewed drawings, JSON, and prompt.
+- Desktop and iPad workflows pass visual QA.
+- No Round 2 database, API, real AI call, real export, or real rendering request is introduced in Phase 4.
 
-## 19. Acceptance Criteria
+## 29. Future Backend Handoff
 
-Phase 4 design implementation is accepted when:
+Backend implementation requires a separate specification covering:
 
-- All authorized project users can open and edit the prototype.
-- Project Detail links to Round 2.
-- No project status changes when Round 2 opens.
-- Round 1 snapshot is the only project-specific seed.
-- No snapshot produces a truthful empty state.
-- Five-step workflow is complete and interactive.
-- Guided and Canvas focus modes preserve state.
-- Plan, elevations, details, schedule, and review use the same local draft.
-- Canvas and inspector selection remain synchronized.
-- Undo, redo, reset, dirty warning, and discard confirmation work.
-- Desktop and iPad layouts pass visual QA.
-- Every drag interaction has an accessible non-drag alternative.
-- Reduced motion is honored.
-- Prototype notice remains visible.
-- Export remains unavailable and explained.
-- No Round 2 API, database, persistence, approval, or production feature is added.
-- No UI copy implies saved or authoritative production data.
-- Automated tests, TypeScript, and production build pass.
+- Evidence storage
+- AI extraction jobs
+- Measurement schema persistence
+- Cabinet proposal versions
+- Drawing versions and file storage
+- Issue assignment and notifications
+- Append-only activity events
+- Review permissions and signatures
+- Rendering job orchestration
+- Concurrency and edit conflicts
+- Audit retention
 
-## 20. Future Backend Handoff
-
-Phase 4 intentionally stops before backend design.
-
-A later Round 2 implementation phase may use this prototype to define:
-
-- Persistent Round 2 schema
-- Measurement provenance
-- Draft versioning
-- Role and approval rules
-- Validation authority
-- Project-status transitions
-- Production drawing generation
-- Real exports
-- Audit history
-
-Those decisions must not be inferred from the frontend prototype alone.
-
-When persistence is introduced, the local reducer and pure geometry can remain useful, but server authority, concurrency, validation, and production eligibility require a separate design specification.
-
+Phase 4 defines the product and frontend contracts. It does not silently decide server authority or production-release rules.
