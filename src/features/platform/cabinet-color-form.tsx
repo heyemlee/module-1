@@ -201,7 +201,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="cabinetStyle" className="text-xs text-studio-secondary">Cabinet style</Label>
+            <Label htmlFor="cabinetStyle" className="text-xs text-studio-muted">Cabinet style</Label>
             <select
               id="cabinetStyle"
               value={cabinetStyle}
@@ -218,7 +218,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-xs text-studio-secondary">Color name</Label>
+            <Label htmlFor="name" className="text-xs text-studio-muted">Color name</Label>
             <Input
               id="name"
               value={name}
@@ -241,7 +241,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="swatchImage" className="text-xs text-studio-secondary">Swatch image</Label>
+            <Label htmlFor="swatchImage" className="text-xs text-studio-muted">Swatch image</Label>
             <div className="flex items-center gap-4">
               {swatchPreview ? (
                 <img
@@ -250,7 +250,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
                   className="size-16 shrink-0 rounded-md border border-studio-line object-cover"
                 />
               ) : (
-                <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-studio-line bg-studio-line/20 text-xs text-studio-secondary">
+                <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-studio-line bg-studio-line/20 text-xs text-studio-muted">
                   No swatch
                 </div>
               )}
@@ -261,16 +261,16 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
                 onChange={(e) => handleFile(e.target.files?.[0], setSwatchData, setSwatchPreview)}
                 disabled={busy}
                 aria-describedby="swatch-upload-hint"
-                className="h-10 text-xs text-studio-secondary file:text-studio-ink"
+                className="h-10 text-xs text-studio-muted file:text-studio-ink"
               />
             </div>
-            <p id="swatch-upload-hint" className="text-xs text-studio-secondary">
+            <p id="swatch-upload-hint" className="text-xs text-studio-muted">
               Images are resized before upload. Maximum source size: 4MB.
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="hoverImage" className="text-xs text-studio-secondary">Hover example image (optional)</Label>
+            <Label htmlFor="hoverImage" className="text-xs text-studio-muted">Hover example image (optional)</Label>
             <div className="flex items-center gap-4">
               {hoverPreview ? (
                 <img
@@ -279,7 +279,7 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
                   className="size-16 shrink-0 rounded-md border border-studio-line object-cover"
                 />
               ) : (
-                <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-studio-line bg-studio-line/20 text-xs text-studio-secondary">
+                <div className="flex size-16 shrink-0 items-center justify-center rounded-md border border-studio-line bg-studio-line/20 text-xs text-studio-muted">
                   No example
                 </div>
               )}
@@ -290,13 +290,13 @@ export function CabinetColorForm({ color }: { color?: CabinetColor }) {
                 onChange={(e) => handleFile(e.target.files?.[0], setHoverData, setHoverPreview)}
                 disabled={busy}
                 aria-describedby="swatch-upload-hint"
-                className="h-10 text-xs text-studio-secondary file:text-studio-ink"
+                className="h-10 text-xs text-studio-muted file:text-studio-ink"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="promptDescription" className="text-xs text-studio-secondary">
+            <Label htmlFor="promptDescription" className="text-xs text-studio-muted">
               AI description
             </Label>
             <textarea

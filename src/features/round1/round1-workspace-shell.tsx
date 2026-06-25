@@ -47,7 +47,7 @@ export function Round1WorkspaceShell({
           layout
           transition={transition}
           data-workspace-region="steps"
-          className="hidden border-r border-studio-line bg-[#0e1713] p-3 xl:block"
+          className="hidden border-r border-studio-line bg-studio-rail p-3 xl:block"
         >
           {stepNavigation}
         </motion.aside>
@@ -73,7 +73,7 @@ export function Round1WorkspaceShell({
             "max-md:sticky max-md:bottom-0 max-md:z-20 max-md:max-h-[52dvh] max-md:overflow-hidden max-md:rounded-t-[16px] max-md:shadow-[0_-20px_60px_rgba(0,0,0,0.34)]"
           )}
         >
-          <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-black/25 md:hidden" />
+          <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-studio-paper-muted-ink/35 md:hidden" />
           {inspector}
         </motion.div>
       </div>

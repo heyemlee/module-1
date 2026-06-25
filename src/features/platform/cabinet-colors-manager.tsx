@@ -147,7 +147,7 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
     <div className="space-y-6">
       <div className="sticky top-[74px] z-10 flex items-center justify-between gap-3 rounded-studio-panel border border-studio-line bg-studio-void px-4 py-3 shadow-sm">
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-studio-secondary">
+          <p className="text-sm font-medium text-studio-muted">
             {dirtyIds.length === 0
               ? "No unsaved changes"
               : `${dirtyIds.length} unsaved change(s)`}
@@ -193,7 +193,7 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                     >
                       <div
                         className="relative h-32 w-full shrink-0"
-                        style={{ backgroundColor: color.swatchHex || "#e8e8ed" }}
+                        style={{ backgroundColor: color.swatchHex || "var(--studio-paper-muted)" }}
                       >
                         {draft.swatchPreview && (
                           <img
@@ -210,7 +210,7 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                               Active
                             </span>
                           ) : (
-                            <span className="inline-flex items-center rounded-full bg-studio-line-strong px-2 py-0.5 text-xs font-semibold text-studio-secondary">
+                            <span className="inline-flex items-center rounded-full bg-studio-line-strong px-2 py-0.5 text-xs font-semibold text-studio-muted">
                               Inactive
                             </span>
                           )}
@@ -239,7 +239,7 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                           <Label htmlFor={`active-${color.id}`}>Active</Label>
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`style-${color.id}`} className="text-xs text-studio-secondary">Cabinet style</Label>
+                          <Label htmlFor={`style-${color.id}`} className="text-xs text-studio-muted">Cabinet style</Label>
                           <select
                             id={`style-${color.id}`}
                             className={selectClass}
@@ -257,18 +257,18 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`swatch-${color.id}`} className="text-xs text-studio-secondary">Swatch image</Label>
+                          <Label htmlFor={`swatch-${color.id}`} className="text-xs text-studio-muted">Swatch image</Label>
                           <Input
                             id={`swatch-${color.id}`}
                             type="file"
                             accept="image/*"
                             onChange={(e) => pickImage(color.id, e.target.files?.[0], "swatch")}
                             disabled={busy}
-                            className="text-xs text-studio-secondary file:text-studio-ink h-8"
+                            className="h-8 text-xs text-studio-muted file:text-studio-ink"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`hover-${color.id}`} className="text-xs text-studio-secondary">Hover example image (optional)</Label>
+                          <Label htmlFor={`hover-${color.id}`} className="text-xs text-studio-muted">Hover example image (optional)</Label>
                           {draft.hoverPreview && (
                             <div className="mb-2 h-16 w-full overflow-hidden rounded-md border border-studio-line bg-studio-line/20">
                               <img
@@ -285,11 +285,11 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
                             accept="image/*"
                             onChange={(e) => pickImage(color.id, e.target.files?.[0], "hover")}
                             disabled={busy}
-                            className="text-xs text-studio-secondary file:text-studio-ink h-8"
+                            className="h-8 text-xs text-studio-muted file:text-studio-ink"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`ai-${color.id}`} className="text-xs text-studio-secondary">AI description</Label>
+                          <Label htmlFor={`ai-${color.id}`} className="text-xs text-studio-muted">AI description</Label>
                           <textarea
                             id={`ai-${color.id}`}
                             rows={2}

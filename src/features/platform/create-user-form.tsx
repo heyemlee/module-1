@@ -72,7 +72,7 @@ export function CreateUserForm() {
       >
         <div className="mb-6">
           <h2 className="text-xl font-bold text-studio-ink">Create user</h2>
-          <p className="mt-1 text-sm text-studio-secondary">
+          <p className="mt-1 text-sm text-studio-muted">
             Create a company account and set its first monthly render allowance.
           </p>
         </div>

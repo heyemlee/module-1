@@ -94,8 +94,8 @@ export function RenderingPreferencesStep({
       <div className="block after:clear-both after:block after:content-['']">
         {/* Left Pane: Preview Area */}
         <div className="mb-6 lg:mb-3 lg:float-left lg:w-[408px] lg:pr-3">
-          <div className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] shadow-sm">
-            <div className="relative aspect-[16/9] w-full bg-[#e8e8ed]">
+          <div className="overflow-hidden rounded-studio-panel border border-studio-paper-line bg-studio-paper-muted shadow-sm">
+            <div className="relative aspect-[16/9] w-full bg-studio-paper-muted">
               {displayImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -106,7 +106,7 @@ export function RenderingPreferencesStep({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-[#aeaeb2]">
+                <div className="flex h-full w-full items-center justify-center text-studio-paper-muted-ink">
                   <ImageIcon className="h-12 w-12" />
                 </div>
               )}
@@ -147,10 +147,10 @@ export function RenderingPreferencesStep({
                   role="alert"
                   className="rounded-studio-control border border-studio-danger/25 bg-studio-danger/10 p-4"
                 >
-                  <p className="text-[13px] font-semibold text-[#8e312b]">
+                  <p className="text-[13px] font-semibold text-studio-danger-ink">
                     Cabinet colors could not be loaded
                   </p>
-                  <p className="mt-1 text-[12px] text-[#6f4b47]">
+                  <p className="mt-1 text-[12px] text-studio-danger-ink/80">
                     Check the connection and try loading the catalog again.
                   </p>
                   <Button
@@ -163,14 +163,14 @@ export function RenderingPreferencesStep({
                   </Button>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-[#d2d2d7] bg-[#f5f5f7] p-5">
+                <div className="rounded-studio-control border border-dashed border-studio-paper-line bg-studio-paper-muted p-5">
                   <div className="flex gap-3">
-                    <InfoCircledIcon className="h-5 w-5 text-[#86868b] shrink-0" />
+                    <InfoCircledIcon className="h-5 w-5 shrink-0 text-studio-paper-muted-ink" />
                     <div>
-                      <p className="text-sm font-bold text-[#1d1d1f]">
+                      <p className="text-sm font-bold text-studio-paper-ink">
                         Ask an Admin to configure cabinet colors
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-[#6e6e73]">
+                      <p className="mt-1 text-sm leading-6 text-studio-paper-muted-ink">
                         Active cabinet colors are required before a sales rendering can be
                         generated for this style.
                       </p>
@@ -193,13 +193,13 @@ export function RenderingPreferencesStep({
                       className={cn(
                         "float-left mr-3 mb-3 group relative shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-lg transition-all duration-200",
                         isSelected
-                          ? "ring-2 ring-[var(--app-ink)] ring-offset-2 scale-105 shadow-md"
-                          : "ring-1 ring-[#d2d2d7] hover:ring-[#6e6e73]"
+                          ? "scale-105 shadow-md ring-2 ring-studio-action-strong ring-offset-2 ring-offset-studio-paper"
+                          : "ring-1 ring-studio-paper-line hover:ring-studio-action-strong/70"
                       )}
                       style={{
                         backgroundColor: color.swatchImageUrl
                           ? undefined
-                          : color.swatchHex ?? "#e2e8f0"
+                          : color.swatchHex ?? "var(--studio-paper-muted)"
                       }}
                     >
                       {color.swatchImageUrl ? (

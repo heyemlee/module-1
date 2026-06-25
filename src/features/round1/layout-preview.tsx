@@ -236,32 +236,32 @@ export function LayoutPreview({
       className="relative w-full aspect-[4/3] overflow-hidden bg-studio-shell"
     >
       {showHeader && !referenceMode && (
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-studio-paper-line bg-studio-paper px-4 py-3 text-studio-paper-ink">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-950">
+          <p className="text-xs font-bold uppercase tracking-wide">
             Top-Down Layout Plan
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs font-bold text-studio-paper-muted-ink">
             <input
               type="checkbox"
               checked={showMep}
               onChange={(e) => setShowMep(e.target.checked)}
-              className="rounded border-slate-300 text-slate-950 focus:ring-slate-950"
+              className="rounded border-studio-paper-line text-studio-action focus:ring-studio-action"
             />
             Show MEP
           </label>
           <span className={`rounded px-2.5 py-1 text-xs font-bold ${
             confirmationItems.length > 0
-              ? "bg-[var(--app-amber-soft)] text-[var(--app-amber)]"
-              : "bg-[var(--app-green-soft)] text-[var(--app-green)]"
+              ? "bg-studio-warning/25 text-studio-warning-ink"
+              : "bg-studio-action/30 text-studio-action-ink"
           }`}>
             {`${confirmationItems.length} confirmation${confirmationItems.length === 1 ? "" : "s"}`}
           </span>
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 rounded bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-950 transition-colors hover:bg-slate-200"
+            className="flex items-center gap-1.5 rounded-studio-small bg-studio-paper-muted px-2.5 py-1 text-xs font-bold text-studio-paper-ink transition-colors hover:brightness-95"
             title="Print Floor Plan"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -279,7 +279,7 @@ export function LayoutPreview({
         viewBox={`0 0 ${plan.canvas.w} ${plan.canvas.h}`}
         aria-label="Kitchen floor plan editor"
         role="img"
-        className="h-full w-full touch-none select-none bg-[#203128]"
+        className="h-full w-full touch-none select-none bg-studio-canvas"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}

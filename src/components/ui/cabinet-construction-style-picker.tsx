@@ -29,23 +29,30 @@ export function CabinetConstructionStylePicker<T extends string>({
             type="button"
             onClick={() => onRequestSelect(option.value)}
             className={cn(
-              "group relative flex items-center gap-4 rounded-xl border bg-white px-5 py-3 text-left transition",
+              "group relative flex items-center gap-4 rounded-studio-control border bg-studio-paper px-5 py-3 text-left text-studio-paper-ink transition",
               selected
-                ? "border-[var(--app-ink)] bg-black/[0.02]"
-                : "border-[var(--app-border)] hover:border-slate-300 hover:shadow-sm"
+                ? "border-studio-action-strong bg-studio-paper-muted"
+                : "border-studio-paper-line hover:border-studio-action-strong/60"
             )}
           >
             <span className="overflow-hidden flex-1">
-              <span className={cn("block truncate text-[14px] font-bold", selected ? "text-[var(--app-ink)]" : "text-[var(--app-ink)]")}>
+              <span className="block truncate text-[14px] font-bold text-studio-paper-ink">
                 {option.label}
               </span>
               {option.description && (
-                <span className="mt-0.5 block truncate text-[11px] text-[var(--app-muted)]">
+                <span className="mt-0.5 block truncate text-[11px] text-studio-paper-muted-ink">
                   {option.description}
                 </span>
               )}
             </span>
-            <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border", selected ? "border-[var(--app-ink)] bg-[var(--app-ink)] text-white" : "border-[#d2d2d7]")}>
+            <div
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                selected
+                  ? "border-studio-action bg-studio-action text-studio-action-ink"
+                  : "border-studio-paper-line"
+              )}
+            >
               {selected && <CheckIcon className="h-3 w-3" />}
             </div>
           </button>

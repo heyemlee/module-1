@@ -118,13 +118,13 @@ export function AdminUsersView({
           <thead className="border-b border-studio-line bg-studio-shell">
             <tr>
               {isDeleteMode && <th className="p-4 w-12"><span className="sr-only">Select</span></th>}
-              <th className="p-4 font-semibold text-studio-secondary">Name</th>
-              <th className="p-4 font-semibold text-studio-secondary">Account</th>
-              <th className="p-4 font-semibold text-studio-secondary">Role</th>
-              <th className="p-4 font-semibold text-studio-secondary">Quota</th>
-              <th className="p-4 font-semibold text-studio-secondary">Status</th>
-              <th className="p-4 font-semibold text-studio-secondary">Stats</th>
-              <th className="p-4 font-semibold text-studio-secondary text-right">Manage</th>
+              <th className="p-4 font-semibold text-studio-muted">Name</th>
+              <th className="p-4 font-semibold text-studio-muted">Account</th>
+              <th className="p-4 font-semibold text-studio-muted">Role</th>
+              <th className="p-4 font-semibold text-studio-muted">Quota</th>
+              <th className="p-4 font-semibold text-studio-muted">Status</th>
+              <th className="p-4 font-semibold text-studio-muted">Stats</th>
+              <th className="p-4 text-right font-semibold text-studio-muted">Manage</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-studio-line">
@@ -145,13 +145,13 @@ export function AdminUsersView({
                 <td className="p-4 font-medium">
                   {u.name}
                   {u.id === currentUserId && (
-                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-secondary">
+                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-muted">
                       You
                     </span>
                   )}
                 </td>
-                <td className="p-4 text-studio-secondary">{u.account}</td>
-                <td className="p-4 font-medium text-studio-secondary">{u.role}</td>
+                <td className="p-4 text-studio-muted">{u.account}</td>
+                <td className="p-4 font-medium text-studio-muted">{u.role}</td>
                 <td className="p-4">
                   <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
                 </td>
@@ -172,7 +172,7 @@ export function AdminUsersView({
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={isDeleteMode ? 8 : 7} className="p-8 text-center text-studio-secondary">
+                <td colSpan={isDeleteMode ? 8 : 7} className="p-8 text-center text-studio-muted">
                   No users yet.
                 </td>
               </tr>
@@ -198,7 +198,7 @@ export function AdminUsersView({
                 <div className="font-medium">
                   {u.name}
                   {u.id === currentUserId && (
-                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-secondary">
+                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-muted">
                       You
                     </span>
                   )}
@@ -208,13 +208,13 @@ export function AdminUsersView({
             </div>
             
             <div className="grid grid-cols-2 gap-y-2 text-sm">
-              <div className="text-studio-secondary">Account</div>
+              <div className="text-studio-muted">Account</div>
               <div className="text-right">{u.account}</div>
               
-              <div className="text-studio-secondary">Role</div>
+              <div className="text-studio-muted">Role</div>
               <div className="text-right font-medium">{u.role}</div>
               
-              <div className="text-studio-secondary">Quota</div>
+              <div className="text-studio-muted">Quota</div>
               <div className="flex justify-end">
                 <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
               </div>
@@ -231,7 +231,7 @@ export function AdminUsersView({
           </div>
         ))}
         {users.length === 0 && (
-          <div className="p-8 text-center text-studio-secondary rounded-xl border border-studio-line bg-studio-void">
+          <div className="rounded-xl border border-studio-line bg-studio-void p-8 text-center text-studio-muted">
             No users yet.
           </div>
         )}
