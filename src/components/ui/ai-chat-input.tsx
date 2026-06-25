@@ -126,21 +126,20 @@ const AIChatInput = ({
   };
 
   return (
-    <div className="w-full flex justify-center items-center text-black relative z-10">
+    <div className="relative z-10 flex w-full items-center justify-center text-studio-paper-ink">
       <motion.div
         ref={wrapperRef}
-        className="w-full max-w-3xl"
+        className="w-full max-w-3xl overflow-hidden rounded-[24px] border border-studio-paper-line bg-studio-paper"
         variants={containerVariants}
         animate={isActive || inputValue ? "expanded" : "collapsed"}
         initial="collapsed"
-        style={{ overflow: "hidden", borderRadius: 32, background: "#fff" }}
         onClick={handleActivate}
       >
         <div className="flex flex-col items-stretch w-full h-full">
           {/* Input Row */}
-          <div className="flex items-center gap-2 p-3 rounded-full bg-white max-w-3xl w-full">
+          <div className="flex w-full max-w-3xl items-center gap-2 p-3">
             <button
-              className="p-3 rounded-full hover:bg-gray-100 transition"
+              className="rounded-full p-3 transition hover:bg-studio-paper-muted"
               title="Attach file"
               type="button"
               tabIndex={-1}
@@ -166,7 +165,7 @@ const AIChatInput = ({
                   {showPlaceholder && !isActive && !inputValue && (
                     <motion.span
                       key={placeholderIndex}
-                      className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-400 select-none pointer-events-none"
+                      className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 select-none text-studio-paper-muted-ink"
                       style={{
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -197,7 +196,7 @@ const AIChatInput = ({
 
             {controls}
             <button
-              className={`p-3 rounded-full transition ${micActive ? "bg-red-100 text-red-600 hover:bg-red-200" : "hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"}`}
+              className={`rounded-full p-3 transition ${micActive ? "bg-studio-danger/15 text-studio-danger hover:bg-studio-danger/20" : "hover:bg-studio-paper-muted disabled:cursor-not-allowed disabled:opacity-50"}`}
               title="Voice input"
               type="button"
               tabIndex={-1}
@@ -207,7 +206,7 @@ const AIChatInput = ({
               <Mic size={20} />
             </button>
             <button
-              className="flex items-center gap-1 bg-black hover:bg-zinc-700 text-white p-3 rounded-full font-medium justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-1 rounded-full bg-studio-action p-3 font-medium text-studio-action-ink transition hover:bg-studio-action-strong disabled:cursor-not-allowed disabled:opacity-50"
               title="Send"
               type="button"
               tabIndex={-1}
@@ -244,8 +243,8 @@ const AIChatInput = ({
               <button
                 className={`flex items-center gap-1 px-4 py-2 rounded-full transition-all font-medium group ${
                   thinkActive
-                    ? "bg-[#1d1d1f]/[0.08] outline outline-[#1d1d1f]/50 text-[#1d1d1f]"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-studio-paper-muted text-studio-paper-ink outline outline-1 outline-studio-action-strong"
+                    : "bg-studio-paper-muted/70 text-studio-paper-muted-ink hover:bg-studio-paper-muted"
                 }`}
                 title="Think"
                 type="button"
@@ -254,7 +253,7 @@ const AIChatInput = ({
                   setThinkActive((a) => !a);
                 }}
               >
-                <LightningBoltIcon className={`h-4 w-4 transition-colors ${thinkActive ? "text-amber-500" : "text-muted-foreground"}`} />
+                <LightningBoltIcon className={`h-4 w-4 transition-colors ${thinkActive ? "text-studio-warning-ink" : "text-studio-paper-muted-ink"}`} />
                 Think
               </button>
 
@@ -262,8 +261,8 @@ const AIChatInput = ({
               <motion.button
                 className={`flex items-center px-4 gap-1 py-2 rounded-full transition font-medium whitespace-nowrap overflow-hidden justify-start  ${
                   deepSearchActive
-                    ? "bg-[#1d1d1f]/[0.08] outline outline-[#1d1d1f]/50 text-[#1d1d1f]"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-studio-paper-muted text-studio-paper-ink outline outline-1 outline-studio-action-strong"
+                    : "bg-studio-paper-muted/70 text-studio-paper-muted-ink hover:bg-studio-paper-muted"
                 }`}
                 title="Deep Search"
                 type="button"

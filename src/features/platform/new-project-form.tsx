@@ -77,7 +77,7 @@ export function NewProjectForm({ user }: { user: AuthUser }) {
       />
 
       <StudioSection className="mt-6 max-w-3xl">
-        <form onSubmit={submit} className="p-5 sm:p-7">
+        <form onSubmit={submit} className="p-6 lg:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Customer name" required>
               <Input

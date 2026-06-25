@@ -13,7 +13,7 @@ import {
 export function Step({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <div className="pt-4">
-      {title && <h2 className="mb-5 text-[26px] font-bold leading-[32px] tracking-tight text-[var(--app-ink)]">{title}</h2>}
+      {title && <h2 className="mb-5 text-[26px] font-bold leading-[32px] tracking-tight text-studio-paper-ink">{title}</h2>}
       {children}
     </div>
   );
@@ -21,7 +21,7 @@ export function Step({ title, children }: { title?: string; children: ReactNode 
 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="app-panel-flat p-4">
+    <section className="rounded-studio-control border border-studio-paper-line bg-studio-paper p-4 text-studio-paper-ink">
       <h2 className="mb-3 text-sm font-bold text-studio-paper-ink">
         {title}
       </h2>
@@ -122,14 +122,14 @@ export function CheckboxField({
       <Checkbox
         checked={checked}
         onCheckedChange={(value) => onChange(value === true)}
-        className="mt-0.5 border-[#9aa79f] bg-white data-[state=checked]:border-studio-action data-[state=checked]:bg-studio-action"
+        className="mt-0.5 border-studio-paper-muted-ink bg-studio-paper data-[state=checked]:border-studio-action data-[state=checked]:bg-studio-action"
       />
       <span>
         <span className="block text-[13px] font-medium text-studio-paper-ink">
           {label}
         </span>
         {help && (
-          <span className="mt-1 block text-[11px] leading-4 text-[#607067]">
+          <span className="mt-1 block text-[11px] leading-4 text-studio-paper-muted-ink">
             {help}
           </span>
         )}
@@ -146,9 +146,9 @@ export function StatusPill({
   tone: "red" | "amber" | "green";
 }) {
   const classes = {
-    red: "bg-[var(--app-red-soft)] text-[var(--app-red)]",
-    amber: "bg-[var(--app-amber-soft)] text-[var(--app-amber)]",
-    green: "bg-[var(--app-green-soft)] text-[var(--app-green)]"
+    red: "bg-studio-danger/15 text-studio-danger-ink",
+    amber: "bg-studio-warning/25 text-studio-warning-ink",
+    green: "bg-studio-action/30 text-studio-action-ink"
   };
   return <span className={`rounded-full px-2.5 py-1 ${classes[tone]}`}>{label}</span>;
 }

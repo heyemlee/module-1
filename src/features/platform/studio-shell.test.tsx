@@ -101,11 +101,11 @@ describe("Studio design tokens", () => {
     const css = readFileSync("src/app/globals.css", "utf8");
     const variables = readRootVariables(css);
 
-    expect(variables["--studio-void"]).toBe("#0b120f");
-    expect(variables["--studio-action"]).toBe("#9fcdb1");
-    expect(variables["--studio-danger"]).toBe("#e66d63");
+    expect(variables["--studio-void"]).toBe("#eef1ec");
+    expect(variables["--studio-action"]).toBe("#16823a");
+    expect(variables["--studio-danger"]).toBe("#b42318");
     expect(variables["--studio-radius-panel"]).toBe("12px");
-    expect(variables["--studio-quiet"]).toBe("#8b9a91");
+    expect(variables["--studio-quiet"]).toBe("#677669");
     expect(
       contrastRatio(
         variables["--studio-quiet"],
@@ -118,44 +118,23 @@ describe("Studio design tokens", () => {
     expect(css).not.toContain("0.001ms");
   });
 
-  test("preserves legacy application aliases until existing pages migrate", () => {
+  test("exposes paper and semantic support tokens without a legacy palette", () => {
     const css = readFileSync("src/app/globals.css", "utf8");
     const variables = readRootVariables(css);
 
     expect(variables).toMatchObject({
-      "--app-bg": "#f5f5f7",
-      "--app-surface": "#ffffff",
-      "--app-surface-muted": "#fbfbfd",
-      "--app-ink": "#1d1d1f",
-      "--app-muted": "#6e6e73",
-      "--app-quiet": "#86868b",
-      "--app-border": "rgba(0, 0, 0, 0.12)",
-      "--app-border-strong": "rgba(0, 0, 0, 0.2)",
-      "--app-blue": "#1d1d1f",
-      "--app-blue-soft": "#f0f0f2",
-      "--app-green": "#16823a",
-      "--app-green-soft": "#eaf7ee",
-      "--app-amber": "#b25a00",
-      "--app-amber-soft": "#fff3df",
-      "--app-red": "#b42318",
-      "--app-red-soft": "#fff1ef",
-      "--app-radius": "8px",
-      "--app-shadow": "0 16px 45px rgba(0, 0, 0, 0.08)"
+      "--studio-paper-muted-ink": "#607067",
+      "--studio-rail": "#dfe5df",
+      "--studio-canvas": "#f5f5f7",
+      "--studio-danger-ink": "#ffffff",
+      "--studio-warning-ink": "#ffffff"
     });
+    expect(css).not.toMatch(/--app-[\w-]+:/);
   });
 
-  test("keeps legacy panels readable while exposing separate Studio panels", () => {
+  test("keeps Studio panels on the dark shell", () => {
     const css = readFileSync("src/app/globals.css", "utf8");
 
-    expect(readStyleRule(css, ".app-panel-flat")).toMatchObject({
-      border: "1px solid var(--app-border)",
-      "border-radius": "var(--app-radius)",
-      background: "var(--app-surface)",
-      color: "var(--app-ink)"
-    });
-    expect(readStyleRule(css, ".app-panel")).toMatchObject({
-      "box-shadow": "var(--app-shadow)"
-    });
     expect(readStyleRule(css, ".studio-panel-flat")).toMatchObject({
       border: "1px solid var(--studio-line)",
       "border-radius": "var(--studio-radius-panel)",
