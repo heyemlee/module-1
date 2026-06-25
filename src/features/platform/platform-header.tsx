@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { User } from "lucide-react";
+import { PersonIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -51,7 +51,7 @@ export function PlatformHeader({ userName, nav }: { userName: string; nav: React
   };
 
   return (
-    <header className="sticky top-0 z-10 border-b border-[#d2d2d7] bg-[#f5f5f7]/95 backdrop-blur">
+    <header className="border-b border-[#d2d2d7] bg-[#f5f5f7]/95 backdrop-blur">
       <div className="mx-auto flex h-[74px] max-w-[1320px] items-center gap-6 px-8">
         <Link href="/projects" className="text-[16px] font-bold text-[#1d1d1f]">
           ABCabinet
@@ -61,7 +61,7 @@ export function PlatformHeader({ userName, nav }: { userName: string; nav: React
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#1d1d1f]/15">
               <span className="flex size-8 items-center justify-center rounded-full bg-[#1d1d1f] text-white">
-                <User className="size-4" />
+                <PersonIcon className="size-4" />
               </span>
               <span className="text-[13px] font-semibold text-[#1d1d1f]">{userName}</span>
             </DropdownMenuTrigger>

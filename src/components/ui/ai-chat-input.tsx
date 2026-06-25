@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { useState, useEffect, useRef } from "react";
-import { Lightbulb, Mic, Globe, Paperclip, Send } from "lucide-react";
+import { Mic } from "lucide-react";
+import { LightningBoltIcon, GlobeIcon, Link2Icon, PaperPlaneIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, type Variants } from "motion/react";
 
 const PLACEHOLDERS = [
@@ -144,7 +145,7 @@ const AIChatInput = ({
               type="button"
               tabIndex={-1}
             >
-              <Paperclip size={20} />
+              <Link2Icon className="h-5 w-5" />
             </button>
 
             {/* Text Input & Placeholder */}
@@ -213,7 +214,7 @@ const AIChatInput = ({
               onClick={onSubmit}
               disabled={disabled}
             >
-              <Send size={18} />
+              <PaperPlaneIcon className="h-4 w-4" />
             </button>
           </div>
 
@@ -253,10 +254,7 @@ const AIChatInput = ({
                   setThinkActive((a) => !a);
                 }}
               >
-                <Lightbulb
-                  className="group-hover:fill-yellow-300 transition-all"
-                  size={18}
-                />
+                <LightningBoltIcon className={`h-4 w-4 transition-colors ${thinkActive ? "text-amber-500" : "text-muted-foreground"}`} />
                 Think
               </button>
 
@@ -280,7 +278,7 @@ const AIChatInput = ({
                 }}
               >
                 <div className="flex-1">
-                  <Globe size={18} />
+                  <GlobeIcon className="h-[18px] w-[18px]" />
                 </div>
                 <motion.span
                 className="pb-[2px]"
