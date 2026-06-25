@@ -8,5 +8,5 @@ export default async function AdminUsersPage() {
   if (!user) redirect("/login");
   if (user.role !== "ADMIN") redirect("/projects");
   const users = await listCompanyUsers(user.companyId);
-  return <AdminUsersView users={users} userName={user.name} currentUserId={user.id} />;
+  return <AdminUsersView users={users} currentUserId={user.id} />;
 }

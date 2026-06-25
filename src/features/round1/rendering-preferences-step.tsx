@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 
 import { useMemo, useState } from "react";
-import { Info, Image as ImageIcon } from "lucide-react";
+import { InfoCircledIcon, ImageIcon } from "@radix-ui/react-icons";
 import {
   CabinetConstructionStylePicker,
   type CabinetConstructionOption
@@ -165,7 +165,7 @@ export function RenderingPreferencesStep({
               ) : (
                 <div className="rounded-xl border border-dashed border-[#d2d2d7] bg-[#f5f5f7] p-5">
                   <div className="flex gap-3">
-                    <Info className="h-5 w-5 text-[#86868b] shrink-0" />
+                    <InfoCircledIcon className="h-5 w-5 text-[#86868b] shrink-0" />
                     <div>
                       <p className="text-sm font-bold text-[#1d1d1f]">
                         Ask an Admin to configure cabinet colors

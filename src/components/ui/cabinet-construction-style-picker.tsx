@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LockKeyhole } from "lucide-react";
+import { CheckIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
 
 export type CabinetConstructionOption<T extends string> = {
@@ -46,7 +46,7 @@ export function CabinetConstructionStylePicker<T extends string>({
               )}
             </span>
             <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border", selected ? "border-[var(--app-ink)] bg-[var(--app-ink)] text-white" : "border-[#d2d2d7]")}>
-              {selected && <Check className="h-3 w-3" />}
+              {selected && <CheckIcon className="h-3 w-3" />}
             </div>
           </button>
         );

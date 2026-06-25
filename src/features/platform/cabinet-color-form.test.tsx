@@ -16,6 +16,15 @@ describe("CabinetColorForm", () => {
     expect(html).toContain("Hover example image");
     expect(html).toContain("AI description");
     expect(html).toContain('type="file"');
+
+    // New phase 3 assertions
+    expect(html).toContain("Add finish");
+    expect(html).toContain("Images are resized before upload");
+    expect(html).toContain('accept="image/*"');
+    expect(html).toContain('aria-describedby="swatch-upload-hint"');
+    expect(html).toContain('id="swatch-upload-hint"');
+    expect(html).not.toContain("uiverse-file-input");
+    expect(html).not.toContain("#1d1d1f");
   });
 
   test("drops the legacy URL/code/sort-order/active inputs from the add form", () => {
@@ -52,6 +61,7 @@ describe("CabinetColorForm", () => {
     );
 
     expect(html).toContain("Active");
+    expect(html).toContain('alt="Natural Oak Matte swatch"');
     expect(html).toContain("Edit color");
   });
 

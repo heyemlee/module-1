@@ -4,39 +4,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompanyUserSummary } from "@/server/platform/user-admin-repository";
 import { CreateUserForm } from "./create-user-form";
-
 import { UserStatusAction } from "./user-status-action";
 import { UserQuotaAction } from "./user-quota-action";
-import { UserLogsModal } from "./user-logs-modal";
+import { UserLogsDialog } from "./user-logs-dialog";
+import { StudioPage, StudioPageHeader, StudioStat, StudioSection } from "./studio-page";
+import { userSummary } from "./admin-presentation";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function canManageUserStatus(currentUserId: string, targetUserId: string) {
   return currentUserId !== targetUserId;
 }
 
-function UserStatus({ disabled }: { disabled: boolean }) {
-  if (disabled) {
-    return (
-      <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-black/[0.05] px-2.5 text-[11px] font-bold text-[#6e6e73]">
-        <span className="size-1.5 rounded-full bg-[#86868b]" />
-        Disabled
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-[#e6f4ef] px-2.5 text-[11px] font-bold text-[#008060]">
-      <span className="size-1.5 rounded-full bg-[#008060]" />
-      Active
-    </span>
-  );
-}
-
 export function AdminUsersView({
   users,
-  userName,
   currentUserId
 }: {
   users: CompanyUserSummary[];
-  userName: string;
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -44,150 +28,247 @@ export function AdminUsersView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [viewingLogsUser, setViewingLogsUser] = useState<CompanyUserSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const colsClass = isDeleteMode 
-    ? "grid grid-cols-[24px_1.5fr_1.3fr_0.8fr_0.8fr_80px_60px_76px] items-center gap-3"
-    : "grid grid-cols-[1.5fr_1.3fr_0.8fr_0.8fr_80px_60px_76px] items-center gap-3";
+  const summary = userSummary(users);
 
-  function toggleSelection(id: string) {
+  function toggleSelection(id: string, checked: boolean) {
     const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (checked) next.add(id);
+    else next.delete(id);
     setSelectedIds(next);
   }
 
   async function handleDelete() {
     if (selectedIds.size === 0) return;
     setBusy(true);
+    setDeleteError(null);
     try {
-      for (const id of selectedIds) {
-        const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
-          method: "DELETE"
-        });
-        if (!res.ok) {
-          console.error("Failed to delete user", id);
-        }
+      const results = await Promise.allSettled(
+        Array.from(selectedIds, (id) =>
+          fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+            method: "DELETE"
+          })
+        )
+      );
+
+      const failed = results.filter(
+        (result) => result.status === "rejected" || !result.value.ok
+      ).length;
+
+      if (failed > 0) {
+        setDeleteError(`Failed to delete ${failed} user(s).`);
+      } else {
+        setIsDeleteMode(false);
+        setSelectedIds(new Set());
       }
-      setIsDeleteMode(false);
-      setSelectedIds(new Set());
       router.refresh();
     } catch (err) {
-      console.error(err);
+      setDeleteError("An unexpected error occurred.");
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <main className="min-h-[100dvh] bg-[#f5f5f7] text-[#1d1d1f]">
-      <div className="mx-auto max-w-[1320px] px-8 py-10">
-        <section className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
-          <div className="rounded-[18px] border border-[#d2d2d7] bg-white p-5">
-            <div className={`${colsClass} px-4 pb-3 text-[11px] font-bold text-[#6e6e73]`}>
-              {isDeleteMode && <span></span>}
-              <span>Name</span>
-              <span>Account</span>
-              <span>Role</span>
-              <span>Quota</span>
-              <span>Status</span>
-              <span>Stats</span>
-              <span className="text-right">
-                {isDeleteMode ? (
-                  <div className="flex justify-end gap-3">
-                    <button 
-                      onClick={() => { setIsDeleteMode(false); setSelectedIds(new Set()); }}
-                      disabled={busy}
-                      className="text-[#6e6e73] hover:underline disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={handleDelete}
-                      disabled={busy || selectedIds.size === 0}
-                      className="text-[#b42318] hover:underline disabled:opacity-50"
-                    >
-                      {busy ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => setIsDeleteMode(true)} 
-                    className="text-[#1d1d1f] hover:text-[#0066cc] hover:underline transition-colors"
-                  >
-                    Action
-                  </button>
-                )}
-              </span>
-            </div>
-            
-            <div className="space-y-2">
-              {users.map((u) => (
-                <div
-                  key={u.id}
-                  className={`${colsClass} rounded-xl border border-[#d2d2d7] px-4 py-3 ${
-                    u.id === currentUserId ? "bg-[#e6f4ef]" : "bg-white"
-                  } ${isDeleteMode && selectedIds.has(u.id) ? "border-[#b42318] bg-[#fffcfc]" : ""}`}
-                >
-                  {isDeleteMode && (
-                    <div className="flex items-center">
-                      {u.id !== currentUserId ? (
-                        <input 
-                          type="checkbox" 
-                          checked={selectedIds.has(u.id)}
-                          onChange={() => toggleSelection(u.id)}
-                          disabled={busy}
-                          className="size-4 cursor-pointer rounded border-[#d2d2d7] text-[#b42318] focus:ring-[#b42318]"
-                        />
-                      ) : <span />}
-                    </div>
-                  )}
+  const userList = (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="sr-only">Users List</h2>
+        {isDeleteMode ? (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsDeleteMode(false);
+                setSelectedIds(new Set());
+                setDeleteError(null);
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={busy || selectedIds.size === 0}
+            >
+              {busy ? "Deleting..." : `Delete selected (${selectedIds.size})`}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" onClick={() => setIsDeleteMode(true)}>
+            Select users
+          </Button>
+        )}
+      </div>
 
-                  <span className="truncate text-[13px] font-semibold text-[#1d1d1f]">
-                    {u.name}
-                    {u.id === currentUserId && (
-                      <span className="ml-2 text-[11px] font-bold text-[#6e6e73]">You</span>
+      <div aria-live="polite" className="sr-only">
+        {isDeleteMode ? `${selectedIds.size} users selected.` : ""}
+      </div>
+
+      {deleteError && (
+        <div role="alert" className="text-sm font-medium text-studio-danger">
+          {deleteError}
+        </div>
+      )}
+
+      {/* Desktop Table (lg and above) */}
+      <div className="hidden lg:block overflow-hidden rounded-xl border border-studio-line bg-studio-void">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-studio-line bg-studio-shell">
+            <tr>
+              {isDeleteMode && <th className="p-4 w-12"><span className="sr-only">Select</span></th>}
+              <th className="p-4 font-semibold text-studio-secondary">Name</th>
+              <th className="p-4 font-semibold text-studio-secondary">Account</th>
+              <th className="p-4 font-semibold text-studio-secondary">Role</th>
+              <th className="p-4 font-semibold text-studio-secondary">Quota</th>
+              <th className="p-4 font-semibold text-studio-secondary">Status</th>
+              <th className="p-4 font-semibold text-studio-secondary">Stats</th>
+              <th className="p-4 font-semibold text-studio-secondary text-right">Manage</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-studio-line">
+            {users.map((u) => (
+              <tr key={u.id} className={u.id === currentUserId ? "bg-studio-shell/50" : ""}>
+                {isDeleteMode && (
+                  <td className="p-4">
+                    {u.id !== currentUserId && (
+                      <Checkbox
+                        checked={selectedIds.has(u.id)}
+                        onCheckedChange={(checked) => toggleSelection(u.id, checked === true)}
+                        disabled={busy}
+                        aria-label={`Select ${u.name}`}
+                      />
                     )}
-                  </span>
-                  <span className="truncate text-[13px] text-[#6e6e73]">{u.account}</span>
-                  <span
-                    className={`text-[13px] font-medium ${
-                      u.role === "ADMIN" ? "text-[#008060]" : "text-[#1d1d1f]"
-                    }`}
-                  >
-                    {u.role}
-                  </span>
-                  <UserQuotaAction userId={u.id} initialQuota={u.monthlyRenderQuota} />
-                  <UserStatus disabled={u.disabledAt !== null} />
-                  <button 
-                    onClick={() => setViewingLogsUser(u)}
-                    className="text-[#0066cc] hover:underline text-[13px] font-semibold text-left"
-                  >
-                    Logs
-                  </button>
-                  {canManageUserStatus(currentUserId, u.id) ? (
-                    <UserStatusAction userId={u.id} disabled={u.disabledAt !== null} />
-                  ) : (
-                    <span />
+                  </td>
+                )}
+                <td className="p-4 font-medium">
+                  {u.name}
+                  {u.id === currentUserId && (
+                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-secondary">
+                      You
+                    </span>
+                  )}
+                </td>
+                <td className="p-4 text-studio-secondary">{u.account}</td>
+                <td className="p-4 font-medium text-studio-secondary">{u.role}</td>
+                <td className="p-4">
+                  <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
+                </td>
+                <td className="p-4">
+                  {u.disabledAt !== null ? "Disabled" : "Active"}
+                </td>
+                <td className="p-4">
+                  <Button variant="link" className="px-0" onClick={() => setViewingLogsUser(u)}>
+                    View usage
+                  </Button>
+                </td>
+                <td className="p-4 text-right">
+                  {canManageUserStatus(currentUserId, u.id) && (
+                    <UserStatusAction userId={u.id} userName={u.name} disabled={u.disabledAt !== null} />
+                  )}
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={isDeleteMode ? 8 : 7} className="p-8 text-center text-studio-secondary">
+                  No users yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Stacked Card representation (< lg) */}
+      <div className="lg:hidden space-y-4">
+        {users.map((u) => (
+          <div key={u.id} className={`flex flex-col gap-3 rounded-xl border border-studio-line p-4 ${u.id === currentUserId ? "bg-studio-shell/50" : "bg-studio-void"}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {isDeleteMode && u.id !== currentUserId && (
+                  <Checkbox
+                    checked={selectedIds.has(u.id)}
+                    onCheckedChange={(checked) => toggleSelection(u.id, checked === true)}
+                    disabled={busy}
+                    aria-label={`Select ${u.name}`}
+                  />
+                )}
+                <div className="font-medium">
+                  {u.name}
+                  {u.id === currentUserId && (
+                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-secondary">
+                      You
+                    </span>
                   )}
                 </div>
-              ))}
-              {users.length === 0 && (
-                <p className="px-4 py-8 text-[13px] text-[#6e6e73]">No users yet.</p>
+              </div>
+              <div>{u.disabledAt !== null ? "Disabled" : "Active"}</div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-y-2 text-sm">
+              <div className="text-studio-secondary">Account</div>
+              <div className="text-right">{u.account}</div>
+              
+              <div className="text-studio-secondary">Role</div>
+              <div className="text-right font-medium">{u.role}</div>
+              
+              <div className="text-studio-secondary">Quota</div>
+              <div className="flex justify-end">
+                <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-studio-line pt-3 mt-1">
+              <Button variant="link" className="px-0 h-auto" onClick={() => setViewingLogsUser(u)}>
+                View usage
+              </Button>
+              {canManageUserStatus(currentUserId, u.id) && (
+                <UserStatusAction userId={u.id} userName={u.name} disabled={u.disabledAt !== null} />
               )}
             </div>
           </div>
+        ))}
+        {users.length === 0 && (
+          <div className="p-8 text-center text-studio-secondary rounded-xl border border-studio-line bg-studio-void">
+            No users yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
-          <CreateUserForm />
-        </section>
+  return (
+    <StudioPage>
+      <StudioPageHeader
+        title="Users"
+        description="Manage access, roles, quotas, and usage."
+        meta={
+          <div className="grid max-w-md grid-cols-3 gap-4">
+            <StudioStat label="Active" value={summary.active} />
+            <StudioStat label="Disabled" value={summary.disabled} tone="warning" />
+            <StudioStat label="Admins" value={summary.admins} />
+          </div>
+        }
+      />
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_370px]">
+        <StudioSection aria-label="Company users">
+          {userList}
+        </StudioSection>
+        <CreateUserForm />
       </div>
 
       {viewingLogsUser && (
-        <UserLogsModal
+        <UserLogsDialog
+          open
           userId={viewingLogsUser.id}
           userName={viewingLogsUser.name}
-          onClose={() => setViewingLogsUser(null)}
+          onOpenChange={(open) => {
+            if (!open) setViewingLogsUser(null);
+          }}
         />
       )}
-    </main>
+    </StudioPage>
   );
 }

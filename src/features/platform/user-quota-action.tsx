@@ -2,12 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+
+export function userQuotaEndpoint(userId: string) {
+  return `/api/admin/users/${encodeURIComponent(userId)}/quota`;
+}
 
 export function UserQuotaAction({
   userId,
+  userName,
   initialQuota
 }: {
   userId: string;
+  userName: string;
   initialQuota: number;
 }) {
   const router = useRouter();
@@ -16,7 +25,8 @@ export function UserQuotaAction({
   const [isEditing, setIsEditing] = useState(false);
   const [quotaInput, setQuotaInput] = useState(initialQuota.toString());
 
-  async function saveQuota() {
+  async function saveQuota(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     const parsed = parseInt(quotaInput, 10);
     if (isNaN(parsed) || parsed < 0) {
       setError("Invalid quota");
@@ -31,7 +41,7 @@ export function UserQuotaAction({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/quota`, {
+      const response = await fetch(userQuotaEndpoint(userId), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quota: parsed })
@@ -52,39 +62,46 @@ export function UserQuotaAction({
   if (!isEditing) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-[13px] font-medium text-[#1d1d1f]">{initialQuota}</span>
-        <button
-          type="button"
+        <span className="tabular-nums text-studio-ink font-medium">{initialQuota}</span>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setIsEditing(true)}
-          className="text-[11px] font-bold text-[#0066cc] hover:underline"
+          aria-label={`Edit ${userName} monthly quota`}
+          className="h-auto px-2 py-1 text-xs"
         >
           Edit
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1">
-        <input
+    <form onSubmit={saveQuota} className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <Label htmlFor={`quota-${userId}`} className="sr-only">
+          Edit {userName} monthly quota
+        </Label>
+        <Input
+          id={`quota-${userId}`}
           type="number"
           min="0"
           value={quotaInput}
           onChange={(e) => setQuotaInput(e.target.value)}
           disabled={busy}
-          className="w-16 rounded-[4px] border border-[#d2d2d7] bg-[#f5f5f7] px-1.5 py-0.5 text-[13px] text-[#1d1d1f] outline-none focus:border-[#0066cc] focus:bg-white"
+          className="h-8 w-20 px-2 py-1 text-sm tabular-nums"
           autoFocus
         />
-        <button
-          type="button"
-          onClick={saveQuota}
+        <Button
+          type="submit"
           disabled={busy}
-          className="rounded-[4px] bg-[#0066cc] px-2 py-0.5 text-[11px] font-semibold text-white disabled:opacity-50"
+          size="sm"
+          className="h-8 px-2 py-1 text-xs"
         >
           Save
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
           type="button"
           onClick={() => {
             setIsEditing(false);
@@ -92,12 +109,13 @@ export function UserQuotaAction({
             setError(null);
           }}
           disabled={busy}
-          className="px-1 text-[11px] text-[#6e6e73] hover:text-[#1d1d1f]"
+          size="sm"
+          className="h-8 px-2 py-1 text-xs"
         >
           Cancel
-        </button>
+        </Button>
       </div>
-      {error && <span className="text-[10px] font-semibold text-[#b42318]">{error}</span>}
-    </div>
+      {error && <span role="alert" className="text-[10px] font-semibold text-studio-danger">{error}</span>}
+    </form>
   );
 }
