@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABCabinet Studio — Round 1 Intake</title>
+<style>
+:root {
+  --void: #0b120f; --shell: #111b16; --surface: #17241e; --raised: #1d2d25;
+  --ink: #edf2ee; --muted: #9aa79f; --quiet: #8b9a91;
+  --line: rgba(231,239,233,0.1); --line-s: rgba(231,239,233,0.18);
+  --action: #9fcdb1; --action-ink: #102019;
+  --paper: #eef1ec; --paper-ink: #18251f;
+  --danger: #e66d63; --warn: #d8ae69;
+  --r-panel: 12px; --r-ctrl: 8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif;background:var(--void);color:var(--ink);height:100vh;overflow:hidden;font-size:13px}
+
+/* ── Mode picker ── */
+#picker{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--void);z-index:100;padding:24px}
+.pick-wrap{width:100%;max-width:560px}
+.pick-title{text-align:center;font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
+.pick-sub{text-align:center;font-size:12px;color:var(--quiet);margin-bottom:32px}
+.pick-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pick-card{background:var(--shell);border:1px solid var(--line);border-radius:var(--r-panel);padding:24px;text-align:left;cursor:pointer;transition:border-color .15s;color:var(--ink)}
+.pick-card:hover{border-color:var(--action)}
+.pick-card h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.pick-card p{font-size:12px;line-height:1.6;color:var(--quiet)}
+
+/* ── App shell ── */
+#app{display:none;height:100vh;flex-direction:column}
+#app.on{display:flex}
+
+/* ── Topbar ── */
+.topbar{height:56px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--shell) 95%,transparent);backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;z-index:20}
+.tb-name{font-size:12px;font-weight:600}
+.tb-cust{font-size:10px;color:var(--quiet)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.tb-pill{display:inline-flex;align-items:center;height:32px;border:1px solid var(--line-s);background:var(--void);border-radius:var(--r-ctrl);padding:0 12px;font-size:11px;font-weight:600;color:var(--quiet);cursor:pointer;transition:color .15s}
+.tb-pill:hover{color:var(--ink)}
+.save-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;transition:background .3s}
+.save-dot.ok{background:var(--action)}
+#save-txt{font-size:11px;color:var(--quiet);font-weight:600}
+
+/* ── Workspace (form mode) ── */
+#form-mode{display:none;flex:1;min-height:0;grid-template-columns:192px 1fr 352px}
+#form-mode.on{display:grid}
+
+/* ── Step rail ── */
+.rail{border-right:1px solid var(--line);background:var(--shell);padding:20px 12px;overflow-y:auto}
+.rail-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--quiet);padding:0 8px;margin-bottom:12px}
+.sitem{display:flex;align-items:flex-start;gap:10px;padding:8px;border-radius:var(--r-ctrl);cursor:pointer;transition:background .1s;margin-bottom:2px}
+.sitem:hover{background:var(--surface)}
+.sitem.active{background:var(--surface)}
+.sitem.locked{opacity:.38;cursor:default;pointer-events:none}
+.sdot{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-s);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;color:var(--muted);transition:all .2s}
+.sitem.active .sdot{background:var(--action);border-color:var(--action);color:var(--action-ink)}
+.sitem.done .sdot{border-color:var(--action);color:var(--action)}
+.stitle{font-size:12px;font-weight:600;color:var(--ink);line-height:1.3}
+.sitem.locked .stitle{color:var(--muted)}
+
+/* ── Canvas ── */
+.canvas{background:#0a1610;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:16px;position:relative}
+#fp{width:100%;height:100%;max-width:600px;max-height:480px}
+
+/* ── Inspector ── */
+.insp{border-left:1px solid var(--line);background:var(--shell);display:flex;flex-direction:column;overflow:hidden}
+.insp-hd{padding:20px 20px 0;flex-shrink:0}
+.insp-title{font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px}
+.insp-desc{font-size:11px;color:var(--quiet);line-height:1.5}
+.insp-body{flex:1;overflow-y:auto;padding:16px 20px}
+.insp-ft{border-top:1px solid var(--line);padding:14px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.btn-prev{height:36px;padding:0 16px;border-radius:var(--r-ctrl);background:transparent;border:1px solid var(--line-s);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:color .15s,border-color .15s}
+.btn-prev:hover{color:var(--ink);border-color:var(--muted)}
+.btn-prev:disabled{opacity:.3;cursor:default}
+.btn-cont{height:36px;padding:0 20px;border-radius:var(--r-ctrl);background:var(--action);border:none;color:var(--action-ink);font-size:12px;font-weight:700;cursor:pointer;transition:opacity .15s;margin-left:auto}
+.btn-cont:hover{opacity:.88}
+.btn-cont:disabled{opacity:.4;cursor:default}
+
+/* ── Fields ── */
+.fgrp{margin-bottom:20px}
+.fgrp-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--quiet);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px}
+.field input,.field select{width:100%;height:40px;background:var(--surface);border:1px solid var(--line-s);border-radius:var(--r-ctrl);color:var(--ink);padding:0 12px;font-size:13px;font-weight:500;outline:none;transition:border-color .15s;appearance:none;-webkit-appearance:none}
+.field input:focus,.field select:focus{border-color:var(--action)}
+.field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%238b9a91' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;cursor:pointer}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.frow2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.chk{display:flex;align-items:center;gap:10px;padding:10px 0}
+.chk input{width:16px;height:16px;accent-color:var(--action);cursor:pointer}
+.chk span{font-size:12px;font-weight:500}
+
+/* ── Step 2 ── */
+.hint-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-panel);padding:16px;margin-bottom:16px}
+.hint-box h3{font-size:13px;font-weight:700;margin-bottom:6px}
+.hint-box p{font-size:12px;color:var(--quiet);line-height:1.6}
+.badge{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:100px;font-size:11px;font-weight:700;margin-bottom:12px}
+.badge.green{background:rgba(159,205,177,.15);color:var(--action)}
+.badge.amber{background:rgba(216,174,105,.15);color:var(--warn)}
+.sugg{background:var(--surface);border:1px solid var(--line);border-left:2px solid var(--action);border-radius:var(--r-ctrl);padding:10px 12px;margin-bottom:16px;font-size:11px;color:var(--muted);line-height:1.6}
+.sugg strong{display:block;font-size:11px;font-weight:700;color:var(--action);margin-bottom:2px}
+.conf-list{margin-top:12px}
+.conf-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--quiet);margin-bottom:8px}
+.conf-item{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}
+.conf-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0;margin-top:3px}
+.gen-btn{width:100%;height:44px;background:var(--action);border:none;border-radius:var(--r-ctrl);color:var(--action-ink);font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;margin-top:16px}
+.gen-btn:hover{opacity:.88}
+.gen-btn:disabled{opacity:.35;cursor:default;background:var(--surface);color:var(--muted);border:1px solid var(--line-s)}
+
+/* ── Step 3 ── */
+.color-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:28px}
+.cswatch-wrap{position:relative}
+.cswatch{aspect-ratio:1;border-radius:8px;border:2px solid transparent;cursor:pointer;transition:border-color .15s,transform .1s;width:100%}
+.cswatch:hover{transform:scale(1.06)}
+.cswatch.sel{border-color:var(--action)}
+.cswatch-lbl{text-align:center;font-size:9px;color:var(--quiet);margin-top:4px}
+.lock-btn{width:100%;height:40px;background:transparent;border:1px solid var(--line-s);border-radius:var(--r-ctrl);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;margin-bottom:10px}
+.lock-btn.locked{background:var(--surface);color:var(--ink);border-color:var(--action)}
+.lock-btn:disabled{opacity:.4;cursor:default}
+.rend-btn{width:100%;height:48px;background:var(--ink);border:none;border-radius:var(--r-ctrl);color:var(--void);font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.rend-btn:hover{opacity:.88}
+.rend-btn:disabled{opacity:.3;cursor:default}
+.rend-out{margin-top:16px;border-radius:var(--r-panel);overflow:hidden;border:1px solid var(--line);position:relative}
+.rend-out canvas{width:100%;display:block}
+.rend-wm{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,.45);text-transform:uppercase;white-space:nowrap;pointer-events:none}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line-s);border-top-color:var(--action);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── AI mode ── */
+#ai-mode{display:none;flex:1;min-height:0}
+#ai-mode.on{display:grid;grid-template-columns:minmax(340px,400px) 1fr}
+.chat-panel{background:var(--paper);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.cmsg{max-width:85%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5}
+.cmsg.agent{background:white;color:#18251f;border:1px solid rgba(0,0,0,.08);align-self:flex-start}
+.cmsg.user{background:#18251f;color:#eef1ec;align-self:flex-end}
+.chat-ft{border-top:1px solid rgba(0,0,0,.1);padding:12px;display:flex;gap:8px}
+.chat-in{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:20px;padding:8px 14px;font-size:13px;background:white;color:#18251f;outline:none}
+.chat-send{width:36px;height:36px;border-radius:50%;background:#18251f;border:none;color:#eef1ec;cursor:pointer;font-size:16px}
+#fp-ai{width:100%;height:100%;max-width:600px;max-height:480px}
+
+/* ── Adjust drag overlay ── */
+.drag-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.drag-tip{background:rgba(11,18,15,.8);border:1px solid var(--line-s);border-radius:var(--r-ctrl);padding:6px 12px;font-size:11px;color:var(--muted);backdrop-filter:blur(8px)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.step-anim{animation:fadeIn .22s ease-out}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line-s);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- Mode picker -->
+<div id="picker">
+  <div class="pick-wrap">
+    <h1 class="pick-title">How do you want to capture this kitchen?</h1>
+    <p class="pick-sub">You can switch between the two anytime.</p>
+    <div class="pick-cards">
+      <button class="pick-card" onclick="startMode('ai')">
+        <h3>🎙️ AI assistant</h3>
+        <p>Describe the kitchen by voice or text — the assistant fills the form for you. Fast, hands-off.</p>
+      </button>
+      <button class="pick-card" onclick="startMode('form')">
+        <h3>📋 Manual form</h3>
+        <p>Fill the stepped form and drag to position. Full manual control.</p>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="tb-name" id="tb-name">Round 1</div>
+      <div class="tb-cust">Sarah Johnson</div>
+    </div>
+    <div class="tb-right">
+      <span><span class="save-dot" id="sdot"></span><span id="save-txt">Changes not frozen</span></span>
+      <button class="tb-pill" id="mode-btn" onclick="switchMode()">AI intake</button>
+    </div>
+  </div>
+
+  <!-- Form mode -->
+  <div id="form-mode">
+    <div class="rail">
+      <div class="rail-lbl">Steps</div>
+      <div id="si0" class="sitem active" onclick="goto(0)"><div class="sdot" id="sd0">1</div><div><div class="stitle">Room &amp; Openings</div></div></div>
+      <div id="si1" class="sitem locked" onclick="goto(1)"><div class="sdot" id="sd1">2</div><div><div class="stitle">Layout &amp; Appliances</div></div></div>
+      <div id="si2" class="sitem locked" onclick="goto(2)"><div class="sdot" id="sd2">3</div><div><div class="stitle">Adjust Positions</div></div></div>
+      <div id="si3" class="sitem locked" onclick="goto(3)"><div class="sdot" id="sd3">4</div><div><div class="stitle">Rendering Preferences</div></div></div>
+    </div>
+
+    <div class="canvas">
+      <svg id="fp" viewBox="0 0 600 460" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="drag-overlay" id="drag-overlay" style="display:none">
+        <div class="drag-tip">Drag door · window · appliances to reposition</div>
+      </div>
+    </div>
+
+    <div class="insp">
+      <div class="insp-hd">
+        <div class="insp-title" id="ititle">Room &amp; Openings</div>
+        <div class="insp-desc" id="idesc">Enter room dimensions and opening locations.</div>
+      </div>
+      <div class="insp-body" id="ibody"></div>
+      <div class="insp-ft" id="ift">
+        <button class="btn-prev" id="bprev" onclick="prev()" disabled>Previous</button>
+        <button class="btn-cont" id="bcont" onclick="next()">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI mode -->
+  <div id="ai-mode">
+    <div class="chat-panel">
+      <div class="chat-msgs" id="cmsgs">
+        <div class="cmsg agent">Hi! I'm here to help capture the kitchen. Let's start — can you tell me the length and width of the kitchen?</div>
+      </div>
+      <div class="chat-ft">
+        <input class="chat-in" id="cin" placeholder="Type or describe…" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="chat-send" onclick="sendChat()">↑</button>
+      </div>
+    </div>
+    <div class="canvas">
+      <svg id="fp-ai" viewBox="0 0 600 460" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const S = {
+  step: 0, maxStep: 0, mode: 'form',
+  fillGen: false, locked: false, color: null, style: 'EUROPEAN_FRAMELESS',
+  rendered: false, rendering: false,
+  form: {
+    len: null, wid: null, ceil: null,
+    doors: 'YES', dkind: 'DOOR', dwall: 'FRONT_SIDE',
+    wins: 'YES', wwall: 'BACK_SIDE',
+    layout: 'NO_PREFERENCE', island: false,
+    sink: 'YES', range: 'YES', cooktop: 'NO',
+    wallOven: 'NO', micro: 'UNKNOWN', ovenCombo: 'UNKNOWN',
+    fridge: 'YES', dw: 'YES'
+  }
+};
+
+const STEPS = ['Room & Openings','Layout & Appliances','Adjust Positions','Rendering Preferences'];
+const DESCS = [
+  'Enter room dimensions and opening locations.',
+  'Choose a kitchen shape and configure appliances.',
+  'Fine-tune positions, then generate cabinet fill.',
+  'Choose cabinet finish and generate a concept rendering.'
+];
+
+const COLORS = [
+  {id:'white',   label:'White',       hex:'#f5f5f0'},
+  {id:'cream',   label:'Cream',       hex:'#e8d9c0'},
+  {id:'oak',     label:'Warm Oak',    hex:'#c8a06a'},
+  {id:'walnut',  label:'Walnut',      hex:'#6b4423'},
+  {id:'sage',    label:'Sage',        hex:'#8fa88e'},
+  {id:'navy',    label:'Navy',        hex:'#2c3e5a'},
+  {id:'black',   label:'Matte Black', hex:'#1a1a1a'},
+  {id:'gray',    label:'Slate Gray',  hex:'#7a8085'},
+];
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+function startMode(m) {
+  document.getElementById('picker').style.display = 'none';
+  document.getElementById('app').classList.add('on');
+  S.mode = m;
+  if (m === 'ai') {
+    document.getElementById('ai-mode').classList.add('on');
+    document.getElementById('mode-btn').textContent = 'Manual form';
+    document.getElementById('tb-name').textContent = 'Round 1 · AI intake';
+    draw('fp-ai');
+  } else {
+    document.getElementById('form-mode').classList.add('on');
+    document.getElementById('mode-btn').textContent = 'AI intake';
+    renderStep(); draw('fp');
+  }
+}
+
+function switchMode() {
+  if (S.mode === 'form') {
+    S.mode = 'ai';
+    document.getElementById('form-mode').classList.remove('on');
+    document.getElementById('ai-mode').classList.add('on');
+    document.getElementById('mode-btn').textContent = 'Manual form';
+    document.getElementById('tb-name').textContent = 'Round 1 · AI intake';
+    draw('fp-ai');
+  } else {
+    S.mode = 'form';
+    document.getElementById('ai-mode').classList.remove('on');
+    document.getElementById('form-mode').classList.add('on');
+    document.getElementById('mode-btn').textContent = 'AI intake';
+    document.getElementById('tb-name').textContent = 'Round 1';
+    renderStep(); draw('fp');
+  }
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+function goto(i) {
+  if (i > S.maxStep) return;
+  S.step = i; renderStep(); updateRail(); draw('fp');
+}
+function next() {
+  if (S.step >= 3) return;
+  S.step++; S.maxStep = Math.max(S.maxStep, S.step);
+  renderStep(); updateRail(); draw('fp');
+}
+function prev() {
+  if (S.step <= 0) return;
+  S.step--; renderStep(); updateRail(); draw('fp');
+}
+
+function updateRail() {
+  for (let i = 0; i < 4; i++) {
+    const item = document.getElementById(`si${i}`);
+    const dot  = document.getElementById(`sd${i}`);
+    item.className = 'sitem';
+    dot.innerHTML = i + 1;
+    if (i === S.step) item.classList.add('active');
+    else if (i < S.step) { item.classList.add('done'); dot.innerHTML = '✓'; }
+    else if (i > S.maxStep) item.classList.add('locked');
+  }
+  document.getElementById('bprev').disabled = S.step === 0;
+  document.getElementById('bcont').disabled = S.step === 3;
+  document.getElementById('ift').style.display = (S.step === 2 || S.step === 3) ? 'none' : 'flex';
+  document.getElementById('drag-overlay').style.display = S.step === 2 ? 'flex' : 'none';
+}
+
+// ── Step render ────────────────────────────────────────────────────────────────
+function renderStep() {
+  document.getElementById('ititle').textContent = STEPS[S.step];
+  document.getElementById('idesc').textContent  = DESCS[S.step];
+  const body = document.getElementById('ibody');
+  body.innerHTML = `<div class="step-anim">${[s0,s1,s2,s3][S.step]()}</div>`;
+  body.querySelectorAll('input,select').forEach(el => {
+    el.addEventListener('change', onchange2);
+    el.addEventListener('input',  onchange2);
+  });
+  if (S.step === 3) bindSwatches();
+  updateRail();
+}
+
+function onchange2(e) {
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  const id = e.target.id;
+  const map = {
+    fl:    () => { S.form.len = v ? +v : null },
+    fw:    () => { S.form.wid = v ? +v : null },
+    fc:    () => { S.form.ceil = v ? +v : null },
+    fdoors:() => { S.form.doors = v },
+    fdk:   () => { S.form.dkind = v },
+    fdw:   () => { S.form.dwall = v },
+    fwins: () => { S.form.wins = v },
+    fww:   () => { S.form.wwall = v },
+    flay:  () => { S.form.layout = v; if (S.fillGen) { S.fillGen = false; setSave(false); } },
+    fisl:  () => { S.form.island = v },
+    fsnk:  () => { S.form.sink = v },
+    frng:  () => { S.form.range = v; if (v==='YES') S.form.cooktop='NO' },
+    fctk:  () => { S.form.cooktop = v; if (v==='YES') S.form.range='NO' },
+    fwov:  () => { S.form.wallOven = v },
+    fmic:  () => { S.form.micro = v },
+    fovc:  () => { S.form.ovenCombo = v },
+    ffrg:  () => { S.form.fridge = v },
+    fdwx:  () => { S.form.dw = v },
+    fsty:  () => { S.style = v; S.locked = false },
+  };
+  if (map[id]) { map[id](); }
+  // Re-render on openings toggle or wallOven/micro change (conditional fields)
+  if (['fdoors','fwins','fwov','fmic'].includes(id)) renderStep();
+  else { draw('fp'); updateSave(); }
+}
+
+function setSave(ok) {
+  document.getElementById('sdot').className = 'save-dot' + (ok ? ' ok' : '');
+  document.getElementById('save-txt').textContent = ok ? 'Saved' : 'Changes not frozen';
+}
+function updateSave() { setSave(S.fillGen); }
+
+// ── Step 0 ─────────────────────────────────────────────────────────────────────
+function s0() {
+  const f = S.form;
+  let h = `
+  <div class="fgrp">
+    <div class="fgrp-lbl">Room dimensions</div>
+    <div class="frow">
+      <div class="field"><label>Length (inches)</label><input type="number" id="fl" value="${f.len??''}" placeholder="e.g. 180"></div>
+      <div class="field"><label>Width (inches)</label><input type="number" id="fw" value="${f.wid??''}" placeholder="e.g. 120"></div>
+    </div>
+    <div class="field"><label>Ceiling height (if known)</label><input type="number" id="fc" value="${f.ceil??''}" placeholder="e.g. 96"></div>
+  </div>
+  <div class="fgrp">
+    <div class="fgrp-lbl">Doors &amp; openings</div>
+    <div class="field"><label>Any doors or open passages?</label>
+      <select id="fdoors">${opts(['YES','NO','UNKNOWN'], f.doors)}</select></div>`;
+  if (f.doors !== 'NO') h += `
+    <div class="frow">
+      <div class="field"><label>Type</label>
+        <select id="fdk">${opts(['DOOR','OPEN_PASSAGE'], f.dkind)}</select></div>
+      <div class="field"><label>Wall</label>
+        <select id="fdw">${opts(['FRONT_SIDE','BACK_SIDE','LEFT_SIDE','RIGHT_SIDE','UNKNOWN'], f.dwall)}</select></div>
+    </div>`;
+  h += `<div class="field"><label>Any windows?</label>
+    <select id="fwins">${opts(['YES','NO','UNKNOWN'], f.wins)}</select></div>`;
+  if (f.wins !== 'NO') h += `
+    <div class="field"><label>Window wall</label>
+      <select id="fww">${opts(['BACK_SIDE','FRONT_SIDE','LEFT_SIDE','RIGHT_SIDE','UNKNOWN'], f.wwall)}</select></div>`;
+  h += '</div>';
+  return h;
+}
+
+// ── Step 1 ─────────────────────────────────────────────────────────────────────
+function s1() {
+  const f = S.form;
+  const showOC = f.wallOven === 'YES' && f.micro === 'YES';
+  return `
+  <div class="fgrp">
+    <div class="fgrp-lbl">Kitchen shape</div>
+    <div class="field"><label>Layout</label>
+      <select id="flay">${opts(['NO_PREFERENCE','ONE_WALL','LEFT_L_SHAPE','RIGHT_L_SHAPE','U_SHAPE','GALLEY','PENINSULA'], f.layout)}</select></div>
+    <div class="chk"><input type="checkbox" id="fisl" ${f.island?'checked':''}><span>Include an island</span></div>
+  </div>
+  <div class="fgrp">
+    <div class="fgrp-lbl">Appliances</div>
+    <div class="frow2">
+      <div class="field"><label>Sink</label><select id="fsnk">${opts(['YES','NO','UNKNOWN'],f.sink)}</select></div>
+      <div class="field"><label>Range</label><select id="frng">${opts(['YES','NO','UNKNOWN'],f.range)}</select></div>
+      <div class="field"><label>Cooktop</label><select id="fctk">${opts(['YES','NO','UNKNOWN'],f.cooktop)}</select></div>
+      <div class="field"><label>Wall oven</label><select id="fwov">${opts(['YES','NO','UNKNOWN'],f.wallOven)}</select></div>
+      <div class="field"><label>Built-in micro</label><select id="fmic">${opts(['YES','NO','UNKNOWN'],f.micro)}</select></div>
+      <div class="field"><label>Fridge</label><select id="ffrg">${opts(['YES','NO','UNKNOWN'],f.fridge)}</select></div>
+      <div class="field"><label>Dishwasher</label><select id="fdwx">${opts(['YES','NONE','UNKNOWN'],f.dw)}</select></div>
+      ${showOC ? `<div class="field" style="grid-column:1/-1"><label>Oven + micro arrangement</label>
+        <select id="fovc">${opts(['WALL_OVEN_MICROWAVE_STACK','SEPARATE_WALL_OVEN_AND_MICROWAVE','UNKNOWN'],f.ovenCombo)}</select></div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Step 2 ─────────────────────────────────────────────────────────────────────
+function s2() {
+  const items = confItems();
+  const badge = S.fillGen
+    ? '<div class="badge green">✓ Cabinet fill generated</div>'
+    : '<div class="badge amber">Adjusted manually</div>';
+  return `
+  <div class="hint-box">
+    <h3>Door, window &amp; appliance positions</h3>
+    <p>Drag these rough positions on the plan, then generate the preliminary cabinet fill around those constraints.</p>
+  </div>
+  ${badge}
+  <div class="sugg"><strong>Assistant</strong>Range and sink are on the back wall. Confirm whether the window is centered over the sink.</div>
+  ${items.length ? `<div class="conf-list"><div class="conf-lbl">Confirmation required (${items.length})</div>
+    ${items.map(i=>`<div class="conf-item"><div class="conf-dot"></div><span>${i}</span></div>`).join('')}
+  </div>` : '<p style="font-size:11px;color:var(--action);margin-top:8px">✓ No outstanding confirmations</p>'}
+  <button class="gen-btn" ${S.fillGen?'disabled':''} onclick="genFill()">
+    ${S.fillGen ? '✓ Cabinet Fill Generated' : 'Generate Cabinet Fill'}
+  </button>`;
+}
+
+// ── Step 3 ─────────────────────────────────────────────────────────────────────
+function s3() {
+  const canLock = S.color !== null;
+  const canRender = S.locked && S.fillGen;
+  const swatches = COLORS.map(c => `
+    <div class="cswatch-wrap">
+      <div class="cswatch ${S.color===c.id?'sel':''}" data-id="${c.id}" style="background:${c.hex}"></div>
+      <div class="cswatch-lbl">${c.label}</div>
+    </div>`).join('');
+  return `
+  <div class="fgrp">
+    <div class="fgrp-lbl">Cabinet style</div>
+    <div class="field"><select id="fsty" onchange="S.style=this.value;S.locked=false;renderStep()">
+      ${opts(['EUROPEAN_FRAMELESS','AMERICAN_FRAMED'], S.style)}</select></div>
+  </div>
+  <div class="fgrp">
+    <div class="fgrp-lbl">Door color</div>
+    <div class="color-grid">${swatches}</div>
+  </div>
+  <button class="lock-btn ${S.locked?'locked':''}" id="lbtn" ${!canLock||S.locked?'disabled':''} onclick="lockPrefs()">
+    ${S.locked?'🔒 Preferences locked':'🔓 Lock preferences'}
+  </button>
+  ${!canLock&&!S.locked?`<p style="font-size:11px;color:var(--danger);font-weight:600;text-align:center;margin-bottom:10px;">Select a cabinet color before locking.</p>`:''}
+  ${!S.fillGen?`<p style="font-size:11px;color:var(--warn);font-weight:600;text-align:center;margin-bottom:10px;">Complete step 3 first: generate cabinet fill.</p>`:''}
+  <button class="rend-btn" id="rbtn" ${!canRender?'disabled':''} onclick="genRender()">
+    ${S.rendering?'<span class="spin"></span>Generating…':'Generate Rendering'}
+  </button>
+  ${S.rendered ? `<div class="rend-out"><canvas id="rcanv" width="320" height="200"></canvas><div class="rend-wm">Sales Estimate Concept · Not For Production</div></div>` : ''}`;
+}
+
+function bindSwatches() {
+  document.querySelectorAll('.cswatch').forEach(el => {
+    el.addEventListener('click', () => {
+      S.color = el.dataset.id;
+      S.locked = false;
+      renderStep();
+    });
+  });
+  if (S.rendered) setTimeout(paintCanvas, 30);
+}
+
+function opts(arr, sel) {
+  return arr.map(o => `<option value="${o}"${o===sel?' selected':''}>${o}</option>`).join('');
+}
+
+function confItems() {
+  const f = S.form, r = [];
+  if (!f.len)              r.push('Room length not entered');
+  if (!f.wid)              r.push('Room width not entered');
+  if (!f.ceil)             r.push('Ceiling height unknown');
+  if (f.doors==='UNKNOWN') r.push('Door presence unknown');
+  if (f.wins==='UNKNOWN')  r.push('Window presence unknown');
+  if (f.layout==='NO_PREFERENCE') r.push('Layout shape not set');
+  if (f.micro==='UNKNOWN') r.push('Built-in microwave status unknown');
+  return r;
+}
+
+function genFill() {
+  S.fillGen = true; setSave(true); renderStep(); draw('fp');
+}
+
+function lockPrefs() {
+  if (!S.color) return;
+  S.locked = true; renderStep();
+}
+
+function genRender() {
+  S.rendering = true; renderStep();
+  setTimeout(() => {
+    S.rendering = false; S.rendered = true; renderStep();
+    setTimeout(paintCanvas, 40);
+  }, 2400);
+}
+
+function paintCanvas() {
+  const c = document.getElementById('rcanv');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const col = COLORS.find(x => x.id === S.color);
+  const cab = col ? col.hex : '#e8d9c0';
+
+  // bg gradient
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#e0d8d0'); g.addColorStop(1,'#c0b8aa');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // floor
+  ctx.fillStyle='#cec0a8'; ctx.fillRect(0,H*.62,W,H*.38);
+
+  // wall cabinets (upper)
+  const uc = 5, uw = (W*.88)/uc, ux = W*.06, uy = H*.08, uh = H*.22;
+  for (let i=0;i<uc;i++) {
+    const x = ux+i*uw;
+    ctx.fillStyle = lighten(cab,.15); ctx.fillRect(x+1,uy,uw-2,uh);
+    ctx.fillStyle='rgba(0,0,0,.05)'; ctx.fillRect(x+4,uy+4,uw-8,uh-8);
+    ctx.strokeStyle='rgba(0,0,0,.1)'; ctx.lineWidth=.5; ctx.strokeRect(x+1,uy,uw-2,uh);
+  }
+
+  // base cabinets
+  const bc = 5, bw = (W*.88)/bc, bx = W*.06, by = H*.42, bh = H*.2;
+  for (let i=0;i<bc;i++) {
+    const x = bx+i*bw;
+    ctx.fillStyle = cab; ctx.fillRect(x+1,by,bw-2,bh);
+    ctx.fillStyle='rgba(0,0,0,.06)'; ctx.fillRect(x+5,by+5,bw-10,bh-10);
+    // handle
+    ctx.fillStyle='rgba(0,0,0,.18)'; ctx.fillRect(x+bw/2-10,by+bh-14,20,3);
+    ctx.strokeStyle='rgba(0,0,0,.1)'; ctx.lineWidth=.5; ctx.strokeRect(x+1,by,bw-2,bh);
+  }
+
+  // countertop
+  ctx.fillStyle='#f0e8dc'; ctx.fillRect(bx,by+bh,W*.88,10);
+  ctx.fillStyle='rgba(0,0,0,.08)'; ctx.fillRect(bx,by+bh,W*.88,2);
+
+  // floor line
+  ctx.strokeStyle='rgba(0,0,0,.07)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,H*.62); ctx.lineTo(W,H*.62); ctx.stroke();
+}
+
+function lighten(hex, amt) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const l=(c)=>Math.min(255,Math.round(c+(255-c)*amt));
+  return `rgb(${l(r)},${l(g)},${l(b)})`;
+}
+
+// ── Floor plan SVG ─────────────────────────────────────────────────────────────
+function draw(id) {
+  const svg = document.getElementById(id);
+  if (!svg) return;
+  const W=600, H=460, MG={t:44,r:44,b:36,l:52};
+  const f = S.form;
+  const rawL = f.len||180, rawW = f.wid||130;
+  const L = Math.min(rawL,600), RW = Math.min(rawW,600);
+  const aW = W-MG.l-MG.r, aH = H-MG.t-MG.b;
+  const sc = Math.min(aW/L, aH/RW);
+  const rw = L*sc, rh = RW*sc;
+  const rx = MG.l+(aW-rw)/2, ry = MG.t+(aH-rh)/2;
+  const wt = 7, cd = Math.max(18*sc, 16);
+  const iw = rw-wt, ih = rh-wt, ox = rx+wt/2, oy = ry+wt/2;
+  const lay = S.form.layout;
+  const gfill = S.fillGen ? 'rgba(159,205,177,.2)' : 'rgba(159,205,177,.08)';
+  const gstk  = S.fillGen ? 'rgba(159,205,177,.55)' : 'rgba(159,205,177,.22)';
+
+  let s = `
+  <rect width="${W}" height="${H}" fill="#0a1610"/>
+  <defs>
+    <pattern id="gr" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0L0 0 0 24" fill="none" stroke="rgba(231,239,233,.035)" stroke-width=".5"/>
+    </pattern>
+  </defs>
+  <rect width="${W}" height="${H}" fill="url(#gr)"/>
+  <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="rgba(231,239,233,.035)" stroke="rgba(231,239,233,.28)" stroke-width="${wt}"/>`;
+
+  // Dim labels
+  if (f.len) s += dimH(rx, ry-18, rw, `${f.len}"`);
+  if (f.wid) s += dimV(rx-20, ry, rh, `${f.wid}"`);
+
+  // Cabinet runs
+  const runs = cabinetRuns(lay, ox, oy, iw, ih, cd);
+  runs.forEach(r2 => { s += runRect(...r2, gfill, gstk); });
+
+  // Island
+  if (f.island) {
+    const isx=ox+iw*.28, isy=oy+ih*.42, isW=Math.min(iw*.28,90), isH=Math.min(ih*.18,44);
+    s += `<rect x="${isx}" y="${isy}" width="${isW}" height="${isH}" fill="rgba(159,205,177,.1)" stroke="rgba(159,205,177,.38)" stroke-width="1" stroke-dasharray="3,2" rx="2"/>
+    <text x="${isx+isW/2}" y="${isy+isH/2+3.5}" text-anchor="middle" fill="rgba(159,205,177,.55)" font-size="8.5" font-family="system-ui">ISLAND</text>`;
+  }
+
+  // Appliances (step 1+)
+  if (S.step >= 1 || S.fillGen) s += appliances(f, ox, oy, iw, ih, cd, lay);
+
+  // Window
+  if (f.wins === 'YES') s += windowShape(f.wwall, ox, oy, iw, ih);
+
+  // Door
+  if (f.doors === 'YES') s += doorShape(f.dwall, f.dkind, ox, oy, iw, ih, wt);
+
+  // Confidence tag
+  const conf = S.fillGen ? 'ROUGH · Cabinet fill generated' : 'ROUGH · Not for production';
+  s += `<text x="${W/2}" y="${H-10}" text-anchor="middle" fill="rgba(231,239,233,.22)" font-size="9" font-family="system-ui">${conf}</text>`;
+
+  svg.innerHTML = s;
+}
+
+function cabinetRuns(lay, ox, oy, iw, ih, cd) {
+  if (lay==='ONE_WALL')   return [[ox,oy,iw,cd]];
+  if (lay==='LEFT_L_SHAPE')  return [[ox,oy,iw,cd],[ox,oy,cd,ih]];
+  if (lay==='RIGHT_L_SHAPE') return [[ox,oy,iw,cd],[ox+iw-cd,oy,cd,ih]];
+  if (lay==='U_SHAPE')    return [[ox,oy,iw,cd],[ox,oy,cd,ih],[ox+iw-cd,oy,cd,ih]];
+  if (lay==='GALLEY')     return [[ox,oy,iw,cd],[ox,oy+ih-cd,iw,cd]];
+  if (lay==='PENINSULA')  return [[ox,oy,iw,cd],[ox,oy,cd,ih],[ox+cd,oy+ih-cd*1.4,iw*.3,cd*1.4]];
+  return [];
+}
+
+function runRect(x,y,w,h,fill,stk) {
+  const isH = w >= h;
+  const cnt = Math.floor(isH ? w/26 : h/26);
+  let segs='';
+  for (let i=1;i<cnt;i++) {
+    if (isH) segs+=`<line x1="${x+i*(w/cnt)}" y1="${y}" x2="${x+i*(w/cnt)}" y2="${y+h}" stroke="${stk}" stroke-width=".4"/>`;
+    else      segs+=`<line x1="${x}" y1="${y+i*(h/cnt)}" x2="${x+w}" y2="${y+i*(h/cnt)}" stroke="${stk}" stroke-width=".4"/>`;
+  }
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="${stk}" stroke-width="1"/>${segs}`;
+}
+
+function dimH(x,y,w,label) {
+  return `<line x1="${x}" y1="${y}" x2="${x+w}" y2="${y}" stroke="rgba(231,239,233,.22)" stroke-width="1"/>
+  <line x1="${x}" y1="${y-4}" x2="${x}" y2="${y+4}" stroke="rgba(231,239,233,.22)" stroke-width="1"/>
+  <line x1="${x+w}" y1="${y-4}" x2="${x+w}" y2="${y+4}" stroke="rgba(231,239,233,.22)" stroke-width="1"/>
+  <text x="${x+w/2}" y="${y-5}" text-anchor="middle" fill="rgba(231,239,233,.38)" font-size="10" font-family="system-ui">${label}</text>`;
+}
+function dimV(x,y,h,label) {
+  return `<text x="${x}" y="${y+h/2}" text-anchor="middle" fill="rgba(231,239,233,.38)" font-size="10" font-family="system-ui" transform="rotate(-90,${x},${y+h/2})">${label}</text>`;
+}
+
+function appliances(f, ox, oy, iw, ih, cd, lay) {
+  let s = '';
+  const isLeft = lay==='LEFT_L_SHAPE'||lay==='U_SHAPE';
+  const sz = cd*.8;
+  if (f.sink==='YES')   s += abox(ox+iw*.36, oy+cd*.08, sz*1.35, sz*.72, '#7dd3fc','SNK');
+  if (f.range==='YES')  s += abox(ox+iw*.56, oy+cd*.08, sz, sz*.72, '#fca5a5','RNG');
+  if (f.cooktop==='YES')s += abox(ox+iw*.56, oy+cd*.08, sz, sz*.72, '#fca5a5','CTK');
+  if (f.fridge==='YES') {
+    const fx=isLeft ? ox+cd*.1 : ox+iw*.82;
+    s += abox(fx, isLeft ? oy+ih*.42 : oy+cd*.08, sz*.9, sz*.65, '#d8b4fe','FRG');
+  }
+  if (f.dw==='YES') s += abox(ox+iw*.23, oy+cd*.08, sz*.7, sz*.72, '#86efac','DW');
+  if (f.wallOven==='YES'||f.micro==='YES') s += abox(ox+iw*.82, oy+cd*.08, sz*.85, sz*1.4, '#fdba74','OV');
+  return s;
+}
+
+function abox(x,y,w,h,col,lbl) {
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" fill-opacity=".18" stroke="${col}" stroke-opacity=".6" stroke-width="1" rx="2"/>
+  <text x="${x+w/2}" y="${y+h/2+3.5}" text-anchor="middle" fill="${col}" fill-opacity=".85" font-size="7.5" font-family="system-ui" font-weight="600">${lbl}</text>`;
+}
+
+function windowShape(wall, ox, oy, iw, ih) {
+  const ww=Math.min(iw*.22,52);
+  const pos={
+    BACK_SIDE:  [ox+iw/2-ww/2, oy,       ww,  4],
+    FRONT_SIDE: [ox+iw/2-ww/2, oy+ih-4,  ww,  4],
+    LEFT_SIDE:  [ox,            oy+ih/2-ww/2, 4, ww],
+    RIGHT_SIDE: [ox+iw-4,      oy+ih/2-ww/2, 4, ww],
+    UNKNOWN:    [ox+iw/2-ww/2, oy, ww, 4],
+  };
+  const [wx,wy,wdw,wdh] = pos[wall]||pos.BACK_SIDE;
+  return `<rect x="${wx}" y="${wy}" width="${wdw}" height="${wdh}" fill="#7dd3fc" opacity=".7"/>
+  <text x="${wx+wdw/2}" y="${wy-5}" text-anchor="middle" fill="#7dd3fc" font-size="8.5" font-family="system-ui" opacity=".7">W</text>`;
+}
+
+function doorShape(wall, kind, ox, oy, iw, ih, wt) {
+  const dw=Math.min(iw*.16,40), isOP = kind==='OPEN_PASSAGE';
+  const pos={
+    FRONT_SIDE: [ox+iw/2-dw/2, oy+ih,       'H'],
+    BACK_SIDE:  [ox+iw/2-dw/2, oy,           'H'],
+    LEFT_SIDE:  [ox,           oy+ih/2-dw/2, 'V'],
+    RIGHT_SIDE: [ox+iw-wt/2,  oy+ih/2-dw/2, 'V'],
+    UNKNOWN:    [ox+iw/2-dw/2, oy+ih,       'H'],
+  };
+  const [dx,dy,or] = pos[wall]||pos.FRONT_SIDE;
+  let s = `<rect x="${or==='H'?dx:dx-3}" y="${or==='H'?dy-3:dy}" width="${or==='H'?dw:wt+6}" height="${or==='H'?wt+6:dw}" fill="#0a1610"/>`;
+  if (!isOP && or==='H') s += `<path d="M${dx} ${dy} A ${dw} ${dw} 0 0 1 ${dx+dw} ${dy}" fill="none" stroke="rgba(159,205,177,.35)" stroke-width=".8" stroke-dasharray="2,2"/>`;
+  s += `<line x1="${or==='H'?dx:dx+2}" y1="${or==='H'?dy-2:dy}" x2="${or==='H'?dx+dw:dx+2}" y2="${or==='H'?dy-2:dy+dw}" stroke="rgba(231,239,233,.65)" stroke-width="1.8"/>`;
+  s += `<text x="${or==='H'?dx+dw/2:dx-8}" y="${or==='H'?dy-7:dy+dw/2+4}" text-anchor="middle" fill="rgba(231,239,233,.45)" font-size="8.5" font-family="system-ui">${isOP?'OP':'D'}</text>`;
+  return s;
+}
+
+// ── AI chat ────────────────────────────────────────────────────────────────────
+const chatScript = [
+  { q:/长|宽|\d+/,  a:'好的，已录入尺寸。层高知道吗？' },
+  { q:/层高|ceil/,  a:'收到。接下来说说门窗——有门吗，几个？' },
+  { q:/门|window|窗/,a:'好，门窗已标记。厨房是什么型？L型、U型还是一字？' },
+  { q:/L|U型|一字|走廊/,a:'形状记了。要岛台吗？' },
+  { q:/岛|island/,  a:'收到。家电方面——水槽灶冰箱洗碗机都有吗？' },
+  { q:/有|都有|全套/, a:'全套了解。我来给你出一下初步布局。'},
+];
+let ci = 0;
+
+function sendChat() {
+  const inp = document.getElementById('cin');
+  const box = document.getElementById('cmsgs');
+  if (!inp?.value.trim()) return;
+  const txt = inp.value; inp.value='';
+  const um = document.createElement('div'); um.className='cmsg user'; um.textContent=txt; box.appendChild(um);
+  box.scrollTop=9999;
+
+  // parse numbers from user text
+  const nums = txt.match(/\d+/g);
+  if (nums) {
+    if (!S.form.len && nums[0]) S.form.len = Math.min(+nums[0],600);
+    if (!S.form.wid && nums[1]) S.form.wid = Math.min(+nums[1],600);
+  }
+  if (/U型/.test(txt)) S.form.layout='U_SHAPE';
+  if (/L型/.test(txt)) S.form.layout='LEFT_L_SHAPE';
+  if (/一字/.test(txt)) S.form.layout='ONE_WALL';
+  if (/岛/.test(txt)) S.form.island=true;
+  draw('fp-ai');
+
+  setTimeout(() => {
+    const reply = chatScript.find(r=>r.q.test(txt))?.a || chatScript[ci%chatScript.length].a;
+    ci++;
+    const am=document.createElement('div'); am.className='cmsg agent'; am.textContent=reply; box.appendChild(am);
+    box.scrollTop=9999;
+  }, 650);
+}
+</script>
+</body>
+</html>

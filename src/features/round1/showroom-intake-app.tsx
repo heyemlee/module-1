@@ -190,6 +190,10 @@ export function ShowroomIntakeApp({
   isAdmin?: boolean;
 }) {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
+  // Optional conversational intake assistant, per ai_ctx.md's AI Boundary: the
+  // form is the authoritative path; the assistant only helps organize customer
+  // input into form fields. Rendered as a collapsible side drawer, off by default.
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [workspaceMode, setWorkspaceMode] =
     useState<WorkspaceMode>(DEFAULT_WORKSPACE_MODE);
   const reduceMotion = useReducedMotion();
@@ -857,6 +861,28 @@ export function ShowroomIntakeApp({
                 : "Changes not frozen"
           }
         />
+        {/*
+          The assistant only helps fill FORM fields, so it is offered only on the
+          capture steps. On Adjust Positions the form swaps into the right
+          inspector (the overlay would occlude it) and there are no extractable
+          fields, so the toggle is hidden there. See
+          docs/decisions/2026-06-24-ai-assistant-placement.md.
+        */}
+        {step !== ADJUST_POSITIONS_STEP_INDEX && (
+          <button
+            type="button"
+            onClick={() => setAssistantOpen((open) => !open)}
+            aria-pressed={assistantOpen}
+            title="Toggle the optional AI intake assistant"
+            className={`inline-flex h-8 items-center rounded-studio-control border px-3 text-[11px] font-semibold transition ${
+              assistantOpen
+                ? "border-studio-action/60 bg-studio-action/10 text-studio-ink"
+                : "border-studio-line bg-studio-void text-studio-quiet hover:text-studio-ink"
+            }`}
+          >
+            AI assistant
+          </button>
+        )}
         <WorkspaceModeSwitch
           mode={workspaceMode}
           onModeChange={updateWorkspaceMode}
@@ -1020,6 +1046,47 @@ export function ShowroomIntakeApp({
         canvas={isFormInMiddle ? inspectorContent : canvasContent}
         inspector={isFormInMiddle ? canvasContent : inspectorContent}
       />
+
+      {/*
+        Optional conversational intake assistant (ai_ctx.md AI Boundary): a
+        collapsible side drawer over the form workflow. It only helps organize
+        customer input into form fields via the same `updateForm` path; the form
+        stays the authoritative intake. Off by default; toggled from the bar.
+      */}
+      {assistantOpen && step !== ADJUST_POSITIONS_STEP_INDEX && (
+        // ≥xl: right overlay over the preview column — the form stays visible in
+        // the center so the rep reviews fields as the AI writes them. <xl: the grid
+        // is one column (no preview column), so a right overlay would cover the
+        // full-width form — render a bottom sheet instead (matches the inspector's
+        // max-md pattern); on one column it's type-then-review, not side-by-side.
+        // See docs/decisions/2026-06-24-ai-assistant-placement.md.
+        <aside
+          aria-label="AI intake assistant"
+          className="fixed z-40 flex flex-col overflow-hidden bg-studio-paper text-studio-paper-ink left-0 right-0 bottom-0 max-h-[72dvh] rounded-t-2xl border-t border-studio-line shadow-[0_-24px_60px_rgba(0,0,0,0.28)] xl:left-auto xl:right-0 xl:top-0 xl:bottom-auto xl:h-[100dvh] xl:max-h-none xl:w-[min(92vw,480px)] xl:rounded-none xl:border-l xl:border-t-0 xl:shadow-[-24px_0_60px_rgba(0,0,0,0.28)]"
+        >
+          <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-black/15 xl:hidden" />
+          <div className="flex shrink-0 items-center justify-between border-b border-black/10 px-4 py-3">
+            <span className="text-[13px] font-semibold text-studio-paper-ink">
+              AI assistant
+            </span>
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(false)}
+              aria-label="Close assistant"
+              className="-mr-1 rounded-full px-2 py-1 text-[15px] leading-none text-[#607067] transition hover:bg-black/5 hover:text-studio-paper-ink"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 px-4 py-4">
+            <AgentChatPanel
+              form={form}
+              onFormUpdate={updateForm}
+              projectId={projectId}
+            />
+          </div>
+        </aside>
+      )}
 
       {/*
         Hidden, clean reference render bound to the frozen snapshot geometry.
