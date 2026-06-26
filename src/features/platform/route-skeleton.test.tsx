@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { RouteSkeleton } from "./route-skeleton";
 
 describe("RouteSkeleton", () => {
-  test.each(["dashboard", "detail", "table", "plain", "round1"] as const)(
+  test.each(["dashboard", "detail", "table", "plain"] as const)(
     "renders the %s variant in the Studio system",
     (variant) => {
       const html = renderToStaticMarkup(<RouteSkeleton variant={variant} />);

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function Round1Inspector({
+  eyebrow,
   title,
   description,
   children,
@@ -16,6 +17,7 @@ export function Round1Inspector({
   className,
   hideHeader
 }: {
+  eyebrow?: string;
   title: string;
   description?: string;
   children: ReactNode;
@@ -32,38 +34,36 @@ export function Round1Inspector({
   return (
     <aside
       aria-label={`${title} settings`}
-      className={cn(
-        "flex min-h-0 flex-col bg-studio-paper text-studio-paper-ink",
-        className
-      )}
+      className={cn("flex min-h-0 flex-col text-studio-ink", className)}
     >
       {!hideHeader && (
-        <header className="border-b border-studio-paper-line px-5 py-5">
-          <h2 className="text-[17px] font-semibold tracking-[-0.02em]">
+        <header className="px-[26px] pb-4 pt-[26px]">
+          {eyebrow && <p className="studio-eyebrow mb-1.5">{eyebrow}</p>}
+          <h2 className="text-[23px] font-semibold tracking-[-0.02em] text-[#16161a]">
             {title}
           </h2>
           {description && (
-            <p className="mt-1.5 text-[12px] leading-5 text-studio-paper-muted-ink">
+            <p className="mt-1.5 text-[12px] leading-5 text-studio-muted">
               {description}
             </p>
           )}
         </header>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-[26px] pb-[22px] pt-2">
         {children}
         {suggestion && (
           <section
             aria-label="Assistant suggestion"
-            className="mt-5 rounded-studio-control bg-studio-paper-muted p-3 text-[12px] leading-5"
+            className="mt-5 rounded-[11px] border border-white/80 bg-white/60 px-3 py-2.5 text-[12.5px] leading-[1.45] text-[#54544f]"
           >
             {suggestion}
           </section>
         )}
       </div>
-      <footer className="flex items-center justify-between gap-3 border-t border-studio-paper-line bg-studio-paper px-5 py-4">
+      <footer className="flex items-center justify-between gap-3 border-t border-[rgba(20,20,26,0.08)] px-[26px] py-4">
         <Button
           type="button"
-          variant="inspector"
+          variant="ghost"
           disabled={previousDisabled}
           onClick={onPrevious}
         >

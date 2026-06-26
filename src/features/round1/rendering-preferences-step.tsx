@@ -1,48 +1,39 @@
 "use client";
 
+import { useMemo } from "react";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
-
-import { useMemo, useState } from "react";
-import { InfoCircledIcon, ImageIcon } from "@radix-ui/react-icons";
-import {
-  CabinetConstructionStylePicker,
-  type CabinetConstructionOption
-} from "@/components/ui/cabinet-construction-style-picker";
 import type { CabinetStyle, Round1FormInput } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import {
   activeColorsForStyle,
-  CABINET_STYLE_LABELS,
   nextRenderingPreferencesForStyle,
   renderingPreferencesForForm,
-  renderingPreferencesComplete,
   selectedRenderingColor
 } from "./rendering-preferences";
 import { Step } from "./showroom-intake-controls";
 import { cn } from "@/lib/utils";
 
-const CABINET_STYLE_OPTIONS: CabinetConstructionOption<CabinetStyle>[] = [
-  {
-    value: "EUROPEAN_FRAMELESS",
-    label: "European",
-    image:
-      "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=1200&q=80"
-  },
-  {
-    value: "AMERICAN_FRAMED",
-    label: "American",
-    image:
-      "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?auto=format&fit=crop&w=1200&q=80"
-  }
+const STYLE_OPTIONS: { value: CabinetStyle; label: string; sub: string }[] = [
+  { value: "EUROPEAN_FRAMELESS", label: "European Frameless", sub: "FULL OVERLAY" },
+  { value: "AMERICAN_FRAMED", label: "American Framed", sub: "FACE FRAME" }
 ];
+
+// Pick a legible tick colour over the swatch preview.
+function isDarkSwatch(hex?: string | null) {
+  if (!hex || hex.length < 7) return false;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140;
+}
 
 export function RenderingPreferencesStep({
   form,
   colors,
   colorsError = false,
   onRetryLoadColors,
-  onFormChange,
-
+  onFormChange
 }: {
   form: Round1FormInput;
   colors: CabinetColor[];
@@ -57,11 +48,7 @@ export function RenderingPreferencesStep({
     () => activeColorsForStyle(colors, selectedStyle),
     [colors, selectedStyle]
   );
-
   const selectedColor = selectedRenderingColor(colors, form);
-  const preferencesComplete = renderingPreferencesComplete(colors, form);
-
-  const [hoveredColor, setHoveredColor] = useState<CabinetColor | null>(null);
 
   const setStyle = (style: CabinetStyle) => {
     onFormChange({
@@ -81,145 +68,149 @@ export function RenderingPreferencesStep({
     });
   };
 
-  // Determine which preview image to show.
-  // Fall back to the first active color so the preview is never empty/broken
-  // when nothing has been selected yet.
-  const previewColor = hoveredColor || selectedColor || activeColors[0] || null;
-  const previewImageUrl = previewColor?.hoverExampleImageUrl || previewColor?.swatchImageUrl;
-  const fallbackImageUrl = CABINET_STYLE_OPTIONS.find(opt => opt.value === selectedStyle)?.image;
-  const displayImage = previewImageUrl || fallbackImageUrl;
-
   return (
     <Step>
-      <div className="block after:clear-both after:block after:content-['']">
-        {/* Left Pane: Preview Area */}
-        <div className="mb-6 lg:mb-3 lg:float-left lg:w-[408px] lg:pr-3">
-          <div className="overflow-hidden rounded-studio-panel border border-studio-paper-line bg-studio-paper-muted shadow-sm">
-            <div className="relative aspect-[16/9] w-full bg-studio-paper-muted">
-              {displayImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={displayImage}
-                  alt="Preview"
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-studio-paper-muted-ink">
-                  <ImageIcon className="h-12 w-12" />
-                </div>
+      <p className="studio-eyebrow mb-2.5">Cabinet style</p>
+      <div className="mb-[22px] grid grid-cols-2 gap-2">
+        {STYLE_OPTIONS.map((option) => {
+          const active = selectedStyle === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setStyle(option.value)}
+              aria-pressed={active}
+              className={cn(
+                "flex flex-col items-start rounded-[11px] border px-[13px] py-2.5 text-left transition-colors",
+                active
+                  ? "border-[#1a1a1c] bg-[#1a1a1c] text-white shadow-[0_8px_18px_-10px_rgba(20,20,26,0.45)]"
+                  : "border-white/[0.78] bg-white/55 text-[#16161a] shadow-[0_1px_0_rgba(255,255,255,0.7)_inset] hover:bg-white/70"
               )}
-
-              {/* Overlay with details */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent p-3 pt-8 text-white">
-
-                <h3 className="text-sm font-bold truncate">
-                  {previewColor ? previewColor.name : CABINET_STYLE_LABELS[selectedStyle]}
-                </h3>
-                {previewColor?.colorCode && (
-                  <p className="mt-0.5 text-xs font-medium text-white/70 truncate">
-                    {previewColor.colorCode}
-                  </p>
+            >
+              <span className="text-[13px] font-semibold">{option.label}</span>
+              <span
+                className={cn(
+                  "mt-0.5 font-mono text-[9px] tracking-[0.1em]",
+                  active ? "text-white/55" : "text-[#9a9a94]"
                 )}
+              >
+                {option.sub}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mb-2.5 flex items-center justify-between">
+        <p className="studio-eyebrow">Door color / finish</p>
+        {activeColors.length > 0 && (
+          <span className="font-mono text-[10px] tracking-[0.04em] text-[#aaaaa4]">
+            {activeColors.length} AVAILABLE
+          </span>
+        )}
+      </div>
+
+      {activeColors.length === 0 ? (
+        colorsError ? (
+          <div
+            role="alert"
+            className="rounded-studio-control border border-studio-danger/25 bg-studio-danger/10 p-4"
+          >
+            <p className="text-[13px] font-semibold text-studio-danger-ink">
+              Cabinet colors could not be loaded
+            </p>
+            <p className="mt-1 text-[12px] text-studio-danger-ink/80">
+              Check the connection and try loading the catalog again.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3"
+              onClick={onRetryLoadColors}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-studio-control border border-dashed border-white/85 bg-white/40 p-5">
+            <div className="flex gap-3">
+              <InfoCircledIcon className="h-5 w-5 shrink-0 text-studio-muted" />
+              <div>
+                <p className="text-sm font-bold text-studio-ink">
+                  Ask an Admin to configure cabinet colors
+                </p>
+                <p className="mt-1 text-sm leading-6 text-studio-muted">
+                  Active cabinet colors are required before a sales rendering can be
+                  generated for this style.
+                </p>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Construction Style Selection */}
-        <div className="mb-4 lg:float-right lg:w-[calc(100%-408px)]">
-          <section>
-            <CabinetConstructionStylePicker
-              value={selectedStyle}
-              options={CABINET_STYLE_OPTIONS}
-              onRequestSelect={setStyle}
-            />
-          </section>
-        </div>
-
-        {/* Color Selection */}
-        <div className="block">
-          <section>
-            {activeColors.length === 0 ? (
-              colorsError ? (
-                <div
-                  role="alert"
-                  className="rounded-studio-control border border-studio-danger/25 bg-studio-danger/10 p-4"
-                >
-                  <p className="text-[13px] font-semibold text-studio-danger-ink">
-                    Cabinet colors could not be loaded
-                  </p>
-                  <p className="mt-1 text-[12px] text-studio-danger-ink/80">
-                    Check the connection and try loading the catalog again.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="inspector"
-                    className="mt-3"
-                    onClick={onRetryLoadColors}
+        )
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {activeColors.map((color) => {
+            const isSelected = selectedColor?.id === color.id;
+            const tickLight = isDarkSwatch(color.swatchHex) || Boolean(color.swatchImageUrl);
+            return (
+              <button
+                key={color.id}
+                type="button"
+                onClick={() => selectColor(color)}
+                aria-label={`Select ${color.name}`}
+                aria-pressed={isSelected}
+                className={cn(
+                  "group relative aspect-[4/3] overflow-hidden rounded-[13px] border text-left transition-colors",
+                  isSelected
+                    ? "border-[#1a1a1c] shadow-[0_10px_22px_-12px_rgba(20,20,26,0.45)]"
+                    : "border-white/[0.78] hover:border-[rgba(20,20,26,0.22)]"
+                )}
+                style={{ backgroundColor: color.swatchHex ?? "#e7e4dd" }}
+              >
+                {color.swatchImageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={color.swatchImageUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+                <span
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(155deg,rgba(255,255,255,0.45),transparent 40%)"
+                  }}
+                />
+                <span
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5"
+                  style={{
+                    background: "linear-gradient(180deg,transparent,rgba(10,10,12,0.8))"
+                  }}
+                />
+                {isSelected && (
+                  <span
+                    className={cn(
+                      "absolute right-1.5 top-1.5 text-[11px] font-bold leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]",
+                      tickLight ? "text-white" : "text-[#1a1a1c]"
+                    )}
                   >
-                    Try again
-                  </Button>
-                </div>
-              ) : (
-                <div className="rounded-studio-control border border-dashed border-studio-paper-line bg-studio-paper-muted p-5">
-                  <div className="flex gap-3">
-                    <InfoCircledIcon className="h-5 w-5 shrink-0 text-studio-paper-muted-ink" />
-                    <div>
-                      <p className="text-sm font-bold text-studio-paper-ink">
-                        Ask an Admin to configure cabinet colors
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-studio-paper-muted-ink">
-                        Active cabinet colors are required before a sales rendering can be
-                        generated for this style.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )
-            ) : (
-              <div className="pb-3 after:clear-both after:block after:content-['']">
-                {activeColors.map((color) => {
-                  const isSelected = selectedColor?.id === color.id;
-                  return (
-                    <button
-                      key={color.id}
-                      type="button"
-                      onClick={() => selectColor(color)}
-                      onMouseEnter={() => setHoveredColor(color)}
-                      onMouseLeave={() => setHoveredColor(null)}
-                      aria-label={`Select ${color.name}`}
-                      className={cn(
-                        "float-left mr-3 mb-3 group relative shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-lg transition-all duration-200",
-                        isSelected
-                          ? "scale-105 shadow-md ring-2 ring-studio-action-strong ring-offset-2 ring-offset-studio-paper"
-                          : "ring-1 ring-studio-paper-line hover:ring-studio-action-strong/70"
-                      )}
-                      style={{
-                        backgroundColor: color.swatchImageUrl
-                          ? undefined
-                          : color.swatchHex ?? "var(--studio-paper-muted)"
-                      }}
-                    >
-                      {color.swatchImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={color.swatchImageUrl}
-                          alt={color.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover rounded-lg"
-                        />
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                    ✓
+                  </span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 overflow-hidden px-2 py-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  <span className="swatch-name-track text-[11.5px] font-medium text-white">
+                    <span>{color.name}</span>
+                    <span aria-hidden="true">{color.name}</span>
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </div>
+      )}
     </Step>
   );
 }

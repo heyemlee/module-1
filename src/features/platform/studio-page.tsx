@@ -68,7 +68,7 @@ export function StudioSection({
     <section
       aria-label={ariaLabel}
       className={cn(
-        "rounded-studio-panel border border-studio-line bg-studio-shell",
+        "studio-glass rounded-studio-panel",
         className
       )}
     >

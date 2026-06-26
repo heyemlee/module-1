@@ -94,8 +94,12 @@ type LayoutSensitive = {
  * what this returns, so all positions/sizes stay testable and reproducible.
  */
 export type PositionOverride = {
-  wall: Wall;
-  position: number;
+  // Wall-bound objects (door/window/appliances) ride a wall at a 1D position.
+  wall?: Wall;
+  position?: number;
+  // Free 2D objects (the island) store an absolute top-left in plan coords.
+  x?: number;
+  y?: number;
 };
 
 export type PositionOverrides = Record<string, PositionOverride>;
@@ -189,6 +193,32 @@ export function buildFloorPlan(
     overrides
   });
 
+  // Place the window before the cabinets so its sink-follows-window centring
+  // happens up front, then re-separate that wall so re-centring the sink can't
+  // leave it sitting on top of its neighbours. Doing it here (rather than after
+  // the cabinet runs) keeps every downstream consumer — clearance zones, base
+  // and wall cabinets, the door — working from the appliances' final positions.
+  const window = placeWindow(normalized, fixtures, appliances, {
+    roomX,
+    roomY,
+    roomW,
+    roomH,
+    thickness,
+    ix,
+    iy,
+    iw,
+    ih,
+    scale,
+    overrides
+  });
+  separateWallAroundAnchor(appliances, "sink", startOffset, endOffset, {
+    ix,
+    iy,
+    iw,
+    ih,
+    scale
+  });
+
   const door = placeDoor(normalized, {
     roomX,
     roomY,
@@ -252,22 +282,8 @@ export function buildFloorPlan(
     }
   }
 
-  // 2. Place window from fixed appliance positions. Cabinet fill must not move
-  // or resize fixed appliances; Round 1 cabinets adapt around them instead.
-  const window = placeWindow(normalized, fixtures, appliances, {
-    roomX,
-    roomY,
-    roomW,
-    roomH,
-    thickness,
-    ix,
-    iy,
-    iw,
-    ih,
-    scale,
-    overrides
-  });
-
+  // The window (and the sink it carries) was placed up front; cabinet fill must
+  // not move or resize fixed appliances — Round 1 cabinets adapt around them.
   const wallObstacles: PlanRect[] = [
     ...sharedCabinetObstacles,
     ...appliances.filter((a) => a.symbol === "sink" || a.symbol === "dishwasher" || a.key === "cooktop" || a.symbol === "hood")
@@ -411,7 +427,8 @@ export function buildFloorPlan(
     iy,
     iw,
     ih,
-    clearanceZones
+    clearanceZones,
+    overrides
   });
 
   const dims: DimShape[] = [
@@ -756,7 +773,7 @@ function overrideWall(
     ? clampWallToLayout(fallback, layoutPreference)
     : fallback;
   const override = overrides[key];
-  if (!override) return resolvedFallback;
+  if (!override || override.wall === undefined) return resolvedFallback;
   if (layoutPreference && !wallAllowed(override.wall, layoutPreference)) return resolvedFallback;
   return override.wall;
 }
@@ -792,7 +809,7 @@ function resolveApplianceWall(
   layoutPreference: string
 ): Wall | null {
   const override = overrides[key];
-  if (override && wallAllowed(override.wall, layoutPreference)) {
+  if (override?.wall !== undefined && wallAllowed(override.wall, layoutPreference)) {
     return override.wall;
   }
   if (!isUnspecifiedRelation(relation)) {
@@ -1127,41 +1144,99 @@ function placeAppliances(
       cursor += length + spacing;
     });
 
-    const onWallShapes = shapes.filter(s => s.wall === wall);
-    let iterations = 0;
-    while (iterations++ < 20) {
-      let overlaps = false;
-      onWallShapes.sort((a, b) => horizontal ? a.x - b.x : a.y - b.y);
-      for (let i = 0; i < onWallShapes.length - 1; i++) {
-        const a = onWallShapes[i];
-        const b = onWallShapes[i + 1];
-        const aEnd = (horizontal ? a.x : a.y) + (horizontal ? a.w : a.h);
-        const bStart = horizontal ? b.x : b.y;
-        
-        if (aEnd > bStart + 0.1) {
-          overlaps = true;
-          const overlap = aEnd - bStart;
-          if (horizontal) {
-            a.x -= overlap / 2;
-            b.x += overlap / 2;
-          } else {
-            a.y -= overlap / 2;
-            b.y += overlap / 2;
-          }
-        }
-      }
-      for (const shape of onWallShapes) {
-        if (horizontal) {
-          shape.x = clamp(shape.x, ix + ctx.startOffset[wall], ix + iw - ctx.endOffset[wall] - shape.w);
-        } else {
-          shape.y = clamp(shape.y, iy + ctx.startOffset[wall], iy + ih - ctx.endOffset[wall] - shape.h);
-        }
-      }
-      if (!overlaps) break;
+    // Guarantee no two appliances on this wall overlap. A relaxation loop (split
+    // each overlap in half, re-clamp, repeat) can hit its iteration cap on a
+    // crowded wall and return with residual overlap — that's what let a dragged
+    // appliance sit slightly on top of its neighbor. fitFactor (above) already
+    // shrinks the run to fit the wall span, so a deterministic forward sweep
+    // (no start may precede the previous end) plus a backward clamp (keep the
+    // run inside the wall) always separates them. For an already-separated
+    // layout both passes are the identity, so coordinates are unchanged.
+    const onWallShapes = shapes
+      .filter((s) => s.wall === wall)
+      .sort((a, b) => (horizontal ? a.x - b.x : a.y - b.y));
+    const runMin = (horizontal ? ix : iy) + startOffset[wall];
+    const runMax = (horizontal ? ix + iw : iy + ih) - endOffset[wall];
+    const axisStart = (s: ApplianceShape) => (horizontal ? s.x : s.y);
+    const axisSize = (s: ApplianceShape) => (horizontal ? s.w : s.h);
+    const setAxis = (s: ApplianceShape, v: number) => {
+      if (horizontal) s.x = v;
+      else s.y = v;
+    };
+    let packCursor = runMin;
+    for (const s of onWallShapes) {
+      const pos = Math.max(axisStart(s), packCursor);
+      setAxis(s, pos);
+      packCursor = pos + axisSize(s);
+    }
+    let limit = runMax;
+    for (let i = onWallShapes.length - 1; i >= 0; i--) {
+      const s = onWallShapes[i];
+      const pos = Math.max(Math.min(axisStart(s), limit - axisSize(s)), runMin);
+      setAxis(s, pos);
+      limit = pos;
     }
   }
 
   return shapes;
+}
+
+/**
+ * Re-separates one wall's appliances after a post-placement move — the sink is
+ * re-centred under the window only once the window's position is known, which
+ * can drop it on top of the neighbours {@link placeAppliances} already packed.
+ * The anchor (sink) stays put; its neighbours are pushed outward just far
+ * enough to clear it, then the whole run is nudged back inside the wall. On an
+ * already-separated wall every step is a no-op, so coordinates are unchanged.
+ */
+function separateWallAroundAnchor(
+  appliances: ApplianceShape[],
+  anchorKey: string,
+  startOffset: Record<Wall, number>,
+  endOffset: Record<Wall, number>,
+  { ix, iy, iw, ih }: Geom
+) {
+  const anchor = appliances.find((a) => a.key === anchorKey);
+  if (!anchor) return;
+  const wall = anchor.wall;
+  const horizontal = wall === "TOP" || wall === "BOTTOM";
+  const runMin = (horizontal ? ix : iy) + startOffset[wall];
+  const runMax = (horizontal ? ix + iw : iy + ih) - endOffset[wall];
+  const axisStart = (s: ApplianceShape) => (horizontal ? s.x : s.y);
+  const axisSize = (s: ApplianceShape) => (horizontal ? s.w : s.h);
+  const setAxis = (s: ApplianceShape, v: number) => {
+    if (horizontal) s.x = v;
+    else s.y = v;
+  };
+
+  const onWall = appliances
+    .filter((s) => s.wall === wall && s.symbol !== "hood")
+    .sort((a, b) => axisStart(a) - axisStart(b));
+  const pin = onWall.indexOf(anchor);
+  if (pin < 0) return;
+
+  // Push right neighbours out so none starts before the previous end.
+  let cursor = axisStart(anchor) + axisSize(anchor);
+  for (let k = pin + 1; k < onWall.length; k++) {
+    const s = onWall[k];
+    if (axisStart(s) < cursor) setAxis(s, cursor);
+    cursor = axisStart(s) + axisSize(s);
+  }
+  // Push left neighbours out so none ends after the next start.
+  cursor = axisStart(anchor);
+  for (let k = pin - 1; k >= 0; k--) {
+    const s = onWall[k];
+    if (axisStart(s) + axisSize(s) > cursor) setAxis(s, cursor - axisSize(s));
+    cursor = axisStart(s);
+  }
+  // Slide the whole (now overlap-free) run back inside the wall.
+  const first = onWall[0];
+  const last = onWall[onWall.length - 1];
+  let shift = 0;
+  const hi = axisStart(last) + axisSize(last);
+  if (hi > runMax) shift = runMax - hi;
+  if (axisStart(first) + shift < runMin) shift = runMin - axisStart(first);
+  if (shift !== 0) for (const s of onWall) setAxis(s, axisStart(s) + shift);
 }
 
 function placeWindow(
@@ -1187,7 +1262,6 @@ function placeWindow(
 
   const relation = windows?.items?.[0]?.relation;
   const sink = appliances.find((a) => a.key === "sink");
-  const sinkUnderWindow = fixtures.sink?.relation === "UNDER_WINDOW" || relation === "BEHIND_SINK";
 
   let wall = overrideWall(ctx.overrides, "window", relationToWall(relation, "TOP"));
 
@@ -1201,22 +1275,37 @@ function placeWindow(
   if (wall === "TOP" || wall === "BOTTOM") {
     w = length;
     h = ctx.thickness;
-    const centerX = (sinkUnderWindow && sink && sink.wall === wall) ? sink.x + sink.w / 2 : ctx.roomX + ctx.roomW / 2;
+    // The window centres on the room and is the anchor; the sink follows it
+    // (below), never the other way around.
+    const centerX = ctx.roomX + ctx.roomW / 2;
     const defaultX = clamp(centerX - length / 2, ctx.ix, ctx.ix + ctx.iw - length);
     x = overridePosition(ctx.overrides, "window") !== undefined ? clamp(overridePosition(ctx.overrides, "window")!, ctx.ix, ctx.ix + ctx.iw - length) : defaultX;
     y = wall === "TOP" ? ctx.roomY : ctx.roomY + ctx.roomH - ctx.thickness;
   } else {
     w = ctx.thickness;
     h = length;
-    const centerY = (sinkUnderWindow && sink && sink.wall === wall) ? sink.y + sink.h / 2 : ctx.roomY + ctx.roomH / 2;
+    const centerY = ctx.roomY + ctx.roomH / 2;
     const defaultY = clamp(centerY - length / 2, ctx.iy, ctx.iy + ctx.ih - length);
     y = overridePosition(ctx.overrides, "window") !== undefined ? clamp(overridePosition(ctx.overrides, "window")!, ctx.iy, ctx.iy + ctx.ih - length) : defaultY;
     x = wall === "LEFT" ? ctx.roomX : ctx.roomX + ctx.roomW - ctx.thickness;
   }
 
   const windowShape: WindowShape = { x, y, w, h, wall };
-  if (sink && sink.wall === wall && wallProjectionOverlapRatio(windowShape, sink) >= 0.75) {
-    alignShapeCenterOnAxis(sink, windowShape, {
+  // Sink-follows-window: when the sink sits under the window on the same wall
+  // and the rep hasn't dragged the sink itself, keep it centred under the
+  // window. Dragging the window therefore carries the sink along; dragging the
+  // sink sets its own override, which detaches it and leaves the window put.
+  const sinkHasOverride = overridePosition(ctx.overrides, "sink") !== undefined;
+  const sinkOnWindowWall = !!sink && sink.wall === wall;
+  // No sink override → sink stays parked under the window (so dragging the
+  // window carries it). With an override → the sink moves freely, but snaps
+  // back to centre once a drag brings it ≥75% over the window.
+  const snapDraggedSink =
+    sinkOnWindowWall &&
+    sinkHasOverride &&
+    wallProjectionOverlapRatio(windowShape, sink!) >= 0.75;
+  if (sinkOnWindowWall && (!sinkHasOverride || snapDraggedSink)) {
+    alignShapeCenterOnAxis(sink!, windowShape, {
       ix: ctx.ix,
       iy: ctx.iy,
       iw: ctx.iw,
@@ -1534,45 +1623,57 @@ function placeIsland(
     iw: number;
     ih: number;
     clearanceZones: ClearanceZoneShape[];
+    overrides: PositionOverrides;
   }
 ): PlanRect | null {
   if (!layoutSensitive.island?.requested && !/ISLAND/.test(normalized.layoutPreference)) {
     return null;
   }
 
-  const sizeOptions = [
-    { w: ctx.iw * 0.36, h: ctx.ih * 0.3 },
-    { w: ctx.iw * 0.3, h: ctx.ih * 0.24 },
-    { w: ctx.iw * 0.24, h: ctx.ih * 0.18 }
-  ];
-  const centerXOptions = [0.5, 0.42, 0.58, 0.34, 0.66];
-  const centerYOptions = [0.5, 0.42, 0.58, 0.34, 0.66];
+  // A kitchen island belongs in the middle of the room — that's where it sits
+  // in real life and in the design mock. Use a long, shallow footprint centred
+  // in the room; the walkway to the surrounding counters is the gap around it,
+  // and the rep drags it to the exact spot in Adjust Positions. The only hard
+  // obstacle we dodge is a door's swing arc.
+  const size = { w: ctx.iw * 0.42, h: ctx.ih * 0.26 };
 
-  for (const size of sizeOptions) {
-    for (const centerY of centerYOptions) {
-      for (const centerX of centerXOptions) {
-        const candidate = {
-          x: clamp(
-            ctx.ix + ctx.iw * centerX - size.w / 2,
-            ctx.ix,
-            ctx.ix + ctx.iw - size.w
-          ),
-          y: clamp(
-            ctx.iy + ctx.ih * centerY - size.h / 2,
-            ctx.iy,
-            ctx.iy + ctx.ih - size.h
-          ),
-          w: size.w,
-          h: size.h
-        };
-        if (ctx.clearanceZones.every((zone) => !rectIntersect(candidate, zone))) {
-          return candidate;
-        }
+  // A dragged island carries an explicit top-left in plan coords; honour it
+  // (clamped inside the room) before falling back to the centred default.
+  const override = ctx.overrides.island;
+  if (override?.x !== undefined && override?.y !== undefined) {
+    return {
+      x: clamp(override.x, ctx.ix, ctx.ix + ctx.iw - size.w),
+      y: clamp(override.y, ctx.iy, ctx.iy + ctx.ih - size.h),
+      w: size.w,
+      h: size.h
+    };
+  }
+
+  const at = (centerX: number, centerY: number): PlanRect => ({
+    x: clamp(centerX - size.w / 2, ctx.ix, ctx.ix + ctx.iw - size.w),
+    y: clamp(centerY - size.h / 2, ctx.iy, ctx.iy + ctx.ih - size.h),
+    w: size.w,
+    h: size.h
+  });
+
+  const centered = at(ctx.ix + ctx.iw / 2, ctx.iy + ctx.ih * 0.52);
+  const doorSwings = ctx.clearanceZones.filter(
+    (zone) => zone.kind === "DOOR_SWING"
+  );
+  if (doorSwings.every((zone) => !rectIntersect(centered, zone))) {
+    return centered;
+  }
+
+  // Centre overlaps the door swing — nudge toward the clearest nearby spot.
+  for (const centerX of [0.5, 0.42, 0.58, 0.36, 0.64]) {
+    for (const centerY of [0.52, 0.44, 0.6, 0.38, 0.66]) {
+      const candidate = at(ctx.ix + ctx.iw * centerX, ctx.iy + ctx.ih * centerY);
+      if (doorSwings.every((zone) => !rectIntersect(candidate, zone))) {
+        return candidate;
       }
     }
   }
-
-  return null;
+  return centered;
 }
 
 function clamp(value: number, min: number, max: number): number {

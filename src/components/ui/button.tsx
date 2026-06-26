@@ -9,17 +9,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "bg-studio-action text-studio-action-ink shadow-sm shadow-black/20 hover:bg-studio-action-strong",
+        default: "studio-cta hover:brightness-110",
         destructive:
           "bg-studio-danger text-studio-danger-ink shadow-sm shadow-black/20 hover:brightness-110",
         outline:
-          "border border-studio-line-strong bg-studio-surface text-studio-ink shadow-sm shadow-black/10 hover:bg-studio-raised",
+          "border border-white/80 bg-white/55 text-studio-ink backdrop-blur-sm shadow-sm shadow-black/5 hover:bg-white/75",
         secondary:
-          "bg-studio-raised text-studio-ink shadow-sm shadow-black/10 hover:bg-studio-surface",
+          "border border-white/80 bg-white/55 text-studio-ink backdrop-blur-sm shadow-sm shadow-black/5 hover:bg-white/75",
         inspector:
           "border border-studio-paper-line bg-studio-paper text-studio-paper-ink shadow-sm shadow-black/10 hover:bg-studio-paper-muted focus-visible:ring-offset-studio-paper",
-        ghost: "text-studio-ink shadow-none hover:bg-studio-raised",
+        ghost: "text-studio-ink shadow-none hover:bg-white/45",
         link:
           "text-studio-action underline-offset-4 shadow-none hover:text-studio-action-strong hover:underline"
       },

@@ -55,6 +55,25 @@ const config: Config = {
         "studio-panel": "var(--studio-radius-panel)",
         "studio-control": "var(--studio-radius-control)",
         "studio-small": "var(--studio-radius-small)"
+      },
+      fontFamily: {
+        sans: [
+          '"Space Grotesk"',
+          "-apple-system",
+          "BlinkMacSystemFont",
+          '"Segoe UI"',
+          '"PingFang SC"',
+          '"Microsoft YaHei"',
+          "Arial",
+          "sans-serif"
+        ],
+        mono: [
+          '"JetBrains Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace"
+        ]
       }
     }
   },

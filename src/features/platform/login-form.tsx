@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SignInForm from "@/components/ui/sign-in-form";
+import { LoginShowpiece } from "./login-showpiece";
 
 export function LoginForm() {
   const [account, setAccount] = useState("");
@@ -33,44 +34,92 @@ export function LoginForm() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-studio-void text-studio-ink">
-      <div className="mx-auto grid min-h-[100dvh] max-w-[1180px] items-center gap-10 px-5 py-10 lg:grid-cols-[1fr_420px] lg:px-10">
-        <section className="hidden lg:block">
-          <div className="flex items-center gap-3">
-            <span className="size-9 rounded-[10px] bg-studio-action" />
-            <span className="text-[14px] font-semibold">ABCabinet Studio</span>
-          </div>
-          <h1 className="mt-12 max-w-[560px] text-[54px] font-semibold leading-[1.02] tracking-[-0.055em]">
-            Make the quote ready.
-          </h1>
-          <p className="mt-5 max-w-[48ch] text-[15px] leading-6 text-studio-muted">
-            Capture the room, confirm the layout, and produce a concept rendering in one project workspace.
-          </p>
-        </section>
-
-        <section className="w-full">
-          <SignInForm
-            account={account}
-            password={password}
-            remember={remember}
-            busy={busy}
-            error={
-              error ? (
-                <p
-                  role="alert"
-                  className="rounded-studio-control border border-studio-danger/30 bg-studio-danger/10 px-3 py-2 text-[13px] text-studio-danger"
-                >
-                  {error}
-                </p>
-              ) : null
-            }
-            onAccountChange={setAccount}
-            onPasswordChange={setPassword}
-            onRememberChange={setRemember}
-            onSubmit={submit}
-          />
-        </section>
+    <main
+      className="studio-anim-screen relative grid min-h-[100dvh] overflow-hidden text-studio-ink lg:grid-cols-[1.08fr_0.92fr]"
+      style={{
+        background:
+          "radial-gradient(130% 120% at 12% 8%,#f3f3f1 0%,#e8e8e5 48%,#e0e0dc 100%)"
+      }}
+    >
+      {/* soft environment blooms */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-[12%] left-[4%] h-[60%] w-[46%] bg-[radial-gradient(circle,rgba(255,255,255,0.85),transparent_62%)] blur-[36px]" />
+        <div className="absolute -bottom-[18%] left-[18%] h-[64%] w-[50%] bg-[radial-gradient(circle,rgba(202,205,210,0.6),transparent_62%)] blur-[54px]" />
+        <div className="absolute right-[30%] top-[18%] h-[42%] w-[30%] bg-[radial-gradient(circle,rgba(255,255,255,0.6),transparent_60%)] blur-[40px]" />
       </div>
+
+      {/* LEFT — brand showpiece (desktop only) */}
+      <section className="relative z-[1] hidden flex-col justify-between p-[46px_52px] lg:flex">
+        <div className="relative z-[2] flex items-center gap-3">
+          <span
+            aria-hidden
+            className="relative size-[15px] shrink-0 rounded-[4px] border-[1.5px] border-studio-ink"
+          >
+            <span className="absolute inset-[3px] rounded-[1px] bg-studio-ink" />
+          </span>
+          <span className="font-mono text-[12px] tracking-[0.36em] text-studio-ink">
+            ABCABINET
+          </span>
+          <span className="font-mono text-[12px] tracking-[0.36em] text-[#9a9a96]">
+            STUDIO
+          </span>
+        </div>
+
+        <div
+          className="relative w-full max-w-[600px] rounded-[26px] p-[36px_34px]"
+          style={{
+            background:
+              "linear-gradient(160deg,rgba(255,255,255,0.62),rgba(255,255,255,0.4))",
+            border: "1px solid rgba(255,255,255,0.85)",
+            boxShadow:
+              "0 1px 0 rgba(255,255,255,0.95) inset,0 30px 70px -30px rgba(20,20,26,0.32)",
+            backdropFilter: "blur(22px) saturate(160%)",
+            WebkitBackdropFilter: "blur(22px) saturate(160%)"
+          }}
+        >
+          <p className="mb-[18px] font-mono text-[10.5px] tracking-[0.22em] text-[#86867f]">
+            AI KITCHEN AGENT
+          </p>
+          <h1 className="m-0 text-balance text-[42px] font-semibold leading-[1.04] tracking-[-0.03em] text-[#16161a]">
+            From conversation to kitchen concept.
+          </h1>
+
+          {/* floating isometric cube */}
+          <div
+            aria-hidden
+            className="studio-anim-floaty pointer-events-none absolute"
+            style={{ top: 11, left: 433, width: 88, height: 113 }}
+          >
+            <div className="kl-cubes" style={{ fontSize: 5 }}>
+              <div className="kl-loop">
+                <div className="kl-item" />
+                <div className="kl-item" />
+                <div className="kl-item" />
+                <div className="kl-item" />
+                <div className="kl-item" />
+                <div className="kl-item" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <LoginShowpiece />
+      </section>
+
+      {/* RIGHT — sign in */}
+      <section className="relative z-[1] flex flex-col justify-center px-[8%] py-10">
+        <SignInForm
+          account={account}
+          password={password}
+          remember={remember}
+          busy={busy}
+          error={error}
+          onAccountChange={setAccount}
+          onPasswordChange={setPassword}
+          onRememberChange={setRemember}
+          onSubmit={submit}
+        />
+      </section>
     </main>
   );
 }

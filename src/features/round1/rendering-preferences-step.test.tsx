@@ -57,7 +57,7 @@ describe("RenderingPreferencesStep", () => {
     expect(html).not.toContain("Painted White");
   });
 
-  test("defaults the preview to the first active color when none is selected", () => {
+  test("lists the active colors as a named swatch grid with an available count", () => {
     const form = createDefaultShowroomForm();
     expect(form.renderingPreferences?.doorColorId ?? null).toBeNull();
 
@@ -69,10 +69,10 @@ describe("RenderingPreferencesStep", () => {
       />
     );
 
-    // The preview image and overlay fall back to the first active color
-    // instead of showing a broken/empty placeholder.
-    expect(html).toContain("https://example.com/oak-kitchen.jpg");
-    expect(html).toContain('alt="Preview"');
+    // Named swatches for the selected style, plus the availability count.
+    expect(html).toContain("Natural Oak Matte");
+    expect(html).toContain("1 AVAILABLE");
+    expect(html).toContain('aria-label="Select Natural Oak Matte"');
   });
 
   test("marks a confirmed cabinet color as locked", () => {

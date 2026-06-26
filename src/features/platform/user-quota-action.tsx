@@ -2,9 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
 export function userQuotaEndpoint(userId: string) {
   return `/api/admin/users/${encodeURIComponent(userId)}/quota`;
@@ -13,11 +10,13 @@ export function userQuotaEndpoint(userId: string) {
 export function UserQuotaAction({
   userId,
   userName,
-  initialQuota
+  initialQuota,
+  used = 0
 }: {
   userId: string;
   userName: string;
   initialQuota: number;
+  used?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -25,19 +24,22 @@ export function UserQuotaAction({
   const [isEditing, setIsEditing] = useState(false);
   const [quotaInput, setQuotaInput] = useState(initialQuota.toString());
 
-  async function saveQuota(e?: React.FormEvent) {
-    if (e) e.preventDefault();
+  const pct =
+    initialQuota > 0
+      ? Math.min(100, Math.round((used / initialQuota) * 100))
+      : 0;
+
+  async function saveQuota(event?: React.FormEvent) {
+    if (event) event.preventDefault();
     const parsed = parseInt(quotaInput, 10);
     if (isNaN(parsed) || parsed < 0) {
       setError("Invalid quota");
       return;
     }
-    
     if (parsed === initialQuota) {
       setIsEditing(false);
       return;
     }
-
     setBusy(true);
     setError(null);
     try {
@@ -59,63 +61,71 @@ export function UserQuotaAction({
     }
   }
 
-  if (!isEditing) {
+  if (isEditing) {
     return (
-      <div className="flex items-center gap-2">
-        <span className="tabular-nums text-studio-ink font-medium">{initialQuota}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsEditing(true)}
-          aria-label={`Edit ${userName} monthly quota`}
-          className="h-auto px-2 py-1 text-xs"
-        >
-          Edit
-        </Button>
-      </div>
+      <form onSubmit={saveQuota} className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <label htmlFor={`quota-${userId}`} className="sr-only">
+            Edit {userName} monthly quota
+          </label>
+          <input
+            id={`quota-${userId}`}
+            type="number"
+            min="0"
+            value={quotaInput}
+            onChange={(event) => setQuotaInput(event.target.value)}
+            disabled={busy}
+            autoFocus
+            className="studio-glass-input h-8 w-20 rounded-[9px] px-2 text-[13px] tabular-nums text-[#16161a]"
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-[9px] bg-studio-action px-2.5 py-1.5 text-[11px] font-medium text-studio-action-ink disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setIsEditing(false);
+              setQuotaInput(initialQuota.toString());
+              setError(null);
+            }}
+            className="rounded-[9px] border border-white/85 bg-white/60 px-2.5 py-1.5 text-[11px] font-medium text-[#16161a] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+        {error && (
+          <span role="alert" className="text-[10px] font-semibold text-studio-danger">
+            {error}
+          </span>
+        )}
+      </form>
     );
   }
 
   return (
-    <form onSubmit={saveQuota} className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <Label htmlFor={`quota-${userId}`} className="sr-only">
-          Edit {userName} monthly quota
-        </Label>
-        <Input
-          id={`quota-${userId}`}
-          type="number"
-          min="0"
-          value={quotaInput}
-          onChange={(e) => setQuotaInput(e.target.value)}
-          disabled={busy}
-          className="h-8 w-20 px-2 py-1 text-sm tabular-nums"
-          autoFocus
+    <div className="group/quota flex items-center gap-[10px]">
+      <div className="h-[6px] max-w-[120px] flex-1 overflow-hidden rounded-full bg-[rgba(20,20,26,0.08)]">
+        <div
+          className="h-full rounded-full bg-studio-ink"
+          style={{ width: `${pct}%` }}
         />
-        <Button
-          type="submit"
-          disabled={busy}
-          size="sm"
-          className="h-8 px-2 py-1 text-xs"
-        >
-          Save
-        </Button>
-        <Button
-          variant="ghost"
-          type="button"
-          onClick={() => {
-            setIsEditing(false);
-            setQuotaInput(initialQuota.toString());
-            setError(null);
-          }}
-          disabled={busy}
-          size="sm"
-          className="h-8 px-2 py-1 text-xs"
-        >
-          Cancel
-        </Button>
       </div>
-      {error && <span role="alert" className="text-[10px] font-semibold text-studio-danger">{error}</span>}
-    </form>
+      <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-[#86867f]">
+        {used}/{initialQuota}
+      </span>
+      <button
+        type="button"
+        onClick={() => setIsEditing(true)}
+        aria-label={`Edit ${userName} monthly quota`}
+        className="shrink-0 font-mono text-[10px] tracking-[0.08em] text-[#aaaaa4] opacity-0 transition-opacity hover:text-studio-ink focus-visible:opacity-100 group-hover/quota:opacity-100"
+      >
+        EDIT
+      </button>
+    </div>
   );
 }

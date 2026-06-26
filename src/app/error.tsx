@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function Error({
+  error,
   reset
 }: {
   error: Error & { digest?: string };
@@ -20,6 +21,13 @@ export default function Error({
       <p className="max-w-md text-[15px] leading-6 text-studio-muted">
         An unexpected error occurred. You can try again, or go back to your projects.
       </p>
+      {process.env.NODE_ENV === "development" ? (
+        <pre className="mt-2 max-w-2xl overflow-auto rounded-lg bg-studio-panel/60 px-4 py-3 text-left text-[12px] leading-5 text-studio-ink">
+          {error.message}
+          {error.digest ? `\n\ndigest: ${error.digest}` : ""}
+          {error.stack ? `\n\n${error.stack}` : ""}
+        </pre>
+      ) : null}
       <div className="mt-4 flex gap-3">
         <Button
           type="button"

@@ -72,12 +72,14 @@ describe("CabinetColorsManager draft logic", () => {
 });
 
 describe("CabinetColorsManager UI", () => {
-  test("markup structure matches design system", () => {
+  test("markup structure matches the handoff design", () => {
     const html = renderToStaticMarkup(
       <CabinetColorsManager colors={[baseColor]} />
     );
-    expect(html).toContain("No unsaved changes");
-    expect(html).toContain("Active"); // Full text status badge
+    expect(html).toContain("Door color library");
+    expect(html).toContain("Save all");
+    expect(html).toContain("Add color"); // "+ Add color" trigger
+    expect(html).toContain(">ON<"); // active ON/OFF toggle (baseColor is active)
     expect(html).toContain('alt="Original Name swatch"'); // Image alt includes the color name
     expect(html).not.toContain("#f5f5f7"); // No legacy hardcoded hex classes
     expect(html).not.toContain("bg-[#");

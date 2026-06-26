@@ -14,6 +14,8 @@ import {
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { AgentChatPanel } from "./agent-chat-panel";
 import { ElevationPreview } from "./elevations/elevation-preview";
+import { buildElevationScene } from "./elevations/elevation-scene";
+import Link from "next/link";
 import { LayoutPreview } from "./layout-preview";
 import { RenderingPreferencesStep } from "./rendering-preferences-step";
 import {
@@ -31,6 +33,8 @@ import {
   renderingPreferenceStampMatches,
   renderingPreferencesComplete,
   selectedRenderingColor,
+  renderingPreferencesForForm,
+  CABINET_STYLE_LABELS,
   type RenderingPreferenceStamp
 } from "./rendering-preferences";
 import { Panel } from "./showroom-intake-controls";
@@ -45,31 +49,20 @@ import {
 import {
   CabinetFillSummaryPanel,
   Round1SnapshotPanel,
-  RenderingControls,
+  Round1InlineRenderPreview,
+  Round1ElevationStrip,
+  Round1ElevationLightbox,
   type SnapshotPersistState
 } from "./showroom-intake-panels";
 import { useReducedMotion } from "motion/react";
 import { LockClosedIcon, LockOpen1Icon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
-import {
-  DEFAULT_WORKSPACE_MODE,
-  parseWorkspaceMode,
-  workspaceModeStorageKey,
-  type WorkspaceMode
-} from "./workspace-mode";
-import { WorkspaceModeSwitch } from "./workspace-mode-switch";
+import { MorphingSquare } from "@/components/ui/morphing-square";
 import { Round1WorkspaceShell } from "./round1-workspace-shell";
 
 import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
-import { Round1Feedback } from "./round1-feedback";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle
-} from "@/components/ui/dialog";
 
 gsap.registerPlugin(useGSAP);
 
@@ -79,6 +72,9 @@ export const SHOWROOM_STEPS = [
   "Adjust Positions",
   "Rendering Preferences"
 ] as const;
+
+// Mono sub-label under each step title in the top strip (design chrome).
+const STEP_META = ["GEOMETRY", "PROGRAM", "DETERMINISTIC", "FINISH"] as const;
 
 // Short imperative cue per step for the rail's "Next action" callout.
 const NEXT_ACTIONS: Record<number, string> = {
@@ -129,43 +125,49 @@ export function shouldApplySnapshotRestore({
 export function RenderingPreferencesLockControl({
   preferencesLocked,
   canLock,
-  onLock
+  onLock,
+  onUnlock
 }: {
   preferencesLocked: boolean;
   canLock: boolean;
   onLock: () => void;
+  onUnlock: () => void;
 }) {
-  const disabled = preferencesLocked || !canLock;
+  // When locked the button stays active so the rep can toggle it back open;
+  // it's only disabled when there's nothing to lock yet.
+  const disabled = !preferencesLocked && !canLock;
   const title = preferencesLocked
-    ? "Preferences locked. Change the selection to unlock automatically."
+    ? "Preferences locked. Click to unlock."
     : canLock
       ? "Lock preferences"
       : "Select a cabinet color before locking.";
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <Button
-        type="button"
-        variant={preferencesLocked ? "secondary" : "inspector"}
-        disabled={disabled}
-        onClick={() => {
-          if (!disabled) onLock();
-        }}
-        title={title}
-      >
-        {preferencesLocked ? (
-          <LockClosedIcon className="size-4" aria-hidden />
-        ) : (
-          <LockOpen1Icon className="size-4" aria-hidden />
-        )}
-        {preferencesLocked ? "Preferences locked" : "Lock preferences"}
-      </Button>
-      {!preferencesLocked && !canLock && (
-        <p className="max-w-44 text-center text-[11px] font-semibold text-studio-danger">
-          Select a cabinet color before locking.
-        </p>
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        if (preferencesLocked) onUnlock();
+        else onLock();
+      }}
+      title={title}
+      aria-label={title}
+      className={cn(
+        "flex h-[50px] w-[54px] shrink-0 items-center justify-center rounded-[12px] border transition-colors",
+        preferencesLocked
+          ? "border-[#1a1a1c] bg-[#1a1a1c] text-white"
+          : canLock
+            ? "border-[#1a1a1c] bg-white/55 text-[#16161a] hover:bg-white"
+            : "cursor-not-allowed border-[rgba(20,20,26,0.14)] bg-white/55 text-[#bcbcb6]"
       )}
-    </div>
+    >
+      {preferencesLocked ? (
+        <LockClosedIcon className="size-[17px]" aria-hidden />
+      ) : (
+        <LockOpen1Icon className="size-[17px]" aria-hidden />
+      )}
+    </button>
   );
 }
 
@@ -181,32 +183,28 @@ export function ShowroomIntakeApp({
   customerName,
   projectName,
   userName = "Account",
-  isAdmin = false
+  isAdmin = false,
+  initialIntake
 }: {
   projectId?: string;
   customerName?: string;
   projectName?: string;
   userName?: string;
   isAdmin?: boolean;
+  initialIntake?: string;
 }) {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
   // Optional conversational intake assistant, per ai_ctx.md's AI Boundary: the
   // form is the authoritative path; the assistant only helps organize customer
   // input into form fields. Rendered as a collapsible side drawer, off by default.
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [workspaceMode, setWorkspaceMode] =
-    useState<WorkspaceMode>(DEFAULT_WORKSPACE_MODE);
   const reduceMotion = useReducedMotion();
 
+  // Arriving from the project overview's AI-intake input opens the assistant
+  // pre-seeded with the customer's description (see AgentChatPanel.initialInput).
   useEffect(() => {
-    const stored = window.localStorage.getItem(workspaceModeStorageKey);
-    setWorkspaceMode(parseWorkspaceMode(stored));
-  }, []);
-
-  const updateWorkspaceMode = useCallback((mode: WorkspaceMode) => {
-    setWorkspaceMode(mode);
-    window.localStorage.setItem(workspaceModeStorageKey, mode);
-  }, []);
+    if (initialIntake) setAssistantOpen(true);
+  }, [initialIntake]);
 
 
   const [step, setStep] = useState(0);
@@ -217,6 +215,8 @@ export function ShowroomIntakeApp({
   const [cabinetColors, setCabinetColors] = useState<CabinetColor[]>([]);
   const [cabinetColorsError, setCabinetColorsError] = useState(false);
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
+  // Which wall elevation the lightbox shows (null = closed). Indexes into elevationScenes.
+  const [elevationOpenIndex, setElevationOpenIndex] = useState<number | null>(null);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
   const [draftPersistState, setDraftPersistState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [draftLoaded, setDraftLoaded] = useState(!projectId);
@@ -228,8 +228,10 @@ export function ShowroomIntakeApp({
   const currentDraftPayloadRef = useRef<Round1DraftPayload | null>(null);
   const draftDirtyRef = useRef(false);
   const [hasEnteredAdjustPositions, setHasEnteredAdjustPositions] = useState(false);
-  const [showAdjustPositionsModal, setShowAdjustPositionsModal] = useState(false);
   const [highlightDraggableItems, setHighlightDraggableItems] = useState(false);
+  // Name of the object currently dragged/hovered on the plan, shown in the
+  // top-of-canvas info pill (lifted out of the SVG so it can sit by the toolbar).
+  const [activeObjectLabel, setActiveObjectLabel] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localSessionChangedRef = useRef(false);
   const shellRef = useRef<HTMLElement | null>(null);
@@ -250,6 +252,7 @@ export function ShowroomIntakeApp({
   const [renderings, setRenderings] = useState<{ id: string; url: string; doorColorId: string | null }[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
+  // The in-canvas concept preview can be dismissed (×); a new generate reopens it.
 
   // Any manual drag invalidates the confirmed positions and the generated
   // cabinet fill, so the frozen snapshot is cleared and must be regenerated.
@@ -420,8 +423,9 @@ export function ShowroomIntakeApp({
       return;
     }
     setHasEnteredAdjustPositions(true);
-    setShowAdjustPositionsModal(true);
-  }, [hasEnteredAdjustPositions, step]);
+    // Briefly pulse the draggable items as a non-intrusive hint (no modal).
+    startDraggableHighlightCue();
+  }, [hasEnteredAdjustPositions, startDraggableHighlightCue, step]);
 
   useEffect(() => {
     return () => {
@@ -668,17 +672,17 @@ export function ShowroomIntakeApp({
     step
   ]);
 
+  // Clears the generated cabinet fill so the rep can keep adjusting the dragged
+  // positions — it deliberately KEEPS positionOverrides (their current layout),
+  // it does not scramble objects back to raw defaults.
   const handleResetPositions = useCallback(() => {
     localSessionChangedRef.current = true;
     draftDirtyRef.current = true;
     setDraftPersistState("idle");
-    setPositionOverrides({});
     setFixedPositionsConfirmed(false);
     setCabinetFillGenerated(false);
     setSnapshot(null);
     setPersistState("idle");
-    // Send the user back to Adjust Positions so they can't sit on the Rendering
-    // step with every action disabled; they must re-confirm + regenerate fill.
     setStep(ADJUST_POSITIONS_STEP_INDEX);
     setMaxAccessibleStep(ADJUST_POSITIONS_STEP_INDEX);
     setRenderingError(null);
@@ -821,46 +825,62 @@ export function ShowroomIntakeApp({
     );
   }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
 
+  // Must stay above the early return below — hooks can't sit after a conditional return.
+  const elevationScenes = useMemo(
+    () => (snapshot ? buildElevationScene(snapshot.floorPlan) : []),
+    [snapshot]
+  );
+
   if (!draftLoaded) {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-studio-void text-studio-ink">
-        <div className="text-center">
-          <div className="studio-skeleton mx-auto size-8 rounded-studio-control border border-studio-line-strong" />
-          <p className="mt-3 text-[13px] font-semibold text-studio-muted">Loading draft...</p>
-        </div>
+        <MorphingSquare message="Loading draft..." />
       </main>
     );
   }
 
+  const draftSaveLabel =
+    draftPersistState === "saving"
+      ? "SAVING…"
+      : draftPersistState === "error"
+        ? "SAVE FAILED · RETRY"
+        : "DRAFT SAVED";
+
   const projectBar = (
-    <div className="flex h-14 items-center gap-3 px-4 md:px-5">
+    <div className="flex h-14 items-center gap-4 px-[26px]">
+      <Link
+        href={`/projects/${projectId}`}
+        aria-label="Back to project overview"
+        className="flex size-[34px] shrink-0 items-center justify-center rounded-[11px] border border-white/85 bg-white/60 text-[14px] text-[#6a6a64] transition-colors hover:text-studio-ink"
+      >
+        ←
+      </Link>
       <div className="min-w-0">
-        <p className="truncate text-[12px] font-semibold text-studio-ink">
+        <p className="studio-eyebrow !text-[#a4a49e]">ROUND 1 · STORE INTAKE</p>
+        <p className="truncate text-[15px] font-semibold text-[#16161a]">
           {projectName ?? "Round 1"}
         </p>
-        {customerName && (
-          <p className="truncate text-[10px] text-studio-quiet">
-            {customerName}
-          </p>
-        )}
       </div>
       <div className="ml-auto flex items-center gap-3">
-        <Round1Feedback
-          state={
-            persistState === "saving"
-              ? "saving"
-              : snapshot
-                ? "saved"
-                : "stale"
-          }
-          message={
-            persistState === "saving"
-              ? "Saving"
-              : snapshot
-                ? "Saved"
-                : "Changes not frozen"
-          }
-        />
+        <span
+          aria-live="polite"
+          className={cn(
+            "inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.06em]",
+            draftPersistState === "error" ? "text-[#a85a5a]" : "text-[#86867f]"
+          )}
+        >
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              draftPersistState === "saving"
+                ? "animate-pulse bg-[#1a1a1c]"
+                : draftPersistState === "error"
+                  ? "bg-[#a85a5a]"
+                  : "bg-[#9a9a94]"
+            )}
+          />
+          {draftSaveLabel}
+        </span>
         {/*
           The assistant only helps fill FORM fields, so it is offered only on the
           capture steps. On Adjust Positions the form swaps into the right
@@ -874,39 +894,27 @@ export function ShowroomIntakeApp({
             onClick={() => setAssistantOpen((open) => !open)}
             aria-pressed={assistantOpen}
             title="Toggle the optional AI intake assistant"
-            className={`inline-flex h-8 items-center rounded-studio-control border px-3 text-[11px] font-semibold transition ${
+            className={cn(
+              "inline-flex h-8 items-center rounded-[11px] border px-3 text-[11px] font-semibold transition",
               assistantOpen
                 ? "border-studio-action/60 bg-studio-action/10 text-studio-ink"
-                : "border-studio-line bg-studio-void text-studio-quiet hover:text-studio-ink"
-            }`}
+                : "border-white/85 bg-white/60 text-[#56564f] hover:text-studio-ink"
+            )}
           >
-            AI assistant
+            {assistantOpen ? "Manual form" : "AI assistant"}
           </button>
         )}
-        <WorkspaceModeSwitch
-          mode={workspaceMode}
-          onModeChange={updateWorkspaceMode}
-        />
       </div>
     </div>
   );
 
-  const stepNavigation = (
+  const stepStrip = (
     <Round1StepNavigation
       steps={SHOWROOM_STEPS}
+      meta={STEP_META}
       currentStep={step}
       maxAccessibleStep={maxAccessibleStep}
-      variant={workspaceMode === "guided" ? "expanded" : "compact"}
-      onStepChange={goToStep}
-    />
-  );
-
-  const mobileStepNavigation = (
-    <Round1StepNavigation
-      steps={SHOWROOM_STEPS}
-      currentStep={step}
-      maxAccessibleStep={maxAccessibleStep}
-      variant="strip"
+      variant="top"
       onStepChange={goToStep}
     />
   );
@@ -957,38 +965,114 @@ export function ShowroomIntakeApp({
     3: "Choose the cabinet finish and generate a concept rendering."
   };
 
-  const isFormInMiddle = step !== 2;
+  // The plan layout, reused as-is whether it's the only canvas content or the
+  // scrollable element below the pinned rendering window on the last step.
+  const layoutPreviewEl = (
+    <LayoutPreview
+      normalized={result.normalized}
+      cabinets={preliminaryEstimate.cabinets}
+      confirmationItems={confirmationItems}
+      positionOverrides={positionOverrides}
+      onPositionOverridesChange={updatePositionOverrides}
+      highlightDraggableItems={highlightDraggableItems}
+      showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
+      previewStage={previewStage}
+      svgRef={floorPlanSvgRef}
+      showHeader={false}
+      onActiveLabelChange={setActiveObjectLabel}
+    />
+  );
 
+  // On Rendering Preferences (last step) the rendering window is always pinned at
+  // the top of the canvas; the layout drops below it and the canvas scrolls so
+  // the rep can still scroll down to inspect the plan.
+  const isRenderingStep = step === SHOWROOM_STEPS.length - 1;
+
+  // Rough wall elevations, derived from the frozen fill snapshot. Built once and
+  // shared by the thumbnail strip and the lightbox so their indexes line up.
+  // Full-bleed canvas: the plan floats over the design's gridded gradient.
   const canvasContent = (
-    <div className={isFormInMiddle ? "grid h-full min-h-0 min-w-0 gap-3 p-3 xl:p-4" : "grid h-full min-h-0 min-w-0 gap-3"}>
-      <div className="min-h-0 overflow-hidden rounded-studio-panel border border-studio-line bg-studio-shell">
-        <LayoutPreview
-          normalized={result.normalized}
-          cabinets={preliminaryEstimate.cabinets}
-          confirmationItems={confirmationItems}
-          positionOverrides={positionOverrides}
-          onPositionOverridesChange={updatePositionOverrides}
-          highlightDraggableItems={highlightDraggableItems}
-          showPositionObjects={step >= ADJUST_POSITIONS_STEP_INDEX}
-          previewStage={previewStage}
-          svgRef={floorPlanSvgRef}
-          showHeader={false}
-        />
-      </div>
-      {(renderingBusy || renderings.length > 0 || renderingError) && (
-        <RenderingControls
-          canRender={canRenderConcept}
-          busy={renderingBusy}
-          error={renderingError}
-          renderings={renderings}
-          cabinetColors={cabinetColors}
+    <div
+      className="relative flex h-full min-h-0 min-w-0 flex-col"
+      style={{ background: "linear-gradient(160deg,#eeeeec,#e7e7e4)" }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(20,20,26,0.045) 1px,transparent 1px),linear-gradient(90deg,rgba(20,20,26,0.045) 1px,transparent 1px)",
+          backgroundSize: "28px 28px"
+        }}
+      />
+      {step === ADJUST_POSITIONS_STEP_INDEX && (
+        <div className="relative z-[2] flex items-center justify-end gap-2 px-[18px] pb-0.5 pt-3">
+          {activeObjectLabel && (
+            <span className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-[rgba(20,20,22,0.92)] px-[18px] py-[9px] text-[13px] font-semibold leading-none text-white shadow-[0_16px_36px_-16px_rgba(20,20,26,0.6)] backdrop-blur-sm">
+              {activeObjectLabel}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleResetPositions}
+            title="Clear cabinet fill (keeps your positions)"
+            aria-label="Clear cabinet fill"
+            className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-white/85 bg-white/60 text-[17px] leading-none text-[#56564f] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset] transition-colors hover:bg-white hover:text-studio-ink"
+          >
+            ↺
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleGenerateCabinetFill();
+              goToNextStep();
+            }}
+            className="inline-flex items-center gap-2.5 rounded-[11px] px-[22px] py-3 text-[13.5px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_12px_26px_-10px_rgba(20,20,26,0.6)]"
+            style={{ background: "linear-gradient(180deg,#2c2c30,#141416)" }}
+          >
+            <span className="size-[7px] shrink-0 rounded-[2px] bg-white" />
+            Confirm
+          </button>
+        </div>
+      )}
+      {isRenderingStep ? (
+        <div className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <Round1InlineRenderPreview
+            busy={renderingBusy}
+            error={renderingError}
+            renderings={renderings}
+            cabinetColors={cabinetColors}
+            styleLabel={
+              CABINET_STYLE_LABELS[renderingPreferencesForForm(form).cabinetStyle]
+            }
+          />
+          <div className="mt-[14px] h-[60vh] shrink-0 px-[2px] pb-[18px]">
+            {layoutPreviewEl}
+          </div>
+        </div>
+      ) : (
+        <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
+      )}
+      {elevationScenes.length > 0 && (
+        <Round1ElevationStrip
+          scenes={elevationScenes}
+          onOpen={setElevationOpenIndex}
         />
       )}
     </div>
   );
 
+  const elevationLightbox =
+    elevationOpenIndex !== null && elevationScenes[elevationOpenIndex] ? (
+      <Round1ElevationLightbox
+        scenes={elevationScenes}
+        index={elevationOpenIndex}
+        onClose={() => setElevationOpenIndex(null)}
+        onSelect={setElevationOpenIndex}
+      />
+    ) : null;
+
   const renderingFooter = (
-    <div className="ml-3 flex flex-1 items-center justify-between">
+    <div className="ml-2 flex flex-1 items-center gap-2.5">
       <RenderingPreferencesLockControl
         preferencesLocked={preferencesLocked}
         canLock={selectedRenderingColor(cabinetColors, form) !== null}
@@ -998,14 +1082,18 @@ export function ShowroomIntakeApp({
           setHasRenderedConcept(false);
           setRenderingError(null);
         }}
+        onUnlock={() => {
+          localSessionChangedRef.current = true;
+          setPreferencesLocked(false);
+        }}
       />
       <Button
         type="button"
         onClick={handleGenerateRendering}
         disabled={!canRenderConcept || renderingBusy}
-        className="px-5"
+        className="flex-1"
       >
-        Generate Rendering
+        Generate Rendering →
       </Button>
     </div>
   );
@@ -1019,74 +1107,69 @@ export function ShowroomIntakeApp({
 
   const inspectorContent = (
     <Round1Inspector
+      eyebrow={`STEP ${String(step + 1).padStart(2, "0")}`}
       title={SHOWROOM_STEPS[step]}
       description={STEP_DESCRIPTIONS[step]}
-      hideHeader={step !== 2}
       previousDisabled={step === 0}
       continueDisabled={step === SHOWROOM_STEPS.length - 1}
       onPrevious={() => goToStep(Math.max(0, step - 1))}
       onContinue={goToNextStep}
       footerContent={step === 3 ? renderingFooter : undefined}
       suggestion={step === 2 ? adjustPositionSuggestion : undefined}
-      className={isFormInMiddle ? "h-full overflow-hidden rounded-[16px] border border-studio-line shadow-[0_20px_40px_rgba(0,0,0,0.1)]" : "h-full"}
+      className="h-full"
     >
-      <div className={isFormInMiddle ? "mx-auto w-full max-w-4xl" : ""}>
-        {activeStepContent}
-      </div>
+      {activeStepContent}
     </Round1Inspector>
   );
+
+  // AI intake mode (opt-in): the prototype's chat-left + live-preview-right
+  // layout. Replaces the form workspace while open; the form stays the default
+  // authoritative path (exit via the bar toggle, now labelled "Manual form").
+  // The live preview stays visible so the rep catches any mis-extraction as the
+  // AI writes fields. Only on capture steps — Adjust Positions has no extractable
+  // fields. See docs/decisions/2026-06-24-ai-assistant-placement.md (revised 2026-06-25).
+  if (assistantOpen && step !== ADJUST_POSITIONS_STEP_INDEX) {
+    return (
+      <main className="flex min-h-[100dvh] min-w-0 flex-col bg-studio-void text-studio-ink">
+        <div className="sticky top-0 z-30 border-b border-studio-line bg-studio-shell/95 backdrop-blur-xl">
+          {projectBar}
+        </div>
+        <div className="grid min-h-0 flex-1 grid-rows-[38dvh_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
+          <section className="order-2 flex min-h-0 flex-col border-studio-line bg-studio-shell max-xl:border-t xl:order-1 xl:border-r">
+            <div className="shrink-0 border-b border-studio-line px-4 py-3">
+              <p className="text-[13px] font-semibold text-studio-ink">AI intake</p>
+              <p className="text-[11px] text-studio-quiet">
+                Describe the kitchen — I will fill in the form for you to review.
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 p-3">
+              <AgentChatPanel
+                form={form}
+                onFormUpdate={updateForm}
+                projectId={projectId}
+                initialInput={initialIntake}
+              />
+            </div>
+          </section>
+          <section className="order-1 min-h-0 min-w-0 overflow-hidden bg-studio-void xl:order-2">
+            {canvasContent}
+          </section>
+        </div>
+        {elevationLightbox}
+      </main>
+    );
+  }
 
   return (
     <>
       <Round1WorkspaceShell
-        mode={workspaceMode}
         projectBar={projectBar}
-        stepNavigation={stepNavigation}
-        mobileStepNavigation={mobileStepNavigation}
-        canvas={isFormInMiddle ? inspectorContent : canvasContent}
-        inspector={isFormInMiddle ? canvasContent : inspectorContent}
+        stepStrip={stepStrip}
+        leftPanel={
+          step === ADJUST_POSITIONS_STEP_INDEX ? undefined : inspectorContent
+        }
+        canvas={canvasContent}
       />
-
-      {/*
-        Optional conversational intake assistant (ai_ctx.md AI Boundary): a
-        collapsible side drawer over the form workflow. It only helps organize
-        customer input into form fields via the same `updateForm` path; the form
-        stays the authoritative intake. Off by default; toggled from the bar.
-      */}
-      {assistantOpen && step !== ADJUST_POSITIONS_STEP_INDEX && (
-        // ≥xl: right overlay over the preview column — the form stays visible in
-        // the center so the rep reviews fields as the AI writes them. <xl: the grid
-        // is one column (no preview column), so a right overlay would cover the
-        // full-width form — render a bottom sheet instead (matches the inspector's
-        // max-md pattern); on one column it's type-then-review, not side-by-side.
-        // See docs/decisions/2026-06-24-ai-assistant-placement.md.
-        <aside
-          aria-label="AI intake assistant"
-          className="fixed z-40 flex flex-col overflow-hidden bg-studio-paper text-studio-paper-ink left-0 right-0 bottom-0 max-h-[72dvh] rounded-t-2xl border-t border-studio-line shadow-[0_-24px_60px_rgba(0,0,0,0.28)] xl:left-auto xl:right-0 xl:top-0 xl:bottom-auto xl:h-[100dvh] xl:max-h-none xl:w-[min(92vw,480px)] xl:rounded-none xl:border-l xl:border-t-0 xl:shadow-[-24px_0_60px_rgba(0,0,0,0.28)]"
-        >
-          <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-black/15 xl:hidden" />
-          <div className="flex shrink-0 items-center justify-between border-b border-black/10 px-4 py-3">
-            <span className="text-[13px] font-semibold text-studio-paper-ink">
-              AI assistant
-            </span>
-            <button
-              type="button"
-              onClick={() => setAssistantOpen(false)}
-              aria-label="Close assistant"
-              className="-mr-1 rounded-full px-2 py-1 text-[15px] leading-none text-[#607067] transition hover:bg-black/5 hover:text-studio-paper-ink"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 px-4 py-4">
-            <AgentChatPanel
-              form={form}
-              onFormUpdate={updateForm}
-              projectId={projectId}
-            />
-          </div>
-        </aside>
-      )}
 
       {/*
         Hidden, clean reference render bound to the frozen snapshot geometry.
@@ -1123,35 +1206,7 @@ export function ShowroomIntakeApp({
         </div>
       )}
 
-      <Dialog open={showAdjustPositionsModal} onOpenChange={setShowAdjustPositionsModal}>
-        <DialogContent
-          overlayClassName="bg-studio-void/80 backdrop-blur-sm"
-          className="w-[calc(100vw-2rem)] max-w-md rounded-studio-panel border border-studio-paper-line bg-studio-paper p-6 text-studio-paper-ink shadow-[var(--studio-shadow-raised)]"
-        >
-          <p className="text-xs font-bold uppercase tracking-wide text-studio-paper-muted-ink">
-            Adjust Positions
-          </p>
-          <DialogTitle className="mt-2 text-lg font-bold text-studio-paper-ink">
-            Door, window, and appliance locations can be dragged on the plan.
-          </DialogTitle>
-          <DialogDescription className="mt-3 text-sm leading-6 text-studio-paper-muted-ink">
-            Drag these rough positions first, then confirm them to generate
-            the preliminary cabinet fill around those constraints.
-          </DialogDescription>
-          <div className="mt-5 flex justify-end">
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setShowAdjustPositionsModal(false);
-                startDraggableHighlightCue();
-              }}
-            >
-              Got It
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {elevationLightbox}
     </>
   );
 }

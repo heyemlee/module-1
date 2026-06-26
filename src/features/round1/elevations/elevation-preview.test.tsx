@@ -37,9 +37,9 @@ describe("ElevationPreview", () => {
     const html = renderElevation();
 
     expect(html).toContain('data-elevation-opening="window"');
-    expect(html).toContain('stroke="#c56a16"');
+    expect(html).toContain('stroke="#b25a00"');
     expect(html).toContain('data-elevation-item="baseCabinet"');
-    expect(html).toContain('stroke="#1f2937"');
+    expect(html).toContain('stroke="#1a1a1c"');
   });
 
   test("renders coarse appliance symbols without production details", () => {

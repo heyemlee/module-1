@@ -108,7 +108,7 @@ const AIChatInput = ({
     <div
       ref={wrapperRef}
       onClick={handleActivate}
-      className="flex w-full items-center gap-1.5 rounded-[24px] bg-white py-1.5 pl-4 pr-1.5 text-black shadow-[0_2px_10px_rgba(0,0,0,0.08)]"
+      className="flex w-full items-center gap-1.5 rounded-[18px] border border-white/85 bg-white/70 py-1.5 pl-4 pr-1.5 text-studio-ink shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_14px_30px_-18px_rgba(20,20,26,0.35)] backdrop-blur-md"
     >
       {/* Text input + animated cycling placeholder */}
       <div className="relative flex-1">
@@ -167,7 +167,7 @@ const AIChatInput = ({
         onClick={onSubmit}
         disabled={disabled}
         title="Send"
-        className="shrink-0 rounded-full bg-black p-2.5 text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="studio-cta shrink-0 rounded-[12px] p-2.5 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Send size={16} />
       </button>

@@ -28,11 +28,13 @@ const HISTORY_TURNS_SENT = 10;
 export function AgentChatPanel({
   form,
   onFormUpdate,
-  projectId
+  projectId,
+  initialInput
 }: {
   form: Round1FormInput;
   onFormUpdate: (form: Round1FormInput) => void;
   projectId?: string;
+  initialInput?: string;
 }) {
   // The transcript is persisted per project (keyed by projectId) so it follows
   // the order across reloads and never bleeds between customers. Lazy-read on
@@ -48,7 +50,9 @@ export function AgentChatPanel({
       return [];
     }
   });
-  const [input, setInput] = useState("");
+  // Seeded from the project overview's AI-intake input when present, so the rep
+  // lands here with their description ready to send.
+  const [input, setInput] = useState(initialInput ?? "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);

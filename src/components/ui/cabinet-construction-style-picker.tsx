@@ -29,18 +29,18 @@ export function CabinetConstructionStylePicker<T extends string>({
             type="button"
             onClick={() => onRequestSelect(option.value)}
             className={cn(
-              "group relative flex items-center gap-4 rounded-studio-control border bg-studio-paper px-5 py-3 text-left text-studio-paper-ink transition",
+              "group relative flex items-center gap-4 rounded-[12px] border px-5 py-3 text-left text-studio-ink transition",
               selected
-                ? "border-studio-action-strong bg-studio-paper-muted"
-                : "border-studio-paper-line hover:border-studio-action-strong/60"
+                ? "border-studio-ink bg-white/80 shadow-[inset_0_1px_0_#fff,0_8px_18px_-10px_rgba(20,20,26,0.32)]"
+                : "border-white/85 bg-white/60 hover:border-studio-ink/40"
             )}
           >
             <span className="overflow-hidden flex-1">
-              <span className="block truncate text-[14px] font-bold text-studio-paper-ink">
+              <span className="block truncate text-[14px] font-bold text-studio-ink">
                 {option.label}
               </span>
               {option.description && (
-                <span className="mt-0.5 block truncate text-[11px] text-studio-paper-muted-ink">
+                <span className="mt-0.5 block truncate text-[11px] text-studio-muted">
                   {option.description}
                 </span>
               )}
@@ -49,8 +49,8 @@ export function CabinetConstructionStylePicker<T extends string>({
               className={cn(
                 "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
                 selected
-                  ? "border-studio-action bg-studio-action text-studio-action-ink"
-                  : "border-studio-paper-line"
+                  ? "border-studio-ink bg-studio-ink text-white"
+                  : "border-studio-ink/25"
               )}
             >
               {selected && <CheckIcon className="h-3 w-3" />}

@@ -323,6 +323,523 @@ C: 行，出。看看叠塔长啥样。
 
 ---
 
+# 第二批：边界与异常路径场景（11–20）
+
+> 来源：6 个并行分析 agent 分别从**验证/错误路径、客户原型、布局家电组合、会话生命周期、渲染边界、隐私安全**六个角度扫了一遍代码，专挑现有场景 1–10 **没覆盖**的路径。每条都标了 `**命中代码**` 锚点。
+> ⚠️ 标记的是分析中**顺带发现的真实缺陷/缺口**（agent 读码所得，落地修复前请人工复核）；无标记的是"正确边界，测它扛不扛得住"。
+
+---
+
+## 场景 11 ⚠️ 非法尺寸：0 / 负数 / 纯文字（硬拒绝，非夹取）
+
+**测试目标**：下限/非法值走的是与场景 1（上限夹取）**完全相反**的硬拒绝分支，验证拒绝后能优雅兜底。
+**人设**：随口乱报，拿尺寸开玩笑，没量过。
+**命中代码**：`schemas.ts` `nullableNumberSchema = z.number().positive().nullable()` —— `.positive()` 拒 0/负数；AI 录入落 `agent-service.ts` 的 `{ ok:false, error, issues:[...] }`。
+
+```
+S: 来坐，喝点水，咱一步步把您家厨房弄出来。
+
+—— Room ——
+S: 厨房长宽大概多少？英寸英尺都行。
+C: 没量，就一面墙那么长，零吧，先填零。
+S: （填 length=0）填不进，0 系统不收。
+[系统] Zod .positive() 拒绝 0 → 返回 issues；与场景 1"超大夹到 600"是两条对立路径（上限夹取 vs 下限/非法硬拒绝）。
+C: 那宽度负二十？（开玩笑）
+S: （填 width=-20）负数也一样被拒，根本写不进表单。
+[系统] 负数同样 .positive() 拒绝——不是夹取。
+S: 咱不猜了，您大概估一个，180 总有吧？宽 120？
+C: 差不多吧。层高不知道。
+S: （填 180×120）层高我先空着标待确认。
+[系统] 层高空 → Confirmation Required；dimensionConfidence=ROUGH。
+
+—— Openings ——
+S: 有门吗？窗呢？
+C: 一个门在前边，窗在后墙。
+
+—— Layout ——
+S: 什么型？L、U、一字？
+C: L 型吧，靠两面墙。
+S: 要岛台吗？
+C: 不要，地方不大。
+
+—— Appliances ——
+S: 水槽、灶、冰箱、洗碗机都有？
+C: 都有，标准的。烤箱就灶带的那种，不要单独的。
+
+—— Adjust Positions ——
+S: （生成）您看大致这样，门在前、窗在后。
+C: 冰箱往门口挪挪。
+S: （拖动）好。
+[系统] 拖动后快照作废，需重新生成。
+
+—— Rendering ——
+S: 出个效果图？先选柜门风格和颜色。
+C: 白色，出。
+[系统] 颜色 active 且匹配 style → 解锁，出概念图，配额 −1。
+C: 行，挺好。回头我量准了尺寸再来改。
+S: 对，这版是粗的，不是施工图。
+```
+
+**验证点**
+- [ ] length=0 / 负数 → Zod 拒绝（非夹取），表单不落值
+- [ ] AI 把 0 当合法意图发 update_intake，靠 Zod 兜底 → agent prompt 应显式拦非正数
+- [ ] ⚠️ 拒绝文案是技术性 issues，缺面向客户的中文兜底（上下限处理不对称）
+
+---
+
+## 场景 12 ⚠️ 房间小于最小可用尺寸（静默通过，无下限守门员）
+
+**测试目标**：尺寸**合法但太小**，排不下任何标准柜段，系统却不报错、产空图。
+**人设**：迷你茶水间/壁橱改厨房，尺寸是真的小。
+**命中代码**：`normalize.ts` 只有 `MAX_ROOM_INCHES=600`，**无对应 MIN**；`readiness.ts` 判 `canGenerateRound1Layout=true`；`plan-geometry.ts` `clamp(_,18,span*0.9)` 把柜段几乎全过滤，**无 error code、无确认项**。
+
+```
+S: 来，咱先把您这间小厨房弄出来。
+
+—— Room ——
+S: 厨房长宽？
+C: 小，茶水间改的，长 30 宽 24（英寸）。
+S: （填 30×24）层高呢？
+C: 普通高度吧，没量。
+[系统] 30×24 正数 → 过 Zod、readiness=可生成，无下限校验；层高空 → 确认项。
+
+—— Openings ——
+S: 有门吗？
+C: 一个小门进来，没窗。
+
+—— Layout ——
+S: 这么窄就一面墙一排了吧？
+C: 对，一字型，贴一面墙。
+S: 岛台肯定放不下。
+C: 那肯定。
+
+—— Appliances ——
+S: 放点啥？
+C: 小水槽、一个电陶炉、台面小冰箱，洗碗机不要。
+
+—— Adjust Positions ——
+S: （点 Generate Cabinet Fill）……这柜子怎么基本没排出来几个？
+C: 是不是太小放不下？
+[系统] span 太小，柜段被 clamp(_,18,span*0.9) 静默过滤成近空图；无 error code、无确认项提示"装不下"。
+S: 系统没拦也没提示，我得自己看出来。这尺寸是英寸还是英尺？
+C: 英寸，就这么小。
+S: 那这单不适合标准柜，我手动标个备注。
+
+—— Rendering ——
+S: 出图意义不大，柜子太少。要不咱先按定制思路另算？
+C: 行，那回头细聊。
+```
+
+**验证点**
+- [ ] 30×24 → 通过校验、可生成，但产近空布局
+- [ ] ⚠️ 缺 `MIN_ROOM_INCHES` + `ROOM_TOO_SMALL_FOR_CABINETS` 确认项（与上限不对称）
+- [ ] 退化空布局是静默的，销售只能肉眼发现
+- [ ] 单位歧义后果相反：30" 误当 30 尺进 max 路径 / 30 尺误当 30" 进 too-small 路径
+
+---
+
+## 场景 13 ⚠️ 夫妻互掐：两个决策人当场给冲突答案
+
+**测试目标**：单值表单 + 互斥字段**静默覆盖**，且无"分歧记录"机制——后点的人直接吞掉先点的人。
+**人设**：业主夫妇同行，灶具/岛台/窗位各执一词。
+**命中代码**：`showroom-intake-steps.tsx` `setCookingStatus`——Range=YES 自动把 Cooktop 设 `NO/NOT_APPLICABLE`（反之亦然），无提示；`updateForm` 全量覆盖；岛台分歧留 UNKNOWN → `normalize.ts` 生成 `UNKNOWN_ISLAND_STATUS`。
+
+```
+S: 二位都坐，咱一起把厨房定一下。
+
+—— Room ——
+S: 长宽多少？
+C(夫): 220 乘 160。
+C(妻): 没有吧，我记得没那么长。
+S: 那我先按 200×150 估，回头量准再改。
+
+—— Openings ——
+S: 门窗呢？
+C(夫): 门在右边。窗户……左边那面吧？
+C(妻): 不对，窗在后墙。
+S: 窗这面我先标"待确认"，你们核一下。
+[系统] 窗墙分歧 → 留 UNKNOWN → 确认项。
+
+—— Layout ——
+S: L 型还是 U 型？要不要岛台？
+C(妻): 要岛台。  C(夫): 不要，太挤。
+S: 岛台我先标"待确认"，出图前定。
+[系统] island=UNKNOWN → UNKNOWN_ISLAND_STATUS（系统唯一能"接住分歧"的出口）。
+
+—— Appliances ——
+S: 做饭主要用带烤箱的灶 Range，还是单独 Cooktop？
+C(夫): Range，带烤箱那种。
+C(妻): 不对，我要 Cooktop，烤箱单独装墙上。
+S: （点 Cooktop=YES）那 Range 我先取消了哈——
+C(夫): 诶你怎么把我的取消了？
+[系统] ⚠️ 互斥字段静默覆盖，先选的被吞，无提示。
+S: 系统这儿只能二选一，我先两个都退回"待确认"，你俩商量好再定。
+
+—— Adjust Positions ——
+S: 剩下的水槽冰箱我先按常规摆，位置回头再挪。
+C(夫): 行。
+
+—— Rendering ——
+S: 出图得你俩把灶具、岛台先定下来，不然图是空的。
+C(妻): 那我们回去商量。
+S: 好，定了再来，我这版先存草稿。
+```
+
+**验证点**
+- [ ] Range↔Cooktop 互斥时静默清掉对方，需销售口头先裁决
+- [ ] ⚠️ 无"分歧待确认"语义：只能借 UNKNOWN 冻结分歧，确认项不携带"两人各要什么"
+- [ ] 分歧最好停在 Generate Cabinet Fill 之前解决
+
+---
+
+## 场景 14 代填人：承包商替不在场的业主来跑
+
+**测试目标**：高 UNKNOWN 密度下，确认清单是否清晰、能否信息不全仍走到快照/出图。
+**人设**：装修承包商代填，很多细节"得回去问业主"。
+**命中代码**：`normalize.ts` 把 UNKNOWN 的吊顶/门/窗/岛台分别转确认项；流程不强制所有字段已知即可 `Generate Cabinet Fill`；`dimensionConfidence:"ROUGH"`。
+
+```
+S: 您是替业主来的？那咱能定的先定，定不了的标"待确认"。
+
+—— Room ——
+S: 厨房长宽知道吗？
+C: 长我量了，240；宽业主说大概 170。
+S: 吊顶多高？
+C: 不清楚，业主没说，标待定。
+[系统] ceilingHeight 空 → Confirmation Required；dimensionConfidence=ROUGH。
+
+—— Openings ——
+S: 门窗呢？
+C: 门肯定有，进门那个。窗户……可能背面？不敢确定。
+[系统] 窗墙 UNKNOWN → 确认项。
+
+—— Layout ——
+S: L 还是 U？岛台要吗？
+C: 业主想要 U 型。岛台他提过想要，但尺寸没定。
+[系统] island=UNKNOWN → 确认项；多字段 UNKNOWN 但快照仍可冻结。
+
+—— Appliances ——
+S: 电器清单业主给了吗？
+C: 水槽灶冰箱要，洗碗机不确定，烤箱他说要个好的，型号没定。
+[系统] 洗碗机/烤箱细节 UNKNOWN → 各自确认项。
+
+—— Adjust Positions ——
+S: （生成）我按现有信息摆个大概，能挪的地方业主回头再说。
+C: 行，先有个样子。
+
+—— Rendering ——
+S: 出张概念图，但这是非权威的，给业主看方向用，别当定稿。
+C: 明白，我拍给业主。
+[系统] 渲染 notForProduction；快照含大量待确认项，是给业主的"回家作业单"。
+S: 对，这清单业主逐条确认完，咱再细化。
+```
+
+**验证点**
+- [ ] 多字段 UNKNOWN → 各自一条确认项，流程不卡死
+- [ ] 待确认清单是核心交付物（"给业主的回家作业单"），销售应主动念
+- [ ] 渲染须明确标"非权威概念图"，防代填人当定稿汇报
+- [ ] `ROUGH` 标记在 UI 上要对代填人足够显眼
+
+---
+
+## 场景 15 ⚠️ 半岛厨房 + 灶带集成烤箱（别画独立壁挂烤箱）
+
+**测试目标**：触发从未用过的 `PENINSULA` + `RANGE_INCLUDES_OVEN` 组合，暴露渲染 prompt 自相矛盾。
+**人设**：厨房一端开放对餐厅，要能坐人的半岛；做饭就一台带烤箱的灶。
+**命中代码**：`LAYOUT_PHRASES.PENINSULA`；`OVEN_MICROWAVE_PHRASES.RANGE_INCLUDES_OVEN`="不要画独立壁挂烤箱"，但 `rendering-prompt.ts` `suppressExplicitOvenMicrowave` **只**抑制 STACK/SEPARATE，**不含 RANGE_INCLUDES_OVEN`。
+
+```
+S: 来，咱把这个开放式厨房弄出来。
+
+—— Room ——
+S: 长宽层高？
+C: 200×180，层高 100。
+
+—— Openings ——
+S: 门窗？
+C: 门在左边，窗在后墙水槽上方。
+
+—— Layout ——
+S: 厨房一端开放对餐厅？那是半岛型。
+C: 对，半岛伸出来放俩高脚凳吃早饭。
+[系统] PENINSULA 几何上复用 LEFT_L 的两面墙，没有独立"伸出"结构。
+
+—— Appliances ——
+S: 灶呢，普通带烤箱的灶，还是单独壁挂烤箱？
+C: 普通灶，底下带烤箱，别整单独烤箱。
+[系统] ⚠️ RANGE_INCLUDES_OVEN 不在抑制白名单：若 wallOven=YES 共存，cooking 行仍画 wall oven，与"不画独立烤箱"矛盾。
+S: 水槽冰箱洗碗机？
+C: 都要。微波放台面就行。
+
+—— Adjust Positions ——
+S: （生成）您看灶在后墙、底下能看到烤箱门。
+C: 灶能挪半岛台子上吗？我想站岛边炒。
+S: （试拖）粗图先标一下，灶具体落点 Round 2 定。
+[系统] ⚠️ relation=ON_ISLAND：几何 relationToWall 无此分支（灶落墙），prompt relationPhrase 却说"on the island"——平面图与概念图打架。
+
+—— Rendering ——
+S: 出图？欧式无框配浅木。
+C: 行，出。
+[系统] 出概念图；注意核对图上没有冒出独立壁挂烤箱。
+```
+
+**验证点**
+- [ ] PENINSULA 出图，话术说明"伸出坐人"（粗图与 L 型几何无别）
+- [ ] ⚠️ RANGE_INCLUDES_OVEN 下不应再画独立 wall oven（修抑制白名单或 normalize 强制 wallOven=NO）
+- [ ] ⚠️ ON_ISLAND 关系几何与 prompt 须一致
+
+---
+
+## 场景 16 ⚠️ 改尺寸发生在效果图**之后**，旧图也得失效
+
+**测试目标**：出图**后**改尺寸，验证失效粒度——快照与渲染应同生命周期。
+**人设**：已看到满意的概念图，随口纠正一面墙尺寸。
+**命中代码**：`showroom-intake-app.tsx` `updateForm` 只 `setSnapshot(null)+setCabinetFillGenerated(false)`，**不清渲染图**；仅 `showroom-intake-panels.tsx` 一条 `state="stale"` 软横幅；重渲染不被强制。
+
+```
+S: 来，咱一步步弄。
+
+—— Room ——
+S: 长宽层高？
+C: 长 240，宽 200，层高 96。
+
+—— Openings ——
+S: 门窗？
+C: 门在右，窗在后墙。
+
+—— Layout ——
+S: 什么型？要岛台吗？
+C: U 型，要个岛台。
+
+—— Appliances ——
+S: 全套电器？
+C: 都要，烤箱微波叠一起。
+
+—— Adjust Positions ——
+S: （生成）门窗岛台都在，您看看。
+C: 挺好。
+
+—— Rendering ——
+S: 出图，欧式无框雾灰。（出概念图）
+C: 好看！哦对，左边那墙是 3 米不是 3 米 6。
+S: （改尺寸，平面图重算，效果图上方冒出"输入已变更"灰条）
+C: 那这效果图还算数吗？看着没变啊。
+[系统] ⚠️ 改尺寸 → snapshot 硬清空，但旧渲染图原地保留、只软标 stale，系统不强制重出。
+S: 图还是按旧尺寸那张，得重出一张才对得上。（重出，扣一次额度）
+C: 那能把旧的删了吗，别看混。
+[系统] gallery 只追加，无删除旧图路径。
+```
+
+**验证点**
+- [ ] 改尺寸后旧渲染图应被失效/锁定，而非仅软横幅
+- [ ] ⚠️ 失效粒度不对称：snapshot 硬清、render 软标
+- [ ] ⚠️ 缺"删除/替换旧图"路径，新旧混排易误读
+
+---
+
+## 场景 17 ⚠️ 老客户回头：旧版本快照被无校验地全解锁
+
+**测试目标**：恢复历史会话时是否校验 `schemaVersion`；以及"开新项目 vs 开旧项目"的人因陷阱。
+**人设**：几周前做过 Round 1，今天接着改。
+**命中代码**：restore 直接 `setSnapshot(latestSnapshot)+setMaxAccessibleStep(last)+persistState="saved"`，**无 schemaVersion 比对**；`ROUND1_SNAPSHOT_SCHEMA_VERSION=1` 定义却没人比；PUT 校验 `z.number().int().positive().passthrough()` 任意正整数都收。
+
+```
+C: 我几周前做过一半，今天接着改。
+S: 行，我开您上次的项目。（确认是开旧 projectId，不是新建）
+[系统] restore 按 projectId 回灌 form + 最新快照 + 历史渲染 + 聊天记录。
+
+—— 恢复后 ——
+S: （直接跳末步、动作全亮）系统说您已定稿，这是当时的效果图。
+C: 可我记得颜色还没选完？布局也不像我最后那版。
+[系统] ⚠️ restore 盲信 latestSnapshot、无 schemaVersion 校验，把旧存档当完整定稿全解锁。
+
+—— Room / Openings / Layout 复核 ——
+S: 保险起见咱过一遍。尺寸 240×180 对吧？门窗、U 型岛台都还要？
+C: 尺寸对。岛台这次不要了，去掉。
+[系统] 改 island → updateForm 清空旧快照。
+
+—— Appliances ——
+S: 电器跟上次一样全套？
+C: 一样。
+
+—— Adjust Positions ——
+S: 那我重做一次 Cabinet Fill，按现在规则重新冻结。
+C: 会清掉我上次填的吗？
+S: 表单值都在，只是重新生成快照。
+[系统] 重新冻结 → 新快照，旧的作废。
+
+—— Rendering ——
+S: 旧效果图按老布局来的，已标过期，我重出一张没岛台的。
+C: 行。
+[系统] 输入变更 → 旧渲染 stale；重出对得上新快照。
+```
+
+**验证点**
+- [ ] ⚠️ restore 时应 `if (snapshot.schemaVersion !== CURRENT)` 触发降级/迁移，而非盲信
+- [ ] ⚠️ PUT 的 schemaVersion 应收窄为 `z.literal(CURRENT)`
+- [ ] 销售第一动作必须"打开正确旧项目"——开新项目则全新空表，连续性全落空
+- [ ] 恢复须连 `positionOverrides`（拖拽位置）一并回灌，否则老客户发现"挪过的窗口回去了"
+
+---
+
+## 场景 18 抢跑出图：流程没走完就要效果图
+
+**测试目标**：渲染前置门控——必须先冻结快照才出图，验证门控在"就绪之前"挡得住。
+**人设**：急性子，刚报完尺寸、瞄到喜欢的颜色就要出图。
+**命中代码**：`canRenderConcept = persistState==="saved" && preferencesComplete`，按钮 disabled；文案"Available after cabinet fill is generated and a cabinet color is confirmed"；绕过 UI 直打 API → 409 "Round 1 snapshot required"。
+
+```
+S: 来，咱先填基本信息。
+C: 颜色看中这个灰的了，能不能直接出效果图，前面跳过？
+S: 出图得先把布局、家电走完、把粗布局冻一下，按钮才亮。
+[系统] canRenderConcept = persistState==="saved" && preferencesComplete；没 saved 快照按钮灰着。
+
+—— Room ——
+S: 长宽？
+C: 200×150，层高 96。快点啊。
+
+—— Openings ——
+S: 门窗？
+C: 门一个、窗俩。能出了吧？
+S: 还差布局家电。
+
+—— Layout ——
+S: L 还是 U？岛台？
+C: L 型，不要岛台。
+
+—— Appliances ——
+S: 水槽灶冰箱洗碗机？
+C: 都有。现在能出了吧？
+S: 还差最后一步，把布局冻一下。
+
+—— Adjust Positions ——
+S: （点 Generate Cabinet Fill）冻好了。
+[系统] persistState="saved" → 渲染按钮解锁。
+
+—— Rendering ——
+S: 这下能出了。您那个灰色配上。
+[系统] 颜色 active 且匹配 style → 出概念图。
+C: 哎早这样不就好了。
+S: 得有平面图打底它才画得出来嘛。
+```
+
+**验证点**
+- [ ] 未冻结快照 → 渲染按钮 disabled，直打 API → 409
+- [ ] 门控文案应解释"为什么"（图基于平面图），话术固化
+- [ ] 缺"还差哪几步"进度提示，急性子会反复点
+
+---
+
+## 场景 19 客户硬塞身份证 / 银行卡（PII 写入边界）
+
+**测试目标**：场景 10 是"我电话**在不在**"（读）；这条反向——客户要你**存**敏感信息（写），验证无字段可接。
+**人设**：热情过头，主动报证件号、卡号"方便扣订金"。
+**命中代码**：`update_intake` allowlist 只有 room/layout/openings/fixtures/appliances，**无自由文本/PII 字段**，Zod 合并 strip 未知 key；`Round1Snapshot` 无 name/phone/address/payment；PII 在独立 `customers` 表（`project-repository.ts`）。
+
+```
+S: 来坐，咱把厨房弄出来。
+
+—— Room ——
+S: 长宽多少？
+C: 长 200 宽 150。对了记下我身份证 3301…信用卡 4532，订金从这扣。
+S: 哎这些这儿真不能记——这工具只画厨房布局，存不了证件卡号，也没这栏。
+[系统] update_intake 仅接受厨房/布局字段；证件/卡号无对应字段，写不进表单或快照。
+C: 你写备注里嘛。
+S: 它连备注栏都没有，硬塞也存不进，存了反而是合规问题。订金身份那些走付款合同那边，跟这张图分开。层高知道吗？
+C: 96。
+
+—— Openings ——
+S: 门窗？
+C: 门在前，窗在后墙。
+
+—— Layout ——
+S: 什么型？岛台？
+C: U 型，要岛台。
+
+—— Appliances ——
+S: 全套电器？
+C: 都要。
+
+—— Adjust Positions ——
+S: （生成）您看大致这样。
+C: 行。
+
+—— Rendering ——
+S: 出图，选个颜色。
+C: 白的。
+[系统] 出概念图；全程快照内无任何 PII/支付字段。
+S: 这是概念图哈，不是施工图。
+```
+
+**验证点**
+- [ ] intake 表单/快照确实无任何 PII/支付字段，敏感串写不进
+- [ ] 语音 agent 念出卡号时只解析厨房字段，不回显敏感串（避免 transcript 留存）
+- [ ] 销售话术"口头拒收 + 指向正确系统"应固化
+
+---
+
+## 场景 20 ⚠️ 客户施压破规：要无限出图 / 把概念图标成施工图
+
+**测试目标**：权限与门控边界——配额、finalize、施工图状态都不是销售能改的。
+**人设**：出图上瘾，配额耗尽后施压销售。
+**命中代码**：配额耗尽 → 403 `QUOTA_EXCEEDED`（`renderings/route.ts`）；调配额需 ADMIN（`admin/users/[userId]/quota/route.ts` `requireRole(user,["ADMIN"])`）；agent 被硬规则禁止 finalize（`agent-service.ts`）；渲染恒 `notForProduction:true`。
+
+```
+S: 来，咱快走一遍。
+
+—— Room ——
+S: 长宽层高？
+C: 210×160，层高 96。
+
+—— Openings ——
+S: 门窗？
+C: 门一个、窗一个，都在后半边。
+
+—— Layout ——
+S: 型？岛台？
+C: U 型，要岛台。
+
+—— Appliances ——
+S: 全套？
+C: 都要，烤箱微波叠塔。
+
+—— Adjust Positions ——
+S: （生成）摆好了。
+
+—— Rendering ——
+S: 出图，选颜色。（连出几张）
+C: 再来几张……又到上限了？你后台给我开无限张呗。
+S: 开不了，配额是 admin 管的，我这权限调不了，能帮您申请。
+[系统] 配额耗尽 → 403 QUOTA_EXCEEDED；调配额需 ADMIN（requireRole），销售无隐藏开关。
+C: 那这张你直接标成施工图，我发工厂下单。
+S: 这是概念图，系统里它永远带"非施工图"标记，翻不成——照它下单尺寸要出错。
+[系统] rendering 恒 notForProduction=true；无动作能改其状态。⚠️ 但图上无像素水印，下载转发后易被当承诺。
+C: 那帮我申请加配额。
+S: 这个可以，我去找 admin。
+```
+
+**验证点**
+- [ ] 配额服务端强制（403），客户端绕不过；销售无隐藏开关
+- [ ] 调配额仅 ADMIN；agent 无 finalize/lock 能力
+- [ ] ⚠️ 概念图**图上无像素水印**（仅 metadata + 颜色名标签）→ 下载转发后易被当承诺，建议烧入"概念图·非施工图"角标
+
+---
+
+## 顺带：分析中挖出的真实代码隐患（落地修复前请人工复核）
+
+| # | 隐患 | 锚点 |
+|---|---|---|
+| 1 | `MISSING_APPLIANCE_DIMENSION` 不豁免 `status:"NO"` → 对"明确不要的冰箱"也索要尺寸（假阳性确认） | `normalize.ts` 约 :113，加 `value.status!=="NO"` 守卫 |
+| 2 | 无 `MIN_ROOM_INCHES` 下限 → 退化小房间静默产空图 | `normalize.ts` / `readiness.ts` |
+| 3 | `RANGE_INCLUDES_OVEN` / `MICROWAVE_DRAWER` 不在渲染抑制白名单 → prompt 自相矛盾 | `rendering-prompt.ts` 约 :216 |
+| 4 | `ON_ISLAND` 关系：几何 `relationToWall` 无该分支、prompt `relationPhrase` 有 → 灶落墙却说"在岛上" | `plan-geometry.ts` :677 vs `rendering-prompt.ts` :249 |
+| 5 | 改尺寸只清快照、不清渲染（失效粒度不对称） | `showroom-intake-app.tsx` :273 |
+| 6 | restore 无 `schemaVersion` 校验，PUT 收任意正整数 | `showroom-intake-app.tsx` :711 / `snapshot/route.ts` |
+| 7 | 重复无变化的出图不去重 → 白扣配额 | `renderings/route.ts` + `renderingPreferenceStampMatches` |
+| 8 | 概念图无像素水印（仅 metadata + 颜色名标签） | `showroom-intake-panels.tsx` :203 |
+
+---
+
 ## 跨场景注意：客户 PII（电话 / 地址）
 
 真实对话里客户会甩电话、地址（「你怎么知道我手机号的」那种），还会怀疑、骂咧咧。Round 1 **边界内不收集客户 PII**（CRM 是后续模块）。
