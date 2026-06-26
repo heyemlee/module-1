@@ -7,8 +7,8 @@ const STATUS_PRESENTATION: Record<
   { label: string; tone: ProjectStatusTone }
 > = {
   INTAKE: { label: "Intake", tone: "muted" },
-  RENDERING_READY: { label: "Rendering ready", tone: "success" },
-  ROUND2_MEASURING: { label: "Round 2 measuring", tone: "action" },
+  RENDERING_READY: { label: "Render Ready", tone: "success" },
+  ROUND2_MEASURING: { label: "Round 2", tone: "action" },
   ARCHIVED: { label: "Archived", tone: "muted" }
 };
 

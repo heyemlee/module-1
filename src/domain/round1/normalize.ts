@@ -21,6 +21,26 @@ export function normalizeRound1Form(
   const form = round1FormSchema.parse(input);
   const confirmationItems: ConfirmationItem[] = [];
 
+  // Round 1 never hard-fails on a bad number. An out-of-range room dimension
+  // (e.g. feet typed as inches -> 12000") is clamped to a realistic ceiling and
+  // surfaced as a Confirmation item, instead of producing absurd plan geometry.
+  // ponytail: flat 50ft cap; make it config if real layouts ever exceed it.
+  const MAX_ROOM_INCHES = 600; // 50 ft
+  const lengthOverMax =
+    form.room.length != null && form.room.length > MAX_ROOM_INCHES;
+  const widthOverMax =
+    form.room.width != null && form.room.width > MAX_ROOM_INCHES;
+  if (lengthOverMax || widthOverMax) {
+    confirmationItems.push(
+      createConfirmationItem({
+        category: "ROOM",
+        code: "ROOM_DIMENSION_OUT_OF_RANGE",
+        message: `Room size exceeds the realistic maximum (${MAX_ROOM_INCHES}"); clamped for the rough plan — confirm the true dimensions.`,
+        path: lengthOverMax ? "room.length" : "room.width"
+      })
+    );
+  }
+
   if (!form.room.ceilingHeight) {
     confirmationItems.push(
       createConfirmationItem({
@@ -129,8 +149,14 @@ export function normalizeRound1Form(
     notForProduction: true,
     dimensionConfidence: "ROUGH",
     room: {
-      length: toDimension(form.room.length, !form.room.length),
-      width: toDimension(form.room.width, !form.room.width),
+      length: toDimension(
+        lengthOverMax ? MAX_ROOM_INCHES : form.room.length,
+        !form.room.length || lengthOverMax
+      ),
+      width: toDimension(
+        widthOverMax ? MAX_ROOM_INCHES : form.room.width,
+        !form.room.width || widthOverMax
+      ),
       ceilingHeight: toDimension(form.room.ceilingHeight ?? null, !form.room.ceilingHeight),
       obstacles: form.room.obstacles
     },

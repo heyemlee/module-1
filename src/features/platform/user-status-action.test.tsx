@@ -7,23 +7,21 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("UserStatusAction", () => {
-  test("offers Pause for an active user", () => {
+  test("offers Disable for an active user", () => {
     const html = renderToStaticMarkup(
       <UserStatusAction userId="user-2" userName="Sales" disabled={false} />
     );
 
-    expect(html).toContain('role="switch"');
-    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain(">Disable<");
     expect(html).toContain('aria-label="Pause Sales"');
   });
 
-  test("offers Activate for a disabled user", () => {
+  test("offers Enable for a disabled user", () => {
     const html = renderToStaticMarkup(
       <UserStatusAction userId="user-2" userName="Sales" disabled />
     );
 
-    expect(html).toContain('role="switch"');
-    expect(html).toContain('aria-checked="false"');
+    expect(html).toContain(">Enable<");
     expect(html).toContain('aria-label="Activate Sales"');
   });
 

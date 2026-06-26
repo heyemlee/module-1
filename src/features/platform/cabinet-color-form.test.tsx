@@ -6,10 +6,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: () => {}, push: () => {}, replace: () => {} })
 }));
 
-describe("CabinetColorForm", () => {
-  test("renders the simplified upload-based fields", () => {
-    const html = renderToStaticMarkup(<CabinetColorForm />);
+const noop = () => {};
 
+describe("CabinetColorForm", () => {
+  test("renders the upload-based fields in a modal", () => {
+    const html = renderToStaticMarkup(<CabinetColorForm onClose={noop} />);
+
+    expect(html).toContain('role="dialog"');
     expect(html).toContain("Cabinet style");
     expect(html).toContain("Color name");
     expect(html).toContain("Swatch image");
@@ -17,8 +20,7 @@ describe("CabinetColorForm", () => {
     expect(html).toContain("AI description");
     expect(html).toContain('type="file"');
 
-    // New phase 3 assertions
-    expect(html).toContain("Add finish");
+    expect(html).toContain("Add a color");
     expect(html).toContain("Images are resized before upload");
     expect(html).toContain('accept="image/*"');
     expect(html).toContain('aria-describedby="swatch-upload-hint"');
@@ -28,7 +30,7 @@ describe("CabinetColorForm", () => {
   });
 
   test("drops the legacy URL/code/sort-order/active inputs from the add form", () => {
-    const html = renderToStaticMarkup(<CabinetColorForm />);
+    const html = renderToStaticMarkup(<CabinetColorForm onClose={noop} />);
 
     expect(html).not.toContain("Swatch image URL");
     expect(html).not.toContain("Hover example image URL");
@@ -42,6 +44,7 @@ describe("CabinetColorForm", () => {
   test("exposes the Active toggle only when editing", () => {
     const html = renderToStaticMarkup(
       <CabinetColorForm
+        onClose={noop}
         color={{
           id: "c1",
           companyId: "co",
@@ -62,7 +65,7 @@ describe("CabinetColorForm", () => {
 
     expect(html).toContain("Active");
     expect(html).toContain('alt="Natural Oak Matte swatch"');
-    expect(html).toContain("Edit color");
+    expect(html).toContain("Edit a color");
   });
 
   test("builds the create payload with an uploaded swatch", () => {

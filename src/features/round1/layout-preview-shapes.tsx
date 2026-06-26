@@ -5,9 +5,9 @@ import {
   type WallCornerShape
 } from "./floorplan/plan-geometry";
 
-const INK = "#1f2937";
-const LINE = "#334155";
-const FILL_CABINET = "#f1f5f9";
+const INK = "#1a1a1c";
+const LINE = "#3c3c3a";
+const FILL_CABINET = "#ececea";
 
 export function Walls({ plan }: { plan: FloorPlan }) {
   const { x, y, w, h, thickness } = plan.room;

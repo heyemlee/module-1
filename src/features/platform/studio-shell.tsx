@@ -1,43 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ColorWheelIcon,
-  DashboardIcon,
-  DrawingPinIcon,
-  ImageIcon,
-  PersonIcon
-} from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
 
 type StudioNavItem =
   | "projects"
+  | "overview"
   | "round1"
   | "renderings"
   | "users"
   | "colors";
 
+type RailSection = "workspace" | "project" | "admin";
+
+const SECTION_LABEL: Record<RailSection, string> = {
+  workspace: "WORKSPACE",
+  project: "PROJECT",
+  admin: "ADMIN"
+};
+
 export function StudioRail({
   userName,
+  userRole = "",
   isAdmin,
   activeItem,
-  projectId,
-  compact = false
+  projectId
 }: {
   userName: string;
+  userRole?: string;
   isAdmin: boolean;
   activeItem: StudioNavItem;
   projectId?: string;
-  compact?: boolean;
 }) {
   const [signingOut, setSigningOut] = useState(false);
+
+  // The rail only knows the active project id (from the URL), so fetch its name
+  // for the "PROJECT · <name>" section header.
+  const [projectName, setProjectName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!projectId) {
+      setProjectName(null);
+      return;
+    }
+    let cancelled = false;
+    setProjectName(null);
+    fetch(`/api/projects/${projectId}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled) setProjectName(data?.project?.projectName ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const logout = async () => {
     setSigningOut(true);
@@ -50,98 +67,159 @@ export function StudioRail({
     }
   };
 
-  const items = [
+  const initials =
+    userName
+      .split(" ")
+      .map((part) => part[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "—";
+
+  const items: {
+    id: StudioNavItem;
+    href: string;
+    label: string;
+    section: RailSection;
+    visible: boolean;
+  }[] = [
     {
-      id: "projects" as const,
+      id: "projects",
       href: "/projects",
       label: "Projects",
-      icon: DashboardIcon,
+      section: "workspace",
       visible: true
     },
     {
-      id: "round1" as const,
+      id: "overview",
+      href: projectId ? `/projects/${projectId}` : "/projects",
+      label: "Overview",
+      section: "project",
+      visible: Boolean(projectId)
+    },
+    {
+      id: "round1",
       href: projectId ? `/projects/${projectId}/round1` : "/projects",
       label: "Round 1",
-      icon: DrawingPinIcon,
+      section: "project",
       visible: Boolean(projectId)
     },
     {
-      id: "renderings" as const,
+      id: "renderings",
       href: projectId ? `/projects/${projectId}/renderings` : "/projects",
       label: "Renderings",
-      icon: ImageIcon,
+      section: "project",
       visible: Boolean(projectId)
     },
     {
-      id: "users" as const,
+      id: "users",
       href: "/admin/users",
       label: "Users",
-      icon: PersonIcon,
+      section: "admin",
       visible: isAdmin
     },
     {
-      id: "colors" as const,
+      id: "colors",
       href: "/admin/cabinet-colors",
-      label: "Cabinet colors",
-      icon: ColorWheelIcon,
+      label: "Cabinet Colors",
+      section: "admin",
       visible: isAdmin
     }
   ];
 
+  const sections: RailSection[] = ["workspace", "project", "admin"];
+
   return (
-    <aside className="sticky top-0 flex h-[100dvh] flex-col border-r border-studio-line bg-studio-rail p-3">
+    <aside className="studio-glass-rail sticky top-0 z-30 flex h-[100dvh] w-[236px] flex-col">
       <Link
         href="/projects"
-        className={cn(
-          "mb-6 flex h-10 items-center gap-2 rounded-studio-control px-2 text-[13px] font-semibold text-studio-ink",
-          compact && "justify-center px-0"
-        )}
+        className="flex items-center gap-2.5 border-b border-[rgba(20,20,26,0.07)] px-[22px] pb-[18px] pt-[22px]"
       >
-        <span className="size-6 rounded-[7px] bg-studio-action" aria-hidden />
-        {!compact && "ABCabinet"}
+        <span
+          aria-hidden
+          className="relative size-[13px] shrink-0 rounded-[4px] border-[1.5px] border-studio-ink"
+        >
+          <span className="absolute inset-[2.5px] rounded-[1px] bg-studio-ink" />
+        </span>
+        <span className="font-mono text-[11px] tracking-[0.3em] text-studio-ink">
+          ABCABINET
+        </span>
       </Link>
-      <nav aria-label="Primary navigation" className="grid gap-1">
-        {items.filter((item) => item.visible).map((item) => {
-          const Icon = item.icon;
-          const active = activeItem === item.id;
+
+      <nav
+        aria-label="Primary navigation"
+        className="flex flex-col gap-[3px] px-3 py-4"
+      >
+        {sections.map((section) => {
+          const sectionItems = items.filter(
+            (item) => item.section === section && item.visible
+          );
+          if (sectionItems.length === 0) return null;
           return (
-            <Link
-              key={item.id}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              title={compact ? item.label : undefined}
-              className={cn(
-                "flex min-h-10 items-center gap-3 rounded-studio-control px-3 text-[12px] font-medium transition-colors",
-                compact && "justify-center px-0",
-                active
-                  ? "bg-studio-surface text-studio-ink"
-                  : "text-studio-muted hover:bg-white/[0.05] hover:text-studio-ink"
-              )}
-            >
-              <Icon className="size-4 shrink-0" aria-hidden />
-              {!compact && <span>{item.label}</span>}
-            </Link>
+            <Fragment key={section}>
+              <p className="truncate px-3 pb-1.5 pt-1 font-mono text-[9.5px] tracking-[0.18em] text-[#a4a49e]">
+                {section === "project" && projectName
+                  ? `${SECTION_LABEL[section]} · ${projectName.toUpperCase()}`
+                  : SECTION_LABEL[section]}
+              </p>
+              {sectionItems.map((item) => {
+                const active = activeItem === item.id;
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-[11px] rounded-[12px] border px-3 py-2.5 text-[13px] transition-colors",
+                      active
+                        ? "border-white/90 bg-white/90 font-semibold text-[#16161a] shadow-[inset_0_1px_0_#fff,0_8px_18px_-10px_rgba(20,20,26,0.32)]"
+                        : "border-transparent font-medium text-[#73736e] hover:bg-white/50 hover:text-[#16161a]"
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className="size-[6px] shrink-0 rounded-full border border-current"
+                      style={{ background: active ? "#1a1a1c" : "transparent" }}
+                    />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </Fragment>
           );
         })}
       </nav>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(
-            "mt-auto flex min-h-10 items-center gap-2 rounded-studio-control border-t border-studio-line px-2 pt-3 text-[11px] text-studio-muted transition-colors hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-white/20 outline-none",
-            compact ? "justify-center" : "w-full"
-          )}
-        >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-studio-surface text-studio-action">
-            <PersonIcon className="size-3.5" aria-hidden />
+
+      <div className="mt-auto border-t border-[rgba(20,20,26,0.07)] p-[14px]">
+        <div className="flex items-center gap-[11px] rounded-[14px] border border-white/75 bg-white/55 p-[9px] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset]">
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+            style={{ background: "linear-gradient(150deg,#2c2c30,#141416)" }}
+          >
+            {initials}
           </span>
-          {!compact && <span className="truncate">{userName}</span>}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align={compact ? "center" : "end"} side="right" sideOffset={8} className="min-w-[160px]">
-          <DropdownMenuItem disabled={signingOut} onSelect={() => void logout()}>
-            {signingOut ? "Signing out..." : "Sign out"}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-[12.5px] font-semibold text-studio-ink">
+              {userName}
+            </span>
+            {userRole && (
+              <span className="block font-mono text-[9.5px] tracking-[0.1em] text-[#86867f]">
+                {userRole}
+              </span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            disabled={signingOut}
+            title="Sign out"
+            aria-label="Sign out"
+            className="flex size-[30px] shrink-0 items-center justify-center rounded-[9px] border border-white/85 bg-white/60 text-[13px] leading-none text-[#6a6a64] transition-colors hover:text-studio-ink disabled:opacity-50"
+          >
+            ⏻
+          </button>
+        </div>
+      </div>
     </aside>
   );
 }

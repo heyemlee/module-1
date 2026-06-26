@@ -17,7 +17,7 @@ function Shimmer({ className }: { className?: string }) {
   );
 }
 
-type SkeletonVariant = "dashboard" | "detail" | "table" | "plain" | "round1";
+type SkeletonVariant = "dashboard" | "detail" | "table" | "plain";
 
 export function RouteSkeleton({
   variant = "plain",
@@ -28,22 +28,20 @@ export function RouteSkeleton({
     <StudioPage aria-busy="true">
       <span className="sr-only">Loading {variant} view...</span>
 
-      {variant !== "round1" && (
-        <header className="flex flex-col gap-5 border-b border-studio-line pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <div className="mb-3">
-              <Shimmer className="h-10 w-48" />
-            </div>
-            <Shimmer className="h-9 w-64" />
-            <Shimmer className="mt-2 h-5 w-96" />
+      <header className="flex flex-col gap-5 border-b border-studio-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <div className="mb-3">
+            <Shimmer className="h-10 w-48" />
           </div>
-        </header>
-      )}
+          <Shimmer className="h-9 w-64" />
+          <Shimmer className="mt-2 h-5 w-96" />
+        </div>
+      </header>
 
       {variant === "dashboard" && (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-studio-panel border border-studio-line bg-studio-shell p-5">
+            <div key={i} className="studio-glass rounded-studio-panel p-5">
               <Shimmer className="h-5 w-1/2" />
               <Shimmer className="mt-3 h-4 w-3/4" />
               <Shimmer className="mt-6 h-8 w-24 rounded-full" />
@@ -55,16 +53,16 @@ export function RouteSkeleton({
       {variant === "detail" && (
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
-            <div className="rounded-studio-panel border border-studio-line bg-studio-shell p-6">
+            <div className="studio-glass rounded-studio-panel p-6">
               <Shimmer className="h-5 w-40" />
               <Shimmer className="mt-4 h-24 w-full" />
             </div>
-            <div className="rounded-studio-panel border border-studio-line bg-studio-shell p-6">
+            <div className="studio-glass rounded-studio-panel p-6">
               <Shimmer className="h-5 w-40" />
               <Shimmer className="mt-4 h-24 w-full" />
             </div>
           </div>
-          <div className="rounded-studio-panel border border-studio-line bg-studio-shell p-6">
+          <div className="studio-glass rounded-studio-panel p-6">
             <Shimmer className="h-5 w-32" />
             <Shimmer className="mt-4 h-40 w-full" />
           </div>
@@ -73,7 +71,7 @@ export function RouteSkeleton({
 
       {variant === "table" && (
         <div className="mt-6 flex flex-col gap-6">
-          <div className="rounded-studio-panel border border-studio-line bg-studio-shell p-6">
+          <div className="studio-glass rounded-studio-panel p-6">
             <Shimmer className="h-5 w-1/4 mb-4" />
             <div className="flex items-center justify-between border-b border-studio-line pb-4">
               <Shimmer className="h-8 w-64" />
@@ -100,17 +98,6 @@ export function RouteSkeleton({
         <div className="mt-8 space-y-4">
           <Shimmer className="h-40 w-full rounded-studio-panel bg-studio-shell" />
           <Shimmer className="h-40 w-full rounded-studio-panel bg-studio-shell" />
-        </div>
-      )}
-
-      {variant === "round1" && (
-        <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-          <div className="flex items-center gap-4">
-            <Shimmer className="size-16 rounded-lg" />
-            <Shimmer className="size-16 rounded-lg" />
-            <Shimmer className="size-16 rounded-lg" />
-          </div>
-          <Shimmer className="h-6 w-48 mt-4" />
         </div>
       )}
     </StudioPage>

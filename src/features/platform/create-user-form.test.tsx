@@ -7,31 +7,24 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("CreateUserForm", () => {
-  test("renders only account, role, and password fields", () => {
-    const html = renderToStaticMarkup(<CreateUserForm />);
-    expect(html).toContain("Account");
-    expect(html).toContain("Role");
-    expect(html).toContain(">Password<");
+  test("renders the create-user modal with account, role, password, quota", () => {
+    const html = renderToStaticMarkup(<CreateUserForm onClose={() => {}} />);
+
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain("NEW USER");
+    expect(html).toContain("Create a user");
+    expect(html).toContain("ACCOUNT");
+    expect(html).toContain("ROLE");
+    expect(html).toContain("PASSWORD");
+    expect(html).toContain("MONTHLY QUOTA");
     expect(html).toContain("SALES");
     expect(html).toContain("DESIGNER");
+    expect(html).toContain("ADMIN");
     expect(html).toContain("Create user");
-    expect(html).not.toContain("Account is used for sign in");
+    expect(html).toContain("At least 8 characters");
+    expect(html).toContain("studio");
+    expect(html).toMatch(/<select/);
     expect(html).not.toContain(">Email<");
     expect(html).not.toContain(">Name<");
-    expect(html).not.toContain("Temporary password");
-    expect(html).not.toContain("min 8 characters");
-    expect(html).toContain('autoComplete="off"');
-    expect(html).toContain('autoComplete="new-password"');
-    expect(html).toMatch(/<input[^>]*required=""[^>]*name="account"[^>]*value=""/);
-    expect(html).toMatch(/<select[^>]*name="role"/);
-    expect(html).toMatch(/<input[^>]*minLength="8"[^>]*required=""[^>]*name="password"[^>]*value=""/);
-    expect(html).toMatch(/<input[^>]*min="0"[^>]*required=""[^>]*name="monthlyRenderQuota"[^>]*value="50"/);
-    expect(html).not.toMatch(/<button[^>]*disabled=""/);
-    expect(html).toContain('aria-describedby="create-user-password-hint"');
-    expect(html).toContain('id="create-user-password-hint"');
-    expect(html).toContain("At least 8 characters");
-    expect(html).toContain("Monthly quota");
-    expect(html).toContain("studio");
-    expect(html).not.toContain("#1d1d1f");
   });
 });

@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { ProjectDetail } from "./project-detail";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: () => {} })
+}));
 
 const projectFixture = {
   id: "p1",
@@ -30,7 +34,7 @@ describe("ProjectDetail", () => {
 
     expect(html).toContain("Elm Street Kitchen");
     expect(html).toContain("Elena Park");
-    expect(html).toContain("Concept visualizations");
+    expect(html).toContain("Deterministic plan");
     expect(html).toContain("Generate rendering");
     expect(html).toContain('href="/projects/p1/round1"');
   });
