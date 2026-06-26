@@ -444,11 +444,11 @@ textarea {
 .newtons-cradle__dot:last-child { animation: swing2 var(--uib-speed) linear infinite; }
 @keyframes swing { 0% { transform: rotate(0deg); animation-timing-function: ease-out; } 25% { transform: rotate(70deg); animation-timing-function: ease-in; } 50% { transform: rotate(0deg); animation-timing-function: linear; } }
 @keyframes swing2 { 0% { transform: rotate(0deg); animation-timing-function: linear; } 50% { transform: rotate(0deg); animation-timing-function: ease-out; } 75% { transform: rotate(-70deg); animation-timing-function: ease-in; } }
-@media (prefers-reduced-motion: reduce) { .newtons-cradle__dot:first-child, .newtons-cradle__dot:last-child { animation: none; } }
+/* reduced-motion handled by the global block above (kills all animation-duration) */
 
 /* Swatch name: single line, scrolls on hover to reveal long names. */
 @keyframes swatch-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .swatch-name-track { display: inline-flex; white-space: nowrap; will-change: transform; }
 .swatch-name-track > span { padding-right: 1.5rem; }
 .group:hover .swatch-name-track { animation: swatch-marquee 6s linear infinite; }
-@media (prefers-reduced-motion: reduce) { .group:hover .swatch-name-track { animation: none; } }
+/* reduced-motion handled by the global block above */
