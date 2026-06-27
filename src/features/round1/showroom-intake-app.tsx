@@ -62,6 +62,10 @@ import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { cn } from "@/lib/utils";
 
+// Stable no-op for the read-only reference render (it never drags positions),
+// so the memoized LayoutPreview there isn't re-rendered by a fresh closure.
+const NOOP_POSITION_OVERRIDES: Dispatch<SetStateAction<PositionOverrides>> = () => {};
+
 export const SHOWROOM_STEPS = [
   "Room & Openings",
   "Layout & Appliances",
@@ -523,12 +527,18 @@ export function ShowroomIntakeApp({
       if (!payload || !draftDirtyRef.current) return;
       void saveDraftPayload(payload, { keepalive: true }).catch(() => {});
     };
+    // visibilitychange fires on both hide and show; only the hide transition is
+    // a "leaving" moment worth a keepalive write. Returning to the tab doesn't
+    // need one — the debounced save already covers ongoing edits.
+    const flushIfHidden = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
     window.addEventListener("pagehide", flushDraft);
-    window.addEventListener("visibilitychange", flushDraft);
+    window.addEventListener("visibilitychange", flushIfHidden);
     return () => {
       flushDraft();
       window.removeEventListener("pagehide", flushDraft);
-      window.removeEventListener("visibilitychange", flushDraft);
+      window.removeEventListener("visibilitychange", flushIfHidden);
     };
   }, [projectId, saveDraftPayload]);
 
@@ -1205,7 +1215,7 @@ export function ShowroomIntakeApp({
             cabinets={snapshot.preliminaryCabinets.cabinets}
             confirmationItems={snapshot.confirmationItems}
             positionOverrides={snapshot.positionOverrides}
-            onPositionOverridesChange={() => {}}
+            onPositionOverridesChange={NOOP_POSITION_OVERRIDES}
             highlightDraggableItems={false}
             showPositionObjects
             svgRef={referenceTopDownRef}

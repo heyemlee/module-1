@@ -69,17 +69,23 @@ const AIChatInput = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputValue = value;
 
-  // Cycle placeholder text when input is inactive and empty.
+  // Cycle placeholder text when input is inactive and empty. Relaxed cadence +
+  // paused while the tab is hidden to avoid needless background re-renders.
   useEffect(() => {
     if (isActive || inputValue) return;
+    let swapTimeout: ReturnType<typeof setTimeout> | undefined;
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       setShowPlaceholder(false);
-      setTimeout(() => {
+      swapTimeout = setTimeout(() => {
         setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
         setShowPlaceholder(true);
       }, 400);
-    }, 3000);
-    return () => clearInterval(interval);
+    }, 6000);
+    return () => {
+      clearInterval(interval);
+      if (swapTimeout) clearTimeout(swapTimeout);
+    };
   }, [isActive, inputValue]);
 
   // Deactivate (resume the cycling placeholder) when clicking outside, if empty.

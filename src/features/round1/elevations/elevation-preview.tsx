@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import type { FloorPlan } from "../floorplan/plan-geometry";
 import {
   buildElevationScene,
@@ -29,7 +29,7 @@ const PANEL_MARGIN = 18;
 const PANEL_HEADER_H = 38;
 const STAMP = "Round 1 rough elevation - not for production";
 
-export function ElevationPreview({ plan, svgRef, className }: ElevationPreviewProps) {
+function ElevationPreviewImpl({ plan, svgRef, className }: ElevationPreviewProps) {
   const scenes = buildElevationScene(plan);
   if (scenes.length === 0) return null;
 
@@ -76,6 +76,10 @@ export function ElevationPreview({ plan, svgRef, className }: ElevationPreviewPr
     </section>
   );
 }
+
+// Memoized: props (frozen snapshot floorPlan + stable ref) don't change on
+// unrelated host re-renders, so the elevation SVG isn't rebuilt needlessly.
+export const ElevationPreview = memo(ElevationPreviewImpl);
 
 function WallPanel({ scene, x, y }: { scene: WallElevationScene; x: number; y: number }) {
   return (
