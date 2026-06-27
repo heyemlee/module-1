@@ -8,6 +8,7 @@ import {
   type KeyboardEvent
 } from "react";
 import { AIChatInput } from "@/components/ui/ai-chat-input";
+import { fetchJson } from "@/lib/api-client";
 import type { Round1FormInput } from "@/domain/round1";
 import { useSpeechToText, type SttLang } from "./use-speech-to-text";
 
@@ -116,10 +117,9 @@ export function AgentChatPanel({
     setError(null);
 
     try {
-      const response = await fetch("/api/round1/agent", {
+      const response = await fetchJson("/api/round1/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, form, history })
+        body: { message: text, form, history }
       });
 
       if (response.status === 503) {

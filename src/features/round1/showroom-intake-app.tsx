@@ -10,7 +10,7 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
-import { AgentChatPanel } from "./agent-chat-panel";
+import dynamic from "next/dynamic";
 import { ElevationPreview } from "./elevations/elevation-preview";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import Link from "next/link";
@@ -61,6 +61,21 @@ import { Round1WorkspaceShell } from "./round1-workspace-shell";
 import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
+
+// The AI assistant drawer is opened on demand, so its bundle (chat UI + speech
+// recognition + motion) is code-split out of the initial Round 1 load.
+const AgentChatPanel = dynamic(
+  () => import("./agent-chat-panel").then((m) => m.AgentChatPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        <MorphingSquare message="Loading assistant…" />
+      </div>
+    )
+  }
+);
 
 // Stable no-op for the read-only reference render (it never drags positions),
 // so the memoized LayoutPreview there isn't re-rendered by a fresh closure.
@@ -302,17 +317,16 @@ export function ShowroomIntakeApp({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/projects/${projectId}/round1/state`, {
+        const response = await fetchJson(`/api/projects/${projectId}/round1/state`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             showroomForm: next,
             positionOverrides,
             fixedPositionsConfirmed,
             cabinetFillGenerated,
             currentStep: step,
             maxAccessibleStep
-          }),
+          },
           signal: controller.signal
         });
         if (!response.ok) {
@@ -345,23 +359,21 @@ export function ShowroomIntakeApp({
       // authoritative snapshot back by project id and never trusts client-posted
       // plan data for rendering.
       projectIdRef.current = projectId;
-      const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+      const savedState = await fetchJson(`/api/projects/${projectId}/round1/state`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           showroomForm: snap.showroomForm,
           positionOverrides: snap.positionOverrides,
           fixedPositionsConfirmed: true,
           cabinetFillGenerated: true,
           currentStep: step,
           maxAccessibleStep
-        })
+        }
       });
       if (!savedState.ok) throw new Error("Unable to save Round 1 state");
-      const saved = await fetch(`/api/projects/${projectId}/round1/snapshot`, {
+      const saved = await fetchJson(`/api/projects/${projectId}/round1/snapshot`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(snap)
+        body: snap
       });
       if (!saved.ok) throw new Error("Unable to save snapshot");
       setPersistState("saved");
@@ -481,10 +493,9 @@ export function ShowroomIntakeApp({
     options?: { signal?: AbortSignal; keepalive?: boolean }
   ) => {
     if (!projectId) return;
-    const response = await fetch(`/api/projects/${projectId}/round1/state`, {
+    const response = await fetchJson(`/api/projects/${projectId}/round1/state`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: payload,
       signal: options?.signal,
       keepalive: options?.keepalive
     });
@@ -596,17 +607,16 @@ export function ShowroomIntakeApp({
       // Persist the latest finish selection BEFORE rendering: the rendering route
       // builds the prompt from the saved server state, so an unsaved color would
       // otherwise render with the previously-saved finish.
-      const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+      const savedState = await fetchJson(`/api/projects/${projectId}/round1/state`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           showroomForm: form,
           positionOverrides,
           fixedPositionsConfirmed,
           cabinetFillGenerated,
           currentStep: step,
           maxAccessibleStep
-        })
+        }
       });
       if (!savedState.ok) {
         throw new Error("Couldn't save your color selection. Please try again.");
@@ -629,12 +639,11 @@ export function ShowroomIntakeApp({
           // Best-effort: fall back to the text prompt if the swatch can't rasterize.
         }
       }
-      const response = await fetch(
+      const response = await fetchJson(
         `/api/projects/${projectId}/round1/renderings`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ referenceImagesBase64 }),
+          body: { referenceImagesBase64 },
           // Recover the UI if the whole request stalls (the server also caps the
           // upstream image call), instead of spinning on "Generating..." forever.
           signal: AbortSignal.timeout(120_000)

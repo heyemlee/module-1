@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fetchJson } from "@/lib/api-client";
 
 export function userStatusEndpoint(userId: string) {
   return `/api/admin/users/${encodeURIComponent(userId)}/status`;
@@ -25,10 +26,9 @@ export function UserStatusAction({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(userStatusEndpoint(userId), {
+      const response = await fetchJson(userStatusEndpoint(userId), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ disabled: !disabled })
+        body: { disabled: !disabled }
       });
       if (!response.ok) {
         setError("Unable to update");

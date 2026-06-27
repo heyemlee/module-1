@@ -6,6 +6,7 @@ import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { CabinetColorForm, buildCabinetColorPayload } from "./cabinet-color-form";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
 
 const TABS = [
   { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
@@ -83,20 +84,17 @@ export function CabinetColorsManager({ colors }: { colors: CabinetColor[] }) {
       const requests = dirtyIds.map((id) => {
         const color = colors.find((c) => c.id === id)!;
         const draft = drafts[id];
-        return fetch(`/api/admin/cabinet-colors/${encodeURIComponent(id)}`, {
+        return fetchJson(`/api/admin/cabinet-colors/${encodeURIComponent(id)}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            buildCabinetColorPayload({
-              cabinetStyle: draft.cabinetStyle,
-              name: draft.name,
-              promptDescription: draft.promptDescription,
-              swatchImageUrl: draft.swatchData,
-              hoverExampleImageUrl: draft.hoverData,
-              active: draft.active,
-              sortOrder: color.sortOrder
-            })
-          )
+          body: buildCabinetColorPayload({
+            cabinetStyle: draft.cabinetStyle,
+            name: draft.name,
+            promptDescription: draft.promptDescription,
+            swatchImageUrl: draft.swatchData,
+            hoverExampleImageUrl: draft.hoverData,
+            active: draft.active,
+            sortOrder: color.sortOrder
+          })
         });
       });
       const results = await Promise.allSettled(requests);
