@@ -1,7 +1,5 @@
 "use client";
 
-import gsap from "gsap";
-import { useGSAP } from "@gsap/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   generatePreliminaryCabinetList,
@@ -12,7 +10,7 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
-import { AgentChatPanel } from "./agent-chat-panel";
+import dynamic from "next/dynamic";
 import { ElevationPreview } from "./elevations/elevation-preview";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import Link from "next/link";
@@ -63,8 +61,25 @@ import { Round1WorkspaceShell } from "./round1-workspace-shell";
 import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
 
-gsap.registerPlugin(useGSAP);
+// The AI assistant drawer is opened on demand, so its bundle (chat UI + speech
+// recognition + motion) is code-split out of the initial Round 1 load.
+const AgentChatPanel = dynamic(
+  () => import("./agent-chat-panel").then((m) => m.AgentChatPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        <MorphingSquare message="Loading assistant…" />
+      </div>
+    )
+  }
+);
+
+// Stable no-op for the read-only reference render (it never drags positions),
+// so the memoized LayoutPreview there isn't re-rendered by a fresh closure.
+const NOOP_POSITION_OVERRIDES: Dispatch<SetStateAction<PositionOverrides>> = () => {};
 
 export const SHOWROOM_STEPS = [
   "Room & Openings",
@@ -302,17 +317,16 @@ export function ShowroomIntakeApp({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/projects/${projectId}/round1/state`, {
+        const response = await fetchJson(`/api/projects/${projectId}/round1/state`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             showroomForm: next,
             positionOverrides,
             fixedPositionsConfirmed,
             cabinetFillGenerated,
             currentStep: step,
             maxAccessibleStep
-          }),
+          },
           signal: controller.signal
         });
         if (!response.ok) {
@@ -345,23 +359,21 @@ export function ShowroomIntakeApp({
       // authoritative snapshot back by project id and never trusts client-posted
       // plan data for rendering.
       projectIdRef.current = projectId;
-      const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+      const savedState = await fetchJson(`/api/projects/${projectId}/round1/state`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           showroomForm: snap.showroomForm,
           positionOverrides: snap.positionOverrides,
           fixedPositionsConfirmed: true,
           cabinetFillGenerated: true,
           currentStep: step,
           maxAccessibleStep
-        })
+        }
       });
       if (!savedState.ok) throw new Error("Unable to save Round 1 state");
-      const saved = await fetch(`/api/projects/${projectId}/round1/snapshot`, {
+      const saved = await fetchJson(`/api/projects/${projectId}/round1/snapshot`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(snap)
+        body: snap
       });
       if (!saved.ok) throw new Error("Unable to save snapshot");
       setPersistState("saved");
@@ -481,10 +493,9 @@ export function ShowroomIntakeApp({
     options?: { signal?: AbortSignal; keepalive?: boolean }
   ) => {
     if (!projectId) return;
-    const response = await fetch(`/api/projects/${projectId}/round1/state`, {
+    const response = await fetchJson(`/api/projects/${projectId}/round1/state`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: payload,
       signal: options?.signal,
       keepalive: options?.keepalive
     });
@@ -527,12 +538,18 @@ export function ShowroomIntakeApp({
       if (!payload || !draftDirtyRef.current) return;
       void saveDraftPayload(payload, { keepalive: true }).catch(() => {});
     };
+    // visibilitychange fires on both hide and show; only the hide transition is
+    // a "leaving" moment worth a keepalive write. Returning to the tab doesn't
+    // need one — the debounced save already covers ongoing edits.
+    const flushIfHidden = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
     window.addEventListener("pagehide", flushDraft);
-    window.addEventListener("visibilitychange", flushDraft);
+    window.addEventListener("visibilitychange", flushIfHidden);
     return () => {
       flushDraft();
       window.removeEventListener("pagehide", flushDraft);
-      window.removeEventListener("visibilitychange", flushDraft);
+      window.removeEventListener("visibilitychange", flushIfHidden);
     };
   }, [projectId, saveDraftPayload]);
 
@@ -590,17 +607,16 @@ export function ShowroomIntakeApp({
       // Persist the latest finish selection BEFORE rendering: the rendering route
       // builds the prompt from the saved server state, so an unsaved color would
       // otherwise render with the previously-saved finish.
-      const savedState = await fetch(`/api/projects/${projectId}/round1/state`, {
+      const savedState = await fetchJson(`/api/projects/${projectId}/round1/state`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           showroomForm: form,
           positionOverrides,
           fixedPositionsConfirmed,
           cabinetFillGenerated,
           currentStep: step,
           maxAccessibleStep
-        })
+        }
       });
       if (!savedState.ok) {
         throw new Error("Couldn't save your color selection. Please try again.");
@@ -623,12 +639,11 @@ export function ShowroomIntakeApp({
           // Best-effort: fall back to the text prompt if the swatch can't rasterize.
         }
       }
-      const response = await fetch(
+      const response = await fetchJson(
         `/api/projects/${projectId}/round1/renderings`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ referenceImagesBase64 }),
+          body: { referenceImagesBase64 },
           // Recover the UI if the whole request stalls (the server also caps the
           // upstream image call), instead of spinning on "Generating..." forever.
           signal: AbortSignal.timeout(120_000)
@@ -754,8 +769,13 @@ export function ShowroomIntakeApp({
         if (!renderRes.ok || cancelled || localSessionChangedRef.current) return;
         const rJson = await renderRes.json();
         if (rJson.renderings && Array.isArray(rJson.renderings)) {
+          type RenderingApiItem = {
+            id: string;
+            imageBase64: string;
+            basedOnRenderingPreferences?: { doorColorId?: string | null } | null;
+          };
           setRenderings(
-            rJson.renderings.map((r: any) => ({
+            (rJson.renderings as RenderingApiItem[]).map((r) => ({
               id: r.id,
               url: `data:image/png;base64,${r.imageBase64}`,
               doorColorId: r.basedOnRenderingPreferences?.doorColorId || null
@@ -809,26 +829,36 @@ export function ShowroomIntakeApp({
     setStep(index);
   }, [maxAccessibleStep]);
 
-  useGSAP(() => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Step-entrance stagger (replaces a one-off GSAP timeline). Uses the native
+  // Web Animations API so we don't ship an animation library for a single effect.
+  useEffect(() => {
     if (reduceMotion) return;
-    gsap.fromTo(
-      ".round1-animate",
-      { autoAlpha: 0, y: 14 },
-      {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.42,
-        ease: "power2.out",
-        stagger: 0.04
-      }
+    const root = shellRef.current;
+    if (!root) return;
+    const animations = Array.from(
+      root.querySelectorAll<HTMLElement>(".round1-animate")
+    ).map((el, i) =>
+      el.animate(
+        [
+          { opacity: 0, transform: "translateY(14px)" },
+          { opacity: 1, transform: "translateY(0)" }
+        ],
+        {
+          duration: 420,
+          delay: i * 40,
+          easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          fill: "backwards"
+        }
+      )
     );
-  }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
+    return () => animations.forEach((animation) => animation.cancel());
+  }, [step, reduceMotion]);
 
   // Must stay above the early return below — hooks can't sit after a conditional return.
+  const elevationFloorPlan = snapshot?.floorPlan ?? null;
   const elevationScenes = useMemo(
-    () => (snapshot ? buildElevationScene(snapshot.floorPlan) : []),
-    [snapshot]
+    () => (elevationFloorPlan ? buildElevationScene(elevationFloorPlan) : []),
+    [elevationFloorPlan]
   );
 
   if (!draftLoaded) {
@@ -1194,7 +1224,7 @@ export function ShowroomIntakeApp({
             cabinets={snapshot.preliminaryCabinets.cabinets}
             confirmationItems={snapshot.confirmationItems}
             positionOverrides={snapshot.positionOverrides}
-            onPositionOverridesChange={() => {}}
+            onPositionOverridesChange={NOOP_POSITION_OVERRIDES}
             highlightDraggableItems={false}
             showPositionObjects
             svgRef={referenceTopDownRef}

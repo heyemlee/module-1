@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UserRole } from "@/server/platform/types";
+import { fetchJson } from "@/lib/api-client";
 
 const ROLES: UserRole[] = ["SALES", "DESIGNER", "ADMIN"];
 
@@ -36,15 +37,14 @@ export function CreateUserForm({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/users", {
+      const response = await fetchJson("/api/admin/users", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           account: account.trim(),
           role,
           password,
           monthlyRenderQuota: parseInt(monthlyRenderQuota, 10)
-        })
+        }
       });
       if (!response.ok) {
         setError(

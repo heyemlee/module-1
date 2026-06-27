@@ -2,8 +2,29 @@
 
 import * as React from "react"
 import { useState, useEffect, useRef } from "react";
-import { Mic, Send } from "lucide-react";
 import { AnimatePresence, motion, type Variants } from "motion/react";
+
+// Inline icons (was lucide-react: Mic, Send) — two glyphs don't justify a dep.
+function MicIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" x2="12" y1="19" y2="22" />
+    </svg>
+  );
+}
+
+function SendIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
+  );
+}
 
 // Cycling example prompts shown in the empty input (kitchen-intake, bilingual).
 const PLACEHOLDERS = [
@@ -48,17 +69,23 @@ const AIChatInput = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputValue = value;
 
-  // Cycle placeholder text when input is inactive and empty.
+  // Cycle placeholder text when input is inactive and empty. Relaxed cadence +
+  // paused while the tab is hidden to avoid needless background re-renders.
   useEffect(() => {
     if (isActive || inputValue) return;
+    let swapTimeout: ReturnType<typeof setTimeout> | undefined;
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       setShowPlaceholder(false);
-      setTimeout(() => {
+      swapTimeout = setTimeout(() => {
         setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
         setShowPlaceholder(true);
       }, 400);
-    }, 3000);
-    return () => clearInterval(interval);
+    }, 6000);
+    return () => {
+      clearInterval(interval);
+      if (swapTimeout) clearTimeout(swapTimeout);
+    };
   }, [isActive, inputValue]);
 
   // Deactivate (resume the cycling placeholder) when clicking outside, if empty.
@@ -159,7 +186,7 @@ const AIChatInput = ({
             : "text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
         }`}
       >
-        <Mic size={18} />
+        <MicIcon size={18} />
       </button>
       <button
         type="button"
@@ -169,7 +196,7 @@ const AIChatInput = ({
         title="Send"
         className="studio-cta shrink-0 rounded-[12px] p-2.5 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Send size={16} />
+        <SendIcon size={16} />
       </button>
     </div>
   );

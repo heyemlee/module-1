@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fetchJson } from "@/lib/api-client";
 
 export function userQuotaEndpoint(userId: string) {
   return `/api/admin/users/${encodeURIComponent(userId)}/quota`;
@@ -43,10 +44,9 @@ export function UserQuotaAction({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(userQuotaEndpoint(userId), {
+      const response = await fetchJson(userQuotaEndpoint(userId), {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quota: parsed })
+        body: { quota: parsed }
       });
       if (!response.ok) {
         setError("Unable to update quota");

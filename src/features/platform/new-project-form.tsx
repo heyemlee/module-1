@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthUser } from "@/server/platform/types";
+import { fetchJson } from "@/lib/api-client";
 
 const LABEL =
   "mb-[7px] block font-mono text-[9.5px] tracking-[0.12em] text-[#86867f]";
@@ -42,10 +43,9 @@ export function NewProjectForm({ user: _user }: { user: AuthUser }) {
     if (customerAddress.trim()) body.customerAddress = customerAddress.trim();
 
     try {
-      const response = await fetch("/api/projects", {
+      const response = await fetchJson("/api/projects", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body
       });
       if (!response.ok) {
         setError(

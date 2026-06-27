@@ -844,7 +844,7 @@ function placeAppliances(
   // --- Fixed-wall appliances (explicit relation or drag override) ---
   let sinkFallbackWall: Wall = relationToWall(fixtures.sink?.relation, "TOP");
   if (sinkUnderWindow) {
-    const windowRelation = (normalized.openings as any)?.windows?.items?.[0]?.relation;
+    const windowRelation = (normalized.openings.windows.items[0] as { relation?: string } | undefined)?.relation;
     sinkFallbackWall = relationToWall(windowRelation, "TOP");
   }
   const sinkWall = overrideWall(ctx.overrides, "sink", sinkFallbackWall, layoutPreference);

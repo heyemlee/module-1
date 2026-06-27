@@ -3,6 +3,7 @@
 import { useState } from "react";
 import SignInForm from "@/components/ui/sign-in-form";
 import { LoginShowpiece } from "./login-showpiece";
+import { fetchJson } from "@/lib/api-client";
 
 export function LoginForm() {
   const [account, setAccount] = useState("");
@@ -16,10 +17,9 @@ export function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetchJson("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account: account.trim(), password })
+        body: { account: account.trim(), password }
       });
       if (!response.ok) {
         setError("Invalid account or password");

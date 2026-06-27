@@ -7,6 +7,7 @@ import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { fetchJson } from "@/lib/api-client";
 
 const STYLES = [
   { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
@@ -178,10 +179,9 @@ export function CabinetColorForm({
         ? `/api/admin/cabinet-colors/${encodeURIComponent(color.id)}`
         : `/api/admin/cabinet-colors`;
 
-      const res = await fetch(url, {
+      const res = await fetchJson(url, {
         method: color ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: payload
       });
 
       if (!res.ok) {

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { memo, useMemo, useState, useRef, useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { Cabinet, ConfirmationItem, Round1Normalized } from "@/domain/round1";
 import {
   allowedDragWallsForLayout,
@@ -11,6 +11,7 @@ import {
   type PositionOverride,
   type Wall
 } from "./floorplan/plan-geometry";
+import { CABINET_FILL } from "./floorplan/palette";
 import {
   Corner,
   Island,
@@ -77,7 +78,7 @@ const UNLABELED_APPLIANCE_KEYS = new Set([
   "wallOven"
 ]);
 
-export function LayoutPreview({
+function LayoutPreviewImpl({
   normalized,
   cabinets,
   confirmationItems,
@@ -145,10 +146,16 @@ export function LayoutPreview({
     return null;
   });
   const dragTimeoutRef = useRef<number | null>(null);
+  // Drag commits are coalesced to one per animation frame: pointermove can fire
+  // faster than the display refreshes (high-poll mice), and every commit re-runs
+  // the full floor-plan geometry + SVG render, so we throttle to rAF.
+  const moveRafRef = useRef<number | null>(null);
+  const pendingMoveRef = useRef<{ id: string; override: PositionOverride } | null>(null);
 
-  // Clear timeout on unmount
+  // Clear timeout + any queued frame on unmount
   useEffect(() => () => {
     if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
+    if (moveRafRef.current !== null) cancelAnimationFrame(moveRafRef.current);
   }, []);
 
   const handlePointerDown = useCallback((id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => {
@@ -182,7 +189,19 @@ export function LayoutPreview({
       : overrideFromPointer(plan, dragInfo.id, pt, dragInfo.axisOffset);
     const nextPositionIsValid = isPositionValid(plan, dragInfo.id, nextOverride);
     setDragState(nextPositionIsValid ? "dragging" : "invalid");
-    onPositionOverridesChange((prev) => ({ ...prev, [dragInfo.id]: nextOverride }));
+    // Coalesce the (expensive) position commit to one per frame; the validity
+    // visual above stays synchronous so feedback still tracks the pointer.
+    pendingMoveRef.current = { id: dragInfo.id, override: nextOverride };
+    if (moveRafRef.current === null) {
+      moveRafRef.current = requestAnimationFrame(() => {
+        moveRafRef.current = null;
+        const pending = pendingMoveRef.current;
+        pendingMoveRef.current = null;
+        if (pending) {
+          onPositionOverridesChange((prev) => ({ ...prev, [pending.id]: pending.override }));
+        }
+      });
+    }
   }, [dragInfo, enablePositionDragging, getSvgPoint, onPositionOverridesChange, plan]);
 
   const handleIslandPointerDown = useCallback((e: React.PointerEvent) => {
@@ -211,6 +230,17 @@ export function LayoutPreview({
       try {
         (e.target as Element).releasePointerCapture(e.pointerId);
       } catch (err) {}
+      // Commit the final position immediately and drop any frame still queued,
+      // so the drop lands exactly where the pointer was released.
+      if (moveRafRef.current !== null) {
+        cancelAnimationFrame(moveRafRef.current);
+        moveRafRef.current = null;
+      }
+      const pending = pendingMoveRef.current;
+      pendingMoveRef.current = null;
+      if (pending) {
+        onPositionOverridesChange((prev) => ({ ...prev, [pending.id]: pending.override }));
+      }
       if (dragState === "invalid") {
         setDragState("invalid");
         dragTimeoutRef.current = window.setTimeout(() => setDragState("idle"), 180);
@@ -220,7 +250,7 @@ export function LayoutPreview({
       }
       setDragInfo(null);
     }
-  }, [dragInfo, dragState]);
+  }, [dragInfo, dragState, onPositionOverridesChange]);
 
   // Surface the dragged/hovered object's name to the host (rendered as a pill
   // by the toolbar) so it no longer floats over the plan inside the SVG.
@@ -465,6 +495,11 @@ export function LayoutPreview({
   );
 }
 
+// Memoized so unrelated parent re-renders (draft-save status, rendering
+// progress, assistant drawer, …) don't re-run this large SVG tree. Props from
+// the host are referentially stable (memoized derives + stable callbacks/refs).
+export const LayoutPreview = memo(LayoutPreviewImpl);
+
 const PREVIEW_STAGE_ORDER: Record<PreviewStage, number> = {
   room: 0,
   openings: 1,
@@ -485,8 +520,8 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
   const { x, y, w, h, thickness } = plan.room;
   const inset = thickness + 6;
   const guideDepth = 22;
-  const color = "#ececea";
-  const stroke = "#1a1a1c";
+  const color = CABINET_FILL;
+  const stroke = INK;
 
   const wallRects: Record<Wall, PlanRect> = {
     TOP: {
@@ -580,8 +615,8 @@ function IslandGuide({
         width={rect.w}
         height={rect.h}
         rx="5"
-        fill="#ececea"
-        stroke="#1a1a1c"
+        fill={CABINET_FILL}
+        stroke={INK}
         strokeWidth="1.5"
         strokeDasharray={dragging ? undefined : "7 5"}
         opacity={dragging ? 1 : 0.95}

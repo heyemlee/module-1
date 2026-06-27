@@ -36,7 +36,6 @@ function contrastRatio(foreground: string, background: string) {
 
 const migratedUiFiles = [
   "src/components/ui/ai-chat-input.tsx",
-  "src/components/ui/cabinet-construction-style-picker.tsx",
   "src/components/ui/input.tsx",
   "src/features/platform/platform-header.tsx",
   "src/features/platform/studio-shell.tsx",
