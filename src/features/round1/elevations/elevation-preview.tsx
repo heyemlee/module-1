@@ -6,6 +6,7 @@ import {
   type ElevationItem,
   type WallElevationScene
 } from "./elevation-scene";
+import { CABINET_FILL as FILL_CABINET } from "../floorplan/palette";
 
 type ElevationPreviewProps = {
   plan: FloorPlan;
@@ -20,7 +21,6 @@ const INK = "#1a1a1c"; // studio-ink — outlines, countertop & floor datum
 const MUTED = "#6a6a64"; // studio-muted — the "not for production" stamp
 const GUIDE = "#d0d0cc"; // warm guide rails (was cool slate #cbd5e1)
 const OPENING = "#b25a00"; // studio-warning amber — window/door accent (was #c56a16)
-const FILL_CABINET = "#ececea"; // cabinet body fill — matches the plan view
 const FILL_OPENING = "#f2f1ef"; // recessed opening fill (was cool #f5f5f7)
 const PANEL_COLUMNS = 2;
 const PANEL_GAP_X = 28;

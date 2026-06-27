@@ -11,6 +11,7 @@ import {
   type PositionOverride,
   type Wall
 } from "./floorplan/plan-geometry";
+import { CABINET_FILL } from "./floorplan/palette";
 import {
   Corner,
   Island,
@@ -485,8 +486,8 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
   const { x, y, w, h, thickness } = plan.room;
   const inset = thickness + 6;
   const guideDepth = 22;
-  const color = "#ececea";
-  const stroke = "#1a1a1c";
+  const color = CABINET_FILL;
+  const stroke = INK;
 
   const wallRects: Record<Wall, PlanRect> = {
     TOP: {
@@ -580,8 +581,8 @@ function IslandGuide({
         width={rect.w}
         height={rect.h}
         rx="5"
-        fill="#ececea"
-        stroke="#1a1a1c"
+        fill={CABINET_FILL}
+        stroke={INK}
         strokeWidth="1.5"
         strokeDasharray={dragging ? undefined : "7 5"}
         opacity={dragging ? 1 : 0.95}

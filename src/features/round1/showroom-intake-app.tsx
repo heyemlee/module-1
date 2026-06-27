@@ -1,7 +1,5 @@
 "use client";
 
-import gsap from "gsap";
-import { useGSAP } from "@gsap/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   generatePreliminaryCabinetList,
@@ -63,8 +61,6 @@ import { Round1WorkspaceShell } from "./round1-workspace-shell";
 import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { cn } from "@/lib/utils";
-
-gsap.registerPlugin(useGSAP);
 
 export const SHOWROOM_STEPS = [
   "Room & Openings",
@@ -754,8 +750,13 @@ export function ShowroomIntakeApp({
         if (!renderRes.ok || cancelled || localSessionChangedRef.current) return;
         const rJson = await renderRes.json();
         if (rJson.renderings && Array.isArray(rJson.renderings)) {
+          type RenderingApiItem = {
+            id: string;
+            imageBase64: string;
+            basedOnRenderingPreferences?: { doorColorId?: string | null } | null;
+          };
           setRenderings(
-            rJson.renderings.map((r: any) => ({
+            (rJson.renderings as RenderingApiItem[]).map((r) => ({
               id: r.id,
               url: `data:image/png;base64,${r.imageBase64}`,
               doorColorId: r.basedOnRenderingPreferences?.doorColorId || null
@@ -809,26 +810,36 @@ export function ShowroomIntakeApp({
     setStep(index);
   }, [maxAccessibleStep]);
 
-  useGSAP(() => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Step-entrance stagger (replaces a one-off GSAP timeline). Uses the native
+  // Web Animations API so we don't ship an animation library for a single effect.
+  useEffect(() => {
     if (reduceMotion) return;
-    gsap.fromTo(
-      ".round1-animate",
-      { autoAlpha: 0, y: 14 },
-      {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.42,
-        ease: "power2.out",
-        stagger: 0.04
-      }
+    const root = shellRef.current;
+    if (!root) return;
+    const animations = Array.from(
+      root.querySelectorAll<HTMLElement>(".round1-animate")
+    ).map((el, i) =>
+      el.animate(
+        [
+          { opacity: 0, transform: "translateY(14px)" },
+          { opacity: 1, transform: "translateY(0)" }
+        ],
+        {
+          duration: 420,
+          delay: i * 40,
+          easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          fill: "backwards"
+        }
+      )
     );
-  }, { scope: shellRef, dependencies: [step], revertOnUpdate: true });
+    return () => animations.forEach((animation) => animation.cancel());
+  }, [step, reduceMotion]);
 
   // Must stay above the early return below — hooks can't sit after a conditional return.
+  const elevationFloorPlan = snapshot?.floorPlan ?? null;
   const elevationScenes = useMemo(
-    () => (snapshot ? buildElevationScene(snapshot.floorPlan) : []),
-    [snapshot]
+    () => (elevationFloorPlan ? buildElevationScene(elevationFloorPlan) : []),
+    [elevationFloorPlan]
   );
 
   if (!draftLoaded) {
