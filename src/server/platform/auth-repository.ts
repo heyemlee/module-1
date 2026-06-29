@@ -28,10 +28,18 @@ function mapUser(row: Omit<UserRow, "password_hash">): AuthUser {
 }
 
 export async function findUserForLogin(identifier: string) {
+  // deleted_at IS NULL: a soft-deleted account must not be able to log back in.
+  // Deletion only sets deleted_at and clears existing sessions; without this
+  // filter findUserForLogin would still resolve the row and mint a fresh session,
+  // and the user would stay invisible in admin (listCompanyUsers excludes
+  // deleted_at). The identifier predicates are parenthesised so the AND applies
+  // to both branches — otherwise OR binds looser and a delete-by-account match
+  // would slip through.
   const result = await query<UserRow>(
     `SELECT id, company_id, account, email, name, password_hash, role, disabled_at, monthly_render_quota
      FROM users
-     WHERE lower(account) = lower($1) OR lower(email) = lower($1)
+     WHERE (lower(account) = lower($1) OR lower(email) = lower($1))
+       AND deleted_at IS NULL
      LIMIT 1`,
     [identifier]
   );
@@ -73,6 +81,7 @@ export async function getUserBySession(sessionId: string) {
      FROM sessions
      JOIN users ON users.id = sessions.user_id
      WHERE sessions.id = $1 AND sessions.expires_at > now()
+       AND users.deleted_at IS NULL
      LIMIT 1`,
     [sessionId]
   );
