@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { memo, useMemo, useState, useRef, useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { Cabinet, ConfirmationItem, Round1Normalized } from "@/domain/round1";
 import {
   allowedDragWallsForLayout,
@@ -11,6 +11,7 @@ import {
   type PositionOverride,
   type Wall
 } from "./floorplan/plan-geometry";
+import { CABINET_FILL } from "./floorplan/palette";
 import {
   Corner,
   Island,
@@ -50,14 +51,20 @@ type LayoutPreviewProps = {
    */
   referenceMode?: boolean;
   showHeader?: boolean;
+  /**
+   * Reports the label of the object currently dragged/hovered on the plan (or
+   * null). Lets the host render the info pill outside the SVG (e.g. by the
+   * toolbar) instead of floating it over the plan.
+   */
+  onActiveLabelChange?: (label: string | null) => void;
 };
 
 type PreviewStage = "room" | "openings" | "layout" | "appliances" | "adjust";
 
 type DragState = "idle" | "dragging" | "snapping" | "invalid";
 
-const INK = "#1f2937";
-const LINE = "#334155";
+const INK = "#1a1a1c";
+const LINE = "#3c3c3a";
 const UNLABELED_APPLIANCE_SYMBOLS = new Set([
   "range",
   "sink",
@@ -71,7 +78,7 @@ const UNLABELED_APPLIANCE_KEYS = new Set([
   "wallOven"
 ]);
 
-export function LayoutPreview({
+function LayoutPreviewImpl({
   normalized,
   cabinets,
   confirmationItems,
@@ -83,9 +90,11 @@ export function LayoutPreview({
   plan: planProp,
   previewStage,
   referenceMode = false,
-  showHeader = true
+  showHeader = true,
+  onActiveLabelChange
 }: LayoutPreviewProps) {
   const [showMep, setShowMep] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const internalSvgRef = useRef<SVGSVGElement>(null);
   const svgRef = externalSvgRef ?? internalSvgRef;
@@ -123,6 +132,10 @@ export function LayoutPreview({
     startVal: number;
     startSvgPt: { x: number, y: number };
     axisOffset: number;
+    // Free 2D drag (island): offset from the pointer to the object's top-left.
+    free?: boolean;
+    offsetX?: number;
+    offsetY?: number;
   };
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [dragState, setDragState] = useState<DragState>("idle");
@@ -133,10 +146,16 @@ export function LayoutPreview({
     return null;
   });
   const dragTimeoutRef = useRef<number | null>(null);
+  // Drag commits are coalesced to one per animation frame: pointermove can fire
+  // faster than the display refreshes (high-poll mice), and every commit re-runs
+  // the full floor-plan geometry + SVG render, so we throttle to rAF.
+  const moveRafRef = useRef<number | null>(null);
+  const pendingMoveRef = useRef<{ id: string; override: PositionOverride } | null>(null);
 
-  // Clear timeout on unmount
+  // Clear timeout + any queued frame on unmount
   useEffect(() => () => {
     if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
+    if (moveRafRef.current !== null) cancelAnimationFrame(moveRafRef.current);
   }, []);
 
   const handlePointerDown = useCallback((id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => {
@@ -157,19 +176,71 @@ export function LayoutPreview({
   }, [getSvgPoint]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragInfo) return;
+    if (!dragInfo) {
+      if (enablePositionDragging) {
+        const el = (e.target as Element).closest?.("[data-position-object]");
+        setHoveredId(el ? el.getAttribute("data-position-object") : null);
+      }
+      return;
+    }
     const pt = getSvgPoint(e.clientX, e.clientY);
-    const nextOverride = overrideFromPointer(plan, dragInfo.id, pt, dragInfo.axisOffset);
+    const nextOverride: PositionOverride = dragInfo.free
+      ? { x: pt.x - (dragInfo.offsetX ?? 0), y: pt.y - (dragInfo.offsetY ?? 0) }
+      : overrideFromPointer(plan, dragInfo.id, pt, dragInfo.axisOffset);
     const nextPositionIsValid = isPositionValid(plan, dragInfo.id, nextOverride);
     setDragState(nextPositionIsValid ? "dragging" : "invalid");
-    onPositionOverridesChange((prev) => ({ ...prev, [dragInfo.id]: nextOverride }));
-  }, [dragInfo, getSvgPoint, onPositionOverridesChange, plan]);
+    // Coalesce the (expensive) position commit to one per frame; the validity
+    // visual above stays synchronous so feedback still tracks the pointer.
+    pendingMoveRef.current = { id: dragInfo.id, override: nextOverride };
+    if (moveRafRef.current === null) {
+      moveRafRef.current = requestAnimationFrame(() => {
+        moveRafRef.current = null;
+        const pending = pendingMoveRef.current;
+        pendingMoveRef.current = null;
+        if (pending) {
+          onPositionOverridesChange((prev) => ({ ...prev, [pending.id]: pending.override }));
+        }
+      });
+    }
+  }, [dragInfo, enablePositionDragging, getSvgPoint, onPositionOverridesChange, plan]);
+
+  const handleIslandPointerDown = useCallback((e: React.PointerEvent) => {
+    if (!plan.island) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    const pt = getSvgPoint(e.clientX, e.clientY);
+    setDragInfo({
+      id: "island",
+      free: true,
+      offsetX: pt.x - plan.island.x,
+      offsetY: pt.y - plan.island.y,
+      startVal: 0,
+      startSvgPt: pt,
+      axisOffset: 0
+    });
+    setSelectedPositionId("island");
+    setDragState("dragging");
+    if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
+  }, [getSvgPoint, plan.island]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    setHoveredId(null);
     if (dragInfo) {
       try {
         (e.target as Element).releasePointerCapture(e.pointerId);
       } catch (err) {}
+      // Commit the final position immediately and drop any frame still queued,
+      // so the drop lands exactly where the pointer was released.
+      if (moveRafRef.current !== null) {
+        cancelAnimationFrame(moveRafRef.current);
+        moveRafRef.current = null;
+      }
+      const pending = pendingMoveRef.current;
+      pendingMoveRef.current = null;
+      if (pending) {
+        onPositionOverridesChange((prev) => ({ ...prev, [pending.id]: pending.override }));
+      }
       if (dragState === "invalid") {
         setDragState("invalid");
         dragTimeoutRef.current = window.setTimeout(() => setDragState("idle"), 180);
@@ -179,7 +250,24 @@ export function LayoutPreview({
       }
       setDragInfo(null);
     }
-  }, [dragInfo, dragState]);
+  }, [dragInfo, dragState, onPositionOverridesChange]);
+
+  // Surface the dragged/hovered object's name to the host (rendered as a pill
+  // by the toolbar) so it no longer floats over the plan inside the SVG.
+  const activeObjectId = dragInfo?.id ?? hoveredId;
+  const activeObjectLabel =
+    activeObjectId === "window"
+      ? "Window"
+      : activeObjectId === "door"
+        ? "Door"
+        : activeObjectId === "island"
+          ? "Island"
+          : (activeObjectId
+              ? plan.appliances.find((a) => a.key === activeObjectId)?.label
+              : null) ?? null;
+  useEffect(() => {
+    onActiveLabelChange?.(activeObjectLabel);
+  }, [activeObjectLabel, onActiveLabelChange]);
 
   const moveSelected = useCallback((id: string, delta: number) => {
     const obj = plan.appliances.find(a => a.key === id) || 
@@ -206,7 +294,7 @@ export function LayoutPreview({
             <title>Floor Plan</title>
             <style>
               body { margin: 0; padding: 20px; display: flex; justify-content: center; font-family: sans-serif; }
-              svg { max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+              svg { max-width: 100%; height: auto; border: 1px solid #dcdcd8; border-radius: 8px; }
               @media print {
                 @page { margin: 1cm; }
                 body { padding: 0; }
@@ -233,7 +321,9 @@ export function LayoutPreview({
     <section
       data-canvas-theme="studio"
       data-drag-state={dragState}
-      className="relative w-full aspect-[4/3] overflow-hidden bg-studio-shell"
+      className={`relative w-full overflow-hidden ${
+        showHeader ? "aspect-[4/3] bg-studio-shell" : "h-full bg-transparent"
+      }`}
     >
       {showHeader && !referenceMode && (
       <div className="flex items-center justify-between border-b border-studio-paper-line bg-studio-paper px-4 py-3 text-studio-paper-ink">
@@ -279,7 +369,9 @@ export function LayoutPreview({
         viewBox={`0 0 ${plan.canvas.w} ${plan.canvas.h}`}
         aria-label="Kitchen floor plan editor"
         role="img"
-        className="h-full w-full touch-none select-none bg-studio-canvas"
+        className={`h-full w-full touch-none select-none ${
+        showHeader ? "bg-studio-canvas" : "bg-transparent"
+      }`}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
@@ -292,6 +384,17 @@ export function LayoutPreview({
         ))}
 
         {showLayoutGuide && <LayoutGuide plan={plan} />}
+
+        {showLayoutGuide && plan.island && (
+          <IslandGuide
+            rect={plan.island}
+            interactive={enablePositionDragging}
+            dragging={dragInfo?.id === "island"}
+            onPointerDown={
+              enablePositionDragging ? handleIslandPointerDown : undefined
+            }
+          />
+        )}
 
         {showCabinetFill && plan.baseCabinets.map((cabinet, index) => (
           <rect
@@ -392,6 +495,11 @@ export function LayoutPreview({
   );
 }
 
+// Memoized so unrelated parent re-renders (draft-save status, rendering
+// progress, assistant drawer, …) don't re-run this large SVG tree. Props from
+// the host are referentially stable (memoized derives + stable callbacks/refs).
+export const LayoutPreview = memo(LayoutPreviewImpl);
+
 const PREVIEW_STAGE_ORDER: Record<PreviewStage, number> = {
   room: 0,
   openings: 1,
@@ -412,8 +520,8 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
   const { x, y, w, h, thickness } = plan.room;
   const inset = thickness + 6;
   const guideDepth = 22;
-  const color = "#fff0dc";
-  const stroke = "#c56a16";
+  const color = CABINET_FILL;
+  const stroke = INK;
 
   const wallRects: Record<Wall, PlanRect> = {
     TOP: {
@@ -463,20 +571,6 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
           />
         );
       })}
-      {plan.island && (
-        <rect
-          data-layout-guide="island"
-          x={plan.island.x}
-          y={plan.island.y}
-          width={plan.island.w}
-          height={plan.island.h}
-          rx="5"
-          fill="#f8fafc"
-          stroke={stroke}
-          strokeWidth="1.5"
-          strokeDasharray="7 5"
-        />
-      )}
       {plan.layoutPreference === "PENINSULA" && (
         <rect
           data-layout-guide="peninsula"
@@ -485,12 +579,59 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
           width={guideDepth}
           height="96"
           rx="4"
-          fill="#f8fafc"
+          fill="#f3f3f1"
           stroke={stroke}
           strokeWidth="1.5"
           strokeDasharray="7 5"
         />
       )}
+    </g>
+  );
+}
+
+function IslandGuide({
+  rect,
+  interactive,
+  dragging,
+  onPointerDown
+}: {
+  rect: PlanRect;
+  interactive?: boolean;
+  dragging?: boolean;
+  onPointerDown?: (e: React.PointerEvent) => void;
+}) {
+  return (
+    <g
+      data-position-object="island"
+      onPointerDown={onPointerDown}
+      style={{
+        cursor: interactive ? (dragging ? "grabbing" : "grab") : "default",
+        touchAction: "none"
+      }}
+    >
+      <rect
+        x={rect.x}
+        y={rect.y}
+        width={rect.w}
+        height={rect.h}
+        rx="5"
+        fill={CABINET_FILL}
+        stroke={INK}
+        strokeWidth="1.5"
+        strokeDasharray={dragging ? undefined : "7 5"}
+        opacity={dragging ? 1 : 0.95}
+      />
+      <text
+        x={rect.x + rect.w / 2}
+        y={rect.y + rect.h / 2 + 3}
+        textAnchor="middle"
+        fontFamily="'JetBrains Mono', monospace"
+        fontSize="10"
+        fill="#6a6a64"
+        style={{ pointerEvents: "none", userSelect: "none" }}
+      >
+        ISLAND
+      </text>
     </g>
   );
 }
@@ -588,13 +729,6 @@ function Appliance({
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
   const currentVal = isHorizontal ? appliance.x : appliance.y;
   const isHood = appliance.symbol === "hood";
-
-  const tooltipW = Math.max(160, (appliance.label?.length || 0) * 8.5);
-  const tooltipH = 32;
-  const tRectX = canvasWidth ? canvasWidth / 2 - tooltipW / 2 : cx - tooltipW / 2;
-  const tRectY = 12;
-  const tTextX = canvasWidth ? canvasWidth / 2 : cx;
-  const tTextY = tRectY + 21;
 
   // Clean reference: just the body rect + symbol glyph, no chrome, no label.
   if (referenceMode) {
@@ -699,18 +833,10 @@ function Appliance({
       )}
       {interactive && (
       <g className={`opacity-0 ${dragging ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
-        <circle cx={cx - 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
-        <circle cx={cx} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
-        <circle cx={cx + 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#334155" />
+        <circle cx={cx - 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#3c3c3a" />
+        <circle cx={cx} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#3c3c3a" />
+        <circle cx={cx + 6} cy={isHorizontal ? cy + appliance.h/2 - 4 : cy} r="1.5" fill="#3c3c3a" />
       </g>
-      )}
-      {interactive && appliance.label && (
-        <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none drop-shadow-sm" style={{ pointerEvents: 'none' }}>
-          <rect x={tRectX} y={tRectY} width={tooltipW} height={tooltipH} rx="4" fill="#c56a16" />
-          <text x={tTextX} y={tTextY} textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="700" className="pointer-events-none tracking-wide">
-            {appliance.label}
-          </text>
-        </g>
       )}
     </g>
   );
@@ -928,8 +1054,8 @@ function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
     return (
       <g>
         <line x1={back_line_1[0]} y1={back_line_1[1]} x2={back_line_2[0]} y2={back_line_2[1]} stroke={LINE} strokeWidth="1" />
-        <path d={`M ${dl_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#e2e8f0" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
-        <path d={`M ${dr_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#e2e8f0" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
+        <path d={`M ${dl_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#dcdcd8" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
+        <path d={`M ${dr_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#dcdcd8" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
         <line x1={h1_0[0]} y1={h1_0[1]} x2={h1_1[0]} y2={h1_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
         <line x1={h2_0[0]} y1={h2_0[1]} x2={h2_1[0]} y2={h2_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
       </g>
@@ -1095,15 +1221,15 @@ function Openings({
           />
           {plan.window.wall === "TOP" || plan.window.wall === "BOTTOM" ? (
             <g>
-              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y} stroke="#1d1d1f" strokeWidth="1.2" />
-              <line x1={plan.window.x} y1={plan.window.y + plan.window.h / 2} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h / 2} stroke="#1d1d1f" strokeWidth="1.2" />
-              <line x1={plan.window.x} y1={plan.window.y + plan.window.h} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y} stroke="#1a1a1c" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y + plan.window.h / 2} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h / 2} stroke="#1a1a1c" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y + plan.window.h} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1a1a1c" strokeWidth="1.2" />
             </g>
           ) : (
             <g>
-              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
-              <line x1={plan.window.x + plan.window.w / 2} y1={plan.window.y} x2={plan.window.x + plan.window.w / 2} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
-              <line x1={plan.window.x + plan.window.w} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1d1d1f" strokeWidth="1.2" />
+              <line x1={plan.window.x} y1={plan.window.y} x2={plan.window.x} y2={plan.window.y + plan.window.h} stroke="#1a1a1c" strokeWidth="1.2" />
+              <line x1={plan.window.x + plan.window.w / 2} y1={plan.window.y} x2={plan.window.x + plan.window.w / 2} y2={plan.window.y + plan.window.h} stroke="#1a1a1c" strokeWidth="1.2" />
+              <line x1={plan.window.x + plan.window.w} y1={plan.window.y} x2={plan.window.x + plan.window.w} y2={plan.window.y + plan.window.h} stroke="#1a1a1c" strokeWidth="1.2" />
             </g>
           )}
           {!referenceMode && (
@@ -1119,9 +1245,9 @@ function Openings({
           )}
           {!referenceMode && interactive && (
           <g className={`opacity-0 ${draggingId === "window" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
-            <circle cx={plan.window.x + plan.window.w / 2 - 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
-            <circle cx={plan.window.x + plan.window.w / 2} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
-            <circle cx={plan.window.x + plan.window.w / 2 + 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#334155" />
+            <circle cx={plan.window.x + plan.window.w / 2 - 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#3c3c3a" />
+            <circle cx={plan.window.x + plan.window.w / 2} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#3c3c3a" />
+            <circle cx={plan.window.x + plan.window.w / 2 + 6} cy={plan.window.y + plan.window.h / 2} r="1.5" fill="#3c3c3a" />
           </g>
           )}
         </g>
@@ -1181,10 +1307,10 @@ function Openings({
                 width={plan.door.leafRect.w}
                 height={plan.door.leafRect.h}
                 fill="none"
-                stroke="#1d1d1f"
+                stroke="#1a1a1c"
                 strokeWidth="1.5"
               />
-              <path d={plan.door.swingPath} fill="none" stroke="#1d1d1f" strokeWidth="1.2" />
+              <path d={plan.door.swingPath} fill="none" stroke="#1a1a1c" strokeWidth="1.2" />
             </>
           )}
           {!referenceMode && (
@@ -1199,9 +1325,9 @@ function Openings({
           )}
           {!referenceMode && interactive && (
           <g className={`opacity-0 ${draggingId === "door" ? "opacity-100" : "group-hover:opacity-100"} transition-opacity`} pointerEvents="none">
-            <circle cx={plan.door.cx - 6} cy={plan.door.cy} r="1.5" fill="#334155" />
-            <circle cx={plan.door.cx} cy={plan.door.cy} r="1.5" fill="#334155" />
-            <circle cx={plan.door.cx + 6} cy={plan.door.cy} r="1.5" fill="#334155" />
+            <circle cx={plan.door.cx - 6} cy={plan.door.cy} r="1.5" fill="#3c3c3a" />
+            <circle cx={plan.door.cx} cy={plan.door.cy} r="1.5" fill="#3c3c3a" />
+            <circle cx={plan.door.cx + 6} cy={plan.door.cy} r="1.5" fill="#3c3c3a" />
           </g>
           )}
         </g>

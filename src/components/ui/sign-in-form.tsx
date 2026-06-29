@@ -1,10 +1,12 @@
 "use client";
 
-import { type FormEvent, type ReactNode } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { type FormEvent } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+
+const LABEL =
+  "mb-[7px] block font-mono text-[10px] tracking-[0.16em] text-[#86867f]";
+const FIELD =
+  "studio-glass-input w-full rounded-[12px] px-[14px] py-[13px] text-[14.5px] text-[#16161a]";
 
 export default function SignInForm({
   account,
@@ -21,72 +23,115 @@ export default function SignInForm({
   password: string;
   remember: boolean;
   busy: boolean;
-  error: ReactNode;
+  error: string | null;
   onAccountChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onRememberChange: (value: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <form onSubmit={onSubmit}>
-      <div className="rounded-studio-panel border border-studio-line bg-studio-shell p-6 shadow-[var(--studio-shadow-raised)] sm:p-8">
-        <h2 className="text-[26px] font-semibold tracking-[-0.035em]">
-          Sign in
-        </h2>
-        <p className="mt-2 text-[13px] text-studio-muted">
-          Use your ABCabinet account.
+    <form onSubmit={onSubmit} className="mx-auto w-full max-w-[370px]">
+      <div
+        className="w-full rounded-[24px] p-[38px_36px]"
+        style={{
+          background:
+            "linear-gradient(165deg,rgba(255,255,255,0.72),rgba(255,255,255,0.52))",
+          border: "1px solid rgba(255,255,255,0.85)",
+          boxShadow:
+            "0 1px 0 rgba(255,255,255,0.95) inset,0 30px 70px -34px rgba(20,20,26,0.34)",
+          backdropFilter: "blur(24px) saturate(160%)",
+          WebkitBackdropFilter: "blur(24px) saturate(160%)"
+        }}
+      >
+        <p className="mb-[9px] font-mono text-[10.5px] tracking-[0.2em] text-[#86867f]">
+          SIGN IN
         </p>
-        <div className="mt-6 grid gap-5">
-          <div className="grid gap-2">
-            <Label htmlFor="account" className="text-[12px] font-medium text-studio-muted">
-              Account
-            </Label>
-            <Input
-              id="account"
-              type="text"
-              autoComplete="username"
-              placeholder="Enter your account"
-              value={account}
-              onChange={(event) => onAccountChange(event.target.value)}
+        <h2 className="m-0 mb-1 text-[27px] font-semibold tracking-[-0.02em] text-[#16161a]">
+          Welcome back
+        </h2>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 mt-4 flex items-center gap-[9px] rounded-[12px] px-[13px] py-[11px] font-mono text-[12.5px] tracking-[0.02em]"
+            style={{
+              border: "1px solid rgba(176,90,90,0.4)",
+              background: "rgba(214,138,138,0.16)",
+              color: "#8a4444"
+            }}
+          >
+            <span
+              className="size-[6px] shrink-0 rounded-full"
+              style={{ background: "#b05a5a" }}
             />
+            {error}
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password" className="text-[12px] font-medium text-studio-muted">
-              Password
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(event) => onPasswordChange(event.target.value)}
-            />
-          </div>
-        </div>
-        
-        {error && <div className="mt-5">{error}</div>}
+        )}
 
         <div className="mt-5">
-          <label className="flex items-center gap-3">
-            <Checkbox
-              checked={remember}
-              onCheckedChange={onRememberChange}
-            />
-            <span className="text-[13px] font-medium text-studio-ink">
-              Remember me
-            </span>
+          <label htmlFor="account" className={LABEL}>
+            ACCOUNT
           </label>
+          <input
+            id="account"
+            type="text"
+            autoComplete="username"
+            placeholder="mei.lin"
+            value={account}
+            onChange={(event) => onAccountChange(event.target.value)}
+            className={`${FIELD} mb-[15px]`}
+          />
+          <label htmlFor="password" className={LABEL}>
+            PASSWORD
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(event) => onPasswordChange(event.target.value)}
+            className={FIELD}
+          />
         </div>
 
-        <Button
+        {/* ponytail: Remember-me kept by request — not in the handoff markup */}
+        <label className="mt-[18px] flex cursor-pointer items-center gap-[10px]">
+          <Checkbox checked={remember} onCheckedChange={onRememberChange} />
+          <span className="text-[13px] font-medium text-[#16161a]">
+            Remember me
+          </span>
+        </label>
+
+        <button
           type="submit"
           disabled={busy}
-          size="lg"
-          className="mt-6 w-full"
+          onMouseMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            event.currentTarget.style.transform = `translate(${
+              (event.clientX - rect.left - rect.width / 2) * 0.12
+            }px, ${(event.clientY - rect.top - rect.height / 2) * 0.18}px)`;
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.transform = "";
+          }}
+          className="relative mt-[22px] w-full overflow-hidden rounded-[13px] p-[15px] text-[14px] font-semibold tracking-[0.01em] text-white"
+          style={{
+            background: "linear-gradient(180deg,#2c2c30,#141416)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.2),0 14px 30px -12px rgba(20,20,26,0.55)",
+            transition: "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)"
+          }}
         >
-          {busy ? "Signing in..." : "Sign In"}
-        </Button>
+          {busy ? (
+            <span className="inline-flex items-center gap-[10px]">
+              <span className="size-[13px] animate-spin rounded-full border-2 border-white/35 border-t-white" />
+              Authenticating…
+            </span>
+          ) : (
+            <span>Enter Studio →</span>
+          )}
+        </button>
       </div>
     </form>
   );

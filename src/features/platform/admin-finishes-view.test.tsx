@@ -7,51 +7,30 @@ vi.mock("./cabinet-colors-manager", () => ({
   CabinetColorsManager: () => <div data-testid="manager" />
 }));
 
-vi.mock("./cabinet-color-form", () => ({
-  CabinetColorForm: () => <div data-testid="form" />
-}));
-
-const baseFinish: Omit<CabinetColor, "id" | "name" | "active"> = {
-  companyId: "c1",
-  cabinetStyle: "EUROPEAN_FRAMELESS",
-  colorCode: "C1",
-  swatchImageUrl: null,
-  swatchHex: "#fff",
-  hoverExampleImageUrl: null,
-  promptDescription: "A color",
-  sortOrder: 1,
-  createdAt: "",
-  updatedAt: ""
-};
-
 const finishes: CabinetColor[] = [
-  ...Array.from({ length: 12 }).map((_, i) => ({
-    ...baseFinish,
-    id: `c-${i}`,
-    name: `Color ${i}`,
-    active: true
-  })),
   {
-    ...baseFinish,
-    id: "c-hidden",
-    name: "Hidden Color",
-    active: false
+    id: "c-1",
+    companyId: "c1",
+    cabinetStyle: "EUROPEAN_FRAMELESS",
+    name: "Color 1",
+    colorCode: "C1",
+    swatchImageUrl: null,
+    swatchHex: "#fff",
+    hoverExampleImageUrl: null,
+    promptDescription: "A color",
+    active: true,
+    sortOrder: 1,
+    createdAt: "",
+    updatedAt: ""
   }
 ];
 
 describe("CabinetColorsAdminView", () => {
-  test("renders Studio page structure and real summary counts", () => {
+  test("renders the cabinet colors manager (handoff page lives there)", () => {
     const html = renderToStaticMarkup(
       <CabinetColorsAdminView colors={finishes} />
     );
 
-    expect(html).toContain(">Cabinet Colors<");
-    expect(html).toContain("Manage your inventory of cabinet finishes and metadata.");
-    expect(html).toContain(">12<");
-    expect(html).toContain(">1<");
-    expect(html).toContain("Active");
-    expect(html).toContain("Hidden");
-    expect(html).not.toContain("#f5f5f7");
-    expect(html).not.toContain("rounded-[18px]");
+    expect(html).toContain('data-testid="manager"');
   });
 });

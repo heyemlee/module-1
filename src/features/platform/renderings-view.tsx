@@ -78,7 +78,7 @@ export function RenderingsView({
             return (
               <figure
                 key={rendering.id}
-                className="group overflow-hidden rounded-studio-panel border border-studio-line bg-studio-shell"
+                className="studio-glass group overflow-hidden rounded-studio-panel"
               >
                 <div className="relative overflow-hidden border-b border-studio-line bg-studio-void">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -90,7 +90,7 @@ export function RenderingsView({
                     className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.01]"
                   />
                   {index === 0 && (
-                    <span className="absolute left-3 top-3 inline-flex h-6 items-center rounded-full bg-studio-action/10 px-2.5 text-[10px] font-bold text-studio-action">
+                    <span className="absolute left-3 top-3 inline-flex h-6 items-center rounded-full bg-studio-action px-2.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-studio-action-ink">
                       Latest
                     </span>
                   )}

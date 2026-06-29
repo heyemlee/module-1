@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import type { FloorPlan } from "../floorplan/plan-geometry";
 import {
   buildElevationScene,
@@ -6,6 +6,7 @@ import {
   type ElevationItem,
   type WallElevationScene
 } from "./elevation-scene";
+import { CABINET_FILL as FILL_CABINET } from "../floorplan/palette";
 
 type ElevationPreviewProps = {
   plan: FloorPlan;
@@ -13,10 +14,14 @@ type ElevationPreviewProps = {
   className?: string;
 };
 
-const INK = "#1f2937";
-const MUTED = "#64748b";
-const GUIDE = "#cbd5e1";
-const OPENING = "#c56a16";
+// Studio palette — keep the elevation in the same warm ink + grays as the
+// top-down plan (layout-preview-shapes) and the design draft, not the
+// pre-redesign cool slates.
+const INK = "#1a1a1c"; // studio-ink — outlines, countertop & floor datum
+const MUTED = "#6a6a64"; // studio-muted — the "not for production" stamp
+const GUIDE = "#d0d0cc"; // warm guide rails (was cool slate #cbd5e1)
+const OPENING = "#b25a00"; // studio-warning amber — window/door accent (was #c56a16)
+const FILL_OPENING = "#f2f1ef"; // recessed opening fill (was cool #f5f5f7)
 const PANEL_COLUMNS = 2;
 const PANEL_GAP_X = 28;
 const PANEL_GAP_Y = 20;
@@ -24,7 +29,7 @@ const PANEL_MARGIN = 18;
 const PANEL_HEADER_H = 38;
 const STAMP = "Round 1 rough elevation - not for production";
 
-export function ElevationPreview({ plan, svgRef, className }: ElevationPreviewProps) {
+function ElevationPreviewImpl({ plan, svgRef, className }: ElevationPreviewProps) {
   const scenes = buildElevationScene(plan);
   if (scenes.length === 0) return null;
 
@@ -72,6 +77,10 @@ export function ElevationPreview({ plan, svgRef, className }: ElevationPreviewPr
   );
 }
 
+// Memoized: props (frozen snapshot floorPlan + stable ref) don't change on
+// unrelated host re-renders, so the elevation SVG isn't rebuilt needlessly.
+export const ElevationPreview = memo(ElevationPreviewImpl);
+
 function WallPanel({ scene, x, y }: { scene: WallElevationScene; x: number; y: number }) {
   return (
     <g data-elevation-wall={scene.wall} transform={`translate(${x} ${y})`}>
@@ -82,44 +91,74 @@ function WallPanel({ scene, x, y }: { scene: WallElevationScene; x: number; y: n
         {STAMP}
       </text>
       <g transform={`translate(0 ${PANEL_HEADER_H})`}>
-        <rect
-          x="0"
-          y="0"
-          width={scene.width}
-          height={scene.height}
-          fill="#ffffff"
-          stroke={GUIDE}
-          strokeWidth="1"
-        />
-        <line
-          x1="18"
-          y1={ELEVATION_FLOOR_Y}
-          x2={scene.width - 18}
-          y2={ELEVATION_FLOOR_Y}
-          stroke={INK}
-          strokeWidth="1.3"
-        />
-        <line
-          x1="18"
-          y1="36"
-          x2="18"
-          y2={ELEVATION_FLOOR_Y}
-          stroke={GUIDE}
-          strokeWidth="1"
-        />
-        <line
-          x1={scene.width - 18}
-          y1="36"
-          x2={scene.width - 18}
-          y2={ELEVATION_FLOOR_Y}
-          stroke={GUIDE}
-          strokeWidth="1"
-        />
-        {scene.items.map((item) => (
-          <ElevationShape key={item.key} item={item} />
-        ))}
+        <ElevationFrame scene={scene} />
       </g>
     </g>
+  );
+}
+
+// The framed drawing for one wall (background, floor datum, side guides, items),
+// drawn at local coords 0,0 → scene.width,scene.height. Shared by the hidden
+// rasterization grid (WallPanel) and the visible single-wall SVG below.
+function ElevationFrame({ scene }: { scene: WallElevationScene }) {
+  return (
+    <>
+      <rect
+        x="0"
+        y="0"
+        width={scene.width}
+        height={scene.height}
+        fill="#ffffff"
+        stroke={GUIDE}
+        strokeWidth="1"
+      />
+      <line
+        x1="18"
+        y1={ELEVATION_FLOOR_Y}
+        x2={scene.width - 18}
+        y2={ELEVATION_FLOOR_Y}
+        stroke={INK}
+        strokeWidth="1.3"
+      />
+      <line x1="18" y1="36" x2="18" y2={ELEVATION_FLOOR_Y} stroke={GUIDE} strokeWidth="1" />
+      <line
+        x1={scene.width - 18}
+        y1="36"
+        x2={scene.width - 18}
+        y2={ELEVATION_FLOOR_Y}
+        stroke={GUIDE}
+        strokeWidth="1"
+      />
+      {scene.items.map((item) => (
+        <ElevationShape key={item.key} item={item} />
+      ))}
+    </>
+  );
+}
+
+// Standalone single-wall elevation SVG used by the visible thumbnail strip and
+// lightbox. Scales to its container (meet = no distortion), no title/stamp chrome
+// — those wrap it as HTML.
+export function WallElevationSvg({
+  scene,
+  className,
+  svgRef
+}: {
+  scene: WallElevationScene;
+  className?: string;
+  svgRef?: RefObject<SVGSVGElement | null>;
+}) {
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${scene.width} ${scene.height}`}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label={`${scene.title} rough elevation`}
+      className={className}
+    >
+      <ElevationFrame scene={scene} />
+    </svg>
   );
 }
 
@@ -155,7 +194,7 @@ function CabinetShape({ item }: { item: ElevationItem }) {
         y={item.y}
         width={item.w}
         height={item.h}
-        fill="#ffffff"
+        fill={FILL_CABINET}
         stroke={INK}
         strokeWidth="1"
       />
@@ -219,7 +258,7 @@ function OpeningShape({ item }: { item: ElevationItem }) {
         y={item.y}
         width={item.w}
         height={item.h}
-        fill="#f5f5f7"
+        fill={FILL_OPENING}
         stroke={OPENING}
         strokeWidth="1"
       />

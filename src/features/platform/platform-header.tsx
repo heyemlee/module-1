@@ -27,7 +27,7 @@ export function NavPill({
         "inline-flex h-8 items-center rounded-studio-control px-4 text-[11px] font-semibold transition-colors",
         active
           ? "bg-studio-action text-studio-action-ink"
-          : "border border-studio-line bg-studio-surface text-studio-muted hover:border-studio-line-strong hover:bg-studio-raised hover:text-studio-ink"
+          : "border border-white/80 bg-white/55 text-studio-muted backdrop-blur-sm hover:bg-white/75 hover:text-studio-ink"
       )}
     >
       {children}
@@ -51,16 +51,24 @@ export function PlatformHeader({ userName, nav }: { userName: string; nav: React
   };
 
   return (
-    <header className="border-b border-studio-line bg-studio-shell/95 text-studio-ink backdrop-blur">
+    <header className="studio-glass-header text-studio-ink">
       <div className="mx-auto flex h-[74px] max-w-[1320px] items-center gap-6 px-8">
-        <Link href="/projects" className="text-[16px] font-bold text-studio-ink">
-          ABCabinet
+        <Link href="/projects" className="flex items-center gap-2.5">
+          <span
+            className="relative size-[15px] shrink-0 rounded-[4px] border-[1.5px] border-studio-ink"
+            aria-hidden
+          >
+            <span className="absolute inset-[3px] rounded-[1px] bg-studio-ink" />
+          </span>
+          <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.28em] text-studio-ink">
+            ABCabinet
+          </span>
         </Link>
         <nav className="flex items-center gap-2">{nav}</nav>
         <div className="ml-auto">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-studio-control py-1 pl-1 pr-3 outline-none transition-colors hover:bg-studio-raised focus-visible:ring-2 focus-visible:ring-studio-action/70">
-              <span className="flex size-8 items-center justify-center rounded-full bg-studio-surface text-studio-action">
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-studio-control py-1 pl-1 pr-3 outline-none transition-colors hover:bg-white/60 focus-visible:ring-2 focus-visible:ring-studio-ink/40">
+              <span className="flex size-8 items-center justify-center rounded-[10px] bg-studio-action text-studio-action-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
                 <PersonIcon className="size-4" />
               </span>
               <span className="text-[13px] font-semibold text-studio-ink">{userName}</span>

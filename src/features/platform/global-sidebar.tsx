@@ -5,14 +5,22 @@ import { StudioRail } from "./studio-shell";
 
 export function GlobalSidebar({
   userName,
-  isAdmin,
+  userRole,
+  isAdmin
 }: {
   userName: string;
+  userRole: string;
   isAdmin: boolean;
 }) {
   const pathname = usePathname() || "";
 
-  let activeItem: "projects" | "round1" | "renderings" | "users" | "colors" = "projects";
+  let activeItem:
+    | "projects"
+    | "overview"
+    | "round1"
+    | "renderings"
+    | "users"
+    | "colors" = "projects";
   let projectId: string | undefined;
 
   if (pathname.startsWith("/admin/users")) {
@@ -29,23 +37,20 @@ export function GlobalSidebar({
       } else if (parts[3] === "renderings") {
         activeItem = "renderings";
       } else {
-        activeItem = "projects";
+        activeItem = "overview";
       }
     } else {
       activeItem = "projects";
     }
   }
 
-  // The Round1 workspace has its own mode tracking which can collapse the sidebar.
-  // For the global sidebar outside of that specific workspace integration, 
-  // we'll keep it expanded by default.
   return (
     <StudioRail
       userName={userName}
+      userRole={userRole}
       isAdmin={isAdmin}
       activeItem={activeItem}
       projectId={projectId}
-      compact={false}
     />
   );
 }

@@ -3,22 +3,18 @@
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
-import type { WorkspaceMode } from "./workspace-mode";
 
 export function Round1WorkspaceShell({
-  mode,
   projectBar,
-  stepNavigation,
-  mobileStepNavigation,
-  canvas,
-  inspector,
+  stepStrip,
+  leftPanel,
+  canvas
 }: {
-  mode: WorkspaceMode;
   projectBar: ReactNode;
-  stepNavigation: ReactNode;
-  mobileStepNavigation?: ReactNode;
+  stepStrip: ReactNode;
+  /** Step form panel (left, 380px). Null on canvas-only steps. */
+  leftPanel?: ReactNode;
   canvas: ReactNode;
-  inspector: ReactNode;
 }) {
   const reduceMotion = useReducedMotion();
   const transition = reduceMotion
@@ -26,57 +22,47 @@ export function Round1WorkspaceShell({
     : { duration: 0.26, ease: [0.2, 0.8, 0.2, 1] as const };
 
   return (
-    <main
-      data-workspace-mode={mode}
-      className="min-h-[100dvh] bg-studio-void text-studio-ink min-w-0"
-    >
-          <div className="sticky top-0 z-30 border-b border-studio-line bg-studio-shell/95 backdrop-blur-xl">
+    <main className="flex h-[100dvh] min-w-0 flex-col overflow-hidden bg-studio-void text-studio-ink">
+      <div
+        data-workspace-region="bar"
+        className="sticky top-0 z-30 border-b border-studio-line bg-studio-shell/95 backdrop-blur-xl"
+      >
         {projectBar}
       </div>
 
       <div
+        data-workspace-region="steps"
+        className="border-b border-[rgba(20,20,26,0.07)] bg-[rgba(247,247,245,0.6)] backdrop-blur-sm"
+      >
+        {stepStrip}
+      </div>
+
+      <div
         className={cn(
-          "grid min-h-[calc(100dvh-56px)] grid-cols-1 bg-studio-void",
-          "md:grid-cols-[minmax(0,1fr)]",
-          mode === "guided"
-            ? "xl:grid-cols-[176px_minmax(0,1fr)_480px]"
-            : "xl:grid-cols-[56px_minmax(0,1fr)_480px]"
+          "grid min-h-0 flex-1 grid-cols-1",
+          leftPanel && "md:grid-cols-[380px_minmax(0,1fr)]"
         )}
       >
-        <motion.aside
-          layout
-          transition={transition}
-          data-workspace-region="steps"
-          className="hidden border-r border-studio-line bg-studio-rail p-3 xl:block"
-        >
-          {stepNavigation}
-        </motion.aside>
+        {leftPanel && (
+          <motion.aside
+            layout
+            transition={transition}
+            data-workspace-region="form"
+            className="min-h-0 overflow-y-auto border-b border-studio-line bg-[rgba(250,250,249,0.55)] backdrop-blur-md md:border-b-0 md:border-r"
+          >
+            {leftPanel}
+          </motion.aside>
+        )}
 
         <motion.section
           layout
           transition={transition}
           data-workspace-region="canvas"
-          className="relative min-h-[560px] min-w-0 overflow-hidden bg-studio-void p-3 md:min-h-[calc(100dvh-56px)]"
+          className="relative min-h-[420px] min-w-0 overflow-hidden md:min-h-0"
         >
-          <div className="mb-3 xl:hidden">{mobileStepNavigation ?? stepNavigation}</div>
           {canvas}
         </motion.section>
-
-        <motion.div
-          layout
-          transition={transition}
-          data-workspace-region="inspector"
-          className={cn(
-            "min-h-0 border-studio-line",
-            "max-xl:border-t",
-            "xl:border-l",
-            "max-md:sticky max-md:bottom-0 max-md:z-20 max-md:max-h-[52dvh] max-md:overflow-hidden max-md:rounded-t-[16px] max-md:shadow-[0_-20px_60px_rgba(0,0,0,0.34)]"
-          )}
-        >
-          <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-studio-paper-muted-ink/35 md:hidden" />
-          {inspector}
-        </motion.div>
       </div>
-        </main>
+    </main>
   );
 }

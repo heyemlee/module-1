@@ -14,9 +14,9 @@ import {
 /**
  * Builds the JSON-derived prompt for the customer concept rendering.
  *
- * This is intentionally different from `buildRound1LayoutPrompt` (which asks for
- * an EMPTY architectural shell). Here we want a realistic, furnished concept
- * preview, so the prompt describes the kitchen's semantics and materials.
+ * This is intentionally different from a bare layout-shell prompt (which would
+ * ask for an EMPTY architectural shell). Here we want a realistic, furnished
+ * concept preview, so the prompt describes the kitchen's semantics and materials.
  *
  * Unlike the earlier version, spatial placement is no longer deferred entirely
  * to the reference image. The prompt now translates the deterministic

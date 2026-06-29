@@ -19,11 +19,11 @@ describe("StudioRail", () => {
     expect(html).toContain("Round 1");
     expect(html).toContain("Renderings");
     expect(html).not.toContain("Users");
-    expect(html).not.toContain("Cabinet colors");
-    // The account menu (with sign out) now lives in the rail; assert its
-    // closed Radix dropdown trigger renders.
+    expect(html).not.toContain("Cabinet Colors");
+    // The account footer (with sign out) now lives in the rail as a direct
+    // power button next to the user's name.
     expect(html).toContain("Maya");
-    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain("Sign out");
   });
 
   test("adds administration destinations for admins", () => {
@@ -37,7 +37,7 @@ describe("StudioRail", () => {
     );
 
     expect(html).toContain("Users");
-    expect(html).toContain("Cabinet colors");
+    expect(html).toContain("Cabinet Colors");
   });
 });
 
@@ -101,11 +101,11 @@ describe("Studio design tokens", () => {
     const css = readFileSync("src/app/globals.css", "utf8");
     const variables = readRootVariables(css);
 
-    expect(variables["--studio-void"]).toBe("#eef1ec");
-    expect(variables["--studio-action"]).toBe("#16823a");
+    expect(variables["--studio-void"]).toBe("#e9e9e6");
+    expect(variables["--studio-action"]).toBe("#1a1a1c");
     expect(variables["--studio-danger"]).toBe("#b42318");
-    expect(variables["--studio-radius-panel"]).toBe("12px");
-    expect(variables["--studio-quiet"]).toBe("#677669");
+    expect(variables["--studio-radius-panel"]).toBe("18px");
+    expect(variables["--studio-quiet"]).toBe("#75756f");
     expect(
       contrastRatio(
         variables["--studio-quiet"],
@@ -123,16 +123,16 @@ describe("Studio design tokens", () => {
     const variables = readRootVariables(css);
 
     expect(variables).toMatchObject({
-      "--studio-paper-muted-ink": "#607067",
-      "--studio-rail": "#dfe5df",
-      "--studio-canvas": "#f5f5f7",
+      "--studio-paper-muted-ink": "#5f5f59",
+      "--studio-rail": "#f2f2f0",
+      "--studio-canvas": "#ececea",
       "--studio-danger-ink": "#ffffff",
       "--studio-warning-ink": "#ffffff"
     });
     expect(css).not.toMatch(/--app-[\w-]+:/);
   });
 
-  test("keeps Studio panels on the dark shell", () => {
+  test("keeps Studio panels on the shell surface", () => {
     const css = readFileSync("src/app/globals.css", "utf8");
 
     expect(readStyleRule(css, ".studio-panel-flat")).toMatchObject({

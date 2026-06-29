@@ -32,6 +32,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname),
+  experimental: {
+    // Rewrite barrel imports (icon set, motion) to direct deep imports so only
+    // the modules actually used get bundled.
+    optimizePackageImports: ["@radix-ui/react-icons", "motion"]
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   }

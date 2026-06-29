@@ -4,7 +4,7 @@ import { CheckIcon, LockClosedIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
 
 type StepState = "completed" | "current" | "available" | "locked";
-type StepNavigationVariant = "expanded" | "compact" | "strip";
+type StepNavigationVariant = "expanded" | "compact" | "strip" | "top";
 
 function stepState(
   index: number,
@@ -26,17 +26,80 @@ function stepAriaLabel(label: string, state: StepState) {
 
 export function Round1StepNavigation({
   steps,
+  meta,
   currentStep,
   maxAccessibleStep,
   variant,
   onStepChange
 }: {
   steps: readonly string[];
+  meta?: readonly string[];
   currentStep: number;
   maxAccessibleStep: number;
   variant: StepNavigationVariant;
   onStepChange: (step: number) => void;
 }) {
+  // Horizontal step strip that sits under the project bar (design chrome).
+  if (variant === "top") {
+    return (
+      <nav aria-label="Round 1 steps">
+        <ol className="flex">
+          {steps.map((label, index) => {
+            const state = stepState(index, currentStep, maxAccessibleStep);
+            const disabled = state === "locked";
+            return (
+              <li key={label} className="flex-1">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-current={state === "current" ? "step" : undefined}
+                  aria-label={stepAriaLabel(label, state)}
+                  data-step-state={state}
+                  onClick={() => {
+                    if (!disabled) onStepChange(index);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 border-r border-[rgba(20,20,26,0.06)] px-[18px] py-[14px] text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-studio-action disabled:cursor-not-allowed",
+                    "border-b-2",
+                    state === "current"
+                      ? "border-b-[#1a1a1c] bg-white/[0.72]"
+                      : "border-b-transparent hover:bg-white/40",
+                    disabled && "opacity-55 hover:bg-transparent"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-[26px] shrink-0 items-center justify-center rounded-full font-mono text-[11px]",
+                      state === "current" && "bg-[#1a1a1c] text-white",
+                      state === "completed" &&
+                        "bg-[rgba(20,20,26,0.12)] text-[#16161a]",
+                      (state === "available" || state === "locked") &&
+                        "bg-white/50 text-[#a4a49e]"
+                    )}
+                  >
+                    {state === "completed"
+                      ? "✓"
+                      : String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="truncate text-[13.5px] font-semibold text-[#16161a]">
+                      {label}
+                    </span>
+                    {meta?.[index] && (
+                      <span className="truncate font-mono text-[9.5px] tracking-[0.08em] text-[#a4a49e]">
+                        {meta[index]}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    );
+  }
+
   return (
     <nav aria-label="Round 1 steps">
       <ol

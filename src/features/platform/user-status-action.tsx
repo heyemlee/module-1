@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fetchJson } from "@/lib/api-client";
 
 export function userStatusEndpoint(userId: string) {
   return `/api/admin/users/${encodeURIComponent(userId)}/status`;
@@ -25,10 +26,9 @@ export function UserStatusAction({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(userStatusEndpoint(userId), {
+      const response = await fetchJson(userStatusEndpoint(userId), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ disabled: !disabled })
+        body: { disabled: !disabled }
       });
       if (!response.ok) {
         setError("Unable to update");
@@ -43,24 +43,21 @@ export function UserStatusAction({
   }
 
   return (
-    <div className="flex min-w-[76px] flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-1">
       <button
         type="button"
-        role="switch"
-        aria-checked={!disabled}
         aria-label={actionLabel}
         disabled={busy}
         onClick={updateStatus}
-        data-state={!disabled ? "active" : "disabled"}
-        className="relative h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-action focus-visible:ring-offset-2 focus-visible:ring-offset-studio-void disabled:cursor-not-allowed disabled:opacity-50 data-[state=active]:bg-studio-success data-[state=disabled]:bg-studio-line-strong"
+        className="rounded-[9px] border border-white/85 bg-white/60 px-3 py-1.5 text-[11px] font-medium text-[#16161a] transition-colors hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none inline-block size-5 transform rounded-full bg-studio-paper shadow ring-0 transition-transform motion-reduce:transition-none data-[state=active]:translate-x-5 data-[state=disabled]:translate-x-0"
-          data-state={!disabled ? "active" : "disabled"}
-        />
+        {disabled ? "Enable" : "Disable"}
       </button>
-      {error && <span role="alert" className="text-[10px] font-semibold text-studio-danger">{error}</span>}
+      {error && (
+        <span role="alert" className="text-[10px] font-semibold text-studio-danger">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

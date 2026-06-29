@@ -237,6 +237,42 @@ describe("buildFloorPlan", () => {
     expect(Math.abs(windowCenter - sinkCenter)).toBeLessThan(2);
   });
 
+  test("re-centring the sink under the window never stacks it on its neighbours", () => {
+    // Regression: the sink follows the window only after placeAppliances has
+    // packed the wall, so a crowded one-wall layout used to drop the centred
+    // sink on top of the range/dishwasher next to it.
+    const base = createDefaultShowroomForm();
+    const form: Round1FormInput = {
+      ...base,
+      layoutPreference: "ONE_WALL",
+      openings: {
+        doors: { status: "NO", items: [] },
+        windows: { status: "YES", items: [{ relation: "BEHIND_SINK", width: null }] }
+      },
+      fixtures: {
+        ...base.fixtures,
+        sink: { ...base.fixtures.sink, status: "YES", relation: "UNDER_WINDOW" },
+        fridge: { ...base.fixtures.fridge, status: "YES" },
+        dishwasher: { ...base.fixtures.dishwasher, status: "YES" }
+      }
+    };
+    const { plan } = planFromForm(form);
+    const onWall = plan.appliances.filter(
+      (a) => a.wall === "TOP" && a.symbol !== "hood"
+    );
+    expect(onWall.length).toBeGreaterThanOrEqual(3);
+    for (const a of onWall) {
+      for (const b of onWall) {
+        if (a.key >= b.key) continue;
+        expect(intersects(a, b), `${a.key} overlaps ${b.key}`).toBe(false);
+      }
+    }
+    // The sink-follows-window feature still holds.
+    const sink = plan.appliances.find((a) => a.key === "sink")!;
+    const windowCenter = plan.window!.x + plan.window!.w / 2;
+    expect(Math.abs(windowCenter - (sink.x + sink.w / 2))).toBeLessThan(2);
+  });
+
   test("omits the window and door when the intake says they do not exist", () => {
     const form = createDefaultShowroomForm();
     const noOpenings: Round1FormInput = {
@@ -302,7 +338,51 @@ describe("buildFloorPlan", () => {
     ).toBe(false);
   });
 
-  test("keeps appliance and opening front clearance zones free of cabinetry and islands", () => {
+  test("keeps a crowded wall overlap-free when every appliance is dragged to one end", () => {
+    // Small room → the four appliances nearly fill the single wall. Dragging
+    // them all to the far end is the worst case for the packing pass; it must
+    // still leave no two appliances on top of each other.
+    const base = createDefaultShowroomForm();
+    const form: Round1FormInput = {
+      ...base,
+      room: { ...base.room, length: 96, width: 96 },
+      layoutPreference: "ONE_WALL",
+      openings: {
+        doors: { status: "NO", items: [] },
+        windows: { status: "NO", items: [] }
+      },
+      fixtures: {
+        ...base.fixtures,
+        sink: { status: "YES", size: 33, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        range: { size: 30, fuel: "GAS", fixedLocation: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        fridge: { status: "YES", size: 36, type: "UNKNOWN", relation: "ON_MAIN_RUN" },
+        dishwasher: { status: "YES", size: 24, relation: "NEAR_SINK" }
+      }
+    };
+    const farEnd = 10_000;
+    const { plan } = planFromForm(form, {
+      sink: { wall: "TOP", position: farEnd },
+      range: { wall: "TOP", position: farEnd },
+      fridge: { wall: "TOP", position: farEnd },
+      dishwasher: { wall: "TOP", position: farEnd }
+    });
+    // The hood is part of the range (it rides above the cooktop), so exclude it.
+    const onWall = plan.appliances.filter(
+      (a) => a.wall === "TOP" && a.symbol !== "hood"
+    );
+    expect(onWall.length).toBeGreaterThanOrEqual(4);
+    for (const a of onWall) {
+      for (const b of onWall) {
+        if (a.key >= b.key) continue;
+        expect(intersects(a, b), `${a.key} overlaps ${b.key}`).toBe(false);
+      }
+      // and every appliance stays inside the room
+      expect(a.x).toBeGreaterThanOrEqual(plan.room.x - 0.1);
+      expect(a.x + a.w).toBeLessThanOrEqual(plan.room.x + plan.room.w + 0.1);
+    }
+  });
+
+  test("keeps appliance and opening front clearance zones free of cabinetry", () => {
     const form = {
       ...createDefaultShowroomForm(),
       layoutPreference: "U_SHAPE_ISLAND" as const,
@@ -315,11 +395,9 @@ describe("buildFloorPlan", () => {
     const { plan } = planFromForm(form);
     expect(plan.clearanceZones.length).toBeGreaterThan(0);
 
-    const blockers = [
-      ...plan.baseCabinets,
-      ...plan.corners,
-      ...(plan.island ? [plan.island] : [])
-    ];
+    // The island intentionally sits centrally (the walkway wraps around it), so
+    // it is not a clearance blocker — only fixed cabinetry must stay clear.
+    const blockers = [...plan.baseCabinets, ...plan.corners];
 
     for (const clearance of plan.clearanceZones) {
       for (const blocker of blockers) {
@@ -329,6 +407,75 @@ describe("buildFloorPlan", () => {
         ).toBe(false);
       }
     }
+  });
+
+  test("centres the sink under the window by default", () => {
+    const { plan } = planFromForm(createDefaultShowroomForm());
+    expect(plan.window).not.toBeNull();
+    const sink = plan.appliances.find((a) => a.key === "sink");
+    expect(sink).toBeDefined();
+    const sinkCenter = sink!.x + sink!.w / 2;
+    const windowCenter = plan.window!.x + plan.window!.w / 2;
+    expect(Math.abs(sinkCenter - windowCenter)).toBeLessThan(1);
+  });
+
+  test("window drag carries the sink, but sink drag leaves the window", () => {
+    const form = createDefaultShowroomForm();
+    const baseWindow = planFromForm(form).plan.window!;
+    const baseWindowCenter = baseWindow.x + baseWindow.w / 2;
+
+    // Dragging the window moves the sink with it (sink has no override).
+    const afterWindowDrag = planFromForm(form, {
+      window: { wall: "TOP", position: baseWindow.x - 80 }
+    }).plan;
+    const win2 = afterWindowDrag.window!;
+    const sink2 = afterWindowDrag.appliances.find((a) => a.key === "sink")!;
+    expect(
+      Math.abs(sink2.x + sink2.w / 2 - (win2.x + win2.w / 2))
+    ).toBeLessThan(1);
+
+    // Dragging the sink detaches it; the window stays centred on the room.
+    const afterSinkDrag = planFromForm(form, {
+      sink: { wall: "TOP", position: 120 }
+    }).plan;
+    expect(
+      Math.abs(afterSinkDrag.window!.x + afterSinkDrag.window!.w / 2 - baseWindowCenter)
+    ).toBeLessThan(1);
+  });
+
+  test("snaps a dragged sink back under the window when it overlaps", () => {
+    const form = createDefaultShowroomForm();
+    const baseWindow = planFromForm(form).plan.window!;
+    const windowCenter = baseWindow.x + baseWindow.w / 2;
+    // Drag the sink so it lands largely over the window — it should snap centred.
+    const dragged = planFromForm(form, {
+      sink: { wall: "TOP", position: baseWindow.x }
+    }).plan;
+    const sink = dragged.appliances.find((a) => a.key === "sink")!;
+    expect(Math.abs(sink.x + sink.w / 2 - windowCenter)).toBeLessThan(1);
+  });
+
+  test("honours a dragged island position override", () => {
+    const base = planFromForm(formForLayout("L_SHAPE_ISLAND")).plan.island!;
+    const moved = planFromForm(formForLayout("L_SHAPE_ISLAND"), {
+      island: { x: base.x - 60, y: base.y - 40 }
+    }).plan.island!;
+    expect(moved.x).toBeCloseTo(base.x - 60, 0);
+    expect(moved.y).toBeCloseTo(base.y - 40, 0);
+  });
+
+  test("centres the island in the room by default", () => {
+    const { plan } = planFromForm(formForLayout("L_SHAPE_ISLAND"));
+    expect(plan.island).not.toBeNull();
+
+    const roomCenterX = plan.room.x + plan.room.w / 2;
+    const roomCenterY = plan.room.y + plan.room.h / 2;
+    const islandCenterX = plan.island!.x + plan.island!.w / 2;
+    const islandCenterY = plan.island!.y + plan.island!.h / 2;
+
+    // Horizontally centred; vertically near centre (a touch below per design).
+    expect(Math.abs(islandCenterX - roomCenterX)).toBeLessThan(plan.room.w * 0.1);
+    expect(Math.abs(islandCenterY - roomCenterY)).toBeLessThan(plan.room.h * 0.15);
   });
 
   test("coarsely fills visible cabinet gaps around fixed appliances for Round 1", () => {

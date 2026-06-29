@@ -1,5 +1,8 @@
 import { Round1Feedback } from "./round1-feedback";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import type { WallElevationScene } from "./elevations/elevation-scene";
+import { WallElevationSvg } from "./elevations/elevation-preview";
 import {
   type PreliminaryCabinetEstimateSummary
 } from "@/domain/round1";
@@ -16,6 +19,26 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import "./ghost-loader.css";
+
+// Newton's cradle: calm placeholder shown while a render image loads or when it
+// fails — replaces the browser's broken-image icon on the dark canvas.
+function NewtonsCradle({ label }: { label?: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3">
+      <div className="newtons-cradle" role="status" aria-label={label ?? "Loading rendering"}>
+        <div className="newtons-cradle__dot" />
+        <div className="newtons-cradle__dot" />
+        <div className="newtons-cradle__dot" />
+        <div className="newtons-cradle__dot" />
+      </div>
+      {label && (
+        <p className="max-w-xs px-8 text-center text-[11.5px] leading-5 text-white/55">
+          {label}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
 
@@ -119,6 +142,270 @@ function CabinetSummaryMetric({
   );
 }
 
+// Design's in-canvas concept preview: a dark panel pinned to the top of the
+// floor-plan canvas on the Rendering step. Shows the render-cube loader while
+// generating, then the latest concept image with a carousel + "View all".
+export function Round1InlineRenderPreview({
+  busy,
+  error,
+  renderings,
+  cabinetColors,
+  styleLabel
+}: {
+  busy: boolean;
+  error: string | null;
+  renderings: { id: string; url: string; doorColorId: string | null }[];
+  cabinetColors: { id: string; name: string }[];
+  styleLabel: string;
+}) {
+  // Newest first; "previous" walks toward older (higher index).
+  const [index, setIndex] = useState(0);
+  // Track render URLs whose <img> failed to load so we can show the cradle
+  // instead of the browser's broken-image icon on the dark canvas.
+  const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const idx = Math.min(index, Math.max(0, renderings.length - 1));
+  const current = renderings[idx];
+  const imageBroken = current ? failedUrls.has(current.url) : false;
+  const colorName = current?.doorColorId
+    ? cabinetColors.find((c) => c.id === current.doorColorId)?.name ?? null
+    : null;
+  const meta = [styleLabel, colorName].filter(Boolean).join(" · ").toUpperCase();
+  const hasOlder = idx < renderings.length - 1;
+  const hasNewer = idx > 0;
+
+  const arrow =
+    "absolute top-1/2 z-[4] flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-[rgba(20,20,22,0.45)] text-[16px] text-white backdrop-blur-sm transition disabled:opacity-30";
+
+  return (
+    <div
+      className="relative z-[3] mx-[18px] mt-[14px] aspect-video w-auto shrink-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]"
+      style={{ background: "linear-gradient(162deg,#3a3a3e,#101012)" }}
+    >
+      {busy ? (
+        <div className="cmx">
+          <div className="cmx-space">
+            <div className="cmx-cube">
+              <div className="cmx-face cmx-f-f" />
+              <div className="cmx-face cmx-f-b" />
+              <div className="cmx-face cmx-f-r" />
+              <div className="cmx-face cmx-f-l" />
+              <div className="cmx-face cmx-f-t" />
+              <div className="cmx-face cmx-f-bt" />
+            </div>
+            <div className="cmx-pop">RENDER</div>
+          </div>
+        </div>
+      ) : error ? (
+        <NewtonsCradle label={`Could not generate the rendering: ${error}`} />
+      ) : imageBroken ? (
+        <NewtonsCradle label="Rendering image unavailable." />
+      ) : !current ? (
+        <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
+          <p className="font-mono text-[10px] tracking-[0.14em] text-white/45">
+            CONCEPT RENDERING
+          </p>
+          <p className="max-w-xs text-[12px] leading-5 text-white/45">
+            Lock a cabinet finish, then generate to preview the concept here.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.url}
+            alt="Latest concept rendering"
+            onError={() =>
+              setFailedUrls((prev) => new Set(prev).add(current.url))
+            }
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: "linear-gradient(180deg,transparent 52%,rgba(10,10,12,0.82))"
+            }}
+          />
+          {renderings.length > 1 && (
+            <span className="absolute left-1/2 top-[14px] -translate-x-1/2 font-mono text-[9px] tracking-[0.12em] text-white/70">
+              {idx + 1} / {renderings.length}
+            </span>
+          )}
+          {meta && (
+            <div className="absolute bottom-4 left-[18px] font-mono text-[10px] tracking-[0.08em] text-white">
+              {meta}
+            </div>
+          )}
+          {renderings.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIndex((i) => Math.min(renderings.length - 1, i + 1))}
+                disabled={!hasOlder}
+                aria-label="Previous rendering"
+                className={cn(arrow, "left-3.5")}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                disabled={!hasNewer}
+                aria-label="Next rendering"
+                className={cn(arrow, "right-3.5")}
+              >
+                ›
+              </button>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Frosted strip of per-wall rough elevation thumbnails, pinned below the floor
+// plan once cabinet fill exists (design's `hasFill` gate). Clicking opens the
+// lightbox. Scenes are derived from the frozen snapshot plan so they match the
+// generated fill, not in-progress drags.
+export function Round1ElevationStrip({
+  scenes,
+  onOpen
+}: {
+  scenes: WallElevationScene[];
+  onOpen: (index: number) => void;
+}) {
+  if (scenes.length === 0) return null;
+
+  return (
+    <div
+      className="studio-anim-rise relative z-[3] flex shrink-0 items-end gap-[10px] overflow-x-auto border-t border-white/50 px-[18px] py-[14px]"
+      style={{
+        background: "rgba(246,246,244,0.7)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)"
+      }}
+    >
+      {scenes.map((scene, index) => (
+        <div key={scene.wall} className="flex flex-col items-center gap-[5px]">
+          <button
+            type="button"
+            onClick={() => onOpen(index)}
+            aria-label={`Open ${scene.title} rough elevation`}
+            className="flex aspect-video w-[112px] shrink-0 flex-col justify-center overflow-hidden rounded-[11px] border border-white/80 bg-white/[0.62] p-[7px] shadow-[0_1px_0_rgba(255,255,255,0.7)_inset] transition-colors hover:border-studio-ink"
+          >
+            <WallElevationSvg scene={scene} className="h-full w-full" />
+          </button>
+          <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#9a9a94]">
+            {scene.title}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Full-bleed glass lightbox for one wall elevation, with ‹ › wrap navigation,
+// Esc/Arrow keys, and a "not for production" stamp. Backdrop click closes.
+export function Round1ElevationLightbox({
+  scenes,
+  index,
+  onClose,
+  onSelect
+}: {
+  scenes: WallElevationScene[];
+  index: number;
+  onClose: () => void;
+  onSelect: (index: number) => void;
+}) {
+  const total = scenes.length;
+  const scene = scenes[index];
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      else if (event.key === "ArrowLeft") onSelect((index - 1 + total) % total);
+      else if (event.key === "ArrowRight") onSelect((index + 1) % total);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, total, onClose, onSelect]);
+
+  if (!scene) return null;
+
+  const arrow =
+    "flex size-[52px] flex-none items-center justify-center rounded-full border border-white/85 bg-white/70 text-[22px] text-studio-ink shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_14px_30px_-14px_rgba(20,20,26,0.4)] transition hover:bg-white";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${scene.title} rough elevation`}
+      onClick={onClose}
+      className="studio-anim-fade fixed inset-0 z-[70] flex items-center justify-center gap-[26px] p-12"
+      style={{
+        background: "rgba(232,232,230,0.6)",
+        backdropFilter: "blur(18px) saturate(140%)",
+        WebkitBackdropFilter: "blur(18px) saturate(140%)"
+      }}
+    >
+      {total > 1 && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect((index - 1 + total) % total);
+          }}
+          aria-label="Previous wall"
+          className={arrow}
+        >
+          ‹
+        </button>
+      )}
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="studio-anim-rise relative flex aspect-video max-h-[86vh] w-[min(88vw,940px)] flex-col overflow-hidden rounded-[24px] border border-white/90 bg-white p-[30px] shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_40px_90px_-40px_rgba(20,20,26,0.5)]"
+      >
+        <div className="font-mono text-[11px] tracking-[0.18em] text-[#86867f]">
+          ROUGH ELEVATION
+        </div>
+        <div className="mb-6 mt-[5px] text-[22px] font-semibold tracking-[-0.01em] text-studio-ink">
+          {scene.title}
+        </div>
+        <div className="min-h-0 flex-1">
+          <WallElevationSvg scene={scene} className="h-full w-full" />
+        </div>
+        <div className="mt-[18px] flex items-center justify-between font-mono text-[10px] tracking-[0.1em] text-[#9a9a94]">
+          <span>
+            {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
+          </span>
+          <span>SALES ESTIMATE · NOT FOR PRODUCTION</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close rough elevation"
+          className="absolute right-[28px] top-[28px] flex size-10 items-center justify-center rounded-full border border-white/85 bg-white/70 text-[18px] text-[#6a6a64] transition hover:bg-white"
+        >
+          ×
+        </button>
+      </div>
+      {total > 1 && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect((index + 1) % total);
+          }}
+          aria-label="Next wall"
+          className={arrow}
+        >
+          ›
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function RenderingControls({
   canRender,
   busy,
@@ -150,10 +437,24 @@ export function RenderingControls({
         <section
           aria-busy="true"
           aria-label="Building concept rendering"
-          className="rounded-studio-panel border border-studio-line bg-studio-shell p-4"
+          className="studio-glass rounded-studio-panel p-4"
         >
           <div className="overflow-hidden rounded-studio-control border border-studio-line bg-studio-surface">
-            <div className="aspect-[16/10] animate-pulse bg-[linear-gradient(110deg,var(--studio-surface)_8%,var(--studio-raised)_18%,var(--studio-surface)_33%)] bg-[length:200%_100%] motion-reduce:animate-none" />
+            <div className="relative aspect-[16/10] overflow-hidden">
+              <div className="cmx">
+                <div className="cmx-space">
+                  <div className="cmx-cube">
+                    <div className="cmx-face cmx-f-f" />
+                    <div className="cmx-face cmx-f-b" />
+                    <div className="cmx-face cmx-f-r" />
+                    <div className="cmx-face cmx-f-l" />
+                    <div className="cmx-face cmx-f-t" />
+                    <div className="cmx-face cmx-f-bt" />
+                  </div>
+                  <div className="cmx-pop">RENDER</div>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="mt-4 flex items-center justify-between gap-4">
             <div>
@@ -393,7 +694,7 @@ export function Round1SnapshotPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-studio-control bg-studio-action/30 p-3 text-studio-action-ink">
+      <div className="rounded-studio-control bg-studio-action p-3 text-studio-action-ink">
         <p className="text-xs font-bold uppercase tracking-wide">
           Snapshot ready
         </p>
@@ -455,7 +756,7 @@ function SnapshotPersistStatus({
   }
 
   const config = {
-    saving: { text: "Saving to server…", className: "text-studio-paper-muted-ink" },
+    saving: { text: "Saving to server…", className: "text-studio-action-ink/70" },
     saved: { text: "Saved to server", className: "text-studio-action-ink" }
   }[persistState];
 

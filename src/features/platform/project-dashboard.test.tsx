@@ -49,17 +49,16 @@ describe("ProjectDashboard", () => {
         projects={[projectFixture]}
       />
     );
-    // The "Projects" page title and the account menu (sign out) now live in the
-    // global sidebar (StudioShell), not in the dashboard itself — those are
-    // covered by studio-shell.test.
-    expect(html).toContain("Search customer, address, or project");
+    // The account menu (sign out) and primary navigation live in the global
+    // sidebar (StudioRail), not in the dashboard itself — covered by
+    // studio-shell.test. The handoff Projects screen renders glass row-cards
+    // (not a <table>) with uppercase column labels.
+    expect(html).toContain("Search customer, address or project");
     expect(html).toContain("New project");
     expect(html).toContain("Chen Family");
-    expect(html).toContain("<table");
-    expect(html).toContain("Customer");
-    expect(html).toContain("Project");
-    expect(html).toContain("Status");
-    expect(html).toContain("Updated");
+    expect(html).toContain("Main Kitchen");
+    expect(html).toContain("CUSTOMER / PROJECT");
+    expect(html).toContain("UPDATED");
 
     // Navigation and account actions belong to the authenticated layout.
     expect(html).not.toContain('aria-label="Primary navigation"');
@@ -95,9 +94,10 @@ describe("ProjectDashboard", () => {
 
     expect(html).toContain("<h1");
     expect(html).toContain("Projects");
-    expect(html).toContain("Active");
-    expect(html).toContain("Intake");
-    expect(html).toContain("Rendering ready");
+    expect(html).toContain("ACTIVE");
+    expect(html).toContain("INTAKE");
+    expect(html).toContain("RENDER READY");
+    expect(html).toContain("TOTAL");
     expect(html).toContain('data-project-status="INTAKE"');
     expect(html).toContain('data-project-status="RENDERING_READY"');
   });

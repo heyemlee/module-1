@@ -84,7 +84,7 @@ describe("Studio controls", () => {
 
     expect(html).toContain('data-surface="inspector"');
     expect(html).toContain("h-10");
-    expect(html).toContain("bg-studio-surface");
+    expect(html).toContain("bg-white/60");
     expect(html).toContain("data-[surface=inspector]:bg-studio-paper");
     expect(html).toContain("placeholder:text-studio-muted");
   });

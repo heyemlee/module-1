@@ -3,36 +3,34 @@ import { describe, expect, test } from "vitest";
 import { Round1WorkspaceShell } from "./round1-workspace-shell";
 
 describe("Round1WorkspaceShell", () => {
-  test("marks guided mode with the expanded workspace contract", () => {
+  test("renders the workspace regions in order", () => {
     const html = renderToStaticMarkup(
       <Round1WorkspaceShell
-        mode="guided"
         projectBar={<div>Project</div>}
-        stepNavigation={<div>Steps</div>}
+        stepStrip={<div>Steps</div>}
+        leftPanel={<div>Form</div>}
         canvas={<div>Canvas</div>}
-        inspector={<div>Inspector</div>}
       />
     );
 
-    expect(html).toContain('data-workspace-mode="guided"');
+    expect(html).toContain('data-workspace-region="bar"');
     expect(html).toContain('data-workspace-region="steps"');
+    expect(html).toContain('data-workspace-region="form"');
     expect(html).toContain('data-workspace-region="canvas"');
-    expect(html).toContain('data-workspace-region="inspector"');
+    expect(html.indexOf("Steps")).toBeLessThan(html.indexOf("Form"));
+    expect(html.indexOf("Form")).toBeLessThan(html.indexOf("Canvas"));
   });
 
-  test("marks canvas focus mode without changing region order", () => {
+  test("omits the form region on canvas-only steps", () => {
     const html = renderToStaticMarkup(
       <Round1WorkspaceShell
-        mode="canvas"
         projectBar={<div>Project</div>}
-        stepNavigation={<div>Steps</div>}
+        stepStrip={<div>Steps</div>}
         canvas={<div>Canvas</div>}
-        inspector={<div>Inspector</div>}
       />
     );
 
-    expect(html).toContain('data-workspace-mode="canvas"');
-    expect(html.indexOf("Steps")).toBeLessThan(html.indexOf("Canvas"));
-    expect(html.indexOf("Canvas")).toBeLessThan(html.indexOf("Inspector"));
+    expect(html).not.toContain('data-workspace-region="form"');
+    expect(html).toContain('data-workspace-region="canvas"');
   });
 });

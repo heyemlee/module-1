@@ -12,6 +12,8 @@ export type CompanyUserSummary = {
   disabledAt: string | null;
   createdAt: string;
   monthlyRenderQuota: number;
+  // Renders created this calendar month. Only populated by listCompanyUsers.
+  used?: number;
 };
 
 type CompanyUserRow = {
@@ -23,6 +25,7 @@ type CompanyUserRow = {
   disabled_at: Date | null;
   created_at: Date;
   monthly_render_quota: number;
+  used?: number;
 };
 
 const ASSIGNABLE_ROLES: UserRole[] = ["ADMIN", "SALES", "DESIGNER"];
@@ -45,14 +48,23 @@ export function mapCompanyUserRow(row: CompanyUserRow): CompanyUserSummary {
 }
 
 export async function listCompanyUsers(companyId: string) {
+  // `used` = renders this user created this calendar month, for the quota bar.
+  // ponytail: per-row correlated subquery — fine at company-user scale.
   const result = await query<CompanyUserRow>(
-    `SELECT id, account, email, name, role, disabled_at, created_at, monthly_render_quota
+    `SELECT users.id, users.account, users.email, users.name, users.role,
+            users.disabled_at, users.created_at, users.monthly_render_quota,
+            (SELECT count(*)::int FROM renderings r
+               WHERE r.created_by_user_id = users.id
+                 AND r.created_at >= date_trunc('month', now())) AS used
      FROM users
      WHERE company_id = $1 AND deleted_at IS NULL
      ORDER BY created_at ASC`,
     [companyId]
   );
-  return result.rows.map(mapCompanyUserRow);
+  return result.rows.map((row) => ({
+    ...mapCompanyUserRow(row),
+    used: row.used ?? 0
+  }));
 }
 
 export class AccountAlreadyExistsError extends Error {}

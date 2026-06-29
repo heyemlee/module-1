@@ -41,14 +41,14 @@ export function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[13px] font-medium text-studio-paper-ink">{label}</span>
+      <span className="studio-eyebrow mb-1.5 block">{label}</span>
       <Input
         type="number"
-        data-surface="inspector"
         value={value ?? ""}
         onChange={(event) =>
           onChange(event.target.value ? Number(event.target.value) : null)
         }
+        className="h-auto rounded-[11px] px-[13px] py-3 font-mono text-[15px]"
       />
     </label>
   );
@@ -67,7 +67,7 @@ export function SelectField<T extends string>({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[13px] font-medium text-studio-paper-ink">{label}</span>
+      <span className="studio-eyebrow mb-1.5 block">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
@@ -83,7 +83,10 @@ export function SelectField<T extends string>({
       </select>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="inspector" className="h-[42px] w-full justify-between">
+          <Button
+            variant="outline"
+            className="h-[42px] w-full justify-between rounded-[11px] font-mono text-[14px]"
+          >
             {value}
             <ChevronDownIcon
               className="-me-1 ms-2 opacity-60"
@@ -122,14 +125,14 @@ export function CheckboxField({
       <Checkbox
         checked={checked}
         onCheckedChange={(value) => onChange(value === true)}
-        className="mt-0.5 border-studio-paper-muted-ink bg-studio-paper data-[state=checked]:border-studio-action data-[state=checked]:bg-studio-action"
+        className="mt-0.5"
       />
       <span>
-        <span className="block text-[13px] font-medium text-studio-paper-ink">
+        <span className="block text-[13px] font-medium text-studio-ink">
           {label}
         </span>
         {help && (
-          <span className="mt-1 block text-[11px] leading-4 text-studio-paper-muted-ink">
+          <span className="mt-1 block text-[11px] leading-4 text-studio-muted">
             {help}
           </span>
         )}

@@ -18,6 +18,7 @@ function renderLock({
       preferencesLocked={preferencesLocked}
       canLock={canLock}
       onLock={() => {}}
+      onUnlock={() => {}}
     />
   );
 }
@@ -37,12 +38,11 @@ describe("RenderingPreferencesLockControl", () => {
     expect(html).toContain('title="Lock preferences"');
   });
 
-  test("does not offer manual unlock after preferences are locked", () => {
+  test("offers manual unlock after preferences are locked", () => {
     const html = renderLock({ preferencesLocked: true, canLock: true });
 
-    expect(html).toContain('disabled=""');
-    expect(html).not.toContain("Unlock preferences");
-    expect(html).toContain("Change the selection to unlock automatically");
+    expect(html).not.toContain('disabled=""');
+    expect(html).toContain("Click to unlock");
   });
 
   test("automatically unlocks whenever rendering preferences change", () => {

@@ -7,13 +7,27 @@ import { CreateUserForm } from "./create-user-form";
 import { UserStatusAction } from "./user-status-action";
 import { UserQuotaAction } from "./user-quota-action";
 import { UserLogsDialog } from "./user-logs-dialog";
-import { StudioPage, StudioPageHeader, StudioStat, StudioSection } from "./studio-page";
-import { userSummary } from "./admin-presentation";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 export function canManageUserStatus(currentUserId: string, targetUserId: string) {
   return currentUserId !== targetUserId;
+}
+
+function initialsOf(name: string) {
+  return (
+    name
+      .split(" ")
+      .map((part) => part[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "—"
+  );
+}
+
+function roleLabel(role: string) {
+  return role.charAt(0) + role.slice(1).toLowerCase();
 }
 
 export function AdminUsersView({
@@ -24,13 +38,17 @@ export function AdminUsersView({
   currentUserId: string;
 }) {
   const router = useRouter();
+  const [showCreate, setShowCreate] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [viewingLogsUser, setViewingLogsUser] = useState<CompanyUserSummary | null>(null);
+  const [viewingLogsUser, setViewingLogsUser] =
+    useState<CompanyUserSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const summary = userSummary(users);
+  const gridCols = isDeleteMode
+    ? "grid-cols-[auto_1.4fr_0.8fr_1fr_1.1fr_0.6fr]"
+    : "grid-cols-[1.4fr_0.8fr_1fr_1.1fr_0.6fr]";
 
   function toggleSelection(id: string, checked: boolean) {
     const next = new Set(selectedIds);
@@ -51,11 +69,9 @@ export function AdminUsersView({
           })
         )
       );
-
       const failed = results.filter(
         (result) => result.status === "rejected" || !result.value.ok
       ).length;
-
       if (failed > 0) {
         setDeleteError(`Failed to delete ${failed} user(s).`);
       } else {
@@ -63,201 +79,229 @@ export function AdminUsersView({
         setSelectedIds(new Set());
       }
       router.refresh();
-    } catch (err) {
+    } catch {
       setDeleteError("An unexpected error occurred.");
     } finally {
       setBusy(false);
     }
   }
 
-  const userList = (
-    <div className="space-y-4 p-6 lg:p-8">
-      <div className="flex items-center justify-between">
-        <h2 className="sr-only">Users List</h2>
-        {isDeleteMode ? (
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setIsDeleteMode(false);
-                setSelectedIds(new Set());
-                setDeleteError(null);
-              }}
-              disabled={busy}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={busy || selectedIds.size === 0}
-            >
-              {busy ? "Deleting..." : `Delete selected (${selectedIds.size})`}
-            </Button>
-          </div>
-        ) : (
-          <Button variant="outline" onClick={() => setIsDeleteMode(true)}>
-            Select users
-          </Button>
-        )}
-      </div>
-
-      <div aria-live="polite" className="sr-only">
-        {isDeleteMode ? `${selectedIds.size} users selected.` : ""}
-      </div>
-
-      {deleteError && (
-        <div role="alert" className="text-sm font-medium text-studio-danger">
-          {deleteError}
+  return (
+    <div className="studio-anim-screen flex min-h-[100dvh] flex-col">
+      <header className="studio-glass-header sticky top-0 z-[5] flex items-end justify-between gap-4 px-5 pb-[24px] pt-[28px] sm:px-[40px]">
+        <div>
+          <p className="mb-[9px] font-mono text-[11px] tracking-[0.2em] text-[#86867f]">
+            ADMIN / USERS
+          </p>
+          <h1 className="text-[33px] font-semibold tracking-[-0.025em] text-[#16161a]">
+            User management
+          </h1>
         </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setShowCreate(true)}
+          className="shrink-0 rounded-[13px] px-5 py-[13px] text-[13.5px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_12px_26px_-12px_rgba(20,20,26,0.5)]"
+          style={{ background: "linear-gradient(180deg,#2c2c30,#141416)" }}
+        >
+          + New user
+        </button>
+      </header>
 
-      {/* Desktop Table (lg and above) */}
-      <div className="hidden lg:block overflow-hidden rounded-xl border border-studio-line bg-studio-void">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-studio-line bg-studio-shell">
-            <tr>
-              {isDeleteMode && <th className="p-4 w-12"><span className="sr-only">Select</span></th>}
-              <th className="p-4 font-semibold text-studio-muted">Name</th>
-              <th className="p-4 font-semibold text-studio-muted">Account</th>
-              <th className="p-4 font-semibold text-studio-muted">Role</th>
-              <th className="p-4 font-semibold text-studio-muted">Quota</th>
-              <th className="p-4 font-semibold text-studio-muted">Status</th>
-              <th className="p-4 font-semibold text-studio-muted">Stats</th>
-              <th className="p-4 text-right font-semibold text-studio-muted">Manage</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-studio-line">
-            {users.map((u) => (
-              <tr key={u.id} className={u.id === currentUserId ? "bg-studio-shell/50" : ""}>
-                {isDeleteMode && (
-                  <td className="p-4">
-                    {u.id !== currentUserId && (
-                      <Checkbox
-                        checked={selectedIds.has(u.id)}
-                        onCheckedChange={(checked) => toggleSelection(u.id, checked === true)}
-                        disabled={busy}
-                        aria-label={`Select ${u.name}`}
+      <div className="px-5 pb-[60px] pt-[22px] sm:px-[40px]">
+        <div className="mb-[14px] flex min-h-[34px] items-center justify-end gap-3">
+          {deleteError && (
+            <span role="alert" className="text-[12px] font-medium text-studio-danger">
+              {deleteError}
+            </span>
+          )}
+          {isDeleteMode ? (
+            <>
+              <span aria-live="polite" className="font-mono text-[11px] text-[#86867f]">
+                {selectedIds.size} selected
+              </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setIsDeleteMode(false);
+                  setSelectedIds(new Set());
+                  setDeleteError(null);
+                }}
+                className="rounded-[10px] border border-white/85 bg-white/55 px-3 py-2 text-[12px] font-medium text-[#16161a] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || selectedIds.size === 0}
+                onClick={handleDelete}
+                className="rounded-[10px] bg-studio-danger px-3 py-2 text-[12px] font-medium text-studio-danger-ink disabled:opacity-50"
+              >
+                {busy ? "Deleting…" : `Delete selected (${selectedIds.size})`}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsDeleteMode(true)}
+              className="rounded-[10px] border border-white/85 bg-white/55 px-3 py-2 text-[12px] font-medium text-[#16161a]"
+            >
+              Select users
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <div
+            className="min-w-[680px] overflow-hidden rounded-[18px]"
+            style={{
+              background:
+                "linear-gradient(160deg,rgba(255,255,255,0.58),rgba(255,255,255,0.42))",
+              border: "1px solid rgba(255,255,255,0.75)",
+              boxShadow:
+                "0 1px 0 rgba(255,255,255,0.85) inset,0 18px 44px -26px rgba(20,20,26,0.22)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)"
+            }}
+          >
+            <div
+              className={cn(
+                "grid items-center gap-2 border-b border-[rgba(20,20,26,0.07)] px-[18px] py-[14px] font-mono text-[10px] tracking-[0.12em] text-[#9a9a94]",
+                gridCols
+              )}
+            >
+              {isDeleteMode && <span className="sr-only">Select</span>}
+              <span>USER</span>
+              <span>ROLE</span>
+              <span>STATUS</span>
+              <span>RENDER QUOTA</span>
+              <span className="text-right">ACTION</span>
+            </div>
+
+            {users.map((user) => {
+              const self = user.id === currentUserId;
+              const isDisabled = user.disabledAt !== null;
+              return (
+                <div
+                  key={user.id}
+                  className={cn(
+                    "grid items-center gap-2 border-b border-[rgba(20,20,26,0.05)] px-[18px] py-[15px] last:border-b-0",
+                    gridCols,
+                    self && "bg-white/40"
+                  )}
+                >
+                  {isDeleteMode && (
+                    <span>
+                      {!self && (
+                        <Checkbox
+                          checked={selectedIds.has(user.id)}
+                          onCheckedChange={(checked) =>
+                            toggleSelection(user.id, checked === true)
+                          }
+                          disabled={busy}
+                          aria-label={`Select ${user.name}`}
+                        />
+                      )}
+                    </span>
+                  )}
+
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      aria-hidden
+                      className="flex size-8 shrink-0 items-center justify-center rounded-[10px] text-[12px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+                      style={{ background: "linear-gradient(150deg,#2c2c30,#141416)" }}
+                    >
+                      {initialsOf(user.name)}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-[13.5px] font-semibold text-[#16161a]">
+                        {user.name}
+                      </div>
+                      <div className="truncate font-mono text-[10.5px] text-[#9a9a94]">
+                        @{user.account}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span
+                      className={cn(
+                        "inline-block rounded-full px-[9px] py-[3px] font-mono text-[9.5px] tracking-[0.08em]",
+                        user.role === "ADMIN"
+                          ? "bg-studio-ink text-white"
+                          : "border border-white/80 bg-white/70 text-[#46463f]"
+                      )}
+                    >
+                      {roleLabel(user.role)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="size-[7px] rounded-full"
+                      style={{ background: isDisabled ? "#cacac4" : "#1a1a1c" }}
+                    />
+                    <span className="text-[12.5px] text-[#5a5a56]">
+                      {isDisabled ? "Disabled" : "Active"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <UserQuotaAction
+                      userId={user.id}
+                      userName={user.name}
+                      initialQuota={user.monthlyRenderQuota}
+                      used={user.used ?? 0}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewingLogsUser(user)}
+                      aria-label={`View usage for ${user.name}`}
+                      title="View usage"
+                      className="flex size-7 items-center justify-center rounded-[8px] border border-white/85 bg-white/55 text-[#6a6a64] transition-colors hover:text-studio-ink"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+                      </svg>
+                    </button>
+                    {self ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-[9px] border border-[rgba(20,20,26,0.1)] bg-transparent px-3 py-1.5 text-[11px] font-medium text-[#bcbcb6]"
+                      >
+                        You
+                      </button>
+                    ) : (
+                      <UserStatusAction
+                        userId={user.id}
+                        userName={user.name}
+                        disabled={isDisabled}
                       />
                     )}
-                  </td>
-                )}
-                <td className="p-4 font-medium">
-                  {u.name}
-                  {u.id === currentUserId && (
-                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-muted">
-                      You
-                    </span>
-                  )}
-                </td>
-                <td className="p-4 text-studio-muted">{u.account}</td>
-                <td className="p-4 font-medium text-studio-muted">{u.role}</td>
-                <td className="p-4">
-                  <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
-                </td>
-                <td className="p-4">
-                  {u.disabledAt !== null ? "Disabled" : "Active"}
-                </td>
-                <td className="p-4">
-                  <Button variant="link" className="px-0" onClick={() => setViewingLogsUser(u)}>
-                    View usage
-                  </Button>
-                </td>
-                <td className="p-4 text-right">
-                  {canManageUserStatus(currentUserId, u.id) && (
-                    <UserStatusAction userId={u.id} userName={u.name} disabled={u.disabledAt !== null} />
-                  )}
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr>
-                <td colSpan={isDeleteMode ? 8 : 7} className="p-8 text-center text-studio-muted">
-                  No users yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Stacked Card representation (< lg) */}
-      <div className="lg:hidden space-y-4">
-        {users.map((u) => (
-          <div key={u.id} className={`flex flex-col gap-3 rounded-xl border border-studio-line p-4 ${u.id === currentUserId ? "bg-studio-shell/50" : "bg-studio-void"}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {isDeleteMode && u.id !== currentUserId && (
-                  <Checkbox
-                    checked={selectedIds.has(u.id)}
-                    onCheckedChange={(checked) => toggleSelection(u.id, checked === true)}
-                    disabled={busy}
-                    aria-label={`Select ${u.name}`}
-                  />
-                )}
-                <div className="font-medium">
-                  {u.name}
-                  {u.id === currentUserId && (
-                    <span className="ml-2 rounded-full bg-studio-line px-2 py-0.5 text-xs font-semibold text-studio-muted">
-                      You
-                    </span>
-                  )}
+                  </div>
                 </div>
-              </div>
-              <div>{u.disabledAt !== null ? "Disabled" : "Active"}</div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-y-2 text-sm">
-              <div className="text-studio-muted">Account</div>
-              <div className="text-right">{u.account}</div>
-              
-              <div className="text-studio-muted">Role</div>
-              <div className="text-right font-medium">{u.role}</div>
-              
-              <div className="text-studio-muted">Quota</div>
-              <div className="flex justify-end">
-                <UserQuotaAction userId={u.id} userName={u.name} initialQuota={u.monthlyRenderQuota} />
-              </div>
-            </div>
+              );
+            })}
 
-            <div className="flex items-center justify-between border-t border-studio-line pt-3 mt-1">
-              <Button variant="link" className="px-0 h-auto" onClick={() => setViewingLogsUser(u)}>
-                View usage
-              </Button>
-              {canManageUserStatus(currentUserId, u.id) && (
-                <UserStatusAction userId={u.id} userName={u.name} disabled={u.disabledAt !== null} />
-              )}
-            </div>
+            {users.length === 0 && (
+              <div className="px-[18px] py-12 text-center text-[13px] text-[#86867f]">
+                No users yet.
+              </div>
+            )}
           </div>
-        ))}
-        {users.length === 0 && (
-          <div className="rounded-xl border border-studio-line bg-studio-void p-8 text-center text-studio-muted">
-            No users yet.
-          </div>
-        )}
-      </div>
-    </div>
-  );
+        </div>
 
-  return (
-    <StudioPage>
-      <StudioPageHeader
-        title="Users"
-        description="Manage access, roles, quotas, and usage."
-        meta={
-          <div className="grid max-w-md grid-cols-3 gap-4">
-            <StudioStat label="Active" value={summary.active} />
-            <StudioStat label="Disabled" value={summary.disabled} tone="warning" />
-            <StudioStat label="Admins" value={summary.admins} />
-          </div>
-        }
-      />
-      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_370px]">
-        <StudioSection aria-label="Company users">
-          {userList}
-        </StudioSection>
-        <CreateUserForm />
+        <p className="mt-[14px] font-mono text-[10.5px] tracking-[0.04em] text-[#aaaaa4]">
+          ⌿ The current administrator cannot suspend or delete their own account.
+        </p>
       </div>
+
+      {showCreate && <CreateUserForm onClose={() => setShowCreate(false)} />}
 
       {viewingLogsUser && (
         <UserLogsDialog
@@ -269,6 +313,6 @@ export function AdminUsersView({
           }}
         />
       )}
-    </StudioPage>
+    </div>
   );
 }

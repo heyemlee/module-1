@@ -15,7 +15,8 @@ import { AppliancesStep, LayoutStep, OpeningsStep } from "./showroom-intake-step
 import {
   CabinetFillSummaryPanel,
   Round1SnapshotPanel,
-  RenderingControls
+  RenderingControls,
+  Round1InlineRenderPreview
 } from "./showroom-intake-panels";
 import { shouldApplySnapshotRestore } from "./showroom-intake-app";
 
@@ -147,6 +148,66 @@ function changeSelect(
   select.props.onChange({ target: { value } });
 }
 
+type OpeningButtonProps = ElementWithChildrenProps & {
+  onClick: () => void;
+  "data-opening"?: string;
+};
+
+function findOpeningButton(
+  node: ReactNode,
+  key: string
+): ReactElement<OpeningButtonProps> | null {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return null;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findOpeningButton(child, key);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  if (typeof node.type === "function") {
+    return findOpeningButton(renderFunctionElement(node), key);
+  }
+  if (
+    node.type === "button" &&
+    (node.props as OpeningButtonProps)["data-opening"] === key
+  ) {
+    return node as ReactElement<OpeningButtonProps>;
+  }
+  return findOpeningButton(childrenOf(node), key);
+}
+
+function findButtonByAttr(
+  node: ReactNode,
+  attr: string,
+  value: string
+): ReactElement<{ onClick: () => void }> | null {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return null;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findButtonByAttr(child, attr, value);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  if (typeof node.type === "function") {
+    return findButtonByAttr(renderFunctionElement(node), attr, value);
+  }
+  if (
+    node.type === "button" &&
+    (node.props as Record<string, unknown>)[attr] === value
+  ) {
+    return node as ReactElement<{ onClick: () => void }>;
+  }
+  return findButtonByAttr(childrenOf(node), attr, value);
+}
+
 describe("OpeningsStep", () => {
   test("does not render first-phase door or window width inputs", () => {
     const html = renderToStaticMarkup(
@@ -157,33 +218,55 @@ describe("OpeningsStep", () => {
     expect(html).not.toContain("Window width if known");
   });
 
-  test("keeps window relation to wall-level positions only", () => {
+  test("presents Door and Window as toggles, not wall/relation selects", () => {
     const html = renderToStaticMarkup(
       <OpeningsStep form={createDefaultShowroomForm()} setForm={() => {}} />
     );
 
-    expect(html).toContain("Window approximate relation");
-    expect(html).toContain("BACK_SIDE");
-    expect(html).toContain("LEFT_SIDE");
-    expect(html).toContain("RIGHT_SIDE");
-    expect(html).toContain("FRONT_SIDE");
-    expect(html).not.toContain("BEHIND_SINK");
-    expect(html).not.toContain("UNDER_WINDOW");
+    expect(html).toContain("Openings");
+    expect(html).toContain("Door");
+    expect(html).toContain("Window");
+    // The wall/relation/kind selects are now set by dragging on the plan.
+    expect(html).not.toContain("Window approximate relation");
+    expect(html).not.toContain("Door or open passage?");
+    expect(html).not.toContain("Door / opening wall");
   });
 
-  test("stores whether the opening is a swinging door or open passage", () => {
+  test("toggling Door on records the opening in the form", () => {
     const form = createDefaultShowroomForm();
+    form.openings.doors = { status: "NO", items: [] };
     let nextForm = form;
     const tree = (
       <OpeningsStep form={form} setForm={(value) => { nextForm = value; }} />
     );
 
-    const select = findSelectByLabel(tree, "Door or open passage?");
-    expect(select).not.toBeNull();
+    const button = findOpeningButton(tree, "door");
+    expect(button).not.toBeNull();
 
-    changeSelect(select!, "OPEN_PASSAGE");
+    button!.props.onClick();
 
-    expect(nextForm.openings.doors.items[0]?.kind).toBe("OPEN_PASSAGE");
+    expect(nextForm.openings.doors.status).toBe("YES");
+    expect(nextForm.openings.doors.items.length).toBeGreaterThan(0);
+  });
+
+  test("toggling Window off clears its status and items", () => {
+    const form = createDefaultShowroomForm();
+    form.openings.windows = {
+      status: "YES",
+      items: [{ relation: "BACK_SIDE", width: null }]
+    };
+    let nextForm = form;
+    const tree = (
+      <OpeningsStep form={form} setForm={(value) => { nextForm = value; }} />
+    );
+
+    const button = findOpeningButton(tree, "window");
+    expect(button).not.toBeNull();
+
+    button!.props.onClick();
+
+    expect(nextForm.openings.windows.status).toBe("NO");
+    expect(nextForm.openings.windows.items).toEqual([]);
   });
   test("rendering controls expose generating and stale states without a generic spinner", () => {
     const html = renderToStaticMarkup(
@@ -208,10 +291,11 @@ describe("AppliancesStep", () => {
       <AppliancesStep form={createDefaultShowroomForm()} setForm={() => {}} />
     );
 
-    expect(html).toContain("Range included?");
-    expect(html).toContain("Cooktop included?");
-    expect(html).toContain("Wall oven included?");
-    expect(html).toContain("Built-in microwave included?");
+    expect(html).toContain("Appliances present");
+    expect(html).toContain("Range (with oven)");
+    expect(html).toContain("Cooktop");
+    expect(html).toContain("Wall oven");
+    expect(html).toContain("Built-in microwave");
     expect(html).not.toContain("Range size");
     expect(html).not.toContain("Cooktop size");
     expect(html).not.toContain("Oven / microwave");
@@ -255,36 +339,24 @@ describe("AppliancesStep", () => {
       />
     );
 
-    expect(hiddenHtml).not.toContain("Oven and microwave arrangement?");
-    expect(visibleHtml).toContain("Oven and microwave arrangement?");
+    expect(hiddenHtml).not.toContain("Wall oven + microwave placement");
+    expect(visibleHtml).toContain("Wall oven + microwave placement");
     expect(visibleHtml).toContain("WALL_OVEN_MICROWAVE_STACK");
     expect(visibleHtml).toContain("SEPARATE_WALL_OVEN_AND_MICROWAVE");
-    expect(visibleHtml).toContain("UNKNOWN");
+    expect(visibleHtml).toContain("Stacked");
+    expect(visibleHtml).toContain("Separate");
   });
 
-  test("maps oven and microwave arrangement changes into appliance statuses", () => {
+  test("maps oven and microwave placement changes into appliance statuses", () => {
     const cases = [
-      {
-        configuration: "WALL_OVEN_MICROWAVE_STACK",
-        wallOven: { status: "YES", relation: "UNKNOWN" },
-        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
-      },
-      {
-        configuration: "SEPARATE_WALL_OVEN_AND_MICROWAVE",
-        wallOven: { status: "YES", relation: "UNKNOWN" },
-        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
-      },
-      {
-        configuration: "UNKNOWN",
-        wallOven: { status: "YES", relation: "LEFT_SIDE" },
-        microwaveOvenCombo: { status: "YES", relation: "UNKNOWN" }
-      }
+      "WALL_OVEN_MICROWAVE_STACK",
+      "SEPARATE_WALL_OVEN_AND_MICROWAVE"
     ] as const;
 
-    for (const expected of cases) {
+    for (const configuration of cases) {
       const form = createDefaultShowroomForm();
       let nextForm = form;
-      const select = findSelectByLabel(
+      const button = findButtonByAttr(
         <AppliancesStep
           form={{
             ...form,
@@ -308,31 +380,32 @@ describe("AppliancesStep", () => {
             nextForm = updatedForm;
           }}
         />,
-        "Oven and microwave arrangement?"
+        "data-oven",
+        configuration
       );
 
-      expect(select).not.toBeNull();
-      changeSelect(select!, expected.configuration);
+      expect(button).not.toBeNull();
+      button!.props.onClick();
 
       expect(
         nextForm.layoutSensitiveCabinets.ovenMicrowave
       ).toMatchObject({
-        configuration: expected.configuration,
+        configuration,
         relation: "UNKNOWN"
       });
       expect(
         nextForm.layoutSensitiveCabinets.cookingAppliances.wallOven
-      ).toEqual(expected.wallOven);
+      ).toEqual({ status: "YES", relation: "UNKNOWN" });
       expect(
         nextForm.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo
-      ).toEqual(expected.microwaveOvenCombo);
+      ).toEqual({ status: "YES", relation: "UNKNOWN" });
     }
   });
 
   test("resets stale oven and microwave arrangement when microwave status changes directly", () => {
     const form = createDefaultShowroomForm();
     let nextForm = form;
-    const select = findSelectByLabel(
+    const button = findButtonByAttr(
       <AppliancesStep
         form={{
           ...form,
@@ -356,11 +429,12 @@ describe("AppliancesStep", () => {
           nextForm = updatedForm;
         }}
       />,
-      "Built-in microwave included?"
+      "data-appl",
+      "microwave"
     );
 
-    expect(select).not.toBeNull();
-    changeSelect(select!, "YES");
+    expect(button).not.toBeNull();
+    button!.props.onClick();
 
     expect(nextForm.layoutSensitiveCabinets.ovenMicrowave).toEqual({
       configuration: "UNKNOWN",
@@ -374,7 +448,7 @@ describe("AppliancesStep", () => {
   test("resets arrangement to unknown when direct status changes leave no wall oven or microwave", () => {
     const form = createDefaultShowroomForm();
     let nextForm = form;
-    const select = findSelectByLabel(
+    const button = findButtonByAttr(
       <AppliancesStep
         form={{
           ...form,
@@ -395,11 +469,12 @@ describe("AppliancesStep", () => {
           nextForm = updatedForm;
         }}
       />,
-      "Built-in microwave included?"
+      "data-appl",
+      "microwave"
     );
 
-    expect(select).not.toBeNull();
-    changeSelect(select!, "NO");
+    expect(button).not.toBeNull();
+    button!.props.onClick();
 
     expect(nextForm.layoutSensitiveCabinets.ovenMicrowave).toEqual({
       configuration: "UNKNOWN",
@@ -448,23 +523,34 @@ describe("LayoutStep", () => {
     expect(rightIndex).toBeGreaterThan(leftIndex);
     expect(uIndex).toBeGreaterThan(rightIndex);
     expect(oneWallIndex).toBeGreaterThan(uIndex);
-    expect(html).toContain("Include an island");
+    expect(html).toContain("Center island");
     expect(html).not.toContain("L_SHAPE_ISLAND");
     expect(html).not.toContain("U_SHAPE_ISLAND");
     expect(html).not.toContain(">ISLAND<");
   });
 
-  test("uses a checkbox for the binary island request", () => {
-    const html = renderToStaticMarkup(
+  test("uses a three-state Yes/No/Unsure control for the island", () => {
+    const form = createDefaultShowroomForm();
+    let nextForm = form;
+    const tree = (
       <LayoutStep
-        form={createDefaultShowroomForm()}
-        setForm={() => {}}
+        form={form}
+        setForm={(value) => {
+          nextForm = value;
+        }}
         setPositionOverrides={() => {}}
       />
     );
+    const html = renderToStaticMarkup(tree);
 
-    expect(html).toContain("Include an island");
-    expect(html).toContain("checkbox");
+    expect(html).toContain("Center island");
+    expect(html).toContain("Unsure");
+    expect(html).not.toContain("checkbox");
+
+    const unsure = findButtonByAttr(tree, "data-island", "UNKNOWN");
+    expect(unsure).not.toBeNull();
+    unsure!.props.onClick();
+    expect(nextForm.layoutSensitiveCabinets.island.status).toBe("UNKNOWN");
   });
   test("rendering controls expose generating and stale states without a generic spinner", () => {
     const html = renderToStaticMarkup(
@@ -529,6 +615,81 @@ describe("ShowroomIntakeApp", () => {
     expect(html).toContain("Building concept rendering");
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("border-t-transparent");
+  });
+});
+
+describe("Round1InlineRenderPreview", () => {
+  const baseProps = {
+    cabinetColors: [{ id: "gr", name: "Graphite" }],
+    styleLabel: "European Frameless"
+  };
+
+  test("shows the render-cube loader while generating", () => {
+    const html = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy
+        error={null}
+        renderings={[]}
+        {...baseProps}
+      />
+    );
+    expect(html).toContain("cmx-cube");
+    expect(html).toContain("RENDER");
+  });
+
+  test("shows the latest concept image with style/color meta", () => {
+    const html = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy={false}
+        error={null}
+        renderings={[{ id: "r1", url: "data:image/png;base64,abc", doorColorId: "gr" }]}
+        {...baseProps}
+      />
+    );
+    expect(html).toContain("data:image/png;base64,abc");
+    expect(html).toContain("EUROPEAN FRAMELESS · GRAPHITE");
+    expect(html).not.toContain("LATEST CONCEPT");
+    expect(html).not.toContain("View all");
+    expect(html).not.toContain("Close preview");
+  });
+
+  test("shows a carousel count only when more than one rendering exists", () => {
+    const single = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy={false}
+        error={null}
+        renderings={[{ id: "r1", url: "u1", doorColorId: "gr" }]}
+        {...baseProps}
+      />
+    );
+    expect(single).not.toContain("1 / 1");
+
+    const many = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy={false}
+        error={null}
+        renderings={[
+          { id: "r2", url: "u2", doorColorId: "gr" },
+          { id: "r1", url: "u1", doorColorId: "gr" }
+        ]}
+        {...baseProps}
+      />
+    );
+    expect(many).toContain("1 / 2");
+    expect(many).toContain('aria-label="Previous rendering"');
+    expect(many).toContain('aria-label="Next rendering"');
+  });
+
+  test("surfaces a generation error", () => {
+    const html = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy={false}
+        error="Rendering failed"
+        renderings={[]}
+        {...baseProps}
+      />
+    );
+    expect(html).toContain("Could not generate the rendering: Rendering failed");
   });
 });
 
@@ -678,7 +839,7 @@ describe("ShowroomIntakeApp snapshot gating", () => {
   test("starts with no snapshot before cabinet fill is generated", () => {
     const html = renderToStaticMarkup(<ShowroomIntakeApp />);
 
-    expect(html).toContain("Changes not frozen");
+    expect(html).toContain("DRAFT SAVED");
     expect(html).not.toContain("Snapshot ready");
     expect(html).not.toContain("View snapshot JSON");
   });
