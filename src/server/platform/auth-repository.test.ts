@@ -42,6 +42,32 @@ describe("auth repository", () => {
     expect(vi.mocked(query).mock.calls[0][1]).toEqual(["admin@example.com"]);
   });
 
+  test("login lookup excludes soft-deleted users, with both identifier branches parenthesised", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [] } as never);
+
+    const result = await findUserForLogin("test");
+
+    // A soft-deleted account resolves to no row, so it can never mint a session.
+    expect(result).toBeNull();
+    const sql = vi.mocked(query).mock.calls[0][0] as string;
+    expect(sql).toContain("deleted_at IS NULL");
+    // The AND must apply to both identifier branches, not just the email one.
+    expect(sql).toContain("(lower(account) = lower($1) OR lower(email) = lower($1))");
+  });
+
+  test("session resolution ignores sessions belonging to soft-deleted users", async () => {
+    const sessionId = `session-deleted-${crypto.randomUUID()}`;
+    // The deleted_at filter means the JOIN yields no row even though the session
+    // row still exists, so a session minted before deletion stops resolving.
+    vi.mocked(query).mockResolvedValueOnce({ rows: [] } as never);
+
+    const user = await getUserBySession(sessionId);
+
+    expect(user).toBeNull();
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("users.deleted_at IS NULL");
+    invalidateSessionCache(sessionId);
+  });
+
   test("reuses a resolved session user within the short TTL", async () => {
     const sessionId = `session-cache-${crypto.randomUUID()}`;
     vi.mocked(query).mockResolvedValueOnce({
