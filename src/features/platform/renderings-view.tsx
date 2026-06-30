@@ -6,7 +6,7 @@ import {
   StudioPageHeader,
   StudioSection
 } from "./studio-page";
-import { DownloadButton } from "./download-button";
+import { RenderingsGallery, type RenderingCard } from "./renderings-gallery";
 
 const STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -63,8 +63,9 @@ export function RenderingsView({
           />
         </StudioSection>
       ) : (
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3">
-          {renderings.map((rendering, index) => {
+        <RenderingsGallery
+          customerName={project.customerName}
+          cards={renderings.map((rendering): RenderingCard => {
             const prefs = rendering.basedOnRenderingPreferences;
             const colorName = prefs
               ? colorNameById.get(prefs.doorColorId) ?? "Unknown color"
@@ -72,55 +73,19 @@ export function RenderingsView({
             const style = prefs
               ? STYLE_LABELS[prefs.cabinetStyle] ?? prefs.cabinetStyle
               : null;
-            const imageUrl = `/api/projects/${project.id}/round1/renderings/${rendering.id}/image`;
             const dateObj = new Date(rendering.createdAt);
 
-            return (
-              <figure
-                key={rendering.id}
-                className="studio-glass group overflow-hidden rounded-studio-panel"
-              >
-                <div className="relative overflow-hidden border-b border-studio-line bg-studio-void">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={imageUrl}
-                    alt={`Concept rendering for ${project.customerName}`}
-                    loading="lazy"
-                    decoding="async"
-                    className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.01]"
-                  />
-                  {index === 0 && (
-                    <span className="absolute left-3 top-3 inline-flex h-6 items-center rounded-full bg-studio-action px-2.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-studio-action-ink">
-                      Latest
-                    </span>
-                  )}
-                </div>
-                <figcaption className="flex items-start justify-between gap-3 p-4">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="truncate text-[13px] font-semibold text-studio-ink">
-                      {colorName}
-                    </p>
-                    {style && (
-                      <p className="truncate text-[13px] text-studio-muted">
-                        {style}
-                      </p>
-                    )}
-                    <time
-                      dateTime={rendering.createdAt}
-                      className="block truncate text-[11px] text-studio-quiet"
-                    >
-                      {dateObj.toLocaleString()}
-                    </time>
-                  </div>
-                  <DownloadButton
-                    href={imageUrl}
-                    fileName={`rendering_${project.projectName.replace(/\s+/g, "_")}_${dateObj.getTime()}.png`}
-                  />
-                </figcaption>
-              </figure>
-            );
+            return {
+              id: rendering.id,
+              imageUrl: `/api/projects/${project.id}/round1/renderings/${rendering.id}/image`,
+              colorName,
+              style,
+              createdAt: rendering.createdAt,
+              dateLabel: dateObj.toLocaleString(),
+              downloadName: `rendering_${project.projectName.replace(/\s+/g, "_")}_${dateObj.getTime()}.png`
+            };
           })}
-        </div>
+        />
       )}
     </StudioPage>
   );
