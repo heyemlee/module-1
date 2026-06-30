@@ -10,6 +10,7 @@ describe("StudioRail", () => {
       <StudioRail
         userName="Maya"
         isAdmin={false}
+        isOwner={false}
         activeItem="round1"
         projectId="project-1"
       />
@@ -26,11 +27,27 @@ describe("StudioRail", () => {
     expect(html).toContain("Sign out");
   });
 
-  test("adds administration destinations for admins", () => {
+  test("adds user management for admins, but not the owner-only color library", () => {
     const html = renderToStaticMarkup(
       <StudioRail
         userName="Admin"
         isAdmin
+        isOwner={false}
+        activeItem="round1"
+        projectId="project-1"
+      />
+    );
+
+    expect(html).toContain("Users");
+    expect(html).not.toContain("Cabinet Colors");
+  });
+
+  test("shows the door-color library only to the owner", () => {
+    const html = renderToStaticMarkup(
+      <StudioRail
+        userName="Owner"
+        isAdmin
+        isOwner
         activeItem="round1"
         projectId="project-1"
       />

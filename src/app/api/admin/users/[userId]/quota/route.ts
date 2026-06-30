@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser, requireRole } from "@/server/platform/auth-service";
+import { ADMIN_ROLES } from "@/server/platform/types";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { setCompanyUserQuota, CompanyUserNotFoundError } from "@/server/platform/user-admin-repository";
 
@@ -14,7 +15,7 @@ export async function PUT(
 ) {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ADMIN_ROLES);
 
     const { userId } = await params;
     const input = requestSchema.parse(await request.json());

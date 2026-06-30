@@ -22,7 +22,7 @@ export default async function ProjectRound1Page({
       customerName={project.customerName}
       projectName={project.projectName}
       userName={user.name}
-      isAdmin={user.role === "ADMIN"}
+      isAdmin={user.role === "ADMIN" || user.role === "OWNER"}
       initialIntake={intake}
     />
   );

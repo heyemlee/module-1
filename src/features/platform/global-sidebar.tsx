@@ -6,11 +6,13 @@ import { StudioRail } from "./studio-shell";
 export function GlobalSidebar({
   userName,
   userRole,
-  isAdmin
+  isAdmin,
+  isOwner
 }: {
   userName: string;
   userRole: string;
   isAdmin: boolean;
+  isOwner: boolean;
 }) {
   const pathname = usePathname() || "";
 
@@ -49,6 +51,7 @@ export function GlobalSidebar({
       userName={userName}
       userRole={userRole}
       isAdmin={isAdmin}
+      isOwner={isOwner}
       activeItem={activeItem}
       projectId={projectId}
     />

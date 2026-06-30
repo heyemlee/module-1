@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('ADMIN', 'SALES', 'DESIGNER')),
+  role TEXT NOT NULL CHECK (role IN ('OWNER', 'ADMIN', 'SALES', 'DESIGNER')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   disabled_at TIMESTAMPTZ,
@@ -155,3 +155,9 @@ ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK (
   status IN ('INTAKE', 'RENDERING_READY', 'ROUND2_MEASURING', 'ARCHIVED')
 );
 ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'INTAKE';
+
+-- Migration (2026-06-29): add OWNER role above ADMIN. Idempotent: drop the old
+-- CHECK first so it can't reject the new value, then re-add it with OWNER.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check
+  CHECK (role IN ('OWNER', 'ADMIN', 'SALES', 'DESIGNER'));

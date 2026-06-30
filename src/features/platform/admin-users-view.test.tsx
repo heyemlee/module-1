@@ -35,7 +35,7 @@ const users: CompanyUserSummary[] = [
 describe("AdminUsersView", () => {
   test("renders the handoff user-management table", () => {
     const html = renderToStaticMarkup(
-      <AdminUsersView users={users} currentUserId="admin-1" />
+      <AdminUsersView users={users} currentUserId="admin-1" currentUserRole="ADMIN" />
     );
 
     expect(html).toContain("ADMIN / USERS");

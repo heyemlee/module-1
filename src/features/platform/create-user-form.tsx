@@ -2,20 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { UserRole } from "@/server/platform/types";
+import { CREATABLE_BY, type UserRole } from "@/server/platform/types";
 import { fetchJson } from "@/lib/api-client";
-
-const ROLES: UserRole[] = ["SALES", "DESIGNER", "ADMIN"];
 
 const LABEL =
   "mb-[7px] block font-mono text-[9.5px] tracking-[0.12em] text-[#86867f]";
 const FIELD =
   "studio-glass-input w-full rounded-[11px] px-3 py-[11px] text-[14px] text-[#16161a]";
 
-export function CreateUserForm({ onClose }: { onClose: () => void }) {
+export function CreateUserForm({
+  onClose,
+  currentUserRole
+}: {
+  onClose: () => void;
+  currentUserRole: UserRole;
+}) {
   const router = useRouter();
+  // Only roles the current user is allowed to create (admins can't create admins).
+  const roles = CREATABLE_BY[currentUserRole];
   const [account, setAccount] = useState("");
-  const [role, setRole] = useState<UserRole>("SALES");
+  const [role, setRole] = useState<UserRole>(roles[0] ?? "SALES");
   const [password, setPassword] = useState("");
   const [monthlyRenderQuota, setMonthlyRenderQuota] = useState("50");
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +135,7 @@ export function CreateUserForm({ onClose }: { onClose: () => void }) {
                 onChange={(event) => setRole(event.target.value as UserRole)}
                 className={`${FIELD} appearance-none`}
               >
-                {ROLES.map((option) => (
+                {roles.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>

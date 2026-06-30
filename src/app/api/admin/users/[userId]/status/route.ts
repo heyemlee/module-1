@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole, requireUser } from "@/server/platform/auth-service";
+import { ADMIN_ROLES } from "@/server/platform/types";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import {
   CompanyUserNotFoundError,
@@ -17,7 +18,7 @@ export async function PATCH(
 ) {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ADMIN_ROLES);
     const { userId } = await params;
     if (user.id === userId) {
       return NextResponse.json(

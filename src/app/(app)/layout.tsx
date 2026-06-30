@@ -29,7 +29,8 @@ export default async function AppLayout({
       <GlobalSidebar
         userName={user.name}
         userRole={user.role}
-        isAdmin={user.role === "ADMIN"}
+        isAdmin={user.role === "ADMIN" || user.role === "OWNER"}
+        isOwner={user.role === "OWNER"}
       />
       <div className="relative z-[1] min-w-0 flex-1">{children}</div>
     </div>

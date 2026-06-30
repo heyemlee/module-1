@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireRole, requireUser } from "@/server/platform/auth-service";
+import { ADMIN_ROLES } from "@/server/platform/types";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { deleteCompanyUser } from "@/server/platform/user-admin-repository";
 
@@ -9,7 +10,7 @@ export async function DELETE(
 ) {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ADMIN_ROLES);
     const { userId } = await context.params;
 
     if (user.id === userId) {

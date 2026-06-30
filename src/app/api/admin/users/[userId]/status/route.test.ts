@@ -61,7 +61,7 @@ describe("PATCH /api/admin/users/[userId]/status", () => {
     const response = await patchRequest("user-2");
 
     expect(response.status).toBe(200);
-    expect(mocks.requireRole).toHaveBeenCalledWith(admin, ["ADMIN"]);
+    expect(mocks.requireRole).toHaveBeenCalledWith(admin, ["ADMIN", "OWNER"]);
     expect(mocks.setCompanyUserDisabled).toHaveBeenCalledWith({
       companyId: "company-1",
       userId: "user-2",

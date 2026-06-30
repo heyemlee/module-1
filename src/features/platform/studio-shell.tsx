@@ -24,12 +24,14 @@ export function StudioRail({
   userName,
   userRole = "",
   isAdmin,
+  isOwner,
   activeItem,
   projectId
 }: {
   userName: string;
   userRole?: string;
   isAdmin: boolean;
+  isOwner: boolean;
   activeItem: StudioNavItem;
   projectId?: string;
 }) {
@@ -123,7 +125,7 @@ export function StudioRail({
       href: "/admin/cabinet-colors",
       label: "Cabinet Colors",
       section: "admin",
-      visible: isAdmin
+      visible: isOwner
     }
   ];
 

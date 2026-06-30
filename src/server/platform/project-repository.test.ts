@@ -35,9 +35,10 @@ describe("project authorization helpers", () => {
     expect(canAccessProject(sales, { companyId: "company-1", createdByUserId: "sales-2" })).toBe(false);
   });
 
-  test("designer and admin can access all company projects", () => {
+  test("designer, admin, and owner can access all company projects", () => {
     expect(canAccessProject({ ...sales, role: "DESIGNER" }, { companyId: "company-1", createdByUserId: "sales-2" })).toBe(true);
     expect(canAccessProject({ ...sales, role: "ADMIN" }, { companyId: "company-1", createdByUserId: "sales-2" })).toBe(true);
+    expect(canAccessProject({ ...sales, role: "OWNER" }, { companyId: "company-1", createdByUserId: "sales-2" })).toBe(true);
   });
 
   test("no role crosses company boundaries", () => {

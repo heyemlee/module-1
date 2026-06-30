@@ -10,7 +10,7 @@ export async function PUT(
 ) {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ["OWNER"]);
     const { colorId } = await params;
     const input = cabinetColorInputSchema.parse(await request.json());
     const color = await updateCabinetColor(user.companyId, colorId, input);
