@@ -596,10 +596,10 @@ describe("ShowroomIntakeApp", () => {
     expect(html).not.toContain("The top-down layout plan updates live as you fill the form.");
   });
 
-  test("includes Rendering Preferences as the sixth showroom step", () => {
+  test("includes Rendering as the sixth showroom step", () => {
     const html = renderToStaticMarkup(<ShowroomIntakeApp />);
 
-    expect(html).toContain("Rendering Preferences");
+    expect(html).toContain("Rendering");
   });
   test("rendering controls expose generating and stale states without a generic spinner", () => {
     const html = renderToStaticMarkup(
@@ -854,7 +854,7 @@ describe("ShowroomIntakeApp snapshot gating", () => {
   test("does not expose the rendering generate action outside the final step", () => {
     const html = renderToStaticMarkup(<ShowroomIntakeApp />);
 
-    expect(html).toContain("Rendering Preferences");
+    expect(html).toContain("Rendering");
     expect(html).not.toContain("Generate Rendering");
   });
   test("rendering controls expose generating and stale states without a generic spinner", () => {

@@ -85,7 +85,7 @@ export const SHOWROOM_STEPS = [
   "Room & Openings",
   "Layout & Appliances",
   "Adjust Positions",
-  "Rendering Preferences"
+  "Rendering"
 ] as const;
 
 // Mono sub-label under each step title in the top strip (design chrome).
@@ -261,6 +261,17 @@ export function ShowroomIntakeApp({
   initialIntake?: string;
 }) {
   const [form, setForm] = useState<Round1FormInput>(() => createDefaultShowroomForm());
+  const cookingForValidation = form.layoutSensitiveCabinets.cookingAppliances || {
+    range: { status: "YES" as const, relation: "BACK_SIDE" as const },
+    cooktop: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+    wallOven: { status: "NO" as const, relation: "NOT_APPLICABLE" as const },
+    microwaveOvenCombo: { status: "UNKNOWN" as const, relation: "UNKNOWN" as const }
+  };
+  const isCookingAppliancesComplete = !(
+    cookingForValidation.wallOven.status === "YES" &&
+    cookingForValidation.microwaveOvenCombo.status === "YES" &&
+    form.layoutSensitiveCabinets.ovenMicrowave.configuration === "UNKNOWN"
+  );
   // Optional conversational intake assistant, per ai_ctx.md's AI Boundary: the
   // form is the authoritative path; the assistant only helps organize customer
   // input into form fields. Rendered as a collapsible side drawer, off by default.
@@ -883,6 +894,7 @@ export function ShowroomIntakeApp({
   }, [draftPersistState, cabinetFillGenerated, form, positionOverrides]);
 
   const goToNextStep = useCallback(() => {
+    if (step === 1 && !isCookingAppliancesComplete) return;
     localSessionChangedRef.current = true;
     draftDirtyRef.current = true;
     setDraftPersistState("idle");
@@ -892,15 +904,16 @@ export function ShowroomIntakeApp({
     const nextStep = Math.min(SHOWROOM_STEPS.length - 1, step + 1);
     setStep(nextStep);
     setMaxAccessibleStep((current) => Math.max(current, nextStep));
-  }, [fixedPositionsConfirmed, step]);
+  }, [fixedPositionsConfirmed, step, isCookingAppliancesComplete]);
 
   const goToStep = useCallback((index: number) => {
     if (index > maxAccessibleStep) return;
+    if (step === 1 && !isCookingAppliancesComplete && index > 1) return;
     localSessionChangedRef.current = true;
     draftDirtyRef.current = true;
     setDraftPersistState("idle");
     setStep(index);
-  }, [maxAccessibleStep]);
+  }, [maxAccessibleStep, step, isCookingAppliancesComplete]);
 
   // Step-entrance stagger (replaces a one-off GSAP timeline). Uses the native
   // Web Animations API so we don't ship an animation library for a single effect.
@@ -1016,7 +1029,7 @@ export function ShowroomIntakeApp({
       steps={SHOWROOM_STEPS}
       meta={STEP_META}
       currentStep={step}
-      maxAccessibleStep={maxAccessibleStep}
+      maxAccessibleStep={isCookingAppliancesComplete ? maxAccessibleStep : Math.min(maxAccessibleStep, 1)}
       variant="top"
       onStepChange={goToStep}
     />
@@ -1214,12 +1227,13 @@ export function ShowroomIntakeApp({
       title={SHOWROOM_STEPS[step]}
       description={STEP_DESCRIPTIONS[step]}
       previousDisabled={step === 0}
-      continueDisabled={step === SHOWROOM_STEPS.length - 1}
+      continueDisabled={step === SHOWROOM_STEPS.length - 1 || (step === 1 && !isCookingAppliancesComplete)}
       onPrevious={() => goToStep(Math.max(0, step - 1))}
       onContinue={goToNextStep}
       footerContent={step === 3 ? renderingFooter : undefined}
       suggestion={step === 2 ? adjustPositionSuggestion : undefined}
       className="h-full"
+      hideHeader={true}
     >
       {activeStepContent}
     </Round1Inspector>
