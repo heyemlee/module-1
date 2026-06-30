@@ -137,6 +137,29 @@ export async function setCompanyUserQuota(input: {
   return mapCompanyUserRow(row);
 }
 
+// Change a user's role. `manageableRoles` is the actor's CREATABLE_BY set, so
+// the WHERE clause does double duty: it protects the OWNER (never in any actor's
+// set) and stops an admin re-roling another admin — a miss returns 0 rows ->
+// not-found. The new role is validated as assignable + creatable by the route.
+export async function setCompanyUserRole(input: {
+  companyId: string;
+  userId: string;
+  role: UserRole;
+  manageableRoles: UserRole[];
+}) {
+  const result = await query<CompanyUserRow>(
+    `UPDATE users
+     SET role = $3,
+         updated_at = now()
+     WHERE id = $1 AND company_id = $2 AND role = ANY($4::text[])
+     RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
+    [input.userId, input.companyId, input.role, input.manageableRoles]
+  );
+  const row = result.rows[0];
+  if (!row) throw new CompanyUserNotFoundError("User not found");
+  return mapCompanyUserRow(row);
+}
+
 export async function deleteCompanyUser(input: {
   companyId: string;
   userId: string;
