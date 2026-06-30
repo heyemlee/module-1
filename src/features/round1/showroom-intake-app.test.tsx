@@ -10,7 +10,10 @@ import {
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot } from "./snapshot";
-import { ShowroomIntakeApp } from "./showroom-intake-app";
+import {
+  Round1RenderingFlow,
+  ShowroomIntakeApp
+} from "./showroom-intake-app";
 import { AppliancesStep, LayoutStep, OpeningsStep } from "./showroom-intake-steps";
 import {
   CabinetFillSummaryPanel,
@@ -653,6 +656,26 @@ describe("Round1InlineRenderPreview", () => {
     expect(html).not.toContain("Close preview");
   });
 
+  test("fits the complete rendering inside the available viewport", () => {
+    const html = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy={false}
+        error={null}
+        renderings={[
+          { id: "r1", url: "render.png", doorColorId: "gr" }
+        ]}
+        {...baseProps}
+        fitViewport
+      />
+    );
+
+    expect(html).toContain('data-rendering-fit="viewport"');
+    expect(html).toContain("h-full");
+    expect(html).toContain("w-full");
+    expect(html).toContain("object-contain");
+    expect(html).not.toContain("object-cover");
+  });
+
   test("shows a carousel count only when more than one rendering exists", () => {
     const single = renderToStaticMarkup(
       <Round1InlineRenderPreview
@@ -690,6 +713,27 @@ describe("Round1InlineRenderPreview", () => {
       />
     );
     expect(html).toContain("Could not generate the rendering: Rendering failed");
+  });
+});
+
+describe("Round1RenderingFlow", () => {
+  test("orders the rendering, layout, and elevations in one scroll flow", () => {
+    const html = renderToStaticMarkup(
+      <Round1RenderingFlow
+        rendering={<div>Rendering viewport</div>}
+        layout={<div>Layout viewport</div>}
+        elevations={<div>Elevation strip</div>}
+      />
+    );
+
+    expect(html).toContain('data-rendering-flow="scroll"');
+    expect(html).toContain("overflow-y-auto");
+    expect(html.indexOf("Rendering viewport")).toBeLessThan(
+      html.indexOf("Layout viewport")
+    );
+    expect(html.indexOf("Layout viewport")).toBeLessThan(
+      html.indexOf("Elevation strip")
+    );
   });
 });
 

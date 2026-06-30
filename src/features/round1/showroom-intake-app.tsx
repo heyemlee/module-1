@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction
+} from "react";
 import {
   generatePreliminaryCabinetList,
   summarizePreliminaryCabinetEstimate,
@@ -242,6 +251,31 @@ export function renderingMatchesCurrentInputs({
       form,
       colors
     )
+  );
+}
+
+export function Round1RenderingFlow({
+  rendering,
+  layout,
+  elevations
+}: {
+  rendering: ReactNode;
+  layout: ReactNode;
+  elevations?: ReactNode;
+}) {
+  return (
+    <div
+      data-rendering-flow="scroll"
+      className="relative z-[1] min-h-0 flex-1 overflow-y-auto"
+    >
+      <div className="flex h-full min-h-[420px] items-center justify-center p-[14px_18px] md:min-h-0">
+        {rendering}
+      </div>
+      <div className="h-[60vh] min-h-[420px] shrink-0 px-[2px] pb-[18px]">
+        {layout}
+      </div>
+      {elevations}
+    </div>
   );
 }
 
@@ -1138,28 +1172,41 @@ export function ShowroomIntakeApp({
         </div>
       )}
       {isRenderingStep ? (
-        <div className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <Round1InlineRenderPreview
-            busy={renderingBusy}
-            error={renderingError}
-            renderings={renderings}
-            cabinetColors={cabinetColors}
-            styleLabel={
-              CABINET_STYLE_LABELS[renderingPreferencesForForm(form).cabinetStyle]
-            }
-          />
-          <div className="mt-[14px] h-[60vh] shrink-0 px-[2px] pb-[18px]">
-            {layoutPreviewEl}
-          </div>
-        </div>
-      ) : (
-        <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
-      )}
-      {elevationScenes.length > 0 && (
-        <Round1ElevationStrip
-          scenes={elevationScenes}
-          onOpen={setElevationOpenIndex}
+        <Round1RenderingFlow
+          rendering={
+            <Round1InlineRenderPreview
+              busy={renderingBusy}
+              error={renderingError}
+              renderings={renderings}
+              cabinetColors={cabinetColors}
+              styleLabel={
+                CABINET_STYLE_LABELS[
+                  renderingPreferencesForForm(form).cabinetStyle
+                ]
+              }
+              fitViewport
+            />
+          }
+          layout={layoutPreviewEl}
+          elevations={
+            elevationScenes.length > 0 ? (
+              <Round1ElevationStrip
+                scenes={elevationScenes}
+                onOpen={setElevationOpenIndex}
+              />
+            ) : undefined
+          }
         />
+      ) : (
+        <>
+          <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
+          {elevationScenes.length > 0 && (
+            <Round1ElevationStrip
+              scenes={elevationScenes}
+              onOpen={setElevationOpenIndex}
+            />
+          )}
+        </>
       )}
     </div>
   );

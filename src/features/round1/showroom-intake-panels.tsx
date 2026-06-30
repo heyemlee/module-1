@@ -150,13 +150,15 @@ export function Round1InlineRenderPreview({
   error,
   renderings,
   cabinetColors,
-  styleLabel
+  styleLabel,
+  fitViewport = false
 }: {
   busy: boolean;
   error: string | null;
   renderings: { id: string; url: string; doorColorId: string | null }[];
   cabinetColors: { id: string; name: string }[];
   styleLabel: string;
+  fitViewport?: boolean;
 }) {
   // Newest first; "previous" walks toward older (higher index).
   const [index, setIndex] = useState(0);
@@ -178,7 +180,13 @@ export function Round1InlineRenderPreview({
 
   return (
     <div
-      className="relative z-[3] mx-[18px] mt-[14px] aspect-video w-auto shrink-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]"
+      data-rendering-fit={fitViewport ? "viewport" : undefined}
+      className={cn(
+        "relative z-[3] shrink-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]",
+        fitViewport
+          ? "h-full w-full"
+          : "mx-[18px] mt-[14px] aspect-video w-auto"
+      )}
       style={{ background: "linear-gradient(162deg,#3a3a3e,#101012)" }}
     >
       {busy ? (
@@ -217,7 +225,10 @@ export function Round1InlineRenderPreview({
             onError={() =>
               setFailedUrls((prev) => new Set(prev).add(current.url))
             }
-            className="absolute inset-0 h-full w-full object-cover"
+            className={cn(
+              "absolute inset-0 h-full w-full",
+              fitViewport ? "object-contain" : "object-cover"
+            )}
           />
           <div
             className="pointer-events-none absolute inset-0"
