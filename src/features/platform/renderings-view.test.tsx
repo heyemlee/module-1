@@ -35,6 +35,9 @@ describe("RenderingsView", () => {
     expect(html).toContain("European Frameless");
     expect(html).not.toContain(" · ");
     expect(html).not.toContain("—");
+    // Each rendering image is wrapped in a click-to-zoom trigger.
+    expect(html).toContain("cursor-zoom-in");
+    expect(html).toContain("Enlarge concept rendering");
   });
 
   test("renders one functional empty-state action", () => {
