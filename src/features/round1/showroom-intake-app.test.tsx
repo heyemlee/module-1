@@ -648,6 +648,7 @@ describe("Round1InlineRenderPreview", () => {
     );
     expect(html).toContain("data:image/png;base64,abc");
     expect(html).toContain("EUROPEAN FRAMELESS · GRAPHITE");
+    expect(html).toContain("Latest");
     expect(html).not.toContain("LATEST CONCEPT");
     expect(html).not.toContain("View all");
     expect(html).not.toContain("Close preview");
