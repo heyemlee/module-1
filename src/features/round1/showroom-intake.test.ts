@@ -52,7 +52,7 @@ describe("showroom intake defaults", () => {
       "Room & Openings",
       "Layout & Appliances",
       "Adjust Positions",
-      "Rendering Preferences"
+      "Rendering"
     ]);
     expect(SHOWROOM_STEPS).not.toContain("MEP");
     expect(SHOWROOM_STEPS).not.toContain("Cabinets");

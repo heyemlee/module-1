@@ -225,6 +225,11 @@ export function Round1InlineRenderPreview({
               background: "linear-gradient(180deg,transparent 52%,rgba(10,10,12,0.82))"
             }}
           />
+          {idx === 0 && (
+            <span className="absolute left-[18px] top-[14px] inline-flex h-6 items-center rounded-full bg-studio-action px-2.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-studio-action-ink z-[4]">
+              Latest
+            </span>
+          )}
           {renderings.length > 1 && (
             <span className="absolute left-1/2 top-[14px] -translate-x-1/2 font-mono text-[9px] tracking-[0.12em] text-white/70">
               {idx + 1} / {renderings.length}
@@ -505,6 +510,11 @@ export function RenderingControls({
               <div className="absolute top-3 left-3 rounded bg-black/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm pointer-events-none">
                 {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
               </div>
+            )}
+            {index === 0 && (
+              <span className="absolute top-3 right-3 inline-flex h-6 items-center rounded-full bg-studio-action px-2.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-studio-action-ink z-[4] pointer-events-none">
+                Latest
+              </span>
             )}
             <div className="absolute bottom-3 right-3">
               <DownloadButton

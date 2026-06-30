@@ -460,6 +460,14 @@ export function AppliancesStep({
         ) {
           newConfig = "UNKNOWN";
         }
+        if (typeof document !== "undefined") {
+          setTimeout(() => {
+            const container = document.querySelector('[data-appl="microwave"]')?.closest('.overflow-y-auto');
+            if (container) {
+              container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+            }
+          }, 100);
+        }
       } else {
         newConfig = "UNKNOWN";
       }
@@ -692,10 +700,25 @@ export function AppliancesStep({
       </div>
 
       {showOvenMicrowaveArrangement && (
-        <div className="mt-4 rounded-[14px] border border-white/80 bg-white/50 px-3.5 py-[13px]">
-          <p className="mb-2.5 text-[12.5px] font-medium text-[#16161a]">
+        <div
+          className={cn(
+            "mt-4 rounded-[14px] border px-3.5 py-[13px] transition-colors duration-200",
+            ovenArrangement === "UNKNOWN"
+              ? "border-[#c73e3e]/40 bg-[#c73e3e]/5"
+              : "border-white/80 bg-white/50"
+          )}
+        >
+          <p className={cn(
+            "text-[12.5px] font-medium transition-colors duration-200",
+            ovenArrangement === "UNKNOWN" ? "mb-1.5 text-[#8a4444]" : "mb-2.5 text-[#16161a]"
+          )}>
             Wall oven + microwave placement
           </p>
+          {ovenArrangement === "UNKNOWN" && (
+            <p className="mb-2.5 text-[11.5px] font-medium text-[#c73e3e] leading-snug">
+              Please select a placement option to continue
+            </p>
+          )}
           <div className="inline-flex overflow-hidden rounded-[10px] border border-white/80 bg-white/55">
             {OVEN_PLACEMENT_OPTIONS.map((option, index) => {
               const active = ovenArrangement === option.value;
