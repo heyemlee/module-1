@@ -7,6 +7,7 @@ import {
   RenderingPreferencesLockControl,
   canGenerateConceptRendering,
   renderingMatchesCurrentInputs,
+  snapshotRenderingFingerprint,
   renderingPreferencesStateAfterChange
 } from "./showroom-intake-app";
 
@@ -164,6 +165,73 @@ describe("RenderingPreferencesLockControl", () => {
           }
         },
         snapshot,
+        form,
+        colors
+      })
+    ).toBe(false);
+  });
+
+  test("treats layout changes as new rendering inputs even when color is unchanged", () => {
+    const form = {
+      ...createDefaultShowroomForm(),
+      renderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        doorColorId: "color-1"
+      }
+    };
+    const normalized = normalizeRound1Form(form);
+    const buildSnapshot = (
+      positionOverrides: Record<string, { wall?: "TOP"; position?: number }>
+    ) =>
+      buildRound1Snapshot({
+        showroomForm: form,
+        normalized: normalized.normalized,
+        positionOverrides,
+        preliminaryCabinets: {
+          cabinets: [],
+          confirmationItems: [],
+          estimatedFillerWidth: 0,
+          salesEstimateOnly: true,
+          notForProduction: true
+        },
+        confirmationItems: normalized.confirmationItems,
+        readiness: normalized.readiness,
+        now: () => new Date("2026-06-30T12:00:00.000Z")
+      });
+    const firstSnapshot = buildSnapshot({});
+    const changedLayoutSnapshot = buildSnapshot({
+      sink: { wall: "TOP", position: 120 }
+    });
+    const colors = [
+      {
+        id: "color-1",
+        companyId: "company-1",
+        name: "White",
+        colorCode: "WHITE",
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        promptDescription: "white slab",
+        active: true,
+        sortOrder: 1,
+        swatchHex: "#ffffff",
+        swatchImageUrl: null,
+        hoverExampleImageUrl: null,
+        createdAt: "2026-06-30T00:00:00.000Z",
+        updatedAt: "2026-06-30T01:00:00.000Z"
+      }
+    ];
+
+    expect(
+      renderingMatchesCurrentInputs({
+        rendering: {
+          basedOnSnapshotGeneratedAt: firstSnapshot.generatedAt,
+          basedOnSnapshotFingerprint: snapshotRenderingFingerprint(firstSnapshot),
+          basedOnRenderingPreferences: {
+            cabinetStyle: "EUROPEAN_FRAMELESS",
+            doorColorId: "color-1",
+            colorUpdatedAt: "2026-06-30T01:00:00.000Z"
+          }
+        },
+        snapshot: changedLayoutSnapshot,
         form,
         colors
       })

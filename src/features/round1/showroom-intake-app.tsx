@@ -130,6 +130,7 @@ type ConceptRendering = {
   url: string;
   doorColorId: string | null;
   basedOnSnapshotGeneratedAt?: string | null;
+  basedOnSnapshotFingerprint?: string | null;
   basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
 };
 
@@ -228,21 +229,39 @@ export function renderingMatchesCurrentInputs({
 }: {
   rendering: Pick<
     ConceptRendering,
-    "basedOnSnapshotGeneratedAt" | "basedOnRenderingPreferences"
+    | "basedOnSnapshotGeneratedAt"
+    | "basedOnSnapshotFingerprint"
+    | "basedOnRenderingPreferences"
   >;
   snapshot: Round1Snapshot | null;
   form: Round1FormInput;
   colors: CabinetColor[];
 }) {
-  if (!snapshot || !rendering.basedOnSnapshotGeneratedAt) return false;
+  if (!snapshot) return false;
+  const snapshotMatches = rendering.basedOnSnapshotFingerprint
+    ? rendering.basedOnSnapshotFingerprint === snapshotRenderingFingerprint(snapshot)
+    : rendering.basedOnSnapshotGeneratedAt === snapshot.generatedAt;
   return (
-    rendering.basedOnSnapshotGeneratedAt === snapshot.generatedAt &&
+    snapshotMatches &&
     renderingPreferenceStampMatches(
       rendering.basedOnRenderingPreferences ?? null,
       form,
       colors
     )
   );
+}
+
+export function snapshotRenderingFingerprint(snapshot: Round1Snapshot) {
+  return JSON.stringify({
+    schemaVersion: snapshot.schemaVersion,
+    showroomForm: snapshot.showroomForm,
+    normalized: snapshot.normalized,
+    positionOverrides: snapshot.positionOverrides,
+    preliminaryCabinets: snapshot.preliminaryCabinets,
+    confirmationItems: snapshot.confirmationItems,
+    readiness: snapshot.readiness,
+    floorPlan: snapshot.floorPlan
+  });
 }
 
 export function ShowroomIntakeApp({
@@ -738,6 +757,7 @@ export function ShowroomIntakeApp({
           url: `data:image/png;base64,${json.imageBase64}`,
           doorColorId: json.basedOnRenderingPreferences?.doorColorId || null,
           basedOnSnapshotGeneratedAt: json.basedOnSnapshotGeneratedAt ?? null,
+          basedOnSnapshotFingerprint: snapshotRenderingFingerprint(snapshot),
           basedOnRenderingPreferences: json.basedOnRenderingPreferences ?? null
         },
         ...prev
