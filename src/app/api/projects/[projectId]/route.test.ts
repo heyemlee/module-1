@@ -45,7 +45,7 @@ describe("DELETE /api/projects/[projectId]", () => {
   test("requires an admin user", async () => {
     await deleteRequest();
 
-    expect(mocks.requireRole).toHaveBeenCalledWith(admin, ["ADMIN"]);
+    expect(mocks.requireRole).toHaveBeenCalledWith(admin, ["ADMIN", "OWNER"]);
   });
 
   test("deletes projects through the authenticated admin company boundary", async () => {

@@ -9,6 +9,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed-admin": "node scripts/seed-admin.mjs",
     "db:seed-user": "node scripts/seed-user.mjs",
+    "db:promote-owner": "node scripts/promote-owner.mjs",
     "db:prepare-cabinet-colors": "node scripts/prepare-cabinet-colors.mjs",
     "db:seed-cabinet-colors": "node scripts/seed-cabinet-colors.mjs",
     "lint": "next lint",

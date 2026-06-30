@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser, requireRole } from "@/server/platform/auth-service";
+import { ADMIN_ROLES } from "@/server/platform/types";
 import { getUserRenderingStats } from "@/server/platform/user-admin-repository";
 
 export async function GET(
@@ -8,7 +9,7 @@ export async function GET(
 ) {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ADMIN_ROLES);
 
     const { userId } = await context.params;
     const stats = await getUserRenderingStats(userId);

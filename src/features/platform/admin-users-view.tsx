@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompanyUserSummary } from "@/server/platform/user-admin-repository";
+import type { UserRole } from "@/server/platform/types";
 import { CreateUserForm } from "./create-user-form";
 import { UserStatusAction } from "./user-status-action";
 import { UserQuotaAction } from "./user-quota-action";
@@ -32,10 +33,12 @@ function roleLabel(role: string) {
 
 export function AdminUsersView({
   users,
-  currentUserId
+  currentUserId,
+  currentUserRole
 }: {
   users: CompanyUserSummary[];
   currentUserId: string;
+  currentUserRole: UserRole;
 }) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
@@ -227,7 +230,7 @@ export function AdminUsersView({
                     <span
                       className={cn(
                         "inline-block rounded-full px-[9px] py-[3px] font-mono text-[9.5px] tracking-[0.08em]",
-                        user.role === "ADMIN"
+                        user.role === "ADMIN" || user.role === "OWNER"
                           ? "bg-studio-ink text-white"
                           : "border border-white/80 bg-white/70 text-[#46463f]"
                       )}
@@ -301,7 +304,12 @@ export function AdminUsersView({
         </p>
       </div>
 
-      {showCreate && <CreateUserForm onClose={() => setShowCreate(false)} />}
+      {showCreate && (
+        <CreateUserForm
+          onClose={() => setShowCreate(false)}
+          currentUserRole={currentUserRole}
+        />
+      )}
 
       {viewingLogsUser && (
         <UserLogsDialog

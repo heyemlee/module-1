@@ -24,7 +24,7 @@ describe("Postgres schema", () => {
     expect(schema).toContain("company_id UUID NOT NULL REFERENCES companies(id)");
     expect(schema).toContain("account TEXT");
     expect(schema).toContain("CREATE UNIQUE INDEX IF NOT EXISTS users_account_lower_key ON users (lower(account))");
-    expect(schema).toContain("role TEXT NOT NULL CHECK (role IN ('ADMIN', 'SALES', 'DESIGNER'))");
+    expect(schema).toContain("role TEXT NOT NULL CHECK (role IN ('OWNER', 'ADMIN', 'SALES', 'DESIGNER'))");
   });
 
   test("defines cabinet color library and rendering preference metadata", () => {

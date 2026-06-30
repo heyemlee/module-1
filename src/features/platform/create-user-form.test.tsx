@@ -8,7 +8,9 @@ vi.mock("next/navigation", () => ({
 
 describe("CreateUserForm", () => {
   test("renders the create-user modal with account, role, password, quota", () => {
-    const html = renderToStaticMarkup(<CreateUserForm onClose={() => {}} />);
+    const html = renderToStaticMarkup(
+      <CreateUserForm onClose={() => {}} currentUserRole="OWNER" />
+    );
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain("NEW USER");
@@ -26,5 +28,15 @@ describe("CreateUserForm", () => {
     expect(html).toMatch(/<select/);
     expect(html).not.toContain(">Email<");
     expect(html).not.toContain(">Name<");
+  });
+
+  test("an admin can only create roles below it — never another admin", () => {
+    const html = renderToStaticMarkup(
+      <CreateUserForm onClose={() => {}} currentUserRole="ADMIN" />
+    );
+
+    expect(html).toContain("SALES");
+    expect(html).toContain("DESIGNER");
+    expect(html).not.toContain(">ADMIN<");
   });
 });

@@ -97,6 +97,9 @@ export async function createCompanyUser(input: {
   return mapCompanyUserRow(result.rows[0]);
 }
 
+// ponytail: `role <> 'OWNER'` keeps anyone from disabling/deleting/re-quota'ing the
+// single OWNER account through the app (an owner row matches 0 rows -> not-found),
+// preventing lockout. Add per-rank gating if multiple owners ever co-manage.
 export async function setCompanyUserDisabled(input: {
   companyId: string;
   userId: string;
@@ -106,7 +109,7 @@ export async function setCompanyUserDisabled(input: {
     `UPDATE users
      SET disabled_at = CASE WHEN $3 THEN now() ELSE NULL END,
          updated_at = now()
-     WHERE id = $1 AND company_id = $2
+     WHERE id = $1 AND company_id = $2 AND role <> 'OWNER'
      RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
     [input.userId, input.companyId, input.disabled]
   );
@@ -125,7 +128,7 @@ export async function setCompanyUserQuota(input: {
     `UPDATE users
      SET monthly_render_quota = $3,
          updated_at = now()
-     WHERE id = $1 AND company_id = $2
+     WHERE id = $1 AND company_id = $2 AND role <> 'OWNER'
      RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
     [input.userId, input.companyId, input.monthlyRenderQuota]
   );
@@ -143,7 +146,7 @@ export async function deleteCompanyUser(input: {
     `UPDATE users
      SET deleted_at = now(),
          updated_at = now()
-     WHERE id = $1 AND company_id = $2
+     WHERE id = $1 AND company_id = $2 AND role <> 'OWNER'
      RETURNING id`,
     [input.userId, input.companyId]
   );

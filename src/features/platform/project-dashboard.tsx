@@ -43,7 +43,7 @@ export function ProjectDashboard({
   query?: string;
 }) {
   const router = useRouter();
-  const canDeleteProjects = user.role === "ADMIN";
+  const canDeleteProjects = user.role === "ADMIN" || user.role === "OWNER";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);

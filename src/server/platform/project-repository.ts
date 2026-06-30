@@ -46,7 +46,7 @@ function mapProject(row: ProjectRow): ProjectSummary {
 
 export function canAccessProject(user: AuthUser, project: ProjectAccessRecord) {
   if (user.companyId !== project.companyId) return false;
-  if (user.role === "ADMIN" || user.role === "DESIGNER") return true;
+  if (user.role === "ADMIN" || user.role === "DESIGNER" || user.role === "OWNER") return true;
   return project.createdByUserId === user.id;
 }
 

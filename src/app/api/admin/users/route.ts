@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireRole, requireUser } from "@/server/platform/auth-service";
+import { ForbiddenError, requireRole, requireUser } from "@/server/platform/auth-service";
+import { ADMIN_ROLES, canCreateRole, type UserRole } from "@/server/platform/types";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import {
   AccountAlreadyExistsError,
@@ -19,7 +20,7 @@ const createSchema = z.object({
 export async function GET() {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ADMIN_ROLES);
     return NextResponse.json({ users: await listCompanyUsers(user.companyId) });
   } catch (error) {
     return authErrorResponse(error, "Admins only") ?? serverError("admin/users:list", error, "Unable to list users");
@@ -29,8 +30,12 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    requireRole(user, ADMIN_ROLES);
     const input = createSchema.parse(await request.json());
+    // An actor may only create roles below its own (admins can't create admins).
+    if (!canCreateRole(user.role, input.role as UserRole)) {
+      throw new ForbiddenError("Insufficient permissions");
+    }
     const created = await createCompanyUser({
       companyId: user.companyId,
       account: input.account,
