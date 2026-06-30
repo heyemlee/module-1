@@ -271,7 +271,7 @@ export function MepStep({
 const LAYOUT_OPTIONS = [
   { value: "LEFT_L_SHAPE", label: "L · Left", glyph: "⌐" },
   { value: "RIGHT_L_SHAPE", label: "L · Right", glyph: "¬" },
-  { value: "U_SHAPE", label: "U-shape", glyph: "⊔" },
+  { value: "U_SHAPE", label: "U-shape", glyph: "⊓" },
   { value: "ONE_WALL", label: "Single wall", glyph: "—" },
   { value: "GALLEY", label: "Galley", glyph: "=" },
   { value: "PENINSULA", label: "Peninsula", glyph: "⊏" }
