@@ -57,4 +57,20 @@ describe("AdminUsersView", () => {
     expect(canManageUserStatus("admin-1", "sales-1")).toBe(true);
     expect(canManageUserStatus("admin-1", "admin-1")).toBe(false);
   });
+
+  test("shows a role selector only for users the actor may re-role", () => {
+    // Admin viewer: can re-role the sales rep, but not themselves.
+    const asAdmin = renderToStaticMarkup(
+      <AdminUsersView users={users} currentUserId="admin-1" currentUserRole="ADMIN" />
+    );
+    expect(asAdmin).toContain("Role for Sales Rep");
+    expect(asAdmin).not.toContain("Role for Admin User");
+
+    // Owner viewer (not in the list): can re-role the admin too.
+    const asOwner = renderToStaticMarkup(
+      <AdminUsersView users={users} currentUserId="owner-x" currentUserRole="OWNER" />
+    );
+    expect(asOwner).toContain("Role for Admin User");
+    expect(asOwner).toContain("Role for Sales Rep");
+  });
 });

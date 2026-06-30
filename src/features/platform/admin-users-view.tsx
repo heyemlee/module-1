@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompanyUserSummary } from "@/server/platform/user-admin-repository";
-import type { UserRole } from "@/server/platform/types";
+import { CREATABLE_BY, type UserRole } from "@/server/platform/types";
 import { CreateUserForm } from "./create-user-form";
 import { UserStatusAction } from "./user-status-action";
+import { UserRoleAction } from "./user-role-action";
 import { UserQuotaAction } from "./user-quota-action";
 import { UserLogsDialog } from "./user-logs-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,6 +42,10 @@ export function AdminUsersView({
   currentUserRole: UserRole;
 }) {
   const router = useRouter();
+  // Roles this actor may assign — same hierarchy as user creation. A user is
+  // re-rolable only when their current role is in this set (so owners can manage
+  // admins, admins can flip sales/designer, and nobody can touch the owner).
+  const manageableRoles = CREATABLE_BY[currentUserRole];
   const [showCreate, setShowCreate] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -227,16 +232,25 @@ export function AdminUsersView({
                   </div>
 
                   <div>
-                    <span
-                      className={cn(
-                        "inline-block rounded-full px-[9px] py-[3px] font-mono text-[9.5px] tracking-[0.08em]",
-                        user.role === "ADMIN" || user.role === "OWNER"
-                          ? "bg-studio-ink text-white"
-                          : "border border-white/80 bg-white/70 text-[#46463f]"
-                      )}
-                    >
-                      {roleLabel(user.role)}
-                    </span>
+                    {!self && manageableRoles.includes(user.role) ? (
+                      <UserRoleAction
+                        userId={user.id}
+                        userName={user.name}
+                        role={user.role}
+                        assignableRoles={manageableRoles}
+                      />
+                    ) : (
+                      <span
+                        className={cn(
+                          "inline-block rounded-full px-[9px] py-[3px] font-mono text-[9.5px] tracking-[0.08em]",
+                          user.role === "ADMIN" || user.role === "OWNER"
+                            ? "bg-studio-ink text-white"
+                            : "border border-white/80 bg-white/70 text-[#46463f]"
+                        )}
+                      >
+                        {roleLabel(user.role)}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
