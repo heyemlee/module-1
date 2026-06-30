@@ -33,8 +33,10 @@ const companyId =
   (await pool.query(`INSERT INTO companies (name) VALUES ($1) RETURNING id`, [companyName]))
     .rows[0].id;
 
-// Idempotent admin: upsert so a re-run refreshes the password/name/role
-// instead of silently doing nothing.
+// Idempotent admin: upsert so a re-run refreshes the password/name, but NEVER
+// downgrade an OWNER. This seed runs on every deploy; without the role guard it
+// would reset a promoted owner (same email) back to ADMIN each time, silently
+// locking owner-only features (role changes, cabinet colors) until re-promoted.
 const result = await pool.query(
   `INSERT INTO users (company_id, account, email, name, password_hash, role)
    VALUES ($1, $2, $3, $4, $5, 'ADMIN')
@@ -42,7 +44,7 @@ const result = await pool.query(
      account = EXCLUDED.account,
      name = EXCLUDED.name,
      password_hash = EXCLUDED.password_hash,
-     role = EXCLUDED.role
+     role = CASE WHEN users.role = 'OWNER' THEN 'OWNER' ELSE EXCLUDED.role END
    RETURNING (xmax = 0) AS inserted`,
   [companyId, account, email, name, passwordHash]
 );
