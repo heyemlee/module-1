@@ -125,6 +125,14 @@ type Round1DraftPayload = {
   maxAccessibleStep: number;
 };
 
+type ConceptRendering = {
+  id: string;
+  url: string;
+  doorColorId: string | null;
+  basedOnSnapshotGeneratedAt?: string | null;
+  basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
+};
+
 export function shouldApplySnapshotRestore({
   cancelled,
   hasSavedSnapshot,
@@ -191,6 +199,50 @@ export function renderingPreferencesStateAfterChange(form: Round1FormInput) {
     form,
     preferencesLocked: false
   };
+}
+
+export function canGenerateConceptRendering({
+  persistState,
+  preferencesComplete,
+  preferencesLocked,
+  hasCurrentRendering
+}: {
+  persistState: SnapshotPersistState;
+  preferencesComplete: boolean;
+  preferencesLocked: boolean;
+  hasCurrentRendering: boolean;
+}) {
+  return (
+    persistState === "saved" &&
+    preferencesComplete &&
+    preferencesLocked &&
+    !hasCurrentRendering
+  );
+}
+
+export function renderingMatchesCurrentInputs({
+  rendering,
+  snapshot,
+  form,
+  colors
+}: {
+  rendering: Pick<
+    ConceptRendering,
+    "basedOnSnapshotGeneratedAt" | "basedOnRenderingPreferences"
+  >;
+  snapshot: Round1Snapshot | null;
+  form: Round1FormInput;
+  colors: CabinetColor[];
+}) {
+  if (!snapshot || !rendering.basedOnSnapshotGeneratedAt) return false;
+  return (
+    rendering.basedOnSnapshotGeneratedAt === snapshot.generatedAt &&
+    renderingPreferenceStampMatches(
+      rendering.basedOnRenderingPreferences ?? null,
+      form,
+      colors
+    )
+  );
 }
 
 export function ShowroomIntakeApp({
@@ -264,7 +316,7 @@ export function ShowroomIntakeApp({
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
   const referenceElevationRef = useRef<SVGSVGElement | null>(null);
-  const [renderings, setRenderings] = useState<{ id: string; url: string; doorColorId: string | null }[]>([]);
+  const [renderings, setRenderings] = useState<ConceptRendering[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
   // The in-canvas concept preview can be dismissed (×); a new generate reopens it.
@@ -466,7 +518,20 @@ export function ShowroomIntakeApp({
   const previewStage = PREVIEW_STAGES[step] ?? "room";
 
   const preferencesComplete = renderingPreferencesComplete(cabinetColors, form);
-  const canRenderConcept = persistState === "saved" && preferencesComplete;
+  const hasCurrentRendering = renderings.some((rendering) =>
+    renderingMatchesCurrentInputs({
+      rendering,
+      snapshot,
+      form,
+      colors: cabinetColors
+    })
+  );
+  const canRenderConcept = canGenerateConceptRendering({
+    persistState,
+    preferencesComplete,
+    preferencesLocked,
+    hasCurrentRendering
+  });
   const nextAction = NEXT_ACTIONS[step] ?? "";
   const draftPayload = useMemo<Round1DraftPayload>(() => ({
     showroomForm: form,
@@ -596,7 +661,7 @@ export function ShowroomIntakeApp({
       !referenceTopDownSvg ||
       !projectId ||
       !snapshot ||
-      !renderingPreferencesComplete(cabinetColors, form)
+      !canRenderConcept
     ) {
       return;
     }
@@ -660,7 +725,9 @@ export function ShowroomIntakeApp({
         {
           id: json.id,
           url: `data:image/png;base64,${json.imageBase64}`,
-          doorColorId: json.basedOnRenderingPreferences?.doorColorId || null
+          doorColorId: json.basedOnRenderingPreferences?.doorColorId || null,
+          basedOnSnapshotGeneratedAt: json.basedOnSnapshotGeneratedAt ?? null,
+          basedOnRenderingPreferences: json.basedOnRenderingPreferences ?? null
         },
         ...prev
       ]);
@@ -680,6 +747,7 @@ export function ShowroomIntakeApp({
     form,
     projectId,
     snapshot,
+    canRenderConcept,
     positionOverrides,
     fixedPositionsConfirmed,
     cabinetFillGenerated,
@@ -771,14 +839,19 @@ export function ShowroomIntakeApp({
         if (rJson.renderings && Array.isArray(rJson.renderings)) {
           type RenderingApiItem = {
             id: string;
-            imageBase64: string;
-            basedOnRenderingPreferences?: { doorColorId?: string | null } | null;
+            imageBase64?: string;
+            basedOnSnapshotGeneratedAt?: string | null;
+            basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
           };
           setRenderings(
             (rJson.renderings as RenderingApiItem[]).map((r) => ({
               id: r.id,
-              url: `data:image/png;base64,${r.imageBase64}`,
-              doorColorId: r.basedOnRenderingPreferences?.doorColorId || null
+              url: r.imageBase64
+                ? `data:image/png;base64,${r.imageBase64}`
+                : `/api/projects/${projectId}/round1/renderings/${r.id}/image`,
+              doorColorId: r.basedOnRenderingPreferences?.doorColorId || null,
+              basedOnSnapshotGeneratedAt: r.basedOnSnapshotGeneratedAt ?? null,
+              basedOnRenderingPreferences: r.basedOnRenderingPreferences ?? null
             }))
           );
         }
