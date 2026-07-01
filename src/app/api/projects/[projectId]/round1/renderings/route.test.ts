@@ -81,7 +81,6 @@ function request() {
       method: "POST",
       body: JSON.stringify({
         referenceImages: [
-          { role: "PERSPECTIVE_STRUCTURE", imageBase64: "persp" },
           { role: "TOP_DOWN_PLAN", imageBase64: "plan" }
         ]
       })
@@ -129,6 +128,25 @@ beforeEach(() => {
 });
 
 describe("POST /api/projects/[projectId]/round1/renderings", () => {
+  test("rejects a request without the required top-down plan", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/round1/renderings", {
+        method: "POST",
+        body: JSON.stringify({
+          referenceImages: [
+            { role: "PERSPECTIVE_STRUCTURE", imageBase64: "persp" }
+          ]
+        })
+      }),
+      { params: Promise.resolve({ projectId: "project-1" }) }
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toBe("Missing required spatial reference (top-down plan)");
+    expect(mocks.generateRound1Rendering).not.toHaveBeenCalled();
+  });
+
   test("returns DOOR_COLOR_REQUIRED when Round 1 state has no selected door color", async () => {
     mocks.getRound1State.mockResolvedValue({
       showroomForm: {
@@ -168,7 +186,7 @@ describe("POST /api/projects/[projectId]/round1/renderings", () => {
     expect(response.status).toBe(200);
     expect(mocks.generateRound1Rendering).toHaveBeenCalledWith(
       expect.objectContaining({
-        referenceImagesBase64: ["persp", "plan"],
+        referenceImagesBase64: ["plan"],
         renderingPreferences: {
           cabinetStyle: "EUROPEAN_FRAMELESS",
           color: europeanOak

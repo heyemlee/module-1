@@ -89,9 +89,9 @@ export async function POST(
   const state = await getRound1State(projectId);
 
   const roles = new Set(input.referenceImages.map((r) => r.role));
-  if (!roles.has("PERSPECTIVE_STRUCTURE") || !roles.has("TOP_DOWN_PLAN")) {
+  if (!roles.has("TOP_DOWN_PLAN")) {
     return NextResponse.json(
-      { error: "Missing required spatial references (perspective and top-down)" },
+      { error: "Missing required spatial reference (top-down plan)" },
       { status: 400 }
     );
   }
@@ -103,7 +103,6 @@ export async function POST(
   }
 
   const roleOrder = [
-    "PERSPECTIVE_STRUCTURE",
     "TOP_DOWN_PLAN",
     "MATERIAL_SWATCH"
   ] as const;
