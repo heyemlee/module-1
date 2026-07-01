@@ -169,6 +169,30 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).not.toContain("behind the viewpoint");
   });
 
+  test("frames the galley pulled back and open instead of a cramped one-point tunnel", () => {
+    const prompt = buildPrompt(buildSnapshot("GALLEY"));
+
+    // The camera is pulled back and framed as a wide, open aisle so the room
+    // does not read as too small / crowded (issue #1).
+    expect(prompt).toContain("pulled well back beyond one open end of the galley aisle");
+    expect(prompt).toContain("wide, open, airy walkway");
+    expect(prompt).toContain("do not compress the room into a cramped narrow corridor");
+    // The old one-point straight-down-the-aisle tunnel framing is gone.
+    expect(prompt).not.toContain("one-point perspective looking straight down the aisle");
+  });
+
+  test("pins galley left/right orientation to the plan so the door cannot mirror", () => {
+    const prompt = buildPrompt(buildSnapshot("GALLEY"));
+
+    // A galley is left-right symmetric, so without a fixed handedness the model
+    // enters from the wrong aisle end and mirrors the scene, flipping the door
+    // to the wrong side of the fridge (issue #2). Anchor it to the top-down plan.
+    expect(prompt).toContain(
+      "the cabinet run the plan shows along its TOP edge must appear on the LEFT of the rendering and the run along its BOTTOM edge must appear on the RIGHT"
+    );
+    expect(prompt).toContain("never mirror or swap the two runs or the two end walls");
+  });
+
   test("renders a peninsula as connected base cabinetry rather than an island", () => {
     const prompt = buildPrompt(buildSnapshot("PENINSULA"));
 
@@ -186,7 +210,10 @@ describe("buildRound1RenderingPrompt", () => {
   test("walks the layout wall by wall from the deterministic geometry", () => {
     const prompt = buildPrompt();
 
-    expect(prompt).toContain("- Reference 1 (perspective) controls the camera");
+    expect(prompt).toContain("- Reference 1 (top-down plan, a bird's-eye view)");
+    // The perspective structure image is no longer sent, so the prompt must not
+    // claim a perspective reference controls the camera.
+    expect(prompt).not.toContain("Reference 1 (perspective)");
     // Sink and range are clustered on the back run in the default L-shape.
     expect(prompt).toContain("a sink");
     expect(prompt).toContain("a freestanding range (burners with an oven below) with a hood above it");

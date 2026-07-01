@@ -68,7 +68,7 @@ const CAMERA_POLICIES: Record<string, string> = {
   U_SHAPE:
     "Place the camera centered outside the open end and slightly elevated so all three cabinet runs are visible from the back corners to both open ends.",
   GALLEY:
-    "Place the camera at an open end of the galley aisle, slightly elevated and angled down the aisle so both opposing parallel cabinet runs on the left and right walls are completely visible together. Use a one-point perspective looking straight down the aisle.",
+    "Place the camera pulled well back beyond one open end of the galley aisle and raised to a comfortable standing eye level, then angle it gently down the aisle (a relaxed, natural perspective — NOT a dead-center one-point tunnel shot) so both opposing parallel cabinet runs on the left and right walls are completely visible together. Keep the aisle reading as a wide, open, airy walkway with generous open floor in the foreground and full ceiling height above; do not compress the room into a cramped narrow corridor, and do not let the nearest cabinets loom oversized and crowd the frame. Orientation is fixed by the top-down plan: the cabinet run the plan shows along its TOP edge must appear on the LEFT of the rendering and the run along its BOTTOM edge must appear on the RIGHT — enter the aisle from whichever end preserves this, and never mirror or swap the two runs or the two end walls.",
   PENINSULA:
     "Use a pulled-back three-quarter view from the open front-right side opposite the left-wall peninsula anchor, showing the complete back and left wall runs, the peninsula attachment point on the left wall, and its free end. CRITICAL REQUIREMENTS: The foreground space nearest the camera must be completely open and unobstructed by any structural walls. The left wall must terminate at or behind the peninsula anchor point and must NOT extend towards the camera to block the view or enclose the corner. The peninsula MUST be physically connected to the left wall cabinetry without any gaps or walkways between them. It is a continuous extension of the left wall cabinets, NOT a freestanding island. They share a single continuous countertop forming a seamless 90-degree inside corner on the left. The peninsula is anchored at the very front (nearest the camera) of the left wall run; any appliances on the left wall (such as a refrigerator) MUST be placed behind the peninsula anchor, towards the back wall. Cabinet fronts face the work zone. There must be no full-height blank island panel in place of the peninsula cabinet run. The physical attachment point on the left wall and free end remain visible.",
   ISLAND:
@@ -143,11 +143,10 @@ export function buildRound1RenderingPrompt(
     "",
     `Camera and viewpoint: use a moderately wide architectural perspective with corrected verticals. ${layoutCamera} Keep every required cabinet run fully inside the frame with visible breathing room at every outer end; no cabinet, appliance, countertop, island, or peninsula may touch or be cropped by the image edge. Do not use a fisheye lens or exaggerated ultra-wide distortion.`,
     "",
-    "Use the provided reference images as the authoritative spatial references.",
-    "- Reference 1 (perspective) controls the camera, the room shell (walls, window, and door openings), and the 3D massing and placement of every run.",
-    "- Reference 2 (top-down plan) controls exact top-down positions and the gaps between items.",
-    "- Reference 3, when present, is a material swatch and controls the cabinet-door finish only.",
-    "Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the references place them. Do not rearrange, mirror, or move anything to a different wall.",
+    "Use the provided top-down plan as the authoritative spatial reference.",
+    "- Reference 1 (top-down plan, a bird's-eye view) is the single source of truth for the room shell (walls, window, and door openings), which wall each item sits on, its position along that wall, and the gaps between items. Preserve its exact left/right handedness: do NOT mirror, flip, or rotate it. The camera is defined by the text above, not by this plan.",
+    "- Reference 2, when present, is a material swatch and controls the cabinet-door finish only.",
+    "Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the plan places them. Do not rearrange, mirror, or move anything to a different wall.",
     "CRITICAL REQUIREMENT: Do not cluster or group appliances together (e.g., sink and dishwasher) unless they are physically adjacent in the layout reference. Strictly follow the reference for the empty counter space and gaps between appliances.",
     "",
     `Kitchen shape: ${layoutPhrase}.`,
