@@ -61,6 +61,28 @@ describe("executeRenderingTask", () => {
     ).rejects.toThrow("save failed");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  test("keeps the existing friendly timeout error", async () => {
+    const timeout = Object.assign(new Error("aborted"), {
+      name: "TimeoutError"
+    });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockRejectedValueOnce(timeout);
+
+    await expect(
+      executeRenderingTask(
+        {
+          projectId: "project-1",
+          projectName: "Kitchen",
+          stateBody: {},
+          renderingBody: {}
+        },
+        fetchImpl
+      )
+    ).rejects.toThrow("Rendering timed out. Please try again.");
+  });
 });
 
 describe("RenderingTaskNotice", () => {

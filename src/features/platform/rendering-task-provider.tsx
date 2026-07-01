@@ -48,12 +48,23 @@ export async function executeRenderingTask(
     throw new Error(await readRequestError(savedState));
   }
 
-  const response = await fetchImpl(`${baseUrl}/renderings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input.renderingBody),
-    signal: AbortSignal.timeout(120_000)
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(`${baseUrl}/renderings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input.renderingBody),
+      signal: AbortSignal.timeout(120_000)
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      throw new Error("Rendering timed out. Please try again.");
+    }
+    throw error;
+  }
   if (!response.ok) {
     throw new Error(await readRequestError(response));
   }
