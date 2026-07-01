@@ -2,18 +2,32 @@
 
 import { rasterizeSvgElement } from "./rasterize-svg";
 
-export async function rasterizeRenderingReferences(
-  svgs: Array<SVGSVGElement | null | undefined>,
-  rasterize: (svg: SVGSVGElement) => Promise<string> = rasterizeSvgElement
-): Promise<string[]> {
-  const references: string[] = [];
+export type RenderingReferenceRole =
+  | "PERSPECTIVE_STRUCTURE"
+  | "TOP_DOWN_PLAN"
+  | "WALL_ELEVATIONS"
+  | "MATERIAL_SWATCH";
 
-  for (const svg of svgs) {
+export type RenderingReference = {
+  role: RenderingReferenceRole;
+  imageBase64: string;
+};
+
+export async function rasterizeRenderingReferences(
+  inputs: Array<{ role: RenderingReferenceRole; svg: SVGSVGElement | null | undefined }>,
+  rasterize: (svg: SVGSVGElement) => Promise<string> = rasterizeSvgElement
+): Promise<RenderingReference[]> {
+  const references: RenderingReference[] = [];
+
+  for (const { role, svg } of inputs) {
     if (!svg) {
       continue;
     }
 
-    references.push(await rasterize(svg));
+    references.push({
+      role,
+      imageBase64: await rasterize(svg)
+    });
   }
 
   return references;

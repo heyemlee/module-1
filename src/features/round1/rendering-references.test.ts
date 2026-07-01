@@ -6,9 +6,15 @@ describe("rasterizeRenderingReferences", () => {
     const topDown = {} as SVGSVGElement;
     const rasterize = vi.fn(async () => "top-down-png");
 
-    const result = await rasterizeRenderingReferences([topDown, null], rasterize);
+    const result = await rasterizeRenderingReferences(
+      [
+        { role: "TOP_DOWN_PLAN", svg: topDown },
+        { role: "WALL_ELEVATIONS", svg: null }
+      ],
+      rasterize
+    );
 
-    expect(result).toEqual(["top-down-png"]);
+    expect(result).toEqual([{ role: "TOP_DOWN_PLAN", imageBase64: "top-down-png" }]);
     expect(rasterize).toHaveBeenCalledTimes(1);
   });
 
@@ -20,9 +26,18 @@ describe("rasterizeRenderingReferences", () => {
       .mockResolvedValueOnce("top-down-png")
       .mockResolvedValueOnce("elevation-png");
 
-    const result = await rasterizeRenderingReferences([topDown, elevation], rasterize);
+    const result = await rasterizeRenderingReferences(
+      [
+        { role: "TOP_DOWN_PLAN", svg: topDown },
+        { role: "WALL_ELEVATIONS", svg: elevation }
+      ],
+      rasterize
+    );
 
-    expect(result).toEqual(["top-down-png", "elevation-png"]);
+    expect(result).toEqual([
+      { role: "TOP_DOWN_PLAN", imageBase64: "top-down-png" },
+      { role: "WALL_ELEVATIONS", imageBase64: "elevation-png" }
+    ]);
     expect(rasterize).toHaveBeenNthCalledWith(1, topDown);
     expect(rasterize).toHaveBeenNthCalledWith(2, elevation);
   });

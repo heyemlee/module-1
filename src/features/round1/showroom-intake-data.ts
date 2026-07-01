@@ -120,11 +120,15 @@ export function createDefaultCabinetRuns(form: Round1FormInput): CabinetRun[] {
   }
 
   if (form.layoutPreference === "PENINSULA") {
+    // A peninsula is a freestanding run that projects into the room (placed by
+    // the geometry layer), not a counter hugging the front wall — keep it off
+    // the FRONT_SIDE wall track so it isn't laid out and gap-filled like a
+    // galley/U bottom run.
     runs.push({
       id: "base-peninsula",
       kind: "BASE",
       width: islandRun,
-      location: "FRONT_SIDE"
+      location: "ON_PENINSULA"
     });
   }
 

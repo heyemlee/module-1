@@ -20,7 +20,17 @@ import {
 } from "@/server/platform/round1-postgres-repository";
 
 const requestSchema = z.object({
-  referenceImagesBase64: z.array(z.string().min(1)).min(1)
+  referenceImages: z.array(
+    z.object({
+      role: z.enum([
+        "PERSPECTIVE_STRUCTURE",
+        "TOP_DOWN_PLAN",
+        "WALL_ELEVATIONS",
+        "MATERIAL_SWATCH"
+      ]),
+      imageBase64: z.string().min(1)
+    })
+  ).min(1)
 });
 
 export async function GET(
@@ -76,6 +86,32 @@ export async function POST(
   }
 
   const state = await getRound1State(projectId);
+
+  const roles = new Set(input.referenceImages.map((r) => r.role));
+  if (!roles.has("PERSPECTIVE_STRUCTURE") || !roles.has("TOP_DOWN_PLAN")) {
+    return NextResponse.json(
+      { error: "Missing required spatial references (perspective and top-down)" },
+      { status: 400 }
+    );
+  }
+  if (roles.size !== input.referenceImages.length) {
+    return NextResponse.json(
+      { error: "Duplicate reference roles are not allowed" },
+      { status: 400 }
+    );
+  }
+
+  const roleOrder = [
+    "PERSPECTIVE_STRUCTURE",
+    "TOP_DOWN_PLAN",
+    "WALL_ELEVATIONS",
+    "MATERIAL_SWATCH"
+  ] as const;
+
+  const orderedBase64 = roleOrder
+    .map((role) => input.referenceImages.find((r) => r.role === role)?.imageBase64)
+    .filter((b64): b64 is string => b64 !== undefined);
+
   const preferences = state?.showroomForm.renderingPreferences;
   if (!state || !preferences?.doorColorId) {
     return NextResponse.json(
@@ -113,7 +149,7 @@ export async function POST(
   try {
     const rendering = await generateRound1Rendering({
       snapshot: latest.snapshot,
-      referenceImagesBase64: input.referenceImagesBase64,
+      referenceImagesBase64: orderedBase64,
       renderingPreferences: {
         cabinetStyle: preferences.cabinetStyle,
         color

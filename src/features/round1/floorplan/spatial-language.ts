@@ -71,7 +71,13 @@ const CORNER_LABELS: Record<string, string> = {
 
 const CABINET_RUN_PHRASE = "a continuous run of base and wall cabinets";
 
-export function wallToCamera(wall: Wall): CameraSurface {
+export function wallToCamera(wall: Wall, layout?: string): CameraSurface {
+  if (layout === "GALLEY") {
+    if (wall === "TOP") return "left";
+    if (wall === "BOTTOM") return "right";
+    if (wall === "LEFT") return "front";
+    if (wall === "RIGHT") return "back";
+  }
   return WALL_TO_CAMERA[wall];
 }
 
@@ -102,9 +108,15 @@ export type WallDescription = {
 };
 
 /** Describes the appliances and cabinet run on a single wall, or null if empty. */
-export function describeWall(plan: FloorPlan, wall: Wall): WallDescription | null {
+export function describeWall(plan: FloorPlan, wall: Wall, layout?: string): WallDescription | null {
   const onWall = plan.appliances
-    .filter((appliance) => appliance.wall === wall && appliance.symbol !== "hood")
+    .filter(
+      (appliance) =>
+        appliance.wall === wall &&
+        appliance.symbol !== "hood" &&
+        !appliance.onIsland &&
+        !appliance.onPeninsula
+    )
     .slice()
     .sort((a, b) => alongAxisValue(wall, a) - alongAxisValue(wall, b));
 
@@ -126,7 +138,7 @@ export function describeWall(plan: FloorPlan, wall: Wall): WallDescription | nul
 
   if (appliances.length === 0 && !hasCabinetRun) return null;
 
-  return { surface: wallToCamera(wall), appliances, hasCabinetRun };
+  return { surface: wallToCamera(wall, layout), appliances, hasCabinetRun };
 }
 
 function readingOrderPhrase(surface: CameraSurface): string {
@@ -138,9 +150,24 @@ function readingOrderPhrase(surface: CameraSurface): string {
 /** Full per-wall walkthrough sentence in camera order, or null if the wall is empty. */
 export function wallWalkthroughSentence(
   plan: FloorPlan,
-  wall: Wall
+  wall: Wall,
+  layout?: string
 ): string | null {
-  const desc = describeWall(plan, wall);
+  if (layout === "PENINSULA" && wall === "LEFT" && plan.peninsula) {
+    const desc = describeWall(plan, wall, layout);
+    let contents = "the peninsula anchor point (where the peninsula connects to the left wall cabinetry)";
+    if (desc && desc.appliances.length > 0) {
+      contents += `, followed by ${joinList(desc.appliances)}`;
+      if (desc.hasCabinetRun) {
+        contents += `, set within continuous base and wall cabinetry towards the far end`;
+      }
+    } else {
+      contents += ", followed by continuous base and wall cabinetry extending to the far corner";
+    }
+    return `On the left wall, from nearest the camera to the far end: ${contents}.`;
+  }
+
+  const desc = describeWall(plan, wall, layout);
   if (!desc) return null;
 
   let contents: string;
@@ -160,9 +187,10 @@ export function wallWalkthroughSentence(
 
 /** Phrases for each corner cabinet, mapped to camera-relative corners. */
 export function describeCorners(plan: FloorPlan): string[] {
-  if (plan.wallCorners.length > 0) {
+  const wallCorners = plan.wallCorners ?? [];
+  if (wallCorners.length > 0) {
     const labels = Array.from(
-      new Set(plan.wallCorners.map((corner) => CORNER_LABELS[corner.type]))
+      new Set(wallCorners.map((corner) => CORNER_LABELS[corner.type]))
     ).filter(Boolean);
     return labels.map((label) => `a corner cabinet in the ${label} corner`);
   }
@@ -173,11 +201,11 @@ export function describeCorners(plan: FloorPlan): string[] {
 }
 
 /** Window phrasing relative to its wall and the sink, or null if no window. */
-export function describeWindow(plan: FloorPlan): string | null {
+export function describeWindow(plan: FloorPlan, layout?: string): string | null {
   const window = plan.window;
-  if (!window) return null;
+  if (!window) return "CRITICAL REQUIREMENT: There are NO windows in this kitchen; do not add any windows to any wall.";
 
-  const surface = wallToCamera(window.wall);
+  const surface = wallToCamera(window.wall, layout);
   const sink = plan.appliances.find(
     (appliance) => appliance.symbol === "sink" && appliance.wall === window.wall
   );
@@ -188,11 +216,15 @@ export function describeWindow(plan: FloorPlan): string | null {
       ? window.x + window.w / 2
       : window.y + window.h / 2;
     const sinkCenter = horizontal ? sink.x + sink.w / 2 : sink.y + sink.h / 2;
-    const tolerance = (horizontal ? sink.w : sink.h) * 0.6;
+    const tolerance = (horizontal ? sink.w : sink.h) * 0.1;
     if (Math.abs(windowCenter - sinkCenter) <= tolerance) {
       return `a window on ${cameraSurfaceShort(
         surface
-      )} centered above the sink, letting in natural daylight`;
+      )} exactly centered above the sink, letting in natural daylight`;
+    } else {
+      return `a window on ${cameraSurfaceShort(
+        surface
+      )}, letting in natural daylight`;
     }
   }
 
@@ -206,27 +238,81 @@ export function describeWindow(plan: FloorPlan): string | null {
  * passage is rendered as a cased opening with no door leaf, so it is described
  * differently from a swinging door.
  */
-export function describeDoor(plan: FloorPlan): string {
+function describePositionOnWall(plan: FloorPlan, cx: number, cy: number, wall: Wall, options: { layout?: string }): string {
+  const surface = wallToCamera(wall, options.layout);
+  const room = plan.room;
+  
+  if (surface === "left" || surface === "right") {
+    let ratio = 0;
+    if (options.layout === "GALLEY") {
+      ratio = (cx - room.x) / room.w;
+    } else {
+      ratio = ((room.y + room.h) - cy) / room.h;
+    }
+    if (ratio < 0.33) return "positioned at the near end of the wall (closest to the camera)";
+    if (ratio > 0.66) return "positioned at the far end of the wall (furthest from the camera)";
+    return "positioned in the middle of the wall";
+  } else if (surface === "back") {
+    let ratio = 0;
+    if (options.layout === "GALLEY") {
+      ratio = (cy - room.y) / room.h;
+    } else {
+      ratio = (cx - room.x) / room.w;
+    }
+    if (ratio < 0.33) return "positioned on the left side of the wall";
+    if (ratio > 0.66) return "positioned on the right side of the wall";
+    return "positioned in the center of the wall";
+  } else if (surface === "front") {
+    let ratio = 0;
+    if (options.layout === "GALLEY") {
+      ratio = (cy - room.y) / room.h;
+    } else {
+      ratio = (cx - room.x) / room.w;
+    }
+    if (ratio < 0.33) return "positioned on the left side of the wall";
+    if (ratio > 0.66) return "positioned on the right side of the wall";
+    return "positioned in the center of the wall";
+  }
+  return "";
+}
+
+export function describeDoor(
+  plan: FloorPlan,
+  options: { frontWallVisible?: boolean; layout?: string } = {}
+): string {
   const door = plan.door;
   if (!door) {
-    return "There is no entry door in this view; do not add a door to any wall.";
+    return "CRITICAL REQUIREMENT: There is no entry door or open passage in this layout; do NOT add a door, doorway, or opening to any wall. All walls must remain solid unless explicitly stated otherwise.";
   }
   const isPassage = door.kind === "OPEN_PASSAGE";
   const opening = isPassage
     ? "open passage (a cased wall opening with no door leaf)"
     : "entry door";
-  const surface = wallToCamera(door.wall);
+  const surface = wallToCamera(door.wall, options.layout);
+  
+  const positionPhrase = describePositionOnWall(plan, door.cx, door.cy, door.wall, options);
+  
+  const backWallNote = surface !== "back" 
+    ? " CRITICAL REQUIREMENT: There is NO door or opening on the back wall straight ahead; the back wall must remain solid. Do not add a door or opening to any other wall." 
+    : " CRITICAL REQUIREMENT: Do not add a door or opening to any other wall.";
+
   if (surface === "front") {
-    return `The ${opening} is on the front wall behind the camera and must NOT appear on the back, left, or right walls.`;
+    if (options.frontWallVisible) {
+      if (isPassage) {
+        return `The ${opening} is on the front wall and is visible from this viewpoint; render it as a cased opening with no swinging door leaf, keep it exactly where the reference places it (${positionPhrase}).${backWallNote}`;
+      }
+      return `The ${opening} is on the front wall and is visible from this viewpoint; keep it exactly where the reference places it (${positionPhrase}).${backWallNote}`;
+    }
+    return `The ${opening} is on the front wall behind the camera (${positionPhrase}) and must NOT appear on the back, left, or right walls.${backWallNote}`;
   }
   if (isPassage) {
     return `The ${opening} is on ${cameraSurfaceShort(
       surface
-    )}; render it as an open doorway with no swinging door leaf, and do not draw a door or opening on any other wall.`;
+    )} (${positionPhrase}); render it as an open doorway with no swinging door leaf.${backWallNote}`;
   }
   return `The ${opening} is on ${cameraSurfaceShort(
     surface
-  )}; do not draw a door on any other wall.`;
+  )} (${positionPhrase}).${backWallNote}`;
 }
 
 /**
@@ -236,7 +322,11 @@ export function describeDoor(plan: FloorPlan): string {
  * null when nothing sits on the front wall (as in the default L-shape, whose
  * appliances all stay within the L).
  */
-export function describeBehindCameraAppliances(plan: FloorPlan): string | null {
+export function describeBehindCameraAppliances(
+  plan: FloorPlan,
+  options: { frontWallVisible?: boolean } = {}
+): string | null {
+  if (options.frontWallVisible) return null;
   const front = plan.appliances.filter(
     (appliance) => appliance.wall === "BOTTOM" && appliance.symbol !== "hood"
   );

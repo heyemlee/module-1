@@ -14,6 +14,7 @@ export type CabinetLocation =
   | "UNDER_WINDOW"
   | "ON_MAIN_RUN"
   | "ON_ISLAND"
+  | "ON_PENINSULA"
   | "NEAR_SINK"
   | "NEAR_RANGE"
   | "NEAR_FRIDGE"

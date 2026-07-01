@@ -79,7 +79,12 @@ function request() {
   return POST(
     new Request("http://localhost/api/projects/project-1/round1/renderings", {
       method: "POST",
-      body: JSON.stringify({ referenceImagesBase64: ["plan"] })
+      body: JSON.stringify({
+        referenceImages: [
+          { role: "PERSPECTIVE_STRUCTURE", imageBase64: "persp" },
+          { role: "TOP_DOWN_PLAN", imageBase64: "plan" }
+        ]
+      })
     }),
     { params: Promise.resolve({ projectId: "project-1" }) }
   );
@@ -163,7 +168,7 @@ describe("POST /api/projects/[projectId]/round1/renderings", () => {
     expect(response.status).toBe(200);
     expect(mocks.generateRound1Rendering).toHaveBeenCalledWith(
       expect.objectContaining({
-        referenceImagesBase64: ["plan"],
+        referenceImagesBase64: ["persp", "plan"],
         renderingPreferences: {
           cabinetStyle: "EUROPEAN_FRAMELESS",
           color: europeanOak

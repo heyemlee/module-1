@@ -1,5 +1,6 @@
 import {
   type FloorPlan,
+  type CabinetShape,
   type MarkerLetter,
   type PlanRect,
   type WallCornerShape
@@ -47,6 +48,41 @@ export function Island({ rect, referenceMode }: { rect: PlanRect; referenceMode?
           Island
         </text>
       )}
+    </g>
+  );
+}
+
+export function Peninsula({
+  rect,
+  cabinets = []
+}: {
+  rect: PlanRect;
+  cabinets?: CabinetShape[];
+}) {
+  return (
+    <g>
+      <rect
+        x={rect.x}
+        y={rect.y}
+        width={rect.w}
+        height={rect.h}
+        fill={FILL_CABINET}
+        stroke={INK}
+        strokeWidth="1.2"
+      />
+      {cabinets.map((cabinet, index) => (
+        <rect
+          key={`${cabinet.code}-${index}`}
+          data-peninsula-cabinet={cabinet.code}
+          x={cabinet.x}
+          y={cabinet.y}
+          width={cabinet.w}
+          height={cabinet.h}
+          fill={FILL_CABINET}
+          stroke={INK}
+          strokeWidth="1.2"
+        />
+      ))}
     </g>
   );
 }
@@ -138,8 +174,9 @@ export function Marker({ cx, cy, letter }: { cx: number; cy: number; letter: Mar
 }
 
 export function ConfirmationFlag({ plan }: { plan: FloorPlan }) {
-  if (plan.confirmationCount === 0) return null;
-  const label = `${plan.confirmationCount} to confirm`;
+  const confirmationCount = plan.confirmationCount ?? 0;
+  if (confirmationCount === 0) return null;
+  const label = `${confirmationCount} to confirm`;
   const width = 44 + label.length * 6.2;
   const x = 22;
   const y = 24;

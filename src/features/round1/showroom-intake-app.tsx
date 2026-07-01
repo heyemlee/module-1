@@ -21,6 +21,7 @@ import {
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import dynamic from "next/dynamic";
 import { ElevationPreview } from "./elevations/elevation-preview";
+import { PerspectivePreview } from "./perspective-preview";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import Link from "next/link";
 import { LayoutPreview } from "./layout-preview";
@@ -350,6 +351,7 @@ export function ShowroomIntakeApp({
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
   const referenceElevationRef = useRef<SVGSVGElement | null>(null);
+  const referencePerspectiveRef = useRef<SVGSVGElement | null>(null);
   const [renderings, setRenderings] = useState<ConceptRendering[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
@@ -691,11 +693,16 @@ export function ShowroomIntakeApp({
     setHasRenderedConcept(true);
     const referenceTopDownSvg = referenceTopDownRef.current;
     const referenceElevationSvg = referenceElevationRef.current;
+    const referencePerspectiveSvg = referencePerspectiveRef.current;
     if (
       !referenceTopDownSvg ||
+      !referenceElevationSvg ||
+      !referencePerspectiveSvg ||
       !projectId ||
       !snapshot ||
-      !canRenderConcept
+      !canRenderConcept ||
+      !form.renderingPreferences ||
+      !cabinetColors.length
     ) {
       return;
     }
@@ -722,8 +729,9 @@ export function ShowroomIntakeApp({
       }
 
       const referenceImagesBase64 = await rasterizeRenderingReferences([
-        referenceTopDownSvg,
-        referenceElevationSvg
+        { role: "PERSPECTIVE_STRUCTURE", svg: referencePerspectiveSvg },
+        { role: "TOP_DOWN_PLAN", svg: referenceTopDownSvg },
+        { role: "WALL_ELEVATIONS", svg: referenceElevationSvg }
       ]);
       // Also send the selected door color's swatch as a MATERIAL reference so the
       // image model matches the actual color/finish, not just the text prompt.
@@ -733,7 +741,9 @@ export function ShowroomIntakeApp({
           const swatchPng = await rasterizeImageSourceToPngBase64(
             selectedColor.swatchImageUrl
           );
-          if (swatchPng) referenceImagesBase64.push(swatchPng);
+          if (swatchPng) {
+            referenceImagesBase64.push({ role: "MATERIAL_SWATCH", imageBase64: swatchPng });
+          }
         } catch {
           // Best-effort: fall back to the text prompt if the swatch can't rasterize.
         }
@@ -742,7 +752,7 @@ export function ShowroomIntakeApp({
         `/api/projects/${projectId}/round1/renderings`,
         {
           method: "POST",
-          body: { referenceImagesBase64 },
+          body: { referenceImages: referenceImagesBase64 },
           // Recover the UI if the whole request stalls (the server also caps the
           // upstream image call), instead of spinning on "Generating..." forever.
           signal: AbortSignal.timeout(120_000)
@@ -1352,6 +1362,10 @@ export function ShowroomIntakeApp({
           <ElevationPreview
             plan={snapshot.floorPlan}
             svgRef={referenceElevationRef}
+          />
+          <PerspectivePreview
+            plan={snapshot.floorPlan}
+            svgRef={referencePerspectiveRef}
           />
         </div>
       )}

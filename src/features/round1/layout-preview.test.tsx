@@ -6,7 +6,8 @@ import {
   type Round1FormInput
 } from "@/domain/round1";
 import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-intake-data";
-import { LayoutPreview } from "./layout-preview";
+import { buildFloorPlan } from "./floorplan/plan-geometry";
+import { LayoutPreview, overrideFromPointer } from "./layout-preview";
 
 describe("LayoutPreview", () => {
   function staticApplianceLabelPattern(label: string) {
@@ -71,6 +72,26 @@ describe("LayoutPreview", () => {
     expect(html).not.toContain('data-base-cabinet="');
   });
 
+  test("connects the peninsula guide directly to the left layout guide", () => {
+    const form = createDefaultShowroomForm();
+    form.layoutPreference = "PENINSULA";
+
+    const html = renderPreview({ form, previewStage: "layout" });
+    const leftGuide = html.match(
+      /data-layout-wall="LEFT" x="([^"]+)" y="[^"]+" width="([^"]+)"/
+    );
+    const peninsulaGuide = html.match(
+      /data-layout-guide="peninsula"[^>]*><rect x="([^"]+)"/
+    );
+
+    expect(leftGuide).not.toBeNull();
+    expect(peninsulaGuide).not.toBeNull();
+    expect(Number(peninsulaGuide![1])).toBeCloseTo(
+      Number(leftGuide![1]) + Number(leftGuide![2]),
+      5
+    );
+  });
+
   test("appliances stage adds appliances but still hides cabinets", () => {
     const html = renderPreview({ previewStage: "appliances" });
 
@@ -86,6 +107,19 @@ describe("LayoutPreview", () => {
     expect(html).toContain('data-appliance-symbol="sink"');
     expect(html).not.toContain('data-base-cabinet="');
     expect(html).not.toContain('data-wall-cabinet="');
+  });
+
+  test("renders peninsula base cabinets instead of an empty peninsula box", () => {
+    const form = createDefaultShowroomForm();
+    form.layoutPreference = "PENINSULA";
+
+    const html = renderPreview({ form, previewStage: "adjust" });
+    const peninsulaCabinetCount = (
+      html.match(/data-peninsula-cabinet="/g) ?? []
+    ).length;
+
+    expect(peninsulaCabinetCount).toBeGreaterThan(1);
+    expect(html).not.toContain(">Peninsula<");
   });
 
   test("accepts parent-owned position overrides and change handler props", () => {
@@ -272,6 +306,40 @@ describe("LayoutPreview", () => {
     expect(html).toContain('data-canvas-theme="studio"');
     expect(html).toContain('data-drag-state="idle"');
     expect(html).toContain('aria-label="Kitchen floor plan editor"');
+  });
+
+  test("treats an island as a drop target for a standalone microwave", () => {
+    const form = createDefaultShowroomForm();
+    form.layoutPreference = "ISLAND";
+    form.layoutSensitiveCabinets.island = {
+      status: "YES",
+      requested: true,
+      functions: []
+    };
+    form.layoutSensitiveCabinets.ovenMicrowave = {
+      configuration: "MICROWAVE_DRAWER",
+      relation: "ON_ISLAND"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+      status: "YES",
+      relation: "ON_ISLAND"
+    };
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(createDefaultCabinetRuns(form));
+    const plan = buildFloorPlan(result.normalized, estimate.cabinets);
+    const island = plan.island!;
+
+    expect(
+      overrideFromPointer(
+        plan,
+        "microwaveOvenCombo",
+        {
+          x: island.x + island.w / 2,
+          y: island.y + island.h / 2
+        },
+        0
+      )
+    ).toMatchObject({ onIsland: true });
   });
 
 });
