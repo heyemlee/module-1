@@ -70,6 +70,12 @@ import { Round1StepNavigation } from "./round1-step-navigation";
 import { Round1Inspector } from "./round1-inspector";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/api-client";
+import {
+  useRenderingTask
+} from "@/features/platform/rendering-task-provider";
+import type {
+  RenderingTaskResult
+} from "@/features/platform/rendering-task-manager";
 
 // The AI assistant drawer is opened on demand, so its bundle (chat UI + speech
 // recognition + motion) is code-split out of the initial Round 1 load.
@@ -272,6 +278,32 @@ export function snapshotRenderingFingerprint(snapshot: Round1Snapshot) {
   });
 }
 
+export function conceptRenderingFromTaskResult(
+  result: RenderingTaskResult,
+  snapshot: Round1Snapshot,
+  projectId?: string
+): ConceptRendering {
+  const preferences = (result.basedOnRenderingPreferences ??
+    null) as RenderingPreferenceStamp | null;
+
+  return {
+    id: result.id,
+    url:
+      typeof result.imageBase64 === "string"
+        ? `data:image/png;base64,${result.imageBase64}`
+        : projectId
+          ? `/api/projects/${projectId}/round1/renderings/${result.id}/image`
+          : "",
+    doorColorId: preferences?.doorColorId ?? null,
+    basedOnSnapshotGeneratedAt:
+      typeof result.basedOnSnapshotGeneratedAt === "string"
+        ? result.basedOnSnapshotGeneratedAt
+        : null,
+    basedOnSnapshotFingerprint: snapshotRenderingFingerprint(snapshot),
+    basedOnRenderingPreferences: preferences
+  };
+}
+
 export function Round1RenderingFlow({
   rendering,
   layout,
@@ -379,8 +411,16 @@ export function ShowroomIntakeApp({
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
   const [renderings, setRenderings] = useState<ConceptRendering[]>([]);
-  const [renderingBusy, setRenderingBusy] = useState(false);
-  const [renderingError, setRenderingError] = useState<string | null>(null);
+  const [preparingRendering, setPreparingRendering] = useState(false);
+  const [localRenderingError, setRenderingError] = useState<string | null>(null);
+  const { task: renderingTask, startRendering } = useRenderingTask(projectId);
+  const renderingBusy =
+    preparingRendering || renderingTask?.status === "running";
+  const renderingError =
+    localRenderingError ??
+    (renderingTask?.status === "failed"
+      ? renderingTask.error ?? "Rendering failed"
+      : null);
   // The in-canvas concept preview can be dismissed (×); a new generate reopens it.
 
   // Any manual drag invalidates the confirmed positions and the generated
@@ -711,10 +751,30 @@ export function ShowroomIntakeApp({
     }
   }, [step, preferencesLocked, fixedPositionsConfirmed, cabinetFillGenerated, handleGenerateCabinetFill]);
 
-  // Non-authoritative concept rendering. Rasterizes the hidden clean reference
-  // render (built from the locked snapshot) and POSTs it to the rendering route,
-  // which loads the authoritative snapshot server-side by id and builds the
-  // prompt — the client never sends snapshot data, only the reference image.
+  useEffect(() => {
+    if (
+      renderingTask?.status !== "succeeded" ||
+      !renderingTask.result ||
+      !snapshot
+    ) {
+      return;
+    }
+    const completed = conceptRenderingFromTaskResult(
+      renderingTask.result,
+      snapshot,
+      projectId
+    );
+    setRenderings((current) =>
+      current.some((rendering) => rendering.id === completed.id)
+        ? current
+        : [completed, ...current]
+    );
+  }, [projectId, renderingTask, snapshot]);
+
+  // Prepare the deterministic references in Round 1, then hand the saved-state
+  // and image requests to the authenticated-layout task provider. The provider
+  // stays mounted when this route is replaced, so navigation cannot orphan the
+  // in-progress rendering task.
   const handleGenerateRendering = useCallback(async () => {
     setHasRenderedConcept(true);
     const referenceTopDownSvg = referenceTopDownRef.current;
@@ -729,27 +789,9 @@ export function ShowroomIntakeApp({
       return;
     }
 
-    setRenderingBusy(true);
+    setPreparingRendering(true);
     setRenderingError(null);
     try {
-      // Persist the latest finish selection BEFORE rendering: the rendering route
-      // builds the prompt from the saved server state, so an unsaved color would
-      // otherwise render with the previously-saved finish.
-      const savedState = await fetchJson(`/api/projects/${projectId}/round1/state`, {
-        method: "PUT",
-        body: {
-          showroomForm: form,
-          positionOverrides,
-          fixedPositionsConfirmed,
-          cabinetFillGenerated,
-          currentStep: step,
-          maxAccessibleStep
-        }
-      });
-      if (!savedState.ok) {
-        throw new Error("Couldn't save your color selection. Please try again.");
-      }
-
       // Elevations and the perspective structure remain human-facing previews
       // only. Temporarily send just the deterministic top-down plan to the image
       // model so the perspective projection cannot pull the render off-plan.
@@ -771,34 +813,19 @@ export function ShowroomIntakeApp({
           // Best-effort: fall back to the text prompt if the swatch can't rasterize.
         }
       }
-      const response = await fetchJson(
-        `/api/projects/${projectId}/round1/renderings`,
-        {
-          method: "POST",
-          body: { referenceImages: referenceImagesBase64 },
-          // Recover the UI if the whole request stalls (the server also caps the
-          // upstream image call), instead of spinning on "Generating..." forever.
-          signal: AbortSignal.timeout(120_000)
-        }
-      );
-      if (!response.ok) {
-        const detail = await response.json().catch(() => null);
-        throw new Error(
-          detail?.reason || detail?.error || `Request failed (${response.status})`
-        );
-      }
-      const json = await response.json();
-      setRenderings((prev) => [
-        {
-          id: json.id,
-          url: `data:image/png;base64,${json.imageBase64}`,
-          doorColorId: json.basedOnRenderingPreferences?.doorColorId || null,
-          basedOnSnapshotGeneratedAt: json.basedOnSnapshotGeneratedAt ?? null,
-          basedOnSnapshotFingerprint: snapshotRenderingFingerprint(snapshot),
-          basedOnRenderingPreferences: json.basedOnRenderingPreferences ?? null
+      void startRendering({
+        projectId,
+        projectName: projectName ?? "Project",
+        stateBody: {
+          showroomForm: form,
+          positionOverrides,
+          fixedPositionsConfirmed,
+          cabinetFillGenerated,
+          currentStep: step,
+          maxAccessibleStep
         },
-        ...prev
-      ]);
+        renderingBody: { referenceImages: referenceImagesBase64 }
+      });
     } catch (error) {
       setRenderingError(
         error instanceof Error
@@ -808,7 +835,7 @@ export function ShowroomIntakeApp({
           : "Rendering failed"
       );
     } finally {
-      setRenderingBusy(false);
+      setPreparingRendering(false);
     }
   }, [
     cabinetColors,
@@ -820,7 +847,9 @@ export function ShowroomIntakeApp({
     fixedPositionsConfirmed,
     cabinetFillGenerated,
     maxAccessibleStep,
-    step
+    step,
+    projectName,
+    startRendering
   ]);
 
   // Clears the generated cabinet fill so the rep can keep adjusting the dragged
