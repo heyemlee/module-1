@@ -1,5 +1,5 @@
 import { Round1Feedback } from "./round1-feedback";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { WallElevationScene } from "./elevations/elevation-scene";
 import { WallElevationSvg } from "./elevations/elevation-preview";
@@ -280,12 +280,16 @@ export function Round1InlineRenderPreview({
 // generated fill, not in-progress drags.
 export function Round1ElevationStrip({
   scenes,
-  onOpen
+  onOpen,
+  leading
 }: {
   scenes: WallElevationScene[];
   onOpen: (index: number) => void;
+  // Optional item rendered first in the same row (e.g. the perspective thumb),
+  // so the 3D reference lines up with the elevations instead of a separate bar.
+  leading?: ReactNode;
 }) {
-  if (scenes.length === 0) return null;
+  if (scenes.length === 0 && !leading) return null;
 
   return (
     <div
@@ -296,6 +300,7 @@ export function Round1ElevationStrip({
         WebkitBackdropFilter: "blur(14px)"
       }}
     >
+      {leading}
       {scenes.map((scene, index) => (
         <div key={scene.wall} className="flex flex-col items-center gap-[5px]">
           <button
@@ -413,6 +418,64 @@ export function Round1ElevationLightbox({
           ›
         </button>
       )}
+    </div>
+  );
+}
+
+// Glass lightbox for the 3D structure (perspective) reference. Same chrome as
+// the elevation lightbox, minus the ‹ › navigation. The perspective SVG is
+// passed as children so this component stays decoupled from PerspectivePreview.
+export function Round1PerspectiveLightbox({
+  onClose,
+  children
+}: {
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="3D structure reference"
+      onClick={onClose}
+      className="studio-anim-fade fixed inset-0 z-[70] flex items-center justify-center p-12"
+      style={{
+        background: "rgba(232,232,230,0.6)",
+        backdropFilter: "blur(18px) saturate(140%)",
+        WebkitBackdropFilter: "blur(18px) saturate(140%)"
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="studio-anim-rise relative flex aspect-square max-h-[86vh] w-[min(88vw,760px)] flex-col overflow-hidden rounded-[24px] border border-white/90 bg-white p-[30px] shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_40px_90px_-40px_rgba(20,20,26,0.5)]"
+      >
+        <div className="font-mono text-[11px] tracking-[0.18em] text-[#86867f]">
+          3D STRUCTURE REFERENCE
+        </div>
+        <div className="mb-6 mt-[5px] text-[22px] font-semibold tracking-[-0.01em] text-studio-ink">
+          Perspective massing
+        </div>
+        <div className="min-h-0 flex-1">{children}</div>
+        <div className="mt-[18px] flex items-center justify-end font-mono text-[10px] tracking-[0.1em] text-[#9a9a94]">
+          <span>SALES ESTIMATE · NOT FOR PRODUCTION</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close 3D structure reference"
+          className="absolute right-[28px] top-[28px] flex size-10 items-center justify-center rounded-full border border-white/85 bg-white/70 text-[18px] text-[#6a6a64] transition hover:bg-white"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }

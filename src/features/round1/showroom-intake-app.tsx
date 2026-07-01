@@ -59,6 +59,7 @@ import {
   Round1InlineRenderPreview,
   Round1ElevationStrip,
   Round1ElevationLightbox,
+  Round1PerspectiveLightbox,
   type SnapshotPersistState
 } from "./showroom-intake-panels";
 import { useReducedMotion } from "motion/react";
@@ -318,6 +319,7 @@ export function ShowroomIntakeApp({
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   // Which wall elevation the lightbox shows (null = closed). Indexes into elevationScenes.
   const [elevationOpenIndex, setElevationOpenIndex] = useState<number | null>(null);
+  const [perspectiveOpen, setPerspectiveOpen] = useState(false);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
   const [draftPersistState, setDraftPersistState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [draftLoaded, setDraftLoaded] = useState(!projectId);
@@ -1136,26 +1138,22 @@ export function ShowroomIntakeApp({
   // the rep can still scroll down to inspect the plan.
   const isRenderingStep = step === SHOWROOM_STEPS.length - 1;
 
-  // The perspective/massing image the model actually receives as Reference 1,
-  // surfaced next to the rough elevations so it can be eyeballed. Same glass
-  // strip chrome as Round1ElevationStrip so it reads as one region.
-  const perspectivePreviewEl = snapshot?.floorPlan ? (
-    <div
-      className="relative z-[3] flex shrink-0 items-end gap-[10px] border-t border-white/50 px-[18px] py-[14px]"
-      style={{
-        background: "rgba(246,246,244,0.7)",
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)"
-      }}
-    >
-      <div className="flex flex-col items-center gap-[5px]">
-        <div className="flex aspect-square w-[132px] shrink-0 items-center justify-center overflow-hidden rounded-[11px] border border-white/80 bg-white/[0.62] p-[7px] shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
-          <PerspectivePreview plan={snapshot.floorPlan} hidden={false} />
-        </div>
-        <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#9a9a94]">
-          Perspective
-        </span>
-      </div>
+  // The perspective/massing image the model receives as Reference 1, surfaced
+  // as the first clickable thumbnail in the elevation strip so the 3D reference
+  // lines up with the rough elevations and opens in a lightbox like they do.
+  const perspectiveThumb = snapshot?.floorPlan ? (
+    <div className="flex flex-col items-center gap-[5px]">
+      <button
+        type="button"
+        onClick={() => setPerspectiveOpen(true)}
+        aria-label="Open 3D structure reference"
+        className="flex aspect-square w-[112px] shrink-0 items-center justify-center overflow-hidden rounded-[11px] border border-white/80 bg-white/[0.62] p-[7px] shadow-[0_1px_0_rgba(255,255,255,0.7)_inset] transition-colors hover:border-studio-ink"
+      >
+        <PerspectivePreview plan={snapshot.floorPlan} hidden={false} />
+      </button>
+      <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#9a9a94]">
+        3D
+      </span>
     </div>
   ) : null;
 
@@ -1223,29 +1221,21 @@ export function ShowroomIntakeApp({
           }
           layout={layoutPreviewEl}
           elevations={
-            perspectivePreviewEl || elevationScenes.length > 0 ? (
-              <>
-                {perspectivePreviewEl}
-                {elevationScenes.length > 0 && (
-                  <Round1ElevationStrip
-                    scenes={elevationScenes}
-                    onOpen={setElevationOpenIndex}
-                  />
-                )}
-              </>
-            ) : undefined
+            <Round1ElevationStrip
+              scenes={elevationScenes}
+              onOpen={setElevationOpenIndex}
+              leading={perspectiveThumb}
+            />
           }
         />
       ) : (
         <>
           <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
-          {perspectivePreviewEl}
-          {elevationScenes.length > 0 && (
-            <Round1ElevationStrip
-              scenes={elevationScenes}
-              onOpen={setElevationOpenIndex}
-            />
-          )}
+          <Round1ElevationStrip
+            scenes={elevationScenes}
+            onOpen={setElevationOpenIndex}
+            leading={perspectiveThumb}
+          />
         </>
       )}
     </div>
@@ -1259,6 +1249,13 @@ export function ShowroomIntakeApp({
         onClose={() => setElevationOpenIndex(null)}
         onSelect={setElevationOpenIndex}
       />
+    ) : null;
+
+  const perspectiveLightbox =
+    perspectiveOpen && snapshot?.floorPlan ? (
+      <Round1PerspectiveLightbox onClose={() => setPerspectiveOpen(false)}>
+        <PerspectivePreview plan={snapshot.floorPlan} hidden={false} />
+      </Round1PerspectiveLightbox>
     ) : null;
 
   const renderingFooter = (
@@ -1346,6 +1343,7 @@ export function ShowroomIntakeApp({
           </section>
         </div>
         {elevationLightbox}
+        {perspectiveLightbox}
       </main>
     );
   }
@@ -1397,6 +1395,7 @@ export function ShowroomIntakeApp({
       )}
 
       {elevationLightbox}
+      {perspectiveLightbox}
     </>
   );
 }
