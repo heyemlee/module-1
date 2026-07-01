@@ -1488,12 +1488,32 @@ function placeWindow(
     sinkHasOverride &&
     wallProjectionOverlapRatio(windowShape, sink!) >= 0.75;
   if (sinkOnWindowWall && (!sinkHasOverride || snapDraggedSink)) {
+    const horizontal = wall === "TOP" || wall === "BOTTOM";
+    const sinkStartBefore = horizontal ? sink!.x : sink!.y;
     alignShapeCenterOnAxis(sink!, windowShape, {
       ix: ctx.ix,
       iy: ctx.iy,
       iw: ctx.iw,
       ih: ctx.ih
     });
+    // Carry a sink-coupled dishwasher along with the sink so re-centring can't
+    // slide the sink past it and flip which side it sits on. Without this, the
+    // sink hops over an adjacent NEAR_SINK dishwasher and the downstream
+    // overlap-resolver banishes the dishwasher to the sink's far side.
+    const delta = (horizontal ? sink!.x : sink!.y) - sinkStartBefore;
+    if (delta !== 0) {
+      const dishwasher = appliances.find(
+        (a) => a.key === "dishwasher" && a.wall === wall
+      );
+      const dishwasherCoupled =
+        dishwasher &&
+        fixtures.dishwasher?.relation === "NEAR_SINK" &&
+        overridePosition(ctx.overrides, "dishwasher") === undefined;
+      if (dishwasherCoupled) {
+        if (horizontal) dishwasher!.x += delta;
+        else dishwasher!.y += delta;
+      }
+    }
   }
 
   return windowShape;
