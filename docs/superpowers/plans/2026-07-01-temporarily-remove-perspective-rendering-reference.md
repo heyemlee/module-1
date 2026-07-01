@@ -143,7 +143,8 @@ const referenceImagesBase64 = await rasterizeRenderingReferences([
 ]);
 ```
 
-Do not remove `referencePerspectiveSvg` from the preview-generation path or UI.
+The perspective preview remains connected until Task 3 removes the complete
+frontend path.
 
 - [ ] **Step 3: Run focused rendering tests**
 
@@ -175,4 +176,135 @@ Expected: all tests PASS and the production build completes without TypeScript e
 ```bash
 git add src/features/round1/showroom-intake-app.tsx
 git commit -m "fix(round1): omit perspective from rendering inputs"
+```
+
+### Task 3: Remove the perspective feature from the active Round 1 frontend
+
+**Files:**
+- Create: `src/features/round1/perspective-cleanup.test.ts`
+- Modify: `src/features/round1/showroom-intake-app.tsx`
+- Modify: `src/features/round1/showroom-intake-panels.tsx`
+- Modify: `src/features/round1/round1-elevations.test.tsx`
+
+- [ ] **Step 1: Add a failing architectural cleanup test**
+
+Create `src/features/round1/perspective-cleanup.test.ts`:
+
+```ts
+import { readFileSync } from "node:fs";
+import { describe, expect, test } from "vitest";
+
+const appSource = readFileSync(
+  new URL("./showroom-intake-app.tsx", import.meta.url),
+  "utf8"
+);
+const panelSource = readFileSync(
+  new URL("./showroom-intake-panels.tsx", import.meta.url),
+  "utf8"
+);
+
+describe("Round 1 perspective frontend cleanup", () => {
+  test("does not connect perspective UI or hidden reference generation", () => {
+    expect(appSource).not.toMatch(
+      /PerspectivePreview|referencePerspectiveRef|referencePerspectiveSvg|perspectiveOpen|perspectiveThumb|perspectiveLightbox/
+    );
+    expect(panelSource).not.toContain("Round1PerspectiveLightbox");
+  });
+});
+```
+
+- [ ] **Step 2: Run the cleanup test to verify it fails**
+
+Run:
+
+```bash
+npx vitest run src/features/round1/perspective-cleanup.test.ts
+```
+
+Expected: FAIL because the Round 1 app still imports and renders
+`PerspectivePreview`, and the panels module still exports
+`Round1PerspectiveLightbox`.
+
+- [ ] **Step 3: Remove perspective wiring from the Round 1 app**
+
+In `src/features/round1/showroom-intake-app.tsx`:
+
+- Remove the `PerspectivePreview` import.
+- Remove `Round1PerspectiveLightbox` from the panel imports.
+- Remove `perspectiveOpen` state.
+- Remove `referencePerspectiveRef`.
+- Remove `referencePerspectiveSvg` and its rendering-gate condition from
+  `handleGenerateRendering`.
+- Remove the `perspectiveThumb` block.
+- Stop passing `leading={perspectiveThumb}` to both `Round1ElevationStrip`
+  instances.
+- Remove the `perspectiveLightbox` block and its render site.
+- Remove the hidden `PerspectivePreview`; keep the hidden `LayoutPreview`
+  connected to `referenceTopDownRef`.
+
+The rendering gate must become:
+
+```ts
+const referenceTopDownSvg = referenceTopDownRef.current;
+if (
+  !referenceTopDownSvg ||
+  !projectId ||
+  !snapshot ||
+  !canRenderConcept ||
+  !form.renderingPreferences ||
+  !cabinetColors.length
+) {
+  return;
+}
+```
+
+- [ ] **Step 4: Remove the unused perspective lightbox**
+
+Delete the complete `Round1PerspectiveLightbox` export from
+`src/features/round1/showroom-intake-panels.tsx`.
+
+In `src/features/round1/round1-elevations.test.tsx`, remove
+`Round1PerspectiveLightbox` from the import and delete the
+`describe("Round1PerspectiveLightbox", ...)` test block. Keep
+`Round1ElevationStrip`'s generic `leading` prop and tests because that API is
+not perspective-specific.
+
+- [ ] **Step 5: Run focused tests**
+
+Run:
+
+```bash
+npx vitest run \
+  src/features/round1/perspective-cleanup.test.ts \
+  src/features/round1/round1-elevations.test.tsx \
+  src/features/round1/showroom-intake-app.test.tsx \
+  src/features/round1/rendering-references.test.ts \
+  'src/app/api/projects/[projectId]/round1/renderings/route.test.ts'
+```
+
+Expected: all focused tests PASS.
+
+- [ ] **Step 6: Run production verification**
+
+Run:
+
+```bash
+npm run build
+npm test
+```
+
+Expected: the production build passes. The full suite should match the current
+baseline: all tests pass except the previously acknowledged unrelated
+`spatial-language.test.ts` appliance-order assertion.
+
+- [ ] **Step 7: Commit the cleanup**
+
+```bash
+git add \
+  src/features/round1/perspective-cleanup.test.ts \
+  src/features/round1/showroom-intake-app.tsx \
+  src/features/round1/showroom-intake-panels.tsx \
+  src/features/round1/round1-elevations.test.tsx \
+  docs/superpowers/plans/2026-07-01-temporarily-remove-perspective-rendering-reference.md
+git commit -m "refactor(round1): remove perspective frontend"
 ```

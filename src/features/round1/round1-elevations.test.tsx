@@ -12,8 +12,7 @@ import { buildFloorPlan } from "./floorplan/plan-geometry";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import {
   Round1ElevationStrip,
-  Round1ElevationLightbox,
-  Round1PerspectiveLightbox
+  Round1ElevationLightbox
 } from "./showroom-intake-panels";
 
 function buildScenes() {
@@ -76,20 +75,6 @@ describe("Round1ElevationStrip", () => {
       />
     );
     expect(html).toContain("Open 3D structure reference");
-  });
-});
-
-describe("Round1PerspectiveLightbox", () => {
-  test("renders the 3D-reference chrome and its child content", () => {
-    const html = renderToStaticMarkup(
-      <Round1PerspectiveLightbox onClose={() => {}}>
-        <svg data-testid="persp-svg" />
-      </Round1PerspectiveLightbox>
-    );
-    expect(html).toContain("3D STRUCTURE REFERENCE");
-    expect(html).toContain("SALES ESTIMATE · NOT FOR PRODUCTION");
-    expect(html).toContain("Close 3D structure reference");
-    expect(html).toContain("persp-svg");
   });
 });
 

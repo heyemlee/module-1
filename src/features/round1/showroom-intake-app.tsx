@@ -20,7 +20,6 @@ import {
 } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import dynamic from "next/dynamic";
-import { PerspectivePreview } from "./perspective-preview";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import Link from "next/link";
 import { LayoutPreview } from "./layout-preview";
@@ -59,7 +58,6 @@ import {
   Round1InlineRenderPreview,
   Round1ElevationStrip,
   Round1ElevationLightbox,
-  Round1PerspectiveLightbox,
   type SnapshotPersistState
 } from "./showroom-intake-panels";
 import { useReducedMotion } from "motion/react";
@@ -319,7 +317,6 @@ export function ShowroomIntakeApp({
   const [snapshot, setSnapshot] = useState<Round1Snapshot | null>(null);
   // Which wall elevation the lightbox shows (null = closed). Indexes into elevationScenes.
   const [elevationOpenIndex, setElevationOpenIndex] = useState<number | null>(null);
-  const [perspectiveOpen, setPerspectiveOpen] = useState(false);
   const [persistState, setPersistState] = useState<SnapshotPersistState>("idle");
   const [draftPersistState, setDraftPersistState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [draftLoaded, setDraftLoaded] = useState(!projectId);
@@ -351,7 +348,6 @@ export function ShowroomIntakeApp({
   // so the reference image and the JSON prompt come from the identical locked
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
-  const referencePerspectiveRef = useRef<SVGSVGElement | null>(null);
   const [renderings, setRenderings] = useState<ConceptRendering[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
@@ -692,10 +688,8 @@ export function ShowroomIntakeApp({
   const handleGenerateRendering = useCallback(async () => {
     setHasRenderedConcept(true);
     const referenceTopDownSvg = referenceTopDownRef.current;
-    const referencePerspectiveSvg = referencePerspectiveRef.current;
     if (
       !referenceTopDownSvg ||
-      !referencePerspectiveSvg ||
       !projectId ||
       !snapshot ||
       !canRenderConcept ||
@@ -1134,25 +1128,6 @@ export function ShowroomIntakeApp({
   // the rep can still scroll down to inspect the plan.
   const isRenderingStep = step === SHOWROOM_STEPS.length - 1;
 
-  // The perspective/massing image the model receives as Reference 1, surfaced
-  // as the first clickable thumbnail in the elevation strip so the 3D reference
-  // lines up with the rough elevations and opens in a lightbox like they do.
-  const perspectiveThumb = snapshot?.floorPlan ? (
-    <div className="flex flex-col items-center gap-[5px]">
-      <button
-        type="button"
-        onClick={() => setPerspectiveOpen(true)}
-        aria-label="Open 3D structure reference"
-        className="flex aspect-square w-[112px] shrink-0 items-center justify-center overflow-hidden rounded-[11px] border border-white/80 bg-white/[0.62] p-[7px] shadow-[0_1px_0_rgba(255,255,255,0.7)_inset] transition-colors hover:border-studio-ink"
-      >
-        <PerspectivePreview plan={snapshot.floorPlan} hidden={false} />
-      </button>
-      <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#9a9a94]">
-        3D
-      </span>
-    </div>
-  ) : null;
-
   // Rough wall elevations, derived from the frozen fill snapshot. Built once and
   // shared by the thumbnail strip and the lightbox so their indexes line up.
   // Full-bleed canvas: the plan floats over the design's gridded gradient.
@@ -1220,7 +1195,6 @@ export function ShowroomIntakeApp({
             <Round1ElevationStrip
               scenes={elevationScenes}
               onOpen={setElevationOpenIndex}
-              leading={perspectiveThumb}
             />
           }
         />
@@ -1230,7 +1204,6 @@ export function ShowroomIntakeApp({
           <Round1ElevationStrip
             scenes={elevationScenes}
             onOpen={setElevationOpenIndex}
-            leading={perspectiveThumb}
           />
         </>
       )}
@@ -1245,13 +1218,6 @@ export function ShowroomIntakeApp({
         onClose={() => setElevationOpenIndex(null)}
         onSelect={setElevationOpenIndex}
       />
-    ) : null;
-
-  const perspectiveLightbox =
-    perspectiveOpen && snapshot?.floorPlan ? (
-      <Round1PerspectiveLightbox onClose={() => setPerspectiveOpen(false)}>
-        <PerspectivePreview plan={snapshot.floorPlan} hidden={false} />
-      </Round1PerspectiveLightbox>
     ) : null;
 
   const renderingFooter = (
@@ -1339,7 +1305,6 @@ export function ShowroomIntakeApp({
           </section>
         </div>
         {elevationLightbox}
-        {perspectiveLightbox}
       </main>
     );
   }
@@ -1383,15 +1348,10 @@ export function ShowroomIntakeApp({
             showPositionObjects
             svgRef={referenceTopDownRef}
           />
-          <PerspectivePreview
-            plan={snapshot.floorPlan}
-            svgRef={referencePerspectiveRef}
-          />
         </div>
       )}
 
       {elevationLightbox}
-      {perspectiveLightbox}
     </>
   );
 }
