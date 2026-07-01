@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   generatePreliminaryCabinetList,
   normalizeRound1Form
@@ -11,8 +12,10 @@ import {
 } from "./showroom-intake-data";
 import { buildRound1Snapshot } from "./snapshot";
 import {
+  conceptRenderingFromTaskResult,
   Round1RenderingFlow,
-  ShowroomIntakeApp
+  ShowroomIntakeApp,
+  snapshotRenderingFingerprint
 } from "./showroom-intake-app";
 import { AppliancesStep, LayoutStep, OpeningsStep } from "./showroom-intake-steps";
 import {
@@ -22,6 +25,14 @@ import {
   Round1InlineRenderPreview
 } from "./showroom-intake-panels";
 import { shouldApplySnapshotRestore } from "./showroom-intake-app";
+
+vi.mock("@/features/platform/rendering-task-provider", () => ({
+  useRenderingTask: () => ({
+    task: undefined,
+    startRendering: vi.fn(),
+    dismissRenderingTask: vi.fn()
+  })
+}));
 
 function buildFixtureSnapshot() {
   const form = createDefaultShowroomForm();
@@ -573,6 +584,36 @@ describe("LayoutStep", () => {
 });
 
 describe("ShowroomIntakeApp", () => {
+  test("delegates the long-running rendering request to the global task provider", () => {
+    const source = readFileSync(
+      "src/features/round1/showroom-intake-app.tsx",
+      "utf8"
+    );
+
+    expect(source).toContain("useRenderingTask(projectId)");
+    expect(source).toContain("renderingBody: { referenceImages:");
+    expect(source).not.toContain("signal: AbortSignal.timeout(120_000)");
+  });
+
+  test("maps a completed global task result into a concept rendering", () => {
+    const snapshot = buildFixtureSnapshot();
+    const result = conceptRenderingFromTaskResult(
+      {
+        id: "render-1",
+        imageBase64: "png",
+        basedOnSnapshotGeneratedAt: snapshot.generatedAt,
+        basedOnRenderingPreferences: null
+      },
+      snapshot
+    );
+
+    expect(result).toMatchObject({
+      id: "render-1",
+      url: "data:image/png;base64,png",
+      basedOnSnapshotFingerprint: snapshotRenderingFingerprint(snapshot)
+    });
+  });
+
   test("does not expose the internal layout prompt in the Round 1 workflow", () => {
     const html = renderToStaticMarkup(<ShowroomIntakeApp />);
 

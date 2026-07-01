@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   generatePreliminaryCabinetList,
   normalizeRound1Form
@@ -7,6 +7,14 @@ import { createElement } from "react";
 import { createDefaultCabinetRuns, createDefaultShowroomForm } from "./showroom-intake-data";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SHOWROOM_STEPS, ShowroomIntakeApp } from "./showroom-intake-app";
+
+vi.mock("@/features/platform/rendering-task-provider", () => ({
+  useRenderingTask: () => ({
+    task: undefined,
+    startRendering: vi.fn(),
+    dismissRenderingTask: vi.fn()
+  })
+}));
 
 describe("showroom intake defaults", () => {
   test("produce a complete Round 1 customer-confirmation preview model", () => {
