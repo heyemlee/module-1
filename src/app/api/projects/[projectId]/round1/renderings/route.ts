@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createOpenAIImageAdapterFromEnv } from "@/infrastructure/image/openai-rest-image-client";
+import { createVisionClientFromEnv } from "@/infrastructure/image/openai-vision-client";
 import { generateRound1Rendering } from "@/server/round1/rendering-service";
+import { verifyConceptRendering } from "@/server/round1/rendering-verification";
 import { requireUser } from "@/server/platform/auth-service";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { rateLimit } from "@/server/platform/rate-limit";
@@ -20,7 +22,16 @@ import {
 } from "@/server/platform/round1-postgres-repository";
 
 const requestSchema = z.object({
-  referenceImagesBase64: z.array(z.string().min(1)).min(1)
+  referenceImages: z.array(
+    z.object({
+      role: z.enum([
+        "PERSPECTIVE_STRUCTURE",
+        "TOP_DOWN_PLAN",
+        "MATERIAL_SWATCH"
+      ]),
+      imageBase64: z.string().min(1)
+    })
+  ).min(1)
 });
 
 export async function GET(
@@ -76,6 +87,30 @@ export async function POST(
   }
 
   const state = await getRound1State(projectId);
+
+  const roles = new Set(input.referenceImages.map((r) => r.role));
+  if (!roles.has("TOP_DOWN_PLAN")) {
+    return NextResponse.json(
+      { error: "Missing required spatial reference (top-down plan)" },
+      { status: 400 }
+    );
+  }
+  if (roles.size !== input.referenceImages.length) {
+    return NextResponse.json(
+      { error: "Duplicate reference roles are not allowed" },
+      { status: 400 }
+    );
+  }
+
+  const roleOrder = [
+    "TOP_DOWN_PLAN",
+    "MATERIAL_SWATCH"
+  ] as const;
+
+  const orderedBase64 = roleOrder
+    .map((role) => input.referenceImages.find((r) => r.role === role)?.imageBase64)
+    .filter((b64): b64 is string => b64 !== undefined);
+
   const preferences = state?.showroomForm.renderingPreferences;
   if (!state || !preferences?.doorColorId) {
     return NextResponse.json(
@@ -113,7 +148,7 @@ export async function POST(
   try {
     const rendering = await generateRound1Rendering({
       snapshot: latest.snapshot,
-      referenceImagesBase64: input.referenceImagesBase64,
+      referenceImagesBase64: orderedBase64,
       renderingPreferences: {
         cabinetStyle: preferences.cabinetStyle,
         color
@@ -126,7 +161,39 @@ export async function POST(
       user,
       rendering
     });
-    return NextResponse.json(saved, { status: 200 });
+
+    // Optional closed-loop check: ask a vision model whether the rendering
+    // matches the authoritative plan inventory. Off by default (extra paid call
+    // per render); enable with ROUND1_VERIFY_RENDERING=1. Never fails the
+    // request — discrepancies are attached to the response and logged.
+    // ponytail: surfaces discrepancies only; add an auto-repair regenerate pass
+    // here if the caught mismatches turn out to warrant it.
+    let verification;
+    if (process.env.ROUND1_VERIFY_RENDERING === "1") {
+      const visionClient = createVisionClientFromEnv(process.env);
+      if (visionClient) {
+        try {
+          verification = await verifyConceptRendering({
+            imageBase64: rendering.imageBase64,
+            snapshot: latest.snapshot,
+            client: visionClient
+          });
+          if (!verification.ok) {
+            console.warn(
+              "Round 1 rendering verification found discrepancies",
+              verification.discrepancies
+            );
+          }
+        } catch (verifyError) {
+          console.error("Round 1 rendering verification failed", verifyError);
+        }
+      }
+    }
+
+    return NextResponse.json(
+      verification ? { ...saved, verification } : saved,
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Round 1 rendering failed", error);
     return NextResponse.json(

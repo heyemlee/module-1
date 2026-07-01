@@ -11,6 +11,8 @@ import {
 import {
   allowedDragWallsForLayout,
   buildFloorPlan,
+  ISLAND_APPLIANCE_KEYS,
+  PENINSULA_APPLIANCE_KEYS,
   type PlanRect
 } from "./plan-geometry";
 
@@ -636,6 +638,83 @@ describe("buildFloorPlan", () => {
 
     expect(wallOven?.symbol).toBe("oven");
     expect(microwave?.symbol).toBe("microwave");
+  });
+
+  test("mounts a standalone microwave in a peninsula base cabinet", () => {
+    const form = formForLayout("PENINSULA");
+    form.layoutSensitiveCabinets.ovenMicrowave = {
+      configuration: "MICROWAVE_DRAWER",
+      relation: "UNKNOWN"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+      status: "YES",
+      relation: "UNKNOWN"
+    };
+
+    const { plan } = planFromForm(form, {
+      microwaveOvenCombo: { onPeninsula: true, position: 120 }
+    });
+
+    expect(
+      plan.appliances.find((item) => item.key === "microwaveOvenCombo")
+    ).toMatchObject({ onPeninsula: true });
+  });
+
+  test("builds the peninsula as a connected run of estimated base cabinets", () => {
+    const form = formForLayout("PENINSULA");
+    const { plan, estimate } = planFromForm(form);
+    const peninsula = plan.peninsula!;
+    const estimatedPeninsulaCabinets = estimate.cabinets.filter(
+      (cabinet) =>
+        cabinet.kind === "BASE" && cabinet.location === "ON_PENINSULA"
+    );
+    const attachedLeftCabinet = plan.baseCabinets.find(
+      (cabinet) =>
+        cabinet.wall === "LEFT" &&
+        cabinet.y < peninsula.y + peninsula.h &&
+        cabinet.y + cabinet.h > peninsula.y
+    );
+
+    expect(peninsula).not.toBeNull();
+    expect(attachedLeftCabinet).toBeDefined();
+    expect(peninsula.x).toBeCloseTo(
+      attachedLeftCabinet!.x + attachedLeftCabinet!.w,
+      5
+    );
+    expect(plan.peninsulaCabinets).toHaveLength(
+      estimatedPeninsulaCabinets.length
+    );
+    expect(plan.peninsulaCabinets[0].x).toBeCloseTo(peninsula.x, 5);
+    expect(
+      plan.peninsulaCabinets.at(-1)!.x + plan.peninsulaCabinets.at(-1)!.w
+    ).toBeCloseTo(peninsula.x + peninsula.w, 5);
+  });
+
+  test("mounts a standalone microwave in an island base cabinet", () => {
+    const form = formForLayout("ISLAND");
+    form.layoutSensitiveCabinets.ovenMicrowave = {
+      configuration: "MICROWAVE_DRAWER",
+      relation: "ON_ISLAND"
+    };
+    form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+      status: "YES",
+      relation: "ON_ISLAND"
+    };
+
+    const { plan } = planFromForm(form, {
+      microwaveOvenCombo: { onIsland: true, position: 120 }
+    });
+
+    expect(plan.island).not.toBeNull();
+    expect(
+      plan.appliances.find((item) => item.key === "microwaveOvenCombo")
+    ).toMatchObject({ onIsland: true });
+  });
+
+  test("does not allow a tall oven and microwave stack on an island or peninsula", () => {
+    expect(PENINSULA_APPLIANCE_KEYS.has("ovenMicrowaveStack")).toBe(false);
+    expect(ISLAND_APPLIANCE_KEYS.has("ovenMicrowaveStack")).toBe(false);
+    expect(ISLAND_APPLIANCE_KEYS.has("microwaveOvenCombo")).toBe(true);
   });
 
   test("keeps an auto-placed cooktop on the main run beside the sink", () => {

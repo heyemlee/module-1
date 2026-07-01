@@ -3,6 +3,7 @@ import type { Wall } from "./floorplan/plan-geometry";
 import type { CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import {
+  applianceNoun,
   describeBehindCameraAppliances,
   describeCorners,
   describeDoor,
@@ -36,11 +37,11 @@ const LAYOUT_PHRASES: Record<string, string> = {
   L_SHAPE: "L-shaped kitchen",
   U_SHAPE: "U-shaped kitchen",
   GALLEY: "galley kitchen with two parallel runs",
-  PENINSULA: "kitchen with a peninsula",
+  PENINSULA: "kitchen with a continuous peninsula extending from the left wall",
   ISLAND: "kitchen with a central island",
-  L_SHAPE_ISLAND: "L-shaped kitchen with a central island",
-  U_SHAPE_ISLAND: "U-shaped kitchen with a central island",
-  NO_PREFERENCE: "kitchen"
+    L_SHAPE_ISLAND: "L-shaped kitchen with a central island",
+      U_SHAPE_ISLAND: "U-shaped kitchen with a central island",
+        NO_PREFERENCE: "kitchen"
 };
 
 const OVEN_MICROWAVE_PHRASES: Record<string, string> = {
@@ -55,9 +56,36 @@ const OVEN_MICROWAVE_PHRASES: Record<string, string> = {
   UNKNOWN: ""
 };
 
-// Walls visible from the fixed camera, in reading order. The front wall
-// (BOTTOM) is behind the camera and described separately.
-const VISIBLE_WALLS: Wall[] = ["TOP", "LEFT", "RIGHT"];
+const CAMERA_POLICIES: Record<string, string> = {
+  ONE_WALL:
+    "Use a centered front view, pulled back until the complete run and both ends are visible.",
+  LEFT_L_SHAPE:
+    "Use a three-quarter view from the open front-right side, aimed toward the inside corner so the complete back and left runs are visible.",
+  L_SHAPE:
+    "Use a three-quarter view from the open front-right side, aimed toward the inside corner so the complete back and left runs are visible.",
+  RIGHT_L_SHAPE:
+    "Use a three-quarter view from the open front-left side, aimed toward the inside corner so the complete back and right runs are visible. Do not mirror the layout.",
+  U_SHAPE:
+    "Place the camera centered outside the open end and slightly elevated so all three cabinet runs are visible from the back corners to both open ends.",
+  GALLEY:
+    "Place the camera pulled well back beyond one open end of the galley aisle and raised to a comfortable standing eye level, then angle it gently down the aisle (a relaxed, natural perspective — NOT a dead-center one-point tunnel shot) so both opposing parallel cabinet runs on the left and right walls are completely visible together. Keep the aisle reading as a wide, open, airy walkway with generous open floor in the foreground and full ceiling height above; do not compress the room into a cramped narrow corridor, and do not let the nearest cabinets loom oversized and crowd the frame. Orientation is fixed by the top-down plan: the cabinet run the plan shows along its TOP edge must appear on the LEFT of the rendering and the run along its BOTTOM edge must appear on the RIGHT — enter the aisle from whichever end preserves this, and never mirror or swap the two runs or the two end walls.",
+  PENINSULA:
+    "Use a pulled-back three-quarter view from the open front-right side opposite the left-wall peninsula anchor, showing the complete back and left wall runs, the peninsula attachment point on the left wall, and its free end. CRITICAL REQUIREMENTS: The foreground space nearest the camera must be completely open and unobstructed by any structural walls. The left wall must terminate at or behind the peninsula anchor point and must NOT extend towards the camera to block the view or enclose the corner. The peninsula MUST be physically connected to the left wall cabinetry without any gaps or walkways between them. It is a continuous extension of the left wall cabinets, NOT a freestanding island. They share a single continuous countertop forming a seamless 90-degree inside corner on the left. The peninsula is anchored at the very front (nearest the camera) of the left wall run; any appliances on the left wall (such as a refrigerator) MUST be placed behind the peninsula anchor, towards the back wall. Cabinet fronts face the work zone. There must be no full-height blank island panel in place of the peninsula cabinet run. The physical attachment point on the left wall and free end remain visible.",
+  ISLAND:
+    "Use a pulled-back three-quarter view that keeps the complete perimeter run and full island inside the frame.",
+  L_SHAPE_ISLAND:
+    "Use a pulled-back three-quarter view from the open front-right side that keeps the complete back and left runs and full island inside the frame.",
+  U_SHAPE_ISLAND:
+    "Place the camera centered outside the open end and slightly elevated so all three cabinet runs and the full island remain inside the frame.",
+  NO_PREFERENCE:
+    "Use a pulled-back three-quarter view that keeps the complete kitchen layout inside the frame."
+};
+
+function visibleWallsForLayout(layout: string): Wall[] {
+  return layout === "GALLEY"
+    ? ["TOP", "BOTTOM"]
+    : ["TOP", "LEFT", "RIGHT"];
+}
 
 export type RenderingPromptPreferences = {
   cabinetStyle: CabinetStyle;
@@ -72,6 +100,10 @@ export function buildRound1RenderingPrompt(
 
   const layoutPhrase =
     LAYOUT_PHRASES[normalized.layoutPreference] ?? "kitchen";
+  const layoutCamera =
+    CAMERA_POLICIES[normalized.layoutPreference] ??
+    CAMERA_POLICIES.NO_PREFERENCE;
+  const frontWallVisible = normalized.layoutPreference === "GALLEY";
 
   const length = normalized.room.length.value;
   const width = normalized.room.width.value;
@@ -89,16 +121,33 @@ export function buildRound1RenderingPrompt(
   const style = describeCabinetStyle(preferences.cabinetStyle);
   const colorDescription = preferences.color.promptDescription;
 
+  // Positive, closed appliance inventory derived from the authoritative plan.
+  // Stating what IS present (and nothing else) suppresses hallucinated extra
+  // appliances far better than scattered "DO NOT draw X" negations, which image
+  // models attend to weakly.
+  const inventoryNouns = Array.from(
+    new Set(floorPlan.appliances.map(applianceNoun))
+  );
+  const inventoryLine = inventoryNouns.length
+    ? `This kitchen contains exactly these appliances and nothing else: ${joinList(
+        inventoryNouns
+      )}. Render only these; do not add any appliance that is not in this list.`
+    : "";
+
   const lines: string[] = [
     "Create a warm, spacious, and photorealistic customer concept rendering of a high-end residential kitchen for a Round 1 sales preview in a luxury California Bay Area single-family house. Ensure the room features high ceilings and an airy, open-concept feel to maximize the perceived size of the space.",
     "",
     `Design style: ${style.designStyle}, ${colorDescription}, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the selected cabinet door color.`,
     "",
-    "Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions. CRITICAL: ONLY draw the exact appliances explicitly listed in this prompt. DO NOT hallucinate or add any extra appliances (like wall ovens or microwaves) that are not explicitly requested.",
+    `Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions.${inventoryLine ? ` ${inventoryLine}` : ""}`,
     "",
-    "Camera and viewpoint: use a wide-angle architectural lens to make the space feel expansive, grand, and highly spacious. Render in one-point perspective as if standing at the front of the room looking straight at the back wall. The back wall is straight ahead; the left wall recedes on the left; the right wall recedes on the right; the front wall is behind the camera and is not shown. Do not change this viewpoint.",
+    `Camera and viewpoint: use a moderately wide architectural perspective with corrected verticals. ${layoutCamera} Keep every required cabinet run fully inside the frame with visible breathing room at every outer end; no cabinet, appliance, countertop, island, or peninsula may touch or be cropped by the image edge. Do not use a fisheye lens or exaggerated ultra-wide distortion.`,
     "",
-    "Use the provided reference image as the authoritative spatial reference. Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the reference places them. Do not rearrange, mirror, or move anything to a different wall.",
+    "Use the provided top-down plan as the authoritative spatial reference.",
+    "- Reference 1 (top-down plan, a bird's-eye view) is the single source of truth for the room shell (walls, window, and door openings), which wall each item sits on, its position along that wall, and the gaps between items. Preserve its exact left/right handedness: do NOT mirror, flip, or rotate it. The camera is defined by the text above, not by this plan.",
+    "- Reference 2, when present, is a material swatch and controls the cabinet-door finish only.",
+    "Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the plan places them. Do not rearrange, mirror, or move anything to a different wall.",
+    "CRITICAL REQUIREMENT: Do not cluster or group appliances together (e.g., sink and dishwasher) unless they are physically adjacent in the layout reference. Strictly follow the reference for the empty counter space and gaps between appliances.",
     "",
     `Kitchen shape: ${layoutPhrase}.`,
     `Approximate room size: ${roomDimensions}.`
@@ -114,16 +163,15 @@ export function buildRound1RenderingPrompt(
   }
 
   // Explicit per-wall walkthrough, derived from the deterministic geometry.
-  for (const wall of VISIBLE_WALLS) {
-    const sentence = wallWalkthroughSentence(floorPlan, wall);
+  for (const wall of visibleWallsForLayout(normalized.layoutPreference)) {
+    const sentence = wallWalkthroughSentence(floorPlan, wall, normalized.layoutPreference);
     if (sentence) lines.push(sentence);
   }
 
   const corners = describeCorners(floorPlan);
   if (corners.length > 0) {
     lines.push(
-      `Corner cabinetry: ${joinList(corners)}. Do not omit the corner cabinet${
-        corners.length === 1 ? "" : "s"
+      `Corner cabinetry: ${joinList(corners)}. Do not omit the corner cabinet${corners.length === 1 ? "" : "s"
       }.`
     );
   }
@@ -134,14 +182,36 @@ export function buildRound1RenderingPrompt(
     );
   }
 
-  const windowPhrase = describeWindow(floorPlan);
-  if (windowPhrase) {
-    lines.push(`Include ${windowPhrase}.`);
+  if (floorPlan.peninsula) {
+    lines.push(
+      "Include the continuous peninsula cabinet run shown in the reference image; it is physically connected to the left wall cabinetry without any gaps or walkways, extending horizontally into the room and sharing a single continuous countertop."
+    );
   }
 
-  lines.push(describeDoor(floorPlan));
+  const islandAppliances = floorPlan.appliances.filter((a) => a.onIsland);
+  if (islandAppliances.length > 0) {
+    lines.push(`On the island: ${joinList(islandAppliances.map(applianceNoun))}.`);
+  }
 
-  const behindCamera = describeBehindCameraAppliances(floorPlan);
+  const peninsulaAppliances = floorPlan.appliances.filter((a) => a.onPeninsula);
+  if (peninsulaAppliances.length > 0) {
+    lines.push(`On the peninsula: ${joinList(peninsulaAppliances.map(applianceNoun))}.`);
+  }
+
+  const windowPhrase = describeWindow(floorPlan, normalized.layoutPreference);
+  if (windowPhrase) {
+    if (windowPhrase.startsWith("CRITICAL") || windowPhrase.startsWith("There")) {
+      lines.push(windowPhrase);
+    } else {
+      lines.push(`Include ${windowPhrase}.`);
+    }
+  }
+
+  lines.push(describeDoor(floorPlan, { frontWallVisible, layout: normalized.layoutPreference }));
+
+  const behindCamera = describeBehindCameraAppliances(floorPlan, {
+    frontWallVisible
+  });
   if (behindCamera) {
     lines.push(behindCamera);
   }
@@ -151,13 +221,22 @@ export function buildRound1RenderingPrompt(
     "UNKNOWN";
   const ovenPhrase =
     OVEN_MICROWAVE_PHRASES[ovenMicrowaveConfiguration];
+  const microwavePlacement = describeMicrowavePlacement(
+    snapshot,
+    ovenMicrowaveConfiguration
+  );
   if (ovenPhrase) {
     lines.push(`Oven / microwave: ${ovenPhrase}.`);
+  }
+  if (microwavePlacement) {
+    lines.push(microwavePlacement);
   }
 
   const cookingPhrase = describeRoughCookingAppliances(
     showroomForm.layoutSensitiveCabinets?.cookingAppliances,
-    ovenMicrowaveConfiguration
+    ovenMicrowaveConfiguration,
+    Boolean(microwavePlacement),
+    normalized.layoutPreference
   );
   if (cookingPhrase) {
     lines.push(`Cooking appliances: ${cookingPhrase}.`);
@@ -169,10 +248,8 @@ export function buildRound1RenderingPrompt(
   }
 
   lines.push(
-    `Cabinetry: approximately ${baseCount} base cabinet${
-      baseCount === 1 ? "" : "s"
-    } and ${wallCount} wall cabinet${
-      wallCount === 1 ? "" : "s"
+    `Cabinetry: approximately ${baseCount} base cabinet${baseCount === 1 ? "" : "s"
+    } and ${wallCount} wall cabinet${wallCount === 1 ? "" : "s"
     }, using ${style.cabinetry} with ${colorDescription}.`,
     "",
     "This is a sales-estimate concept image only, not a production drawing. All dimensions are approximate and subject to confirmation.",
@@ -204,50 +281,87 @@ function describeCabinetStyle(cabinetStyle: CabinetStyle) {
 function describeRoughCookingAppliances(
   cooking:
     | {
-        range?: { status?: string; relation?: string };
-        cooktop?: { status?: string; relation?: string };
-        wallOven?: { status?: string; relation?: string };
-        microwaveOvenCombo?: { status?: string; relation?: string };
-      }
+      range?: { status?: string; relation?: string };
+      cooktop?: { status?: string; relation?: string };
+      wallOven?: { status?: string; relation?: string };
+      microwaveOvenCombo?: { status?: string; relation?: string };
+    }
     | undefined,
-  ovenMicrowaveConfiguration: string
+  ovenMicrowaveConfiguration: string,
+  hasSpecificMicrowavePlacement = false,
+  layoutPreference?: string
 ) {
   if (!cooking) return "";
   const suppressExplicitOvenMicrowave =
     ovenMicrowaveConfiguration === "WALL_OVEN_MICROWAVE_STACK" ||
     ovenMicrowaveConfiguration === "SEPARATE_WALL_OVEN_AND_MICROWAVE";
   const items = [
-    describeRoughAppliance("freestanding range (with visible oven door underneath)", cooking.range),
-    describeRoughAppliance("built-in cooktop (burners only, no oven — DO NOT draw an oven door under it)", cooking.cooktop),
+    describeRoughAppliance("freestanding range (with visible oven door underneath)", cooking.range, layoutPreference),
+    describeRoughAppliance("built-in cooktop (burners only, no oven — DO NOT draw an oven door under it)", cooking.cooktop, layoutPreference),
     suppressExplicitOvenMicrowave
       ? ""
-      : describeRoughAppliance("wall oven", cooking.wallOven),
-    suppressExplicitOvenMicrowave
+      : describeRoughAppliance("wall oven", cooking.wallOven, layoutPreference),
+    suppressExplicitOvenMicrowave || hasSpecificMicrowavePlacement
       ? ""
       : describeRoughAppliance(
-          "microwave",
-          cooking.microwaveOvenCombo
-        )
+        "microwave",
+        cooking.microwaveOvenCombo,
+        layoutPreference
+      )
   ].filter(Boolean);
   return items.join("; ");
 }
 
-function describeRoughAppliance(
-  label: string,
-  value: { status?: string; relation?: string } | undefined
-) {
-  if (!value || value.status !== "YES") return "";
-  return `${label} on ${relationPhrase(value.relation)}`;
+function describeMicrowavePlacement(
+  snapshot: Round1Snapshot,
+  configuration: string
+): string {
+  const microwave = snapshot.floorPlan.appliances.find(
+    (appliance) => appliance.key === "microwaveOvenCombo"
+  );
+  const counterSurface = microwave?.onPeninsula
+    ? "peninsula"
+    : microwave?.onIsland
+      ? "island"
+      : null;
+
+  if (counterSurface) {
+    return `Microwave placement: install the standalone built-in microwave under-counter in the ${counterSurface} base cabinet. Do not add a tall cabinet, wall-oven tower, or upper cabinet at this location.`;
+  }
+
+  switch (configuration) {
+    case "WALL_OVEN_MICROWAVE_STACK":
+      return "Microwave placement: place the microwave above the wall oven in one tall appliance cabinet.";
+    case "MICROWAVE_DRAWER":
+      return "Microwave placement: install a microwave drawer under-counter in a base cabinet; do not turn it into a tall or upper cabinet.";
+    case "UPPER_CABINET_MICROWAVE":
+      return "Microwave placement: use a built-in microwave integrated into an upper wall cabinet.";
+    case "COUNTERTOP_MICROWAVE":
+      return "Microwave placement: use a freestanding countertop microwave; do not enclose it as a built-in appliance.";
+    default:
+      return "";
+  }
 }
 
-function relationPhrase(relation: string | undefined) {
+function describeRoughAppliance(
+  label: string,
+  value: { status?: string; relation?: string } | undefined,
+  layoutPreference?: string
+) {
+  if (!value || value.status !== "YES") return "";
+  return `${label} on ${relationPhrase(value.relation, layoutPreference)}`;
+}
+
+function relationPhrase(relation: string | undefined, layoutPreference?: string) {
+  const isGalley = layoutPreference === "GALLEY";
   const phrases: Record<string, string> = {
-    BACK_SIDE: "the back wall",
-    FRONT_SIDE: "the front wall",
-    LEFT_SIDE: "the left wall",
-    RIGHT_SIDE: "the right wall",
+    BACK_SIDE: isGalley ? "the left wall" : "the back wall",
+    FRONT_SIDE: isGalley ? "the right wall" : "the front wall",
+    LEFT_SIDE: isGalley ? "the front wall" : "the left wall",
+    RIGHT_SIDE: isGalley ? "the back wall" : "the right wall",
     ON_ISLAND: "the island",
-    UNKNOWN: "an unconfirmed wall"
+    ON_PENINSULA: "the attached peninsula",
+    UNKNOWN: "its explicitly designated location"
   };
-  return phrases[relation ?? "UNKNOWN"] ?? "an unconfirmed wall";
+  return phrases[relation ?? "UNKNOWN"] ?? "its explicitly designated location";
 }

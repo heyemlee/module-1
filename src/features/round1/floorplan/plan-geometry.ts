@@ -17,6 +17,11 @@ export type ApplianceShape = PlanRect & {
   label: string;
   symbol: ApplianceSymbol;
   wall: Wall;
+  // Mounted on the peninsula bar (a horizontal run): the symbol faces the main
+  // work area (rotated 180°) rather than its nominal wall.
+  onPeninsula?: boolean;
+  // Mounted under the counter in the island base cabinetry.
+  onIsland?: boolean;
 };
 
 export type MarkerLetter = "W" | "G" | "E" | "V";
@@ -54,6 +59,8 @@ export type FloorPlan = {
   appliances: ApplianceShape[];
   clearanceZones: ClearanceZoneShape[];
   island: PlanRect | null;
+  peninsula: PlanRect | null;
+  peninsulaCabinets: CabinetShape[];
   window: WindowShape | null;
   door: DoorShape | null;
   markers: MarkerShape[];
@@ -100,9 +107,33 @@ export type PositionOverride = {
   // Free 2D objects (the island) store an absolute top-left in plan coords.
   x?: number;
   y?: number;
+  // Appliances mounted on the peninsula: `position` is then re-interpreted as a
+  // centre offset along the peninsula's length (so they follow it when it moves).
+  onPeninsula?: boolean;
+  // Standalone microwave mounted under-counter in the island base cabinetry.
+  onIsland?: boolean;
 };
 
 export type PositionOverrides = Record<string, PositionOverride>;
+
+/**
+ * Appliances the rep may drag onto the peninsula. Any standalone appliance is
+ * allowed (the hood is excluded — it isn't dragged on its own, it rides the
+ * range/cooktop it sits over).
+ */
+export const PENINSULA_APPLIANCE_KEYS = new Set([
+  "sink",
+  "dishwasher",
+  "range",
+  "cooktop",
+  "fridge",
+  "wallOven",
+  "microwaveOvenCombo"
+]);
+
+// Keep island mounting narrow for Round 1: a standalone microwave can be an
+// under-counter drawer/built-in, while the tall oven/microwave stack cannot.
+export const ISLAND_APPLIANCE_KEYS = new Set(["microwaveOvenCombo"]);
 
 export function buildFloorPlan(
   normalized: Round1Normalized,
@@ -181,6 +212,18 @@ export function buildFloorPlan(
     BOTTOM: cornerBR ? baseDepth : 0
   };
 
+  let applianceEndOffsetLEFT = endOffset["LEFT"];
+  if (normalized.layoutPreference === "PENINSULA") {
+    const override = overrides.peninsula;
+    const depth = baseDepth;
+    const gapBelow = clamp(ih * 0.18, baseDepth * 0.6, ih * 0.34);
+    const peninsulaY = override?.y !== undefined ? clamp(override.y, iy, iy + ih - depth) : iy + ih - gapBelow - depth;
+    // The LEFT wall effectively ends at the Peninsula for appliances.
+    applianceEndOffsetLEFT = Math.max(endOffset["LEFT"], (iy + ih) - peninsulaY);
+  }
+
+  const applianceEndOffsets = { ...endOffset, LEFT: applianceEndOffsetLEFT };
+
   const appliances = placeAppliances(fixtures, layoutSensitive, normalized, {
     ix,
     iy,
@@ -189,7 +232,7 @@ export function buildFloorPlan(
     scale,
     baseDepth,
     startOffset,
-    endOffset,
+    endOffset: applianceEndOffsets,
     overrides
   });
 
@@ -211,13 +254,30 @@ export function buildFloorPlan(
     scale,
     overrides
   });
-  separateWallAroundAnchor(appliances, "sink", startOffset, endOffset, {
+  separateWallAroundAnchor(appliances, "sink", startOffset, applianceEndOffsets, {
     ix,
     iy,
     iw,
     ih,
     scale
   });
+
+  // If the sink moved to resolve overlaps, the window should follow it so they
+  // remain aligned in the prompt/rendering — but only when neither was placed by
+  // the user. A user window drag pins the window; a user sink drag detaches the
+  // sink and leaves the window where it was.
+  const sinkAfterMove = appliances.find((a) => a.key === "sink");
+  const windowHasOverride = overrides.window !== undefined;
+  const sinkHasOverride = overrides.sink !== undefined;
+  if (
+    window &&
+    sinkAfterMove &&
+    sinkAfterMove.wall === window.wall &&
+    !windowHasOverride &&
+    !sinkHasOverride
+  ) {
+    alignShapeCenterOnAxis(window, sinkAfterMove, { ix, iy, iw, ih });
+  }
 
   const door = placeDoor(normalized, {
     roomX,
@@ -431,6 +491,113 @@ export function buildFloorPlan(
     overrides
   });
 
+  if (island) {
+    const mounted = [...mountAppliancesOnIsland(appliances, island, overrides)];
+    appliances.length = 0;
+    appliances.push(...mounted);
+  }
+
+  const peninsula = placePeninsula(normalized, {
+    ix,
+    iy,
+    iw,
+    ih,
+    baseDepth,
+    clearanceZones,
+    appliances,
+    overrides
+  });
+  const peninsulaCabinets = peninsula
+    ? layPeninsulaRun(
+        peninsula,
+        cabinets.filter(
+          (cabinet) =>
+            cabinet.kind === "BASE" && cabinet.location === "ON_PENINSULA"
+        )
+      )
+    : [];
+
+  // Move any appliance the rep dropped onto the peninsula off its wall and onto
+  // the peninsula bar (it then follows the peninsula). Done after the wall runs
+  // so the vacated wall stretch simply fills with base cabinetry.
+  if (peninsula) {
+    // Copy first: when nothing is mounted, mountAppliancesOnPeninsula returns the
+    // SAME array, so clearing `appliances` before the spread would empty it too
+    // (which hid every appliance on the peninsula layout). The spread snapshots
+    // the result before we rewrite `appliances` in place.
+    const mounted = [...mountAppliancesOnPeninsula(appliances, peninsula, overrides)];
+    appliances.length = 0;
+    appliances.push(...mounted);
+
+    // Dynamic closing logic: trim/discard LEFT wall cabinetry below the bottom edge of the peninsula
+    const bottomLimit = peninsula.y + peninsula.h;
+
+    // Filter out or clamp base cabinets on the LEFT wall
+    for (let i = baseCabinets.length - 1; i >= 0; i--) {
+      const bc = baseCabinets[i];
+      if (bc.wall === "LEFT") {
+        if (bc.y >= bottomLimit) {
+          baseCabinets.splice(i, 1);
+        } else if (bc.y + bc.h > bottomLimit) {
+          bc.h = bottomLimit - bc.y;
+        }
+      }
+    }
+
+    // Filter out or clamp wall cabinets on the LEFT wall
+    for (let i = wallCabinets.length - 1; i >= 0; i--) {
+      const wc = wallCabinets[i];
+      if (wc.wall === "LEFT") {
+        if (wc.y >= bottomLimit) {
+          wallCabinets.splice(i, 1);
+        } else if (wc.y + wc.h > bottomLimit) {
+          wc.h = bottomLimit - wc.y;
+        }
+      }
+    }
+  }
+
+  // Absorb sub-minimum wall-cabinet fragments (e.g. a sliver the fill leaves at
+  // a wall end) into an adjacent same-wall cabinet, so a clipped, unbuildable
+  // narrow standalone wall cabinet is never rendered. A fragment with no
+  // touching neighbour is dropped rather than kept as a lone sliver.
+  // ponytail: O(n^2) per wall, but n (cabinets per wall) is tiny.
+  const minStandaloneWall = 12 * scale;
+  for (const wall of ["TOP", "BOTTOM", "LEFT", "RIGHT"] as const) {
+    const horizontal = wall === "TOP" || wall === "BOTTOM";
+    const runSize = (c: CabinetShape) => (horizontal ? c.w : c.h);
+    const runStart = (c: CabinetShape) => (horizontal ? c.x : c.y);
+    const runEnd = (c: CabinetShape) => (horizontal ? c.x + c.w : c.y + c.h);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const onWall = wallCabinets
+        .filter((c) => c.wall === wall)
+        .sort((a, b) => runStart(a) - runStart(b));
+      const frag = onWall.find((c) => runSize(c) < minStandaloneWall);
+      if (!frag) continue;
+      const neighbour = onWall.find(
+        (c) =>
+          c !== frag &&
+          (Math.abs(runEnd(c) - runStart(frag)) < 1 ||
+            Math.abs(runEnd(frag) - runStart(c)) < 1)
+      );
+      if (neighbour) {
+        const start = Math.min(runStart(neighbour), runStart(frag));
+        const end = Math.max(runEnd(neighbour), runEnd(frag));
+        if (horizontal) {
+          neighbour.x = start;
+          neighbour.w = end - start;
+        } else {
+          neighbour.y = start;
+          neighbour.h = end - start;
+        }
+      }
+      wallCabinets.splice(wallCabinets.indexOf(frag), 1);
+      changed = true;
+    }
+  }
+
   const dims: DimShape[] = [
     {
       orientation: "H",
@@ -464,6 +631,8 @@ export function buildFloorPlan(
     appliances,
     clearanceZones,
     island,
+    peninsula,
+    peninsulaCabinets,
     window,
     door,
     markers,
@@ -479,7 +648,11 @@ export function buildFloorPlan(
 function groupByWall(cabinets: Cabinet[]): Map<Wall, Cabinet[]> {
   const map = new Map<Wall, Cabinet[]>();
   for (const cabinet of cabinets) {
-    if (cabinet.location === "ON_ISLAND") continue;
+    // Free-standing runs (island, peninsula) are placed by their own geometry
+    // helpers, not laid along a wall track.
+    if (cabinet.location === "ON_ISLAND" || cabinet.location === "ON_PENINSULA") {
+      continue;
+    }
     const wall = cabinetWall(cabinet.location);
     const list = map.get(wall) ?? [];
     list.push(cabinet);
@@ -1141,7 +1314,17 @@ function placeAppliances(
 
       occupied.push({ start: pos, end: pos + length });
       occupied.sort((a, b) => a.start - b.start);
-      cursor += length + spacing;
+      
+      let currentSpacing = spacing;
+      const nextSpec = sortedOnWall[sortedOnWall.indexOf(spec) + 1];
+      if (
+        nextSpec &&
+        ((spec.key === "sink" && nextSpec.key === "dishwasher") ||
+         (spec.key === "dishwasher" && nextSpec.key === "sink"))
+      ) {
+        currentSpacing = 0;
+      }
+      cursor += length + currentSpacing;
     });
 
     // Guarantee no two appliances on this wall overlap. A relaxation loop (split
@@ -1674,6 +1857,231 @@ function placeIsland(
     }
   }
   return centered;
+}
+
+/**
+ * A peninsula is a counter run anchored to the end of the wall cabinetry that
+ * projects straight into the room, open on three sides. Unlike a galley/U-shape
+ * front run it must NOT hug the opposite (front) wall — that was the old bug,
+ * where the peninsula was routed to the BOTTOM wall and gap-filled across it.
+ *
+ * For the peninsula layout (main run on TOP, side run on LEFT) it reads as the
+ * bottom leg jutting right from the foot of the LEFT run — the "⊏" of the layout
+ * tile — leaving a walkway between its far edge and the front wall.
+ */
+function placePeninsula(
+  normalized: Round1Normalized,
+  ctx: {
+    ix: number;
+    iy: number;
+    iw: number;
+    ih: number;
+    baseDepth: number;
+    clearanceZones: ClearanceZoneShape[];
+    appliances: ApplianceShape[];
+    overrides: PositionOverrides;
+  }
+): PlanRect | null {
+  if (normalized.layoutPreference !== "PENINSULA") return null;
+
+  const { ix, iy, iw, ih, baseDepth } = ctx;
+  const innerBottom = iy + ih;
+  const gap = 6;
+
+  const depth = baseDepth;
+  const length = clamp(iw * 0.42, baseDepth * 2.2, iw - baseDepth * 2.2);
+  const gapBelow = clamp(ih * 0.18, baseDepth * 0.6, ih * 0.34);
+  const minWalkway = baseDepth * 0.5;
+
+  // The peninsula only slides vertically along its LEFT-wall anchor — x stays
+  // pinned to the wall, so a drag stores just `y`. Honour it (clamped) and skip
+  // the auto fridge/door dodging; the rep owns the position once they've moved it.
+  const override = ctx.overrides.peninsula;
+  if (override?.y !== undefined) {
+    return {
+      x: ix + baseDepth,
+      y: clamp(override.y, iy, iy + ih - depth),
+      w: length,
+      h: depth
+    };
+  }
+
+  let rect: PlanRect = {
+    x: ix + baseDepth,
+    y: iy + ih - gapBelow - depth,
+    w: length,
+    h: depth
+  };
+
+  // The peninsula anchors on the LEFT wall and juts right. A left-wall appliance
+  // — typically the fridge — can occupy that same lower corner, which made the
+  // peninsula look like it grew out of the fridge. If its anchor band overlaps
+  // such an appliance, slide it just below (preferred, keeping a walkway to the
+  // front wall) or, if that doesn't fit, just above.
+  const anchorBlockers = ctx.appliances.filter(
+    (a) => a.wall === "LEFT" && a.x < rect.x && a.x + a.w > ix
+  );
+  const overlapping = anchorBlockers.filter(
+    (a) => rect.y + rect.h > a.y && rect.y < a.y + a.h
+  );
+  if (overlapping.length > 0) {
+    const below = Math.max(...overlapping.map((a) => a.y + a.h)) + gap;
+    if (below + depth <= innerBottom - minWalkway) {
+      rect = { ...rect, y: below };
+    } else {
+      const above = Math.min(...overlapping.map((a) => a.y)) - gap - depth;
+      rect = { ...rect, y: Math.max(iy + gap, above) };
+    }
+  }
+
+  // Keep clear of a door's swing arc: trim the peninsula's reach rather than
+  // letting it cross the doorway.
+  for (const zone of ctx.clearanceZones) {
+    if (zone.kind !== "DOOR_SWING") continue;
+    if (rectIntersect(rect, zone) && zone.x > rect.x) {
+      rect = { ...rect, w: Math.max(baseDepth * 1.6, zone.x - rect.x - 6) };
+    }
+  }
+
+  return rect;
+}
+
+function layPeninsulaRun(
+  peninsula: PlanRect,
+  cabinets: Cabinet[]
+): CabinetShape[] {
+  if (cabinets.length === 0) return [];
+
+  const totalWidth = cabinets.reduce((sum, cabinet) => sum + cabinet.width, 0);
+  let cursor = peninsula.x;
+
+  return cabinets.map((cabinet, index) => {
+    const isLast = index === cabinets.length - 1;
+    const width = isLast
+      ? peninsula.x + peninsula.w - cursor
+      : peninsula.w * (cabinet.width / totalWidth);
+    const shape: CabinetShape = {
+      x: cursor,
+      y: peninsula.y,
+      w: width,
+      h: peninsula.h,
+      code: cabinet.code,
+      confirmationRequired: cabinet.confirmationRequired,
+      wall: "LEFT"
+    };
+    cursor += width;
+    return shape;
+  });
+}
+
+/**
+ * Relocates appliances flagged `onPeninsula` from their wall onto the peninsula
+ * bar, reusing each appliance's existing run-length so sizes stay consistent.
+ * The bar is horizontal, so mounted appliances sit centred on its depth and are
+ * packed left-to-right (honouring each drag's centre offset) without overlap.
+ * A hood left stranded by a moved cooktop is dropped too.
+ */
+function mountAppliancesOnPeninsula(
+  appliances: ApplianceShape[],
+  peninsula: PlanRect,
+  overrides: PositionOverrides
+): ApplianceShape[] {
+  const movedKeys = [...PENINSULA_APPLIANCE_KEYS].filter(
+    (key) => overrides[key]?.onPeninsula === true && appliances.some((a) => a.key === key)
+  );
+  if (movedKeys.length === 0) return appliances;
+
+  const kept = appliances
+    .filter((a) => !movedKeys.includes(a.key))
+    // A hood only makes sense over a remaining wall cooktop/range.
+    .filter(
+      (a) =>
+        a.symbol !== "hood" ||
+        appliances.some(
+          (o) => o.symbol === "range" && !movedKeys.includes(o.key) && rectIntersect(a, o)
+        )
+    );
+
+  const depth = Math.min(peninsula.h * 0.84, peninsula.h - 6);
+  const y = peninsula.y + (peninsula.h - depth) / 2;
+
+  const mounted = movedKeys
+    .map((key) => {
+      const prev = appliances.find((a) => a.key === key)!;
+      const runLen = prev.wall === "TOP" || prev.wall === "BOTTOM" ? prev.w : prev.h;
+      const w = clamp(runLen, 18, peninsula.w * 0.9);
+      const rel = overrides[key]?.position;
+      // No drag offset yet -> append to the right; otherwise centre on the offset.
+      const requested = rel != null ? rel - w / 2 : Number.POSITIVE_INFINITY;
+      return { key, prev, w, requested };
+    })
+    .sort((a, b) => a.requested - b.requested);
+
+  const shapes: ApplianceShape[] = [];
+  let cursor = peninsula.x;
+  for (const m of mounted) {
+    const desired = Number.isFinite(m.requested) ? peninsula.x + m.requested : cursor;
+    const x = clamp(Math.max(desired, cursor), peninsula.x, peninsula.x + peninsula.w - m.w);
+    shapes.push({
+      x,
+      y,
+      w: m.w,
+      h: depth,
+      key: m.key,
+      label: m.prev.label,
+      symbol: m.prev.symbol,
+      wall: "TOP",
+      onPeninsula: true
+    });
+    cursor = x + m.w;
+  }
+
+  return [...kept, ...shapes];
+}
+
+function mountAppliancesOnIsland(
+  appliances: ApplianceShape[],
+  island: PlanRect,
+  overrides: PositionOverrides
+): ApplianceShape[] {
+  const key = "microwaveOvenCombo";
+  if (
+    !ISLAND_APPLIANCE_KEYS.has(key) ||
+    overrides[key]?.onIsland !== true
+  ) {
+    return appliances;
+  }
+
+  const previous = appliances.find((appliance) => appliance.key === key);
+  if (!previous) return appliances;
+
+  const runLength =
+    previous.wall === "TOP" || previous.wall === "BOTTOM"
+      ? previous.w
+      : previous.h;
+  const width = clamp(runLength, 18, island.w * 0.9);
+  const depth = Math.min(island.h * 0.84, island.h - 6);
+  const requestedCenter = overrides[key]?.position ?? island.w / 2;
+  const x = clamp(
+    island.x + requestedCenter - width / 2,
+    island.x,
+    island.x + island.w - width
+  );
+
+  return [
+    ...appliances.filter((appliance) => appliance.key !== key),
+    {
+      x,
+      y: island.y + (island.h - depth) / 2,
+      w: width,
+      h: depth,
+      key,
+      label: previous.label,
+      symbol: previous.symbol,
+      wall: "TOP",
+      onIsland: true
+    }
+  ];
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -11,6 +11,7 @@ import {
   createDefaultShowroomForm
 } from "./showroom-intake-data";
 import { buildRound1Snapshot, type Round1Snapshot } from "./snapshot";
+import type { PositionOverrides } from "./floorplan/plan-geometry";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 
 const europeanOak: CabinetColor = {
@@ -59,7 +60,8 @@ function buildSnapshot(
   layoutPreference: ReturnType<
     typeof createDefaultShowroomForm
   >["layoutPreference"] = "L_SHAPE",
-  configureForm?: (form: Round1FormInput) => void
+  configureForm?: (form: Round1FormInput) => void,
+  positionOverrides: PositionOverrides = {}
 ): Round1Snapshot {
   const form = { ...createDefaultShowroomForm(), layoutPreference };
   configureForm?.(form);
@@ -69,7 +71,7 @@ function buildSnapshot(
   return buildRound1Snapshot({
     showroomForm: form,
     normalized,
-    positionOverrides: {},
+    positionOverrides,
     preliminaryCabinets: estimate,
     confirmationItems: [...confirmationItems, ...estimate.confirmationItems],
     readiness,
@@ -136,18 +138,82 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain(`${wallCount} wall cabinet`);
   });
 
-  test("fixes a one-point camera viewpoint", () => {
+  test("uses an architectural camera that keeps complete runs inside the frame", () => {
     const prompt = buildPrompt();
 
-    expect(prompt).toContain("one-point perspective");
-    expect(prompt).toContain("looking straight at the back wall");
-    expect(prompt).toContain("front wall is behind the camera");
+    expect(prompt).toContain("corrected verticals");
+    expect(prompt).toContain(
+      "Keep every required cabinet run fully inside the frame"
+    );
+    expect(prompt).toContain("Do not use a fisheye lens");
+  });
+
+  test.each([
+    ["ONE_WALL", "complete run"],
+    ["LEFT_L_SHAPE", "open front-right side"],
+    ["RIGHT_L_SHAPE", "open front-left side"],
+    ["U_SHAPE", "all three cabinet runs"],
+    ["PENINSULA", "peninsula attachment point"]
+  ] as const)("uses the complete-layout camera for %s", (layout, phrase) => {
+    const prompt = buildPrompt(buildSnapshot(layout));
+    expect(prompt).toContain(phrase);
+  });
+
+  test("shows both parallel galley runs from one open-end viewpoint", () => {
+    const prompt = buildPrompt(buildSnapshot("GALLEY"));
+
+    expect(prompt).toContain("open end of the galley aisle");
+    expect(prompt).toContain("both opposing parallel cabinet runs on the left and right walls");
+    expect(prompt).toContain("On the right wall");
+    expect(prompt).not.toContain("front wall behind the camera");
+    expect(prompt).not.toContain("behind the viewpoint");
+  });
+
+  test("frames the galley pulled back and open instead of a cramped one-point tunnel", () => {
+    const prompt = buildPrompt(buildSnapshot("GALLEY"));
+
+    // The camera is pulled back and framed as a wide, open aisle so the room
+    // does not read as too small / crowded (issue #1).
+    expect(prompt).toContain("pulled well back beyond one open end of the galley aisle");
+    expect(prompt).toContain("wide, open, airy walkway");
+    expect(prompt).toContain("do not compress the room into a cramped narrow corridor");
+    // The old one-point straight-down-the-aisle tunnel framing is gone.
+    expect(prompt).not.toContain("one-point perspective looking straight down the aisle");
+  });
+
+  test("pins galley left/right orientation to the plan so the door cannot mirror", () => {
+    const prompt = buildPrompt(buildSnapshot("GALLEY"));
+
+    // A galley is left-right symmetric, so without a fixed handedness the model
+    // enters from the wrong aisle end and mirrors the scene, flipping the door
+    // to the wrong side of the fridge (issue #2). Anchor it to the top-down plan.
+    expect(prompt).toContain(
+      "the cabinet run the plan shows along its TOP edge must appear on the LEFT of the rendering and the run along its BOTTOM edge must appear on the RIGHT"
+    );
+    expect(prompt).toContain("never mirror or swap the two runs or the two end walls");
+  });
+
+  test("renders a peninsula as connected base cabinetry rather than an island", () => {
+    const prompt = buildPrompt(buildSnapshot("PENINSULA"));
+
+    expect(prompt).toContain(
+      "The peninsula MUST be physically connected to the left wall cabinetry without any gaps"
+    );
+    expect(prompt).toContain(
+      "Include the continuous peninsula cabinet run shown in the reference image; it is physically connected to the left wall cabinetry without any gaps or walkways, extending horizontally into the room and sharing a single continuous countertop."
+    );
+    expect(prompt).toContain(
+      "On the left wall, from nearest the camera to the far end: the peninsula anchor point (where the peninsula connects to the left wall cabinetry), followed by a refrigerator, set within continuous base and wall cabinetry towards the far end."
+    );
   });
 
   test("walks the layout wall by wall from the deterministic geometry", () => {
     const prompt = buildPrompt();
 
-    expect(prompt).toContain("On the back wall, from left to right:");
+    expect(prompt).toContain("- Reference 1 (top-down plan, a bird's-eye view)");
+    // The perspective structure image is no longer sent, so the prompt must not
+    // claim a perspective reference controls the camera.
+    expect(prompt).not.toContain("Reference 1 (perspective)");
     // Sink and range are clustered on the back run in the default L-shape.
     expect(prompt).toContain("a sink");
     expect(prompt).toContain("a freestanding range (burners with an oven below) with a hood above it");
@@ -229,6 +295,101 @@ describe("buildRound1RenderingPrompt", () => {
     );
   });
 
+  test.each([
+    ["PENINSULA", { onPeninsula: true, position: 120 }, "peninsula"],
+    ["ISLAND", { onIsland: true, position: 120 }, "island"]
+  ] as const)(
+    "renders a standalone %s microwave under-counter without inventing a tall cabinet",
+    (layout, override, surface) => {
+      const snapshot = buildSnapshot(
+        layout,
+        (form) => {
+          form.layoutSensitiveCabinets.ovenMicrowave = {
+            configuration: "MICROWAVE_DRAWER",
+            relation: surface === "island" ? "ON_ISLAND" : "UNKNOWN"
+          };
+          form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+            status: "YES",
+            relation: surface === "island" ? "ON_ISLAND" : "UNKNOWN"
+          };
+          if (layout === "ISLAND") {
+            form.layoutSensitiveCabinets.island = {
+              status: "YES",
+              requested: true,
+              functions: []
+            };
+          }
+        },
+        { microwaveOvenCombo: override }
+      );
+
+      const prompt = buildPrompt(snapshot);
+
+      expect(prompt).toContain("under-counter");
+      expect(prompt).toContain(`${surface} base cabinet`);
+      expect(prompt).toContain("Do not add a tall cabinet");
+      const wallWalkthrough = prompt
+        .split("\n")
+        .filter((line) => line.startsWith("On the ") && !line.includes("island") && !line.includes("peninsula"))
+        .join(" ");
+      expect(wallWalkthrough).not.toContain("a microwave");
+      expect(prompt).toContain(
+        layout === "PENINSULA" ? "On the peninsula: a microwave." : "On the island: a microwave."
+      );
+    }
+  );
+
+  test("keeps a wall oven and microwave stack in one tall cabinet", () => {
+    const prompt = buildPrompt(
+      buildSnapshot("U_SHAPE", (form) => {
+        form.layoutSensitiveCabinets.ovenMicrowave = {
+          configuration: "WALL_OVEN_MICROWAVE_STACK",
+          relation: "UNKNOWN"
+        };
+        form.layoutSensitiveCabinets.cookingAppliances.wallOven = {
+          status: "YES",
+          relation: "UNKNOWN"
+        };
+        form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+          status: "YES",
+          relation: "UNKNOWN"
+        };
+      })
+    );
+
+    expect(prompt).toContain(
+      "microwave above the wall oven in one tall appliance cabinet"
+    );
+    expect(prompt).not.toContain("island base cabinet");
+    expect(prompt).not.toContain("peninsula base cabinet");
+  });
+
+  test.each([
+    [
+      "UPPER_CABINET_MICROWAVE",
+      "integrated into an upper wall cabinet"
+    ],
+    [
+      "COUNTERTOP_MICROWAVE",
+      "freestanding countertop microwave"
+    ]
+  ] as const)("preserves %s placement", (configuration, phrase) => {
+    const prompt = buildPrompt(
+      buildSnapshot("LEFT_L_SHAPE", (form) => {
+        form.layoutSensitiveCabinets.ovenMicrowave = {
+          configuration,
+          relation: "UNKNOWN"
+        };
+        form.layoutSensitiveCabinets.cookingAppliances.microwaveOvenCombo = {
+          status: "YES",
+          relation: "UNKNOWN"
+        };
+      })
+    );
+
+    expect(prompt).toContain(phrase);
+  });
+
   test("names the corner cabinet and forbids dropping it", () => {
     const prompt = buildPrompt();
 
@@ -259,10 +420,15 @@ describe("buildRound1RenderingPrompt", () => {
     expect(prompt).toContain("no swinging door leaf");
   });
 
-  test("keeps a front-wall fridge behind the camera", () => {
-    // A galley puts the default front-side fridge on the front (BOTTOM) wall.
+  test("keeps a galley right-wall (originally bottom) fridge visible on its actual run", () => {
     const prompt = buildPrompt(buildSnapshot("GALLEY"));
-    expect(prompt).toContain("behind the viewpoint");
+    const rightWall = prompt
+      .split("\n")
+      .find((line) => line.startsWith("On the right wall"));
+
+    expect(rightWall).toBeDefined();
+    expect(rightWall ?? "").toContain("a refrigerator");
+    expect(prompt).not.toContain("behind the viewpoint");
   });
 
   test("is deterministic for the same snapshot", () => {
@@ -283,7 +449,8 @@ describe("golden layout-phrase matrix", () => {
     ["LEFT_L_SHAPE", "left L-shaped kitchen"],
     ["RIGHT_L_SHAPE", "right L-shaped kitchen"],
     ["U_SHAPE", "U-shaped kitchen"],
-    ["PENINSULA", "kitchen with a peninsula"]
+    ["PENINSULA", "kitchen with a continuous peninsula extending from the left wall"],
+    ["ISLAND", "kitchen with a central island"]
   ];
 
   for (const [layout, phrase] of LAYOUTS) {

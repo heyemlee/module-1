@@ -118,6 +118,9 @@ describe("createOpenAIRestImageClient", () => {
     expect(form.getAll("image[]")).toHaveLength(0);
     // gpt-image models return base64 by default and reject response_format.
     expect(form.get("response_format")).toBeNull();
+    // gpt-image-2 currently rejects this field with
+    // `invalid_input_fidelity_model`.
+    expect(form.get("input_fidelity")).toBeNull();
   });
 
   test("uses image[] parts (and no single image) for multiple references", async () => {

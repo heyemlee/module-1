@@ -87,7 +87,8 @@ const SCENARIOS: Scenario[] = [
   {
     name: "peninsula",
     form: withLayout("PENINSULA"),
-    expectRunLocations: ["ON_MAIN_RUN", "LEFT_SIDE", "FRONT_SIDE"]
+    expectRunLocations: ["ON_MAIN_RUN", "LEFT_SIDE", "ON_PENINSULA"],
+    forbidRunLocations: ["FRONT_SIDE", "RIGHT_SIDE"]
   },
   {
     name: "U-shape + island",
@@ -172,6 +173,26 @@ describe("Round 1 full flow (per scenario)", () => {
       }
     });
   }
+
+  // Regression: the peninsula layout mounts dragged appliances onto its bar, but
+  // with nothing mounted it must still draw every appliance on its wall. A buggy
+  // in-place rewrite once cleared the whole array, hiding all appliances on the
+  // peninsula plan. Guard it: peninsula keeps the same appliances as the L it's
+  // built on top of.
+  test("PENINSULA keeps every appliance on the plan when none are mounted", () => {
+    const planFor = (pref: Round1FormInput["layoutPreference"]) => {
+      const form = withLayout(pref);
+      const { normalized } = normalizeRound1Form(form);
+      const cabinets = generatePreliminaryCabinetList(
+        createDefaultCabinetRuns(form)
+      ).cabinets;
+      return buildFloorPlan(normalized, cabinets, 0, {});
+    };
+    const peninsula = planFor("PENINSULA");
+    const lShape = planFor("LEFT_L_SHAPE");
+    expect(peninsula.appliances.length).toBeGreaterThan(0);
+    expect(peninsula.appliances.length).toBe(lShape.appliances.length);
+  });
 
   test("editing a layout field changes the generated geometry (staleness has teeth)", () => {
     const oneWall = runFullFlow(withLayout("ONE_WALL"));

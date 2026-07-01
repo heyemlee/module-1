@@ -202,7 +202,7 @@ function wallCabinetItems(plan: FloorPlan, wall: Wall): ElevationItem[] {
 }
 
 function cornerItems(plan: FloorPlan, wall: Wall): ElevationItem[] {
-  const corners = plan.wallCorners.filter((corner) => cornerTouchesWall(corner.type, wall));
+  const corners = (plan.wallCorners ?? []).filter((corner) => cornerTouchesWall(corner.type, wall));
   const items: ElevationItem[] = [];
 
   corners.forEach((corner, index) => {

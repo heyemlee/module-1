@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction
+} from "react";
 import {
   generatePreliminaryCabinetList,
   summarizePreliminaryCabinetEstimate,
@@ -11,7 +20,6 @@ import {
 } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import dynamic from "next/dynamic";
-import { ElevationPreview } from "./elevations/elevation-preview";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import Link from "next/link";
 import { LayoutPreview } from "./layout-preview";
@@ -264,6 +272,31 @@ export function snapshotRenderingFingerprint(snapshot: Round1Snapshot) {
   });
 }
 
+export function Round1RenderingFlow({
+  rendering,
+  layout,
+  elevations
+}: {
+  rendering: ReactNode;
+  layout: ReactNode;
+  elevations?: ReactNode;
+}) {
+  return (
+    <div
+      data-rendering-flow="scroll"
+      className="relative z-[1] min-h-0 flex-1 overflow-y-auto"
+    >
+      <div className="flex h-full min-h-[420px] items-center justify-center p-[14px_18px] md:min-h-0">
+        {rendering}
+      </div>
+      <div className="h-[60vh] min-h-[420px] shrink-0 px-[2px] pb-[18px]">
+        {layout}
+      </div>
+      {elevations}
+    </div>
+  );
+}
+
 export function ShowroomIntakeApp({
   projectId,
   customerName,
@@ -345,7 +378,6 @@ export function ShowroomIntakeApp({
   // so the reference image and the JSON prompt come from the identical locked
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
-  const referenceElevationRef = useRef<SVGSVGElement | null>(null);
   const [renderings, setRenderings] = useState<ConceptRendering[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
   const [renderingError, setRenderingError] = useState<string | null>(null);
@@ -686,12 +718,13 @@ export function ShowroomIntakeApp({
   const handleGenerateRendering = useCallback(async () => {
     setHasRenderedConcept(true);
     const referenceTopDownSvg = referenceTopDownRef.current;
-    const referenceElevationSvg = referenceElevationRef.current;
     if (
       !referenceTopDownSvg ||
       !projectId ||
       !snapshot ||
-      !canRenderConcept
+      !canRenderConcept ||
+      !form.renderingPreferences ||
+      !cabinetColors.length
     ) {
       return;
     }
@@ -717,9 +750,11 @@ export function ShowroomIntakeApp({
         throw new Error("Couldn't save your color selection. Please try again.");
       }
 
+      // Elevations and the perspective structure remain human-facing previews
+      // only. Temporarily send just the deterministic top-down plan to the image
+      // model so the perspective projection cannot pull the render off-plan.
       const referenceImagesBase64 = await rasterizeRenderingReferences([
-        referenceTopDownSvg,
-        referenceElevationSvg
+        { role: "TOP_DOWN_PLAN", svg: referenceTopDownSvg }
       ]);
       // Also send the selected door color's swatch as a MATERIAL reference so the
       // image model matches the actual color/finish, not just the text prompt.
@@ -729,7 +764,9 @@ export function ShowroomIntakeApp({
           const swatchPng = await rasterizeImageSourceToPngBase64(
             selectedColor.swatchImageUrl
           );
-          if (swatchPng) referenceImagesBase64.push(swatchPng);
+          if (swatchPng) {
+            referenceImagesBase64.push({ role: "MATERIAL_SWATCH", imageBase64: swatchPng });
+          }
         } catch {
           // Best-effort: fall back to the text prompt if the swatch can't rasterize.
         }
@@ -738,7 +775,7 @@ export function ShowroomIntakeApp({
         `/api/projects/${projectId}/round1/renderings`,
         {
           method: "POST",
-          body: { referenceImagesBase64 },
+          body: { referenceImages: referenceImagesBase64 },
           // Recover the UI if the whole request stalls (the server also caps the
           // upstream image call), instead of spinning on "Generating..." forever.
           signal: AbortSignal.timeout(120_000)
@@ -1171,28 +1208,37 @@ export function ShowroomIntakeApp({
         </div>
       )}
       {isRenderingStep ? (
-        <div className="relative z-[1] flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <Round1InlineRenderPreview
-            busy={renderingBusy}
-            error={renderingError}
-            renderings={renderings}
-            cabinetColors={cabinetColors}
-            styleLabel={
-              CABINET_STYLE_LABELS[renderingPreferencesForForm(form).cabinetStyle]
-            }
-          />
-          <div className="mt-[14px] h-[60vh] shrink-0 px-[2px] pb-[18px]">
-            {layoutPreviewEl}
-          </div>
-        </div>
-      ) : (
-        <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
-      )}
-      {elevationScenes.length > 0 && (
-        <Round1ElevationStrip
-          scenes={elevationScenes}
-          onOpen={setElevationOpenIndex}
+        <Round1RenderingFlow
+          rendering={
+            <Round1InlineRenderPreview
+              busy={renderingBusy}
+              error={renderingError}
+              renderings={renderings}
+              cabinetColors={cabinetColors}
+              styleLabel={
+                CABINET_STYLE_LABELS[
+                  renderingPreferencesForForm(form).cabinetStyle
+                ]
+              }
+              fitViewport
+            />
+          }
+          layout={layoutPreviewEl}
+          elevations={
+            <Round1ElevationStrip
+              scenes={elevationScenes}
+              onOpen={setElevationOpenIndex}
+            />
+          }
         />
+      ) : (
+        <>
+          <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
+          <Round1ElevationStrip
+            scenes={elevationScenes}
+            onOpen={setElevationOpenIndex}
+          />
+        </>
       )}
     </div>
   );
@@ -1335,10 +1381,6 @@ export function ShowroomIntakeApp({
             highlightDraggableItems={false}
             showPositionObjects
             svgRef={referenceTopDownRef}
-          />
-          <ElevationPreview
-            plan={snapshot.floorPlan}
-            svgRef={referenceElevationRef}
           />
         </div>
       )}

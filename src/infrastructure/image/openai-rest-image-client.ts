@@ -102,7 +102,7 @@ export function createOpenAIRestImageClient(input: {
         form.append("prompt", request.prompt);
         form.append("size", request.size);
         form.append("n", "1");
-        // gpt-image-* return base64 by default and reject `response_format`.
+        // GPT Image models return base64 by default and reject `response_format`.
         if (!request.model.startsWith("gpt-image")) {
           form.append("response_format", "b64_json");
         }

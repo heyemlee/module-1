@@ -4,6 +4,8 @@ import {
   allowedDragWallsForLayout,
   isPositionValid,
   buildFloorPlan,
+  ISLAND_APPLIANCE_KEYS,
+  PENINSULA_APPLIANCE_KEYS,
   type ApplianceShape,
   type FloorPlan,
   type PlanRect,
@@ -17,6 +19,7 @@ import {
   Island,
   Legend,
   Marker,
+  Peninsula,
   Stamp,
   WallCorner,
   Walls
@@ -136,6 +139,8 @@ function LayoutPreviewImpl({
     free?: boolean;
     offsetX?: number;
     offsetY?: number;
+    // Constrains a free drag to one axis (the peninsula slides vertically only).
+    lockAxis?: "y";
   };
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [dragState, setDragState] = useState<DragState>("idle");
@@ -185,7 +190,9 @@ function LayoutPreviewImpl({
     }
     const pt = getSvgPoint(e.clientX, e.clientY);
     const nextOverride: PositionOverride = dragInfo.free
-      ? { x: pt.x - (dragInfo.offsetX ?? 0), y: pt.y - (dragInfo.offsetY ?? 0) }
+      ? dragInfo.lockAxis === "y"
+        ? { y: pt.y - (dragInfo.offsetY ?? 0) }
+        : { x: pt.x - (dragInfo.offsetX ?? 0), y: pt.y - (dragInfo.offsetY ?? 0) }
       : overrideFromPointer(plan, dragInfo.id, pt, dragInfo.axisOffset);
     const nextPositionIsValid = isPositionValid(plan, dragInfo.id, nextOverride);
     setDragState(nextPositionIsValid ? "dragging" : "invalid");
@@ -223,6 +230,27 @@ function LayoutPreviewImpl({
     setDragState("dragging");
     if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
   }, [getSvgPoint, plan.island]);
+
+  const handlePeninsulaPointerDown = useCallback((e: React.PointerEvent) => {
+    if (!plan.peninsula) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    const pt = getSvgPoint(e.clientX, e.clientY);
+    setDragInfo({
+      id: "peninsula",
+      free: true,
+      lockAxis: "y",
+      offsetX: pt.x - plan.peninsula.x,
+      offsetY: pt.y - plan.peninsula.y,
+      startVal: 0,
+      startSvgPt: pt,
+      axisOffset: 0
+    });
+    setSelectedPositionId("peninsula");
+    setDragState("dragging");
+    if (dragTimeoutRef.current !== null) window.clearTimeout(dragTimeoutRef.current);
+  }, [getSvgPoint, plan.peninsula]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     setHoveredId(null);
@@ -262,7 +290,9 @@ function LayoutPreviewImpl({
         ? "Door"
         : activeObjectId === "island"
           ? "Island"
-          : (activeObjectId
+          : activeObjectId === "peninsula"
+            ? "Peninsula"
+            : (activeObjectId
               ? plan.appliances.find((a) => a.key === activeObjectId)?.label
               : null) ?? null;
   useEffect(() => {
@@ -378,6 +408,12 @@ function LayoutPreviewImpl({
       >
         <Walls plan={plan} />
         {showCabinetFill && plan.island && <Island rect={plan.island} referenceMode={referenceMode} />}
+        {showCabinetFill && plan.peninsula && (
+          <Peninsula
+            rect={plan.peninsula}
+            cabinets={plan.peninsulaCabinets}
+          />
+        )}
 
         {showCabinetFill && plan.corners.map((corner, index) => (
           <Corner key={`corner-${index}`} rect={corner} />
@@ -392,6 +428,23 @@ function LayoutPreviewImpl({
             dragging={dragInfo?.id === "island"}
             onPointerDown={
               enablePositionDragging ? handleIslandPointerDown : undefined
+            }
+          />
+        )}
+
+        {showLayoutGuide && plan.peninsula && (
+          <PeninsulaGuide
+            rect={plan.peninsula}
+            anchorX={
+              plan.room.x +
+              plan.room.thickness +
+              LAYOUT_GUIDE_WALL_OFFSET +
+              LAYOUT_GUIDE_DEPTH
+            }
+            interactive={enablePositionDragging}
+            dragging={dragInfo?.id === "peninsula"}
+            onPointerDown={
+              enablePositionDragging ? handlePeninsulaPointerDown : undefined
             }
           />
         )}
@@ -418,27 +471,33 @@ function LayoutPreviewImpl({
 
         {enablePositionDragging && <DragFeedback plan={plan} draggingId={dragInfo?.id} />}
 
-        {showAppliances && [...plan.appliances]
-          .sort((a, b) => {
-            const isDraggingA = !referenceMode && (dragInfo?.id === a.key || (a.key === "hood" && dragInfo?.id === "range"));
-            const isDraggingB = !referenceMode && (dragInfo?.id === b.key || (b.key === "hood" && dragInfo?.id === "range"));
-            if (isDraggingA && !isDraggingB) return 1;
-            if (!isDraggingA && isDraggingB) return -1;
-            return 0;
-          })
-          .map((appliance) => (
-          <Appliance
-            key={appliance.key}
-            appliance={appliance}
-            onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
-            dragging={!referenceMode && (dragInfo?.id === appliance.key || (appliance.key === "hood" && dragInfo?.id === "range"))}
-            highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
-            referenceMode={referenceMode}
-            interactive={enablePositionDragging}
-            canvasWidth={plan.canvas.w}
-            roomY={plan.room.y}
-          />
-        ))}
+        {showAppliances && (() => {
+          const hasCooktop = plan.appliances.some((a) => a.key === "cooktop");
+          const baseCookingKey = hasCooktop ? "cooktop" : "range";
+          return [...plan.appliances]
+            .sort((a, b) => {
+              const isDraggingA = !referenceMode && (dragInfo?.id === a.key || (a.key === "hood" && (dragInfo?.id === "range" || dragInfo?.id === "cooktop")));
+              const isDraggingB = !referenceMode && (dragInfo?.id === b.key || (b.key === "hood" && (dragInfo?.id === "range" || dragInfo?.id === "cooktop")));
+              if (isDraggingA && !isDraggingB) return 1;
+              if (!isDraggingA && isDraggingB) return -1;
+              return 0;
+            })
+            .map((appliance) => (
+              <Appliance
+                key={appliance.key}
+                appliance={appliance}
+                onPointerDown={enablePositionDragging ? handlePointerDown : undefined}
+                onKeyboardMove={enablePositionDragging ? moveSelected : undefined}
+                dragging={!referenceMode && (dragInfo?.id === appliance.key || (appliance.key === "hood" && (dragInfo?.id === "range" || dragInfo?.id === "cooktop")))}
+                highlighted={enablePositionDragging && highlightDraggableItems && isHighlightableAppliance(appliance.key)}
+                referenceMode={referenceMode}
+                interactive={enablePositionDragging}
+                canvasWidth={plan.canvas.w}
+                roomY={plan.room.y}
+                baseCookingKey={baseCookingKey}
+              />
+            ));
+        })()}
 
         {showCabinetFill && plan.wallCabinets.map((cabinet, index) => {
           const inset = 2.5;
@@ -512,6 +571,9 @@ function stageAtLeast(stage: PreviewStage, minimum: PreviewStage) {
   return PREVIEW_STAGE_ORDER[stage] >= PREVIEW_STAGE_ORDER[minimum];
 }
 
+const LAYOUT_GUIDE_WALL_OFFSET = 8;
+const LAYOUT_GUIDE_DEPTH = 22;
+
 function LayoutGuide({ plan }: { plan: FloorPlan }) {
   const walls =
     plan.layoutPreference === "NO_PREFERENCE"
@@ -519,7 +581,7 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
       : allowedDragWallsForLayout(plan.layoutPreference);
   const { x, y, w, h, thickness } = plan.room;
   const inset = thickness + 6;
-  const guideDepth = 22;
+  const guideDepth = LAYOUT_GUIDE_DEPTH;
   const color = CABINET_FILL;
   const stroke = INK;
 
@@ -537,13 +599,16 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
       h: guideDepth
     },
     LEFT: {
-      x: x + thickness + 8,
+      x: x + thickness + LAYOUT_GUIDE_WALL_OFFSET,
       y: y + inset,
       w: guideDepth,
-      h: h - inset * 2
+      h:
+        plan.layoutPreference === "PENINSULA" && plan.peninsula
+          ? (plan.peninsula.y + plan.peninsula.h) - (y + inset)
+          : h - inset * 2
     },
     RIGHT: {
-      x: x + w - thickness - 8 - guideDepth,
+      x: x + w - thickness - LAYOUT_GUIDE_WALL_OFFSET - guideDepth,
       y: y + inset,
       w: guideDepth,
       h: h - inset * 2
@@ -571,20 +636,63 @@ function LayoutGuide({ plan }: { plan: FloorPlan }) {
           />
         );
       })}
-      {plan.layoutPreference === "PENINSULA" && (
-        <rect
-          data-layout-guide="peninsula"
-          x={x + thickness + 8}
-          y={y + h - thickness - 110}
-          width={guideDepth}
-          height="96"
-          rx="4"
-          fill="#f3f3f1"
-          stroke={stroke}
-          strokeWidth="1.5"
-          strokeDasharray="7 5"
-        />
-      )}
+    </g>
+  );
+}
+
+function PeninsulaGuide({
+  rect,
+  anchorX,
+  interactive,
+  dragging,
+  onPointerDown
+}: {
+  rect: PlanRect;
+  anchorX: number;
+  interactive?: boolean;
+  dragging?: boolean;
+  onPointerDown?: (e: React.PointerEvent) => void;
+}) {
+  const freeEnd = rect.x + rect.w;
+  const guideRect = {
+    ...rect,
+    x: anchorX,
+    w: Math.max(0, freeEnd - anchorX)
+  };
+
+  return (
+    <g
+      data-position-object="peninsula"
+      data-layout-guide="peninsula"
+      onPointerDown={onPointerDown}
+      style={{
+        cursor: interactive ? (dragging ? "grabbing" : "grab") : "default",
+        touchAction: "none"
+      }}
+    >
+      <rect
+        x={guideRect.x}
+        y={guideRect.y}
+        width={guideRect.w}
+        height={guideRect.h}
+        rx="4"
+        fill="#f3f3f1"
+        stroke={INK}
+        strokeWidth="1.5"
+        strokeDasharray={dragging ? undefined : "7 5"}
+        opacity={dragging ? 1 : 0.95}
+      />
+      <text
+        x={guideRect.x + guideRect.w / 2}
+        y={guideRect.y + guideRect.h / 2 + 3}
+        textAnchor="middle"
+        fontFamily="'JetBrains Mono', monospace"
+        fontSize="10"
+        fill="#6a6a64"
+        style={{ pointerEvents: "none", userSelect: "none" }}
+      >
+        PENINSULA
+      </text>
     </g>
   );
 }
@@ -649,23 +757,94 @@ function DragFeedback({ plan, draggingId }: { plan: FloorPlan; draggingId?: stri
   const insets = thickness;
   const strokeW = 6;
   const color = "var(--studio-action)";
-  
+  // The peninsula is also a valid drop target for the appliances that can mount
+  // on it — highlight it so the rep sees they can drag an appliance over there.
+  const peninsulaDroppable =
+    !!plan.peninsula && PENINSULA_APPLIANCE_KEYS.has(draggingId);
+  const islandDroppable =
+    !!plan.island && ISLAND_APPLIANCE_KEYS.has(draggingId);
+
   return (
     <g pointerEvents="none" opacity="0.4">
       {allowed.includes("TOP") && <rect x={x + insets} y={y + insets} width={w - insets*2} height={strokeW} fill={color} />}
       {allowed.includes("BOTTOM") && <rect x={x + insets} y={y + h - insets - strokeW} width={w - insets*2} height={strokeW} fill={color} />}
-      {allowed.includes("LEFT") && <rect x={x + insets} y={y + insets} width={strokeW} height={h - insets*2} fill={color} />}
+      {allowed.includes("LEFT") && (
+        <rect
+          x={x + insets}
+          y={y + insets}
+          width={strokeW}
+          height={
+            plan.layoutPreference === "PENINSULA" && plan.peninsula
+              ? (plan.peninsula.y + plan.peninsula.h) - (y + insets)
+              : h - insets * 2
+          }
+          fill={color}
+        />
+      )}
       {allowed.includes("RIGHT") && <rect x={x + w - insets - strokeW} y={y + insets} width={strokeW} height={h - insets*2} fill={color} />}
+      {peninsulaDroppable && plan.peninsula && (
+        <rect
+          x={plan.peninsula.x}
+          y={plan.peninsula.y}
+          width={plan.peninsula.w}
+          height={plan.peninsula.h}
+          rx="4"
+          fill={color}
+          opacity="0.5"
+        />
+      )}
+      {islandDroppable && plan.island && (
+        <rect
+          x={plan.island.x}
+          y={plan.island.y}
+          width={plan.island.w}
+          height={plan.island.h}
+          rx="4"
+          fill={color}
+          opacity="0.5"
+        />
+      )}
     </g>
   );
 }
 
-function overrideFromPointer(
+// How far outside a freestanding base-cabinet run the pointer can stray and
+// still count as a drop — gives the rep a forgiving target while dragging.
+const COUNTER_DROP_MARGIN = 26;
+
+export function overrideFromPointer(
   plan: FloorPlan,
   id: string,
   pt: { x: number; y: number },
   axisOffset: number
 ): PositionOverride {
+  if (plan.island && ISLAND_APPLIANCE_KEYS.has(id)) {
+    const island = plan.island;
+    const margin = COUNTER_DROP_MARGIN;
+    const overIsland =
+      pt.x >= island.x - margin &&
+      pt.x <= island.x + island.w + margin &&
+      pt.y >= island.y - margin &&
+      pt.y <= island.y + island.h + margin;
+    if (overIsland) {
+      return { onIsland: true, position: pt.x - island.x };
+    }
+  }
+
+  // Eligible appliances dropped over the peninsula mount onto it; `position` is
+  // a centre offset along the bar so the appliance follows the peninsula.
+  if (plan.peninsula && PENINSULA_APPLIANCE_KEYS.has(id)) {
+    const p = plan.peninsula;
+    const m = COUNTER_DROP_MARGIN;
+    const over =
+      pt.x >= p.x - m &&
+      pt.x <= p.x + p.w + m &&
+      pt.y >= p.y - m &&
+      pt.y <= p.y + p.h + m;
+    if (over) {
+      return { onPeninsula: true, position: pt.x - p.x };
+    }
+  }
   const wall = nearestAllowedWall(plan, pt, id);
   const horizontal = wall === "TOP" || wall === "BOTTOM";
   const rawPosition = (horizontal ? pt.x : pt.y) - axisOffset;
@@ -700,7 +879,7 @@ function nearestAllowedWall(plan: FloorPlan, pt: { x: number; y: number }, id: s
 }
 
 function isHighlightableAppliance(key: string) {
-  return ["sink", "range", "fridge", "dishwasher", "hood"].includes(key);
+  return ["sink", "range", "fridge", "dishwasher", "hood", "cooktop"].includes(key);
 }
 
 function Appliance({
@@ -712,7 +891,8 @@ function Appliance({
   interactive,
   canvasWidth,
   roomY,
-  onKeyboardMove
+  onKeyboardMove,
+  baseCookingKey
 }: {
   appliance: ApplianceShape;
   onPointerDown?: (id: string, wall: Wall, currentVal: number, e: React.PointerEvent) => void;
@@ -723,12 +903,14 @@ function Appliance({
   interactive?: boolean;
   canvasWidth?: number;
   roomY?: number;
+  baseCookingKey?: string;
 }) {
   const cx = appliance.x + appliance.w / 2;
   const cy = appliance.y + appliance.h / 2;
   const isHorizontal = appliance.wall === "TOP" || appliance.wall === "BOTTOM";
   const currentVal = isHorizontal ? appliance.x : appliance.y;
   const isHood = appliance.symbol === "hood";
+  const actualKey = isHood ? (baseCookingKey ?? "range") : appliance.key;
 
   // Clean reference: just the body rect + symbol glyph, no chrome, no label.
   if (referenceMode) {
@@ -753,7 +935,7 @@ function Appliance({
     <g
       onPointerDown={
         interactive && onPointerDown
-          ? (e) => onPointerDown(isHood ? "range" : appliance.key, appliance.wall, currentVal, e)
+          ? (e) => onPointerDown(actualKey, appliance.wall, currentVal, e)
           : undefined
       }
       onKeyDown={interactive && onKeyboardMove ? (e) => {
@@ -762,13 +944,13 @@ function Appliance({
         if (e.key === "ArrowRight" || e.key === "ArrowDown") delta = 1;
         if (delta !== 0) {
           e.preventDefault();
-          onKeyboardMove(isHood ? "range" : appliance.key, delta * (e.shiftKey ? 6 : 1));
+          onKeyboardMove(actualKey, delta * (e.shiftKey ? 6 : 1));
         }
       } : undefined}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? `Move ${appliance.label}` : undefined}
-      data-position-object={isHood ? "range" : appliance.key}
+      data-position-object={actualKey}
       className={`transition-opacity duration-100 ${interactive ? "group cursor-grab outline-none active:cursor-grabbing" : ""} ${dragging ? "opacity-60" : interactive ? "hover:opacity-80" : ""} ${highlighted ? "animate-pulse" : ""}`}
       data-appliance-symbol={appliance.symbol}
     >
@@ -851,285 +1033,213 @@ function shouldShowApplianceLabel(appliance: ApplianceShape): boolean {
 }
 
 function ApplianceSymbol({ appliance }: { appliance: ApplianceShape }) {
-  const { x, y, w, h, symbol, wall } = appliance;
+  const { x, y, w, h, symbol, wall, onIsland, onPeninsula } = appliance;
   const cx = x + w / 2;
   const cy = y + h / 2;
-  if (symbol === "range") {
-    let fw = w;
-    let fh = h;
-    let fcx = cx;
-    let fcy = y + h / 2;
-    
-    // Shift burners to the visible front 40% of the range (avoiding the hood)
-    if (wall === "TOP") {
-      fh = h * 0.42;
-      fcy = y + h - fh / 2;
-    } else if (wall === "BOTTOM") {
-      fh = h * 0.42;
-      fcy = y + fh / 2;
-    } else if (wall === "LEFT") {
-      fw = w * 0.42;
-      fcx = x + w - fw / 2;
-    } else if (wall === "RIGHT") {
-      fw = w * 0.42;
-      fcx = x + fw / 2;
+
+  // Draw every symbol once, in a canonical "TOP wall" orientation — front facing
+  // DOWN, the run length along the box width (bw) and the cabinet depth along its
+  // height (bh) — then rotate the whole glyph so it faces into the room for its
+  // actual wall. This keeps a single source of truth for each appliance's look
+  // and makes orientation a pure transform:
+  //   TOP 0°, BOTTOM/peninsula 180°, LEFT −90° (CCW), RIGHT +90° (CW).
+  const horizontal = wall === "TOP" || wall === "BOTTOM";
+  const bw = horizontal ? w : h; // along-wall length
+  const bh = horizontal ? h : w; // depth
+  const bx = cx - bw / 2;
+  const by = cy - bh / 2;
+
+  let angle = 0;
+  if (wall === "BOTTOM") angle = 180;
+  else if (wall === "LEFT") angle = -90;
+  else if (wall === "RIGHT") angle = 90;
+  if (onIsland || onPeninsula) angle = 180;
+
+  // pt(l, d): l = signed offset from the box centre along its width, d = distance
+  // DOWN from the box's back edge (the wall side). Mirrors the old TOP-wall math.
+  const pt = (l: number, d: number): [number, number] => [cx + l, by + d];
+
+  const body = (() => {
+    if (symbol === "range") {
+      // Burners sit in the visible front 42% of the cooktop (clear of the hood).
+      const fh = bh * 0.42;
+      const fcy = by + bh - fh / 2;
+      const fcx = cx;
+      const fw = bw;
+      const offX = Math.min(fw, fh) * 0.24;
+      const offY = Math.min(fw, fh) * 0.24;
+      const r = Math.min(fw, fh) * 0.16;
+      return (
+        <g fill="none" stroke={LINE} strokeWidth="1">
+          <circle cx={fcx - offX} cy={fcy - offY} r={r} />
+          <circle cx={fcx + offX} cy={fcy - offY} r={r} />
+          <circle cx={fcx - offX} cy={fcy + offY} r={r} />
+          <circle cx={fcx + offX} cy={fcy + offY} r={r} />
+        </g>
+      );
     }
+    if (symbol === "dishwasher") {
+      const len = bw;
+      const dep = bh;
+      const handleW = len * 0.55;
+      const handleD = dep * 0.08;
+      const hTL = pt(-handleW / 2, dep);
+      const hBR = pt(handleW / 2, dep + handleD);
 
-    const offX = Math.min(fw, fh) * 0.24;
-    const offY = Math.min(fw, fh) * 0.24;
-    const r = Math.min(fw, fh) * 0.16;
-    return (
-      <g fill="none" stroke={LINE} strokeWidth="1">
-        <circle cx={fcx - offX} cy={fcy - offY} r={r} />
-        <circle cx={fcx + offX} cy={fcy - offY} r={r} />
-        <circle cx={fcx - offX} cy={fcy + offY} r={r} />
-        <circle cx={fcx + offX} cy={fcy + offY} r={r} />
-      </g>
-    );
-  }
-  if (symbol === "dishwasher") {
-    let nx = 0, ny = 1, tx = 1, ty = 0, cbx = cx, cby = y;
-    let len = w, dep = h;
-    
-    if (wall === "TOP") {
-      nx = 0; ny = 1; tx = 1; ty = 0; cbx = cx; cby = y; len = w; dep = h;
-    } else if (wall === "BOTTOM") {
-      nx = 0; ny = -1; tx = -1; ty = 0; cbx = cx; cby = y + h; len = w; dep = h;
-    } else if (wall === "LEFT") {
-      nx = 1; ny = 0; tx = 0; ty = -1; cbx = x; cby = cy; len = h; dep = w;
-    } else if (wall === "RIGHT") {
-      nx = -1; ny = 0; tx = 0; ty = 1; cbx = x + w; cby = cy; len = h; dep = w;
-    }
+      const inset = Math.max(3, Math.min(bw, bh) * 0.06);
+      const panelX = bx + inset;
+      const panelY = by + inset;
+      const panelW = Math.max(1, bw - inset * 2);
+      const panelH = Math.max(1, bh - inset * 2);
 
-    const pt = (l: number, d: number) => [cbx + tx * l + nx * d, cby + ty * l + ny * d];
-    
-    const handleW = len * 0.55; 
-    const handleD = dep * 0.08; 
-    const handleY = dep; 
-    
-    const hTL = pt(-handleW / 2, handleY);
-    const hBR = pt(handleW / 2, handleY + handleD);
-
-    const inset = Math.max(3, Math.min(len, dep) * 0.06);
-    const panelX = x + inset;
-    const panelY = y + inset;
-    const panelW = Math.max(1, w - inset * 2);
-    const panelH = Math.max(1, h - inset * 2);
-
-    return (
-      <g data-dishwasher-panel="true">
-        <title>Dishwasher integrated base cabinet panel</title>
-        <rect
-          x={panelX}
-          y={panelY}
-          width={panelW}
-          height={panelH}
-          fill="none"
-          stroke={LINE}
-          strokeWidth="1.1"
-          rx="2"
-        />
-        {wall === "TOP" || wall === "BOTTOM" ? (
+      return (
+        <g data-dishwasher-panel="true">
+          <title>Dishwasher integrated base cabinet panel</title>
+          <rect
+            x={panelX}
+            y={panelY}
+            width={panelW}
+            height={panelH}
+            fill="none"
+            stroke={LINE}
+            strokeWidth="1.1"
+            rx="2"
+          />
           <line
             x1={panelX}
-            y1={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
+            y1={panelY + panelH * 0.74}
             x2={panelX + panelW}
-            y2={wall === "BOTTOM" ? panelY + panelH * 0.26 : panelY + panelH * 0.74}
+            y2={panelY + panelH * 0.74}
             stroke={LINE}
             strokeWidth="0.9"
           />
-        ) : (
-          <line
-            x1={wall === "RIGHT" ? panelX + panelW * 0.26 : panelX + panelW * 0.74}
-            y1={panelY}
-            x2={wall === "RIGHT" ? panelX + panelW * 0.26 : panelX + panelW * 0.74}
-            y2={panelY + panelH}
+          <rect
+            x={Math.min(hTL[0], hBR[0])}
+            y={Math.min(hTL[1], hBR[1])}
+            width={Math.abs(hBR[0] - hTL[0])}
+            height={Math.abs(hBR[1] - hTL[1])}
+            fill="#ffffff"
             stroke={LINE}
-            strokeWidth="0.9"
+            strokeWidth="1.2"
+            rx="1.5"
           />
-        )}
+        </g>
+      );
+    }
+    if (symbol === "sink") {
+      const len = bw;
+      const dep = bh;
+      const bW = len * 0.8;
+      const bD = dep * 0.65;
+      const bCenterD = dep * 0.55;
+      const bTL = pt(-bW / 2, bCenterD - bD / 2);
+      const bBR = pt(bW / 2, bCenterD + bD / 2);
+
+      const apronY = dep * 0.9;
+      const apronL = pt(-len / 2, apronY);
+      const apronR = pt(len / 2, apronY);
+
+      const fBaseD = dep * 0.15;
+      const fBase = pt(0, fBaseD);
+      const fSpoutEnd = pt(0, fBaseD + dep * 0.25);
+      const handleStart = pt(len * 0.06, fBaseD);
+      const handleEnd = pt(len * 0.16, fBaseD);
+      const handleTick = pt(len * 0.16, fBaseD + dep * 0.04);
+
+      return (
+        <g fill="none" stroke={LINE} strokeWidth="1.2">
+          <rect
+            x={Math.min(bTL[0], bBR[0])}
+            y={Math.min(bTL[1], bBR[1])}
+            width={Math.abs(bBR[0] - bTL[0])}
+            height={Math.abs(bBR[1] - bTL[1])}
+            rx="3"
+          />
+          <line x1={apronL[0]} y1={apronL[1]} x2={apronR[0]} y2={apronR[1]} />
+          <circle cx={fBase[0]} cy={fBase[1]} r={Math.min(len, dep) * 0.06} />
+          <circle cx={fBase[0]} cy={fBase[1]} r={Math.min(len, dep) * 0.03} />
+          <line x1={fBase[0]} y1={fBase[1]} x2={fSpoutEnd[0]} y2={fSpoutEnd[1]} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1={handleStart[0]} y1={handleStart[1]} x2={handleEnd[0]} y2={handleEnd[1]} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1={handleEnd[0]} y1={handleEnd[1]} x2={handleTick[0]} y2={handleTick[1]} strokeWidth="1.5" strokeLinecap="round" />
+        </g>
+      );
+    }
+    if (symbol === "fridge") {
+      const len = bw;
+      const dep = bh;
+      const doorD = dep * 0.18;
+      const gap = 1;
+      const inset = 1.5;
+
+      const dl_pts = [pt(-len / 2 + inset, dep - doorD), pt(-gap, dep - doorD), pt(-gap, dep - inset), pt(-len / 2 + inset, dep - inset)];
+      const dr_pts = [pt(gap, dep - doorD), pt(len / 2 - inset, dep - doorD), pt(len / 2 - inset, dep - inset), pt(gap, dep - inset)];
+
+      const h1_0 = pt(-len * 0.1, dep - doorD * 0.5);
+      const h1_1 = pt(-len * 0.1, dep - inset * 1.5);
+      const h2_0 = pt(len * 0.1, dep - doorD * 0.5);
+      const h2_1 = pt(len * 0.1, dep - inset * 1.5);
+
+      const back_line_1 = pt(-len / 2 + inset, dep * 0.12);
+      const back_line_2 = pt(len / 2 - inset, dep * 0.12);
+
+      return (
+        <g>
+          <line x1={back_line_1[0]} y1={back_line_1[1]} x2={back_line_2[0]} y2={back_line_2[1]} stroke={LINE} strokeWidth="1" />
+          <path d={`M ${dl_pts.map((p) => p.join(",")).join(" L ")} Z`} fill="#dcdcd8" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
+          <path d={`M ${dr_pts.map((p) => p.join(",")).join(" L ")} Z`} fill="#dcdcd8" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
+          <line x1={h1_0[0]} y1={h1_0[1]} x2={h1_1[0]} y2={h1_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1={h2_0[0]} y1={h2_0[1]} x2={h2_1[0]} y2={h2_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
+        </g>
+      );
+    }
+    if (symbol === "oven") {
+      return (
+        <g fill="none" stroke={LINE} strokeWidth="1">
+          <line x1={bx + 5} y1={by + bh * 0.35} x2={bx + bw - 5} y2={by + bh * 0.35} />
+          <line x1={bx + 5} y1={by + bh * 0.6} x2={bx + bw - 5} y2={by + bh * 0.6} />
+        </g>
+      );
+    }
+    if (symbol === "microwave") {
+      return (
+        <g fill="none" stroke={LINE} strokeWidth="1">
+          <rect x={bx + bw * 0.1} y={by + bh * 0.3} width={bw * 0.6} height={bh * 0.4} rx="2" />
+          <circle cx={bx + bw * 0.82} cy={by + bh * 0.4} r="1" />
+          <circle cx={bx + bw * 0.82} cy={by + bh * 0.6} r="1" />
+        </g>
+      );
+    }
+    if (symbol === "hood") {
+      const hw = bw * 0.32;
+      const hh = bh * 0.32;
+      return (
         <rect
-          x={Math.min(hTL[0], hBR[0])}
-          y={Math.min(hTL[1], hBR[1])}
-          width={Math.abs(hBR[0] - hTL[0])}
-          height={Math.abs(hBR[1] - hTL[1])}
-          fill="#ffffff"
+          x={cx - hw / 2}
+          y={cy - hh / 2}
+          width={hw}
+          height={hh}
+          fill="none"
           stroke={LINE}
           strokeWidth="1.2"
-          rx="1.5"
         />
-      </g>
-    );
-  }
-  if (symbol === "sink") {
-    let nx = 0, ny = 1, tx = 1, ty = 0, cbx = cx, cby = y;
-    let len = w, dep = h;
-    
-    if (wall === "TOP") {
-      nx = 0; ny = 1; tx = 1; ty = 0; cbx = cx; cby = y; len = w; dep = h;
-    } else if (wall === "BOTTOM") {
-      nx = 0; ny = -1; tx = -1; ty = 0; cbx = cx; cby = y + h; len = w; dep = h;
-    } else if (wall === "LEFT") {
-      nx = 1; ny = 0; tx = 0; ty = -1; cbx = x; cby = cy; len = h; dep = w;
-    } else if (wall === "RIGHT") {
-      nx = -1; ny = 0; tx = 0; ty = 1; cbx = x + w; cby = cy; len = h; dep = w;
+      );
     }
-
-    const pt = (l: number, d: number) => [cbx + tx * l + nx * d, cby + ty * l + ny * d];
-    
-    const bW = len * 0.8;
-    const bD = dep * 0.65;
-    const bCenterD = dep * 0.55;
-    const bTL = pt(-bW / 2, bCenterD - bD / 2);
-    const bBR = pt(bW / 2, bCenterD + bD / 2);
-    
-    const apronY = dep * 0.90;
-    const apronL = pt(-len / 2, apronY);
-    const apronR = pt(len / 2, apronY);
-    const apronTickL1 = pt(-len / 2 + len * 0.08, apronY);
-    const apronTickL2 = pt(-len / 2 + len * 0.08, dep);
-
-    const fBaseD = dep * 0.15;
-    const fBase = pt(0, fBaseD);
-    const fSpoutEnd = pt(0, fBaseD + dep * 0.25);
-    const handleStart = pt(len * 0.06, fBaseD);
-    const handleEnd = pt(len * 0.16, fBaseD);
-    const handleTick = pt(len * 0.16, fBaseD + dep * 0.04);
-    
-    const soapD = bCenterD + bD / 2 - dep * 0.06;
-    const soapL = bW / 2 + len * 0.04;
-    const soapBase = pt(soapL, soapD);
-    const soapSpout = pt(soapL - len * 0.08, soapD);
-
-    return (
-      <g fill="none" stroke={LINE} strokeWidth="1.2">
-        <rect 
-          x={Math.min(bTL[0], bBR[0])} 
-          y={Math.min(bTL[1], bBR[1])} 
-          width={Math.abs(bBR[0] - bTL[0])} 
-          height={Math.abs(bBR[1] - bTL[1])} 
-          rx="3" 
-        />
-        <line x1={apronL[0]} y1={apronL[1]} x2={apronR[0]} y2={apronR[1]} />
-        
-        <circle cx={fBase[0]} cy={fBase[1]} r={Math.min(len, dep) * 0.06} />
-        <circle cx={fBase[0]} cy={fBase[1]} r={Math.min(len, dep) * 0.03} />
-        <line x1={fBase[0]} y1={fBase[1]} x2={fSpoutEnd[0]} y2={fSpoutEnd[1]} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1={handleStart[0]} y1={handleStart[1]} x2={handleEnd[0]} y2={handleEnd[1]} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1={handleEnd[0]} y1={handleEnd[1]} x2={handleTick[0]} y2={handleTick[1]} strokeWidth="1.5" strokeLinecap="round" />
-      </g>
-    );
-  }
-  if (symbol === "fridge") {
-    let nx = 0, ny = 1, tx = 1, ty = 0, cbx = cx, cby = y;
-    let len = w, dep = h;
-    
-    if (wall === "TOP") {
-      nx = 0; ny = 1; tx = 1; ty = 0; cbx = cx; cby = y; len = w; dep = h;
-    } else if (wall === "BOTTOM") {
-      nx = 0; ny = -1; tx = -1; ty = 0; cbx = cx; cby = y + h; len = w; dep = h;
-    } else if (wall === "LEFT") {
-      nx = 1; ny = 0; tx = 0; ty = -1; cbx = x; cby = cy; len = h; dep = w;
-    } else if (wall === "RIGHT") {
-      nx = -1; ny = 0; tx = 0; ty = 1; cbx = x + w; cby = cy; len = h; dep = w;
-    }
-
-    const pt = (l: number, d: number) => [cbx + tx * l + nx * d, cby + ty * l + ny * d];
-    
-    const doorD = dep * 0.18;
-    const gap = 1;
-    const inset = 1.5;
-    
-    const dl_pts = [pt(-len/2 + inset, dep - doorD), pt(-gap, dep - doorD), pt(-gap, dep - inset), pt(-len/2 + inset, dep - inset)];
-    const dr_pts = [pt(gap, dep - doorD), pt(len/2 - inset, dep - doorD), pt(len/2 - inset, dep - inset), pt(gap, dep - inset)];
-    
-    const h1_0 = pt(-len * 0.1, dep - doorD * 0.5);
-    const h1_1 = pt(-len * 0.1, dep - inset * 1.5);
-    const h2_0 = pt(len * 0.1, dep - doorD * 0.5);
-    const h2_1 = pt(len * 0.1, dep - inset * 1.5);
-
-    const back_line_1 = pt(-len/2 + inset, dep * 0.12);
-    const back_line_2 = pt(len/2 - inset, dep * 0.12);
-
-    return (
-      <g>
-        <line x1={back_line_1[0]} y1={back_line_1[1]} x2={back_line_2[0]} y2={back_line_2[1]} stroke={LINE} strokeWidth="1" />
-        <path d={`M ${dl_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#dcdcd8" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
-        <path d={`M ${dr_pts.map(p => p.join(",")).join(" L ")} Z`} fill="#dcdcd8" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" />
-        <line x1={h1_0[0]} y1={h1_0[1]} x2={h1_1[0]} y2={h1_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1={h2_0[0]} y1={h2_0[1]} x2={h2_1[0]} y2={h2_1[1]} stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
-      </g>
-    );
-  }
-  if (symbol === "oven") {
-    const isHorizontal = wall === "TOP" || wall === "BOTTOM";
-    return (
-      <g fill="none" stroke={LINE} strokeWidth="1">
-        {isHorizontal ? (
-          <>
-            <line x1={x + 5} y1={y + h * 0.35} x2={x + w - 5} y2={y + h * 0.35} />
-            <line x1={x + 5} y1={y + h * 0.6} x2={x + w - 5} y2={y + h * 0.6} />
-          </>
-        ) : (
-          <>
-            <line x1={x + w * 0.35} y1={y + 5} x2={x + w * 0.35} y2={y + h - 5} />
-            <line x1={x + w * 0.6} y1={y + 5} x2={x + w * 0.6} y2={y + h - 5} />
-          </>
-        )}
-      </g>
-    );
-  }
-  if (symbol === "microwave") {
-    const isHorizontal = wall === "TOP" || wall === "BOTTOM";
-    const windowX = isHorizontal ? w * 0.1 : w * 0.3;
-    const windowY = isHorizontal ? h * 0.3 : h * 0.1;
-    const windowW = isHorizontal ? w * 0.6 : w * 0.4;
-    const windowH = isHorizontal ? h * 0.4 : h * 0.6;
-    return (
-      <g fill="none" stroke={LINE} strokeWidth="1">
-        <rect x={x + windowX} y={y + windowY} width={windowW} height={windowH} rx="2" />
-        {isHorizontal ? (
-          <>
-            <circle cx={x + w * 0.82} cy={y + h * 0.4} r="1" />
-            <circle cx={x + w * 0.82} cy={y + h * 0.6} r="1" />
-          </>
-        ) : (
-          <>
-            <circle cx={x + w * 0.4} cy={y + h * 0.82} r="1" />
-            <circle cx={x + w * 0.6} cy={y + h * 0.82} r="1" />
-          </>
-        )}
-      </g>
-    );
-  }
-  if (symbol === "hood") {
-    const hw = w * 0.32;
-    const hh = h * 0.32;
     return (
       <rect
-        x={x + w / 2 - hw / 2}
-        y={y + h / 2 - hh / 2}
-        width={hw}
-        height={hh}
+        x={bx + bw * 0.16}
+        y={by + bh * 0.16}
+        width={bw * 0.68}
+        height={bh * 0.45}
+        rx="2"
         fill="none"
         stroke={LINE}
-        strokeWidth="1.2"
+        strokeWidth="0.9"
+        strokeDasharray="4 3"
       />
     );
-  }
-  return (
-    <rect
-      x={x + w * 0.16}
-      y={y + h * 0.16}
-      width={w * 0.68}
-      height={h * 0.45}
-      rx="2"
-      fill="none"
-      stroke={LINE}
-      strokeWidth="0.9"
-      strokeDasharray="4 3"
-    />
-  );
+  })();
+
+  return angle === 0 ? body : <g transform={`rotate(${angle} ${cx} ${cy})`}>{body}</g>;
 }
 
 function Openings({

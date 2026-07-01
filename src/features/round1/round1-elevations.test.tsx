@@ -49,6 +49,33 @@ describe("Round1ElevationStrip", () => {
       renderToStaticMarkup(<Round1ElevationStrip scenes={[]} onOpen={() => {}} />)
     ).toBe("");
   });
+
+  test("renders a leading item as the first thumbnail in the same row", () => {
+    const scenes = buildScenes();
+    const html = renderToStaticMarkup(
+      <Round1ElevationStrip
+        scenes={scenes}
+        onOpen={() => {}}
+        leading={<button aria-label="Open 3D structure reference">3D</button>}
+      />
+    );
+    expect(html).toContain("Open 3D structure reference");
+    // Leading sits before the wall thumbnails in the same strip.
+    expect(html.indexOf("Open 3D structure reference")).toBeLessThan(
+      html.search(/Open [^"]+ rough elevation/)
+    );
+  });
+
+  test("renders the leading item even with no wall scenes", () => {
+    const html = renderToStaticMarkup(
+      <Round1ElevationStrip
+        scenes={[]}
+        onOpen={() => {}}
+        leading={<button aria-label="Open 3D structure reference">3D</button>}
+      />
+    );
+    expect(html).toContain("Open 3D structure reference");
+  });
 });
 
 describe("Round1ElevationLightbox", () => {
