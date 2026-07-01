@@ -107,7 +107,7 @@ export type WallDescription = {
   hasCabinetRun: boolean;
 };
 
-/** Describes the appliances and cabinet run on a single wall, or null if empty. */
+/** Describes the appliances, window, and cabinet run on a single wall, or null if empty. */
 export function describeWall(plan: FloorPlan, wall: Wall, layout?: string): WallDescription | null {
   const onWall = plan.appliances
     .filter(
@@ -124,13 +124,26 @@ export function describeWall(plan: FloorPlan, wall: Wall, layout?: string): Wall
     (appliance) => appliance.wall === wall && appliance.symbol === "hood"
   );
 
-  const appliances = onWall.map((appliance) => {
+  type PositionedNoun = { position: number; noun: string };
+
+  const items: PositionedNoun[] = onWall.map((appliance) => {
     const noun = applianceNoun(appliance);
-    if (appliance.symbol === "range" && hasHood) {
-      return `${noun} with a hood above it`;
-    }
-    return noun;
+    const text =
+      appliance.symbol === "range" && hasHood ? `${noun} with a hood above it` : noun;
+    return { position: alongAxisValue(wall, appliance), noun: text };
   });
+
+  // Fold the window into the same nearest-to-farthest ordering as the
+  // appliances on this wall. Without this, an appliance's position relative
+  // to the window only exists in the reference images, and image models are
+  // unreliable at reproducing that left/right relationship from a picture
+  // alone; stating it in words too gives the model a second, explicit signal.
+  if (plan.window && plan.window.wall === wall) {
+    items.push({ position: alongAxisValue(wall, plan.window), noun: "a window" });
+  }
+
+  items.sort((a, b) => a.position - b.position);
+  const appliances = items.map((item) => item.noun);
 
   const hasCabinetRun =
     plan.baseCabinets.some((cabinet) => cabinet.wall === wall) ||
