@@ -726,14 +726,10 @@ export function ShowroomIntakeApp({
         throw new Error("Couldn't save your color selection. Please try again.");
       }
 
-      // Elevations are intentionally NOT sent to the image model: the model
-      // blends references, and a head-on orthographic wall is the hardest for it
-      // to reconcile with the 3/4 render. The perspective (Reference 1) now
-      // carries the same vertical info via its extruded massing, so top-down +
-      // perspective (both faithful re-projections of the plan) are enough. The
-      // elevation strip stays in the UI for the human.
+      // Elevations and the perspective structure remain human-facing previews
+      // only. Temporarily send just the deterministic top-down plan to the image
+      // model so the perspective projection cannot pull the render off-plan.
       const referenceImagesBase64 = await rasterizeRenderingReferences([
-        { role: "PERSPECTIVE_STRUCTURE", svg: referencePerspectiveSvg },
         { role: "TOP_DOWN_PLAN", svg: referenceTopDownSvg }
       ]);
       // Also send the selected door color's swatch as a MATERIAL reference so the
