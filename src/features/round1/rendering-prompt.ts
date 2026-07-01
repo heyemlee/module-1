@@ -121,20 +121,32 @@ export function buildRound1RenderingPrompt(
   const style = describeCabinetStyle(preferences.cabinetStyle);
   const colorDescription = preferences.color.promptDescription;
 
+  // Positive, closed appliance inventory derived from the authoritative plan.
+  // Stating what IS present (and nothing else) suppresses hallucinated extra
+  // appliances far better than scattered "DO NOT draw X" negations, which image
+  // models attend to weakly.
+  const inventoryNouns = Array.from(
+    new Set(floorPlan.appliances.map(applianceNoun))
+  );
+  const inventoryLine = inventoryNouns.length
+    ? `This kitchen contains exactly these appliances and nothing else: ${joinList(
+        inventoryNouns
+      )}. Render only these; do not add any appliance that is not in this list.`
+    : "";
+
   const lines: string[] = [
     "Create a warm, spacious, and photorealistic customer concept rendering of a high-end residential kitchen for a Round 1 sales preview in a luxury California Bay Area single-family house. Ensure the room features high ceilings and an airy, open-concept feel to maximize the perceived size of the space.",
     "",
     `Design style: ${style.designStyle}, ${colorDescription}, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the selected cabinet door color.`,
     "",
-    "Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions. CRITICAL: ONLY draw the exact appliances explicitly listed in this prompt. DO NOT hallucinate or add any extra appliances (like wall ovens or microwaves) that are not explicitly requested.",
+    `Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions.${inventoryLine ? ` ${inventoryLine}` : ""}`,
     "",
     `Camera and viewpoint: use a moderately wide architectural perspective with corrected verticals. ${layoutCamera} Keep every required cabinet run fully inside the frame with visible breathing room at every outer end; no cabinet, appliance, countertop, island, or peninsula may touch or be cropped by the image edge. Do not use a fisheye lens or exaggerated ultra-wide distortion.`,
     "",
     "Use the provided reference images as the authoritative spatial references.",
-    "- Reference 1 controls the camera and 3D massing.",
-    "- Reference 2 controls top-down positions.",
-    "- Reference 3 controls vertical stacking only and must not override floor-plan geometry.",
-    "- Reference 4, when present, controls material only.",
+    "- Reference 1 (perspective) controls the camera, the room shell (walls, window, and door openings), and the 3D massing and placement of every run.",
+    "- Reference 2 (top-down plan) controls exact top-down positions and the gaps between items.",
+    "- Reference 3, when present, is a material swatch and controls the cabinet-door finish only.",
     "Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the references place them. Do not rearrange, mirror, or move anything to a different wall.",
     "CRITICAL REQUIREMENT: Do not cluster or group appliances together (e.g., sink and dishwasher) unless they are physically adjacent in the layout reference. Strictly follow the reference for the empty counter space and gaps between appliances.",
     "",

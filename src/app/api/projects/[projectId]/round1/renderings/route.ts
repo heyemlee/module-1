@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createOpenAIImageAdapterFromEnv } from "@/infrastructure/image/openai-rest-image-client";
+import { createVisionClientFromEnv } from "@/infrastructure/image/openai-vision-client";
 import { generateRound1Rendering } from "@/server/round1/rendering-service";
+import { verifyConceptRendering } from "@/server/round1/rendering-verification";
 import { requireUser } from "@/server/platform/auth-service";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { rateLimit } from "@/server/platform/rate-limit";
@@ -25,7 +27,6 @@ const requestSchema = z.object({
       role: z.enum([
         "PERSPECTIVE_STRUCTURE",
         "TOP_DOWN_PLAN",
-        "WALL_ELEVATIONS",
         "MATERIAL_SWATCH"
       ]),
       imageBase64: z.string().min(1)
@@ -104,7 +105,6 @@ export async function POST(
   const roleOrder = [
     "PERSPECTIVE_STRUCTURE",
     "TOP_DOWN_PLAN",
-    "WALL_ELEVATIONS",
     "MATERIAL_SWATCH"
   ] as const;
 
@@ -162,7 +162,39 @@ export async function POST(
       user,
       rendering
     });
-    return NextResponse.json(saved, { status: 200 });
+
+    // Optional closed-loop check: ask a vision model whether the rendering
+    // matches the authoritative plan inventory. Off by default (extra paid call
+    // per render); enable with ROUND1_VERIFY_RENDERING=1. Never fails the
+    // request — discrepancies are attached to the response and logged.
+    // ponytail: surfaces discrepancies only; add an auto-repair regenerate pass
+    // here if the caught mismatches turn out to warrant it.
+    let verification;
+    if (process.env.ROUND1_VERIFY_RENDERING === "1") {
+      const visionClient = createVisionClientFromEnv(process.env);
+      if (visionClient) {
+        try {
+          verification = await verifyConceptRendering({
+            imageBase64: rendering.imageBase64,
+            snapshot: latest.snapshot,
+            client: visionClient
+          });
+          if (!verification.ok) {
+            console.warn(
+              "Round 1 rendering verification found discrepancies",
+              verification.discrepancies
+            );
+          }
+        } catch (verifyError) {
+          console.error("Round 1 rendering verification failed", verifyError);
+        }
+      }
+    }
+
+    return NextResponse.json(
+      verification ? { ...saved, verification } : saved,
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Round 1 rendering failed", error);
     return NextResponse.json(

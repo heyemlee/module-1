@@ -9,7 +9,7 @@ describe("rasterizeRenderingReferences", () => {
     const result = await rasterizeRenderingReferences(
       [
         { role: "TOP_DOWN_PLAN", svg: topDown },
-        { role: "WALL_ELEVATIONS", svg: null }
+        { role: "PERSPECTIVE_STRUCTURE", svg: null }
       ],
       rasterize
     );
@@ -18,27 +18,27 @@ describe("rasterizeRenderingReferences", () => {
     expect(rasterize).toHaveBeenCalledTimes(1);
   });
 
-  test("rasterizes top-down and elevation references in order", async () => {
+  test("rasterizes top-down and perspective references in order", async () => {
     const topDown = { id: "top" } as unknown as SVGSVGElement;
-    const elevation = { id: "elevation" } as unknown as SVGSVGElement;
+    const perspective = { id: "perspective" } as unknown as SVGSVGElement;
     const rasterize = vi
       .fn<(svg: SVGSVGElement) => Promise<string>>()
       .mockResolvedValueOnce("top-down-png")
-      .mockResolvedValueOnce("elevation-png");
+      .mockResolvedValueOnce("perspective-png");
 
     const result = await rasterizeRenderingReferences(
       [
         { role: "TOP_DOWN_PLAN", svg: topDown },
-        { role: "WALL_ELEVATIONS", svg: elevation }
+        { role: "PERSPECTIVE_STRUCTURE", svg: perspective }
       ],
       rasterize
     );
 
     expect(result).toEqual([
       { role: "TOP_DOWN_PLAN", imageBase64: "top-down-png" },
-      { role: "WALL_ELEVATIONS", imageBase64: "elevation-png" }
+      { role: "PERSPECTIVE_STRUCTURE", imageBase64: "perspective-png" }
     ]);
     expect(rasterize).toHaveBeenNthCalledWith(1, topDown);
-    expect(rasterize).toHaveBeenNthCalledWith(2, elevation);
+    expect(rasterize).toHaveBeenNthCalledWith(2, perspective);
   });
 });

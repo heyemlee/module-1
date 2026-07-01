@@ -263,14 +263,18 @@ export function buildFloorPlan(
   });
 
   // If the sink moved to resolve overlaps, the window should follow it so they
-  // remain aligned in the prompt/rendering (unless the user explicitly overrode the window).
+  // remain aligned in the prompt/rendering — but only when neither was placed by
+  // the user. A user window drag pins the window; a user sink drag detaches the
+  // sink and leaves the window where it was.
   const sinkAfterMove = appliances.find((a) => a.key === "sink");
   const windowHasOverride = overrides.window !== undefined;
+  const sinkHasOverride = overrides.sink !== undefined;
   if (
     window &&
     sinkAfterMove &&
     sinkAfterMove.wall === window.wall &&
-    !windowHasOverride
+    !windowHasOverride &&
+    !sinkHasOverride
   ) {
     alignShapeCenterOnAxis(window, sinkAfterMove, { ix, iy, iw, ih });
   }
@@ -550,6 +554,47 @@ export function buildFloorPlan(
           wc.h = bottomLimit - wc.y;
         }
       }
+    }
+  }
+
+  // Absorb sub-minimum wall-cabinet fragments (e.g. a sliver the fill leaves at
+  // a wall end) into an adjacent same-wall cabinet, so a clipped, unbuildable
+  // narrow standalone wall cabinet is never rendered. A fragment with no
+  // touching neighbour is dropped rather than kept as a lone sliver.
+  // ponytail: O(n^2) per wall, but n (cabinets per wall) is tiny.
+  const minStandaloneWall = 12 * scale;
+  for (const wall of ["TOP", "BOTTOM", "LEFT", "RIGHT"] as const) {
+    const horizontal = wall === "TOP" || wall === "BOTTOM";
+    const runSize = (c: CabinetShape) => (horizontal ? c.w : c.h);
+    const runStart = (c: CabinetShape) => (horizontal ? c.x : c.y);
+    const runEnd = (c: CabinetShape) => (horizontal ? c.x + c.w : c.y + c.h);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const onWall = wallCabinets
+        .filter((c) => c.wall === wall)
+        .sort((a, b) => runStart(a) - runStart(b));
+      const frag = onWall.find((c) => runSize(c) < minStandaloneWall);
+      if (!frag) continue;
+      const neighbour = onWall.find(
+        (c) =>
+          c !== frag &&
+          (Math.abs(runEnd(c) - runStart(frag)) < 1 ||
+            Math.abs(runEnd(frag) - runStart(c)) < 1)
+      );
+      if (neighbour) {
+        const start = Math.min(runStart(neighbour), runStart(frag));
+        const end = Math.max(runEnd(neighbour), runEnd(frag));
+        if (horizontal) {
+          neighbour.x = start;
+          neighbour.w = end - start;
+        } else {
+          neighbour.y = start;
+          neighbour.h = end - start;
+        }
+      }
+      wallCabinets.splice(wallCabinets.indexOf(frag), 1);
+      changed = true;
     }
   }
 

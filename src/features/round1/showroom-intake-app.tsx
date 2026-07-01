@@ -20,7 +20,6 @@ import {
 } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import dynamic from "next/dynamic";
-import { ElevationPreview } from "./elevations/elevation-preview";
 import { PerspectivePreview } from "./perspective-preview";
 import { buildElevationScene } from "./elevations/elevation-scene";
 import Link from "next/link";
@@ -350,7 +349,6 @@ export function ShowroomIntakeApp({
   // so the reference image and the JSON prompt come from the identical locked
   // snapshot, with no labels/markers/chrome.
   const referenceTopDownRef = useRef<SVGSVGElement | null>(null);
-  const referenceElevationRef = useRef<SVGSVGElement | null>(null);
   const referencePerspectiveRef = useRef<SVGSVGElement | null>(null);
   const [renderings, setRenderings] = useState<ConceptRendering[]>([]);
   const [renderingBusy, setRenderingBusy] = useState(false);
@@ -692,11 +690,9 @@ export function ShowroomIntakeApp({
   const handleGenerateRendering = useCallback(async () => {
     setHasRenderedConcept(true);
     const referenceTopDownSvg = referenceTopDownRef.current;
-    const referenceElevationSvg = referenceElevationRef.current;
     const referencePerspectiveSvg = referencePerspectiveRef.current;
     if (
       !referenceTopDownSvg ||
-      !referenceElevationSvg ||
       !referencePerspectiveSvg ||
       !projectId ||
       !snapshot ||
@@ -728,10 +724,15 @@ export function ShowroomIntakeApp({
         throw new Error("Couldn't save your color selection. Please try again.");
       }
 
+      // Elevations are intentionally NOT sent to the image model: the model
+      // blends references, and a head-on orthographic wall is the hardest for it
+      // to reconcile with the 3/4 render. The perspective (Reference 1) now
+      // carries the same vertical info via its extruded massing, so top-down +
+      // perspective (both faithful re-projections of the plan) are enough. The
+      // elevation strip stays in the UI for the human.
       const referenceImagesBase64 = await rasterizeRenderingReferences([
         { role: "PERSPECTIVE_STRUCTURE", svg: referencePerspectiveSvg },
-        { role: "TOP_DOWN_PLAN", svg: referenceTopDownSvg },
-        { role: "WALL_ELEVATIONS", svg: referenceElevationSvg }
+        { role: "TOP_DOWN_PLAN", svg: referenceTopDownSvg }
       ]);
       // Also send the selected door color's swatch as a MATERIAL reference so the
       // image model matches the actual color/finish, not just the text prompt.
@@ -1135,6 +1136,29 @@ export function ShowroomIntakeApp({
   // the rep can still scroll down to inspect the plan.
   const isRenderingStep = step === SHOWROOM_STEPS.length - 1;
 
+  // The perspective/massing image the model actually receives as Reference 1,
+  // surfaced next to the rough elevations so it can be eyeballed. Same glass
+  // strip chrome as Round1ElevationStrip so it reads as one region.
+  const perspectivePreviewEl = snapshot?.floorPlan ? (
+    <div
+      className="relative z-[3] flex shrink-0 items-end gap-[10px] border-t border-white/50 px-[18px] py-[14px]"
+      style={{
+        background: "rgba(246,246,244,0.7)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)"
+      }}
+    >
+      <div className="flex flex-col items-center gap-[5px]">
+        <div className="flex aspect-square w-[132px] shrink-0 items-center justify-center overflow-hidden rounded-[11px] border border-white/80 bg-white/[0.62] p-[7px] shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
+          <PerspectivePreview plan={snapshot.floorPlan} hidden={false} />
+        </div>
+        <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#9a9a94]">
+          Perspective
+        </span>
+      </div>
+    </div>
+  ) : null;
+
   // Rough wall elevations, derived from the frozen fill snapshot. Built once and
   // shared by the thumbnail strip and the lightbox so their indexes line up.
   // Full-bleed canvas: the plan floats over the design's gridded gradient.
@@ -1199,17 +1223,23 @@ export function ShowroomIntakeApp({
           }
           layout={layoutPreviewEl}
           elevations={
-            elevationScenes.length > 0 ? (
-              <Round1ElevationStrip
-                scenes={elevationScenes}
-                onOpen={setElevationOpenIndex}
-              />
+            perspectivePreviewEl || elevationScenes.length > 0 ? (
+              <>
+                {perspectivePreviewEl}
+                {elevationScenes.length > 0 && (
+                  <Round1ElevationStrip
+                    scenes={elevationScenes}
+                    onOpen={setElevationOpenIndex}
+                  />
+                )}
+              </>
             ) : undefined
           }
         />
       ) : (
         <>
           <div className="relative z-[1] min-h-0 flex-1">{layoutPreviewEl}</div>
+          {perspectivePreviewEl}
           {elevationScenes.length > 0 && (
             <Round1ElevationStrip
               scenes={elevationScenes}
@@ -1358,10 +1388,6 @@ export function ShowroomIntakeApp({
             highlightDraggableItems={false}
             showPositionObjects
             svgRef={referenceTopDownRef}
-          />
-          <ElevationPreview
-            plan={snapshot.floorPlan}
-            svgRef={referenceElevationRef}
           />
           <PerspectivePreview
             plan={snapshot.floorPlan}

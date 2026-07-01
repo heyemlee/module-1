@@ -186,7 +186,7 @@ describe("buildRound1RenderingPrompt", () => {
   test("walks the layout wall by wall from the deterministic geometry", () => {
     const prompt = buildPrompt();
 
-    expect(prompt).toContain("- Reference 1 controls the camera and 3D massing");
+    expect(prompt).toContain("- Reference 1 (perspective) controls the camera");
     // Sink and range are clustered on the back run in the default L-shape.
     expect(prompt).toContain("a sink");
     expect(prompt).toContain("a freestanding range (burners with an oven below) with a hood above it");

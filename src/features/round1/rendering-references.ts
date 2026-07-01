@@ -5,7 +5,6 @@ import { rasterizeSvgElement } from "./rasterize-svg";
 export type RenderingReferenceRole =
   | "PERSPECTIVE_STRUCTURE"
   | "TOP_DOWN_PLAN"
-  | "WALL_ELEVATIONS"
   | "MATERIAL_SWATCH";
 
 export type RenderingReference = {
