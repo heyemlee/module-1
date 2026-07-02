@@ -8,6 +8,7 @@ type StudioNavItem =
   | "projects"
   | "overview"
   | "round1"
+  | "round2"
   | "renderings"
   | "users"
   | "colors";
@@ -103,6 +104,13 @@ export function StudioRail({
       id: "round1",
       href: projectId ? `/projects/${projectId}/round1` : "/projects",
       label: "Round 1",
+      section: "project",
+      visible: Boolean(projectId)
+    },
+    {
+      id: "round2",
+      href: projectId ? `/projects/${projectId}/round2` : "/projects",
+      label: "Round 2",
       section: "project",
       visible: Boolean(projectId)
     },

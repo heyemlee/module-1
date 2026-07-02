@@ -18,6 +18,8 @@ describe("StudioRail", () => {
 
     expect(html).toContain("Projects");
     expect(html).toContain("Round 1");
+    expect(html).toContain("Round 2");
+    expect(html).toContain('href="/projects/project-1/round2"');
     expect(html).toContain("Renderings");
     expect(html).not.toContain("Users");
     expect(html).not.toContain("Cabinet Colors");

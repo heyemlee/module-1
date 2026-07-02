@@ -37,6 +37,7 @@ describe("ProjectDetail", () => {
     expect(html).toContain("Deterministic plan");
     expect(html).toContain("Generate rendering");
     expect(html).toContain('href="/projects/p1/round1"');
+    expect(html).toContain('href="/projects/p1/round2"');
   });
 
   test("does not retain the decorative plan glyph or retired serif", () => {

@@ -86,8 +86,8 @@ export function ProjectDetail({
     {
       idx: "3",
       title: "Round 2",
-      desc: "Detailed re-measure & design. Reserved for the next phase.",
-      href: `/projects/${project.id}/round1`,
+      desc: "Detailed field measurement, cabinet design, drawings and review.",
+      href: `/projects/${project.id}/round2`,
       node: stage > 1 ? "active" : "todo",
       lineOn: false,
       tagLabel: "UPCOMING",
