@@ -70,15 +70,6 @@ export type Round2PrototypeAction =
   | { type: "SET_DRAWING_ZOOM"; zoom: number }
   | { type: "MARK_REVIEWED" };
 
-export type Round2Cabinet = {
-  id: string;
-  wall: WallId;
-  code: string;
-  width: number;
-  kind: "base" | "upper" | "sink" | "appliance" | "filler" | "tall";
-  label: string;
-};
-
 export type Round1ReferenceSource = {
   id: string;
   generatedAt: string;

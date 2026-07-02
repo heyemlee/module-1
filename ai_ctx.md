@@ -288,6 +288,22 @@ Next implementation TODO:
 - No outstanding Module 1 rendering work. The optional conversational Round 1 agent is now implemented; `src/server/llm/` and `POST /api/round1/agent` exist.
 - Note: the previously-leaked `OPENAI_API_KEY` has now been rotated (2026-06-18); the old key is invalid and the new key in `.env.local` is working for rendering. See the "Architecture Decision" security note. No further rotation action outstanding.
 
+## Round 2 Visual Prototype
+
+Round 2 is the Studio measured-design workspace at `/projects/[projectId]/round2`, a separate effort from the Round 1 MVP above. Its full task tracker lives in `todo.md` at repo root.
+
+Architecture decision (2026-07-02): Round 2 is driven by a single deterministic model, not hardcoded fixtures. Previously measurement/proposal/drawings each carried their own hardcoded U-shape data (`ROUND2_MEASUREMENT_FIXTURE`, `ROUND2_CABINET_FIXTURE`, and a third inline set in `drawing-sheet.tsx`), so the workspace ignored the locked Round 1 layout and the three views contradicted each other. That is now replaced by:
+
+- One `Round2Model` (`src/features/round2/model/round2-model.ts`): walls with 1/16″-integer segments (`cabinet | filler | appliance | opening | gap`).
+- Walls are derived from the locked Round 1 `floorPlan` topology only, never by treating its canvas pixels as inches — `deriveWallsFromRound1` (`src/features/round2/model/derive-walls.ts`) reads each shape's `wall` field (TOP/LEFT/RIGHT/BOTTOM) and the fixed points (window/door/markers/appliance intent), keeping wall count, naming (A/B/C…), and relative order. All real dimensions come from Round 2 field measurement.
+- Deterministic autofill (`src/features/round2/model/autofill.ts`) lays standard cabinet widths after fixed appliance/sink segments and turns the remainder into fillers; sub-threshold fillers emit decision items (same Confirmation Required philosophy as Round 1). Geometry stays in code; AI does not place cabinets or set dimensions.
+- Adjustment is constrained, not free drag: `STEP_CABINET_WIDTH` / `NUDGE_GROUP` / `MOVE_FILLER_END` / `SET_SEGMENT_KIND` in `round2-state.ts`, with same-wall fillers absorbing any delta so the dimension chain always equals the wall length. The old free-offset `SET_CABINET_OFFSET`/`cabinetOffsets` and the sink-only `SET_SINK_WIDTH` are gone.
+- Drawings (`drawings/drawing-sheet.tsx`, `cabinet-schedule.tsx`) are projections of the same model: A1 plan, one elevation sheet per participating wall (so a galley yields 2, not a fixed A2–A4), and an S1 schedule including filler rows. `LOCK_REFERENCE`/`REPLACE_REFERENCE` carry the full `Round1ReferenceSource` and derive at lock time.
+
+Status: `todo.md` stages 0–4 complete; stage 5 cleanup done (dead `ROUND2_*` fixtures and the orphaned `Round2Cabinet` type removed; `ROUND1_REFERENCE_FIXTURE` retained for tests/handoff empty state). Verified 2026-07-02: `npm test` 489 passing / 1 skipped, `npx tsc --noEmit` clean, `npm run build` succeeds. Remaining: manual three-layout browser QA (galley / L / U locked in Round 1, walked through lock → measure → submit → adjust → drawings → mark reviewed) needs seeded projects, so it stays a user-side acceptance step.
+
+Round 2 stays out of the Round 1 product boundary: Round 1 remains coarse and `salesEstimateOnly`; precise dimensions, fillers, and cabinet-by-cabinet layout exist only in Round 2.
+
 ## Later Work
 
 After Module 1 deployment:
