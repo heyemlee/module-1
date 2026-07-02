@@ -21,10 +21,26 @@ This phase does not introduce a Round 2 database, real AI extraction, production
 
 Round 2 uses one shared project with two role-specific workspaces.
 
+Round 2 cannot start until a complete Round 1 layout snapshot has been
+explicitly locked as its reference. The lock is a strict entry gate, not an
+optional prefill action.
+
+The locked Round 1 reference supplies:
+
+- layout topology and deterministic floor-plan geometry;
+- appliance list and rough appliance positions;
+- preliminary cabinet arrangement;
+- cabinet style and door color;
+- position overrides and unresolved confirmation items.
+
+The Round 1 snapshot remains immutable. Round 2 copies it into a reference
+version and records all later precision work as Round 2 proposal versions.
+
 ### Sales responsibility
 
 Sales captures and submits authoritative site measurements.
 
+- Sales may lock a complete Round 1 snapshot for Round 2.
 - Sales may create and edit measurements before submission.
 - Submitting creates a named `Measurement Version`.
 - The submitted measurement version is the sole dimensional source of truth for the design.
@@ -34,8 +50,12 @@ Sales captures and submits authoritative site measurements.
 
 Designers create and review the cabinet design from the submitted measurement version.
 
+- Designers and Admins may lock a complete Round 1 snapshot for Round 2.
 - Designers cannot silently edit submitted measurements.
-- Designers may adjust cabinet configuration and design decisions.
+- Designers may adjust exact cabinet positions, widths, appliance relationships,
+  island or peninsula placement, color, style, and other design decisions.
+- Designer adjustments create new Round 2 proposal versions and never modify
+  the historical Round 1 snapshot.
 - If measurement data appears wrong or insufficient, the Designer creates a remeasurement request.
 - A later Sales measurement version makes affected proposals and drawings stale and requires another design review.
 
@@ -80,6 +100,23 @@ Round 2 has three primary tasks:
 3. `Drawings & Review`
 
 The same project and fixture data flow through all tasks. Role and task determine the default presentation.
+
+### Round 1 handoff gate
+
+Before the three tasks appear, the route checks for a locked Round 1 reference.
+
+- With no locked reference, the user sees only the Handoff screen.
+- The screen previews the available complete Round 1 snapshot: layout, plan,
+  cabinet style, door color, appliances, and confirmation items.
+- Sales, Designer, and Admin may choose `Lock for Round 2`.
+- Incomplete Round 1 drafts cannot be locked.
+- After locking, the three Round 2 tasks become available.
+- The active Round 1 reference remains visible in the Round 2 project header.
+
+The prototype supports replacing the active reference. Replacing it increments
+the reference version and marks current measurement mappings, proposals, and
+drawings as requiring revalidation. Multi-draft branching for every reference
+is not part of this visual prototype.
 
 ### Sales default
 
@@ -127,6 +164,7 @@ The right canvas updates as the user enters values.
 - Missing geometry remains visibly incomplete.
 - Confirmed geometry becomes solid.
 - Openings, utilities, and appliances use distinct technical marks.
+- Open boundaries show no invented diagonal, curved, or dashed closing line.
 - Zoom and fit controls remain compact and secondary.
 
 ### Submission
@@ -153,6 +191,7 @@ The header shows:
 - locked measurement version;
 - current review state;
 - stale state when a newer measurement version exists.
+- locked Round 1 reference version and source snapshot time.
 
 ### Paired drawing workspace
 
@@ -185,6 +224,11 @@ The right rail contains only contextual design work:
 - unresolved decision;
 - request remeasurement;
 - accept or resolve design exception.
+
+Round 2 precision controls may adjust cabinet offsets, run composition,
+cabinet width, island or peninsula placement, and appliance relationships.
+They may not edit authoritative field dimensions or rewrite the locked Round 1
+snapshot.
 
 Submitted measurements are visibly read-only.
 
@@ -228,6 +272,9 @@ All state is local fixture state.
 
 ```ts
 type Round2VisualPrototypeState = {
+  referenceLocked: boolean;
+  referenceVersion: number;
+  referenceSnapshotId: string | null;
   role: "SALES" | "DESIGNER";
   task: "MEASUREMENT" | "PROPOSAL" | "DRAWINGS";
   measurementVersion: number;
@@ -239,6 +286,7 @@ type Round2VisualPrototypeState = {
   selectedWall: "A" | "B" | "C";
   selectedObjectId: string | null;
   issueId: string | null;
+  cabinetOffsets: Record<string, { x: number; y: number }>;
 };
 ```
 
@@ -248,6 +296,9 @@ The state exists to demonstrate visual behavior, not backend contracts.
 
 The visual prototype must support:
 
+- previewing and locking a complete Round 1 reference;
+- refusing entry to the three tasks until a reference is locked;
+- replacing the reference and showing downstream revalidation state;
 - switching among the three primary tasks;
 - switching between Sales and Designer demo roles;
 - stepping through measurement sections;
@@ -257,6 +308,7 @@ The visual prototype must support:
 - selecting walls and cabinets in plan and elevation;
 - synchronized plan/elevation highlighting;
 - changing one allowed cabinet design option;
+- adjusting one cabinet's exact Round 2 position without changing Round 1;
 - opening and resolving one design decision;
 - creating one remeasurement request;
 - switching drawing sheets;
@@ -326,6 +378,9 @@ Phone is limited to task status, issue viewing, and remeasurement prompts. Full 
 
 The visual prototype must make these states explicit:
 
+- Round 1 reference not locked;
+- selected Round 1 snapshot incomplete and unavailable for locking;
+- new Round 1 reference requiring measurement revalidation;
 - required measurement missing;
 - value awaiting Sales confirmation;
 - Designer remeasurement request;
@@ -363,11 +418,18 @@ Errors appear beside the affected context and in a secondary summary. They do no
 The visual prototype is accepted when:
 
 - it looks like the same product as Round 1;
+- the three Round 2 tasks are unavailable until a complete Round 1 reference is
+  locked;
+- the locked reference visibly carries Round 1 layout, color, appliances, and
+  rough plan context into Round 2;
 - Sales can understand where and how to enter authoritative measurements;
 - Designer sees submitted measurements as locked source data;
 - Designer can review the plan and selected elevation at the same time;
 - selecting a wall or cabinet visibly connects plan, elevation, and decision context;
 - a Designer can request remeasurement without editing Sales data;
+- a Designer can make exact cabinet-position adjustments as new Round 2
+  proposal versions without rewriting Round 1;
+- open room boundaries contain no invented diagonal or curved closure;
 - the drawing review surface looks like a professional cabinet drawing set;
 - the fixture drawing contains the reference color conventions and information density;
 - core interactions work with local state;
@@ -384,3 +446,4 @@ The visual prototype is accepted when:
 - Order, cut-list, or manufacturing output
 - Real approval signatures and permissions
 - Notifications and append-only audit history
+- Persistent multi-draft branching for every historical Round 1 reference

@@ -1206,3 +1206,172 @@ Expected: zero test failures, TypeScript exit 0, build exit 0.
 git add docs/audits/round2-visual-prototype src/features/round2 src/features/platform/studio-shell.tsx src/features/platform/global-sidebar.tsx src/features/platform/project-detail.tsx
 git commit -m "test(round2): verify visual prototype"
 ```
+
+## Revision Task 10: Add the Strict Round 1 Handoff Gate
+
+**Files:**
+
+- Modify: `src/features/round2/round2-types.ts`
+- Modify: `src/features/round2/round2-state.ts`
+- Modify: `src/features/round2/round2-state.test.ts`
+- Modify: `src/features/round2/round2-fixtures.ts`
+- Create: `src/features/round2/handoff/round1-handoff.tsx`
+- Create: `src/features/round2/handoff/round1-handoff.test.tsx`
+- Modify: `src/features/round2/round2-visual-prototype.tsx`
+
+- [ ] **Step 1: Add failing state tests**
+
+Test that the initial state has no locked reference, `SET_TASK` cannot enter a
+Round 2 task before lock, `LOCK_REFERENCE` unlocks the tasks, and
+`REPLACE_REFERENCE` increments the reference version while marking proposal
+and drawing stale.
+
+- [ ] **Step 2: Verify the tests fail**
+
+Run:
+
+```bash
+npx vitest run src/features/round2/round2-state.test.ts
+```
+
+Expected: FAIL because reference state and actions do not exist.
+
+- [ ] **Step 3: Add reference state**
+
+Add:
+
+```ts
+type Round1ReferenceFixture = {
+  id: string;
+  generatedAt: string;
+  complete: boolean;
+  layoutLabel: string;
+  styleLabel: string;
+  colorLabel: string;
+  appliances: readonly string[];
+};
+```
+
+Add `referenceLocked`, `referenceVersion`, and `referenceSnapshotId` to
+`Round2PrototypeState`, plus `LOCK_REFERENCE` and `REPLACE_REFERENCE` actions.
+`SET_TASK` must return unchanged state when `referenceLocked` is false.
+
+- [ ] **Step 4: Write the failing Handoff component test**
+
+Assert that the Handoff screen renders layout, style, color, appliances,
+snapshot version, and `Lock for Round 2`, without rendering the three task
+workspaces.
+
+- [ ] **Step 5: Implement the Handoff screen**
+
+Use the approved Studio visual system. Show one complete Round 1 snapshot card
+with a real miniature plan, source metadata, and role-permitted lock action.
+Do not add a marketing hero or generic empty-state illustration.
+
+- [ ] **Step 6: Gate the prototype composition**
+
+Render `Round1Handoff` instead of task navigation and workspaces until a
+reference is locked. After lock, show the reference version in the project
+header and render the existing three-task workflow.
+
+- [ ] **Step 7: Verify**
+
+Run:
+
+```bash
+npx vitest run src/features/round2/round2-state.test.ts src/features/round2/handoff/round1-handoff.test.tsx src/features/round2/round2-visual-prototype.test.tsx
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/features/round2
+git commit -m "feat(round2): gate workflow on locked Round 1 reference"
+```
+
+## Revision Task 11: Remove Invented Boundaries and Add Precision Adjustment
+
+**Files:**
+
+- Modify: `src/features/round2/measurement/measured-plan.tsx`
+- Modify: `src/features/round2/measurement/measured-plan.test.tsx`
+- Modify: `src/features/round2/proposal/design-plan.tsx`
+- Modify: `src/features/round2/proposal/decision-rail.tsx`
+- Modify: `src/features/round2/round2-types.ts`
+- Modify: `src/features/round2/round2-state.ts`
+- Modify: `src/features/round2/round2-state.test.ts`
+
+- [ ] **Step 1: Add failing measured-plan assertions**
+
+Assert that measured-plan markup contains no `OPEN SIDE`, no diagonal closing
+path, and no dashed closure.
+
+- [ ] **Step 2: Verify the measured-plan test fails**
+
+Run:
+
+```bash
+npx vitest run src/features/round2/measurement/measured-plan.test.tsx
+```
+
+Expected: FAIL against the current open-side annotation and dashed path.
+
+- [ ] **Step 3: Remove the invented closure**
+
+Delete the diagonal/dashed path and the `OPEN SIDE · NO WALL` label from both
+measurement and proposal plan drawings. Preserve only real walls and opening
+marks.
+
+- [ ] **Step 4: Add a failing cabinet-offset reducer test**
+
+Dispatch:
+
+```ts
+{ type: "SET_CABINET_OFFSET", objectId: "a-03", x: 2.5, y: 0 }
+```
+
+Assert the offset is stored and `proposalVersion` increments.
+
+- [ ] **Step 5: Implement precision state and controls**
+
+Add `cabinetOffsets` to state and the offset action. Add numeric X/Y controls
+to the Decision rail for the selected cabinet. Apply the selected cabinet's
+offset in the proposal plan and elevation without changing Round 1 reference
+geometry or Sales measurements.
+
+- [ ] **Step 6: Verify**
+
+Run:
+
+```bash
+npx vitest run src/features/round2
+npx tsc --noEmit
+```
+
+Expected: all Round 2 tests pass and TypeScript exits 0.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/features/round2
+git commit -m "feat(round2): add precise proposal adjustments"
+```
+
+## Revision Task 12: Re-run Visual Fidelity Verification
+
+- [ ] Verify the strict Handoff gate at 1440×900.
+- [ ] Lock the Round 1 reference as Sales and confirm task navigation appears.
+- [ ] Verify the reference version remains visible in all three tasks.
+- [ ] Confirm measured and proposal plans have no invented diagonal closure.
+- [ ] Adjust a cabinet offset and confirm both plan and elevation update.
+- [ ] Replace the reference and confirm proposal/drawing stale states.
+- [ ] Repeat desktop and iPad screenshots and update the fidelity ledger.
+- [ ] Run:
+
+```bash
+npx vitest run src/features/round2 src/features/platform/studio-shell.test.tsx src/features/platform/project-detail.test.tsx && npx tsc --noEmit && npm run build
+```
+
+Expected: zero test failures, TypeScript exit 0, build exit 0.
