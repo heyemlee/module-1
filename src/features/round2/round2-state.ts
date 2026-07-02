@@ -9,6 +9,9 @@ export function createRound2PrototypeState(
   role: Round2DemoRole
 ): Round2PrototypeState {
   return {
+    referenceLocked: false,
+    referenceVersion: 0,
+    referenceSnapshotId: null,
     role,
     task: role === "SALES" ? "MEASUREMENT" : "PROPOSAL",
     measurementVersion: 3,
@@ -32,6 +35,23 @@ export function reduceRound2Prototype(
   action: Round2PrototypeAction
 ): Round2PrototypeState {
   switch (action.type) {
+    case "LOCK_REFERENCE":
+      return {
+        ...state,
+        referenceLocked: true,
+        referenceVersion: 1,
+        referenceSnapshotId: action.snapshotId
+      };
+    case "REPLACE_REFERENCE":
+      return {
+        ...state,
+        referenceLocked: true,
+        referenceVersion: state.referenceVersion + 1,
+        referenceSnapshotId: action.snapshotId,
+        measurementStatus: "DRAFT",
+        proposalStatus: "STALE",
+        drawingStatus: "STALE"
+      };
     case "SET_ROLE":
       return {
         ...state,
@@ -39,7 +59,7 @@ export function reduceRound2Prototype(
         task: action.role === "SALES" ? "MEASUREMENT" : "PROPOSAL"
       };
     case "SET_TASK":
-      return { ...state, task: action.task };
+      return state.referenceLocked ? { ...state, task: action.task } : state;
     case "EDIT_MEASUREMENT":
       return state.role === "DESIGNER"
         ? state

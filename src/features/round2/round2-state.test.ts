@@ -58,4 +58,39 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.sinkBaseWidth).toBe(33);
     expect(adjusted.proposalStatus).toBe("NEEDS_DECISION");
   });
+
+  test("blocks Round 2 tasks until a Round 1 reference is locked", () => {
+    const initial = createRound2PrototypeState("SALES");
+    expect(initial.referenceLocked).toBe(false);
+
+    const blocked = reduceRound2Prototype(initial, {
+      type: "SET_TASK",
+      task: "PROPOSAL"
+    });
+    expect(blocked.task).toBe("MEASUREMENT");
+
+    const locked = reduceRound2Prototype(initial, {
+      type: "LOCK_REFERENCE",
+      snapshotId: "snapshot-1"
+    });
+    expect(locked.referenceLocked).toBe(true);
+    expect(locked.referenceVersion).toBe(1);
+    expect(locked.referenceSnapshotId).toBe("snapshot-1");
+  });
+
+  test("replacing the Round 1 reference invalidates downstream output", () => {
+    const locked = reduceRound2Prototype(
+      createRound2PrototypeState("DESIGNER"),
+      { type: "LOCK_REFERENCE", snapshotId: "snapshot-1" }
+    );
+    const replaced = reduceRound2Prototype(locked, {
+      type: "REPLACE_REFERENCE",
+      snapshotId: "snapshot-2"
+    });
+
+    expect(replaced.referenceVersion).toBe(2);
+    expect(replaced.referenceSnapshotId).toBe("snapshot-2");
+    expect(replaced.proposalStatus).toBe("STALE");
+    expect(replaced.drawingStatus).toBe("STALE");
+  });
 });

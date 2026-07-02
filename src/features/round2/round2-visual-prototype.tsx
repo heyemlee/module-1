@@ -6,6 +6,7 @@ import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/server/platform/types";
 import { DrawingReview } from "./drawings/drawing-review";
+import { Round1Handoff } from "./handoff/round1-handoff";
 import { MeasurementWorkspace } from "./measurement/measurement-workspace";
 import { ProposalWorkspace } from "./proposal/proposal-workspace";
 import {
@@ -13,7 +14,10 @@ import {
   reduceRound2Prototype
 } from "./round2-state";
 import { Round2TaskNavigation } from "./round2-task-navigation";
-import type { Round2DemoRole } from "./round2-types";
+import type {
+  Round1ReferenceSource,
+  Round2DemoRole
+} from "./round2-types";
 import { Round2WorkspaceShell } from "./round2-workspace-shell";
 
 function initialDemoRole(actualRole: UserRole): Round2DemoRole {
@@ -24,12 +28,14 @@ export function Round2VisualPrototype({
   projectId,
   projectName,
   customerName,
-  actualRole
+  actualRole,
+  reference
 }: {
   projectId: string;
   projectName: string;
   customerName: string;
   actualRole: UserRole;
+  reference: Round1ReferenceSource | null;
 }) {
   const [state, dispatch] = useReducer(
     reduceRound2Prototype,
@@ -37,8 +43,16 @@ export function Round2VisualPrototype({
     createRound2PrototypeState
   );
 
-  const workspace =
-    state.task === "MEASUREMENT" ? (
+  const workspace = !state.referenceLocked ? (
+    <Round1Handoff
+      reference={reference}
+      role={state.role}
+      round1Href={`/projects/${projectId}/round1`}
+      onLock={(snapshotId) =>
+        dispatch({ type: "LOCK_REFERENCE", snapshotId })
+      }
+    />
+  ) : state.task === "MEASUREMENT" ? (
       <MeasurementWorkspace state={state} dispatch={dispatch} />
     ) : state.task === "PROPOSAL" ? (
       <ProposalWorkspace state={state} dispatch={dispatch} />
@@ -70,6 +84,11 @@ export function Round2VisualPrototype({
                 <span className="size-1 rounded-full bg-[#a7a79f]" />
                 <span>VISUAL PROTOTYPE</span>
                 <span className="hidden sm:inline">· CHANGES ARE NOT SAVED</span>
+                {state.referenceLocked && (
+                  <span className="hidden lg:inline">
+                    · ROUND 1 REF v{state.referenceVersion}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -95,10 +114,21 @@ export function Round2VisualPrototype({
         </header>
       }
       taskBar={
-        <Round2TaskNavigation
-          task={state.task}
-          onTaskChange={(task) => dispatch({ type: "SET_TASK", task })}
-        />
+        state.referenceLocked ? (
+          <Round2TaskNavigation
+            task={state.task}
+            onTaskChange={(task) => dispatch({ type: "SET_TASK", task })}
+          />
+        ) : (
+          <div className="flex min-h-[58px] items-center justify-between gap-4 px-5">
+            <span className="font-mono text-[9px] tracking-[0.14em] text-studio-quiet">
+              ROUND 1 REFERENCE REQUIRED
+            </span>
+            <span className="font-mono text-[8px] tracking-[0.1em] text-studio-quiet">
+              TASKS LOCKED
+            </span>
+          </div>
+        )
       }
     >
       {workspace}

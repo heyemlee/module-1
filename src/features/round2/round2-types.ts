@@ -1,3 +1,5 @@
+import type { FloorPlan } from "@/features/round1/floorplan/plan-geometry";
+
 export type Round2DemoRole = "SALES" | "DESIGNER";
 export type Round2Task = "MEASUREMENT" | "PROPOSAL" | "DRAWINGS";
 export type MeasurementStatus =
@@ -19,6 +21,9 @@ export type Round2Measurements = {
 };
 
 export type Round2PrototypeState = {
+  referenceLocked: boolean;
+  referenceVersion: number;
+  referenceSnapshotId: string | null;
   role: Round2DemoRole;
   task: Round2Task;
   measurementVersion: number;
@@ -37,6 +42,8 @@ export type Round2PrototypeState = {
 };
 
 export type Round2PrototypeAction =
+  | { type: "LOCK_REFERENCE"; snapshotId: string }
+  | { type: "REPLACE_REFERENCE"; snapshotId: string }
   | { type: "SET_ROLE"; role: Round2DemoRole }
   | { type: "SET_TASK"; task: Round2Task }
   | {
@@ -62,4 +69,16 @@ export type Round2Cabinet = {
   width: number;
   kind: "base" | "upper" | "sink" | "appliance" | "filler" | "tall";
   label: string;
+};
+
+export type Round1ReferenceSource = {
+  id: string;
+  generatedAt: string;
+  complete: boolean;
+  layoutLabel: string;
+  styleLabel: string;
+  colorLabel: string;
+  appliances: readonly string[];
+  confirmationCount: number;
+  floorPlan: FloorPlan;
 };
