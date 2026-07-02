@@ -9,6 +9,7 @@ import type {
   WallId
 } from "../round2-types";
 import { DesignPlan } from "./design-plan";
+import { DecisionRail } from "./decision-rail";
 import { WallElevation } from "./wall-elevation";
 
 const WALLS: readonly WallId[] = ["A", "B", "C"];
@@ -60,7 +61,7 @@ export function ProposalWorkspace({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1.18fr)_minmax(360px,.82fr)] lg:overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1.18fr)_minmax(340px,.82fr)] xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)_280px] xl:overflow-hidden">
         <DesignPlan
           cabinets={ROUND2_CABINET_FIXTURE}
           selectedObjectId={state.selectedObjectId}
@@ -72,6 +73,9 @@ export function ProposalWorkspace({
           selectedObjectId={state.selectedObjectId}
           onSelect={selectObject}
         />
+        <div className="lg:col-span-2 xl:col-span-1">
+          <DecisionRail state={state} dispatch={dispatch} />
+        </div>
       </div>
     </div>
   );

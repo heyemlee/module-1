@@ -35,4 +35,27 @@ describe("Round 2 prototype state", () => {
     expect(resubmitted.proposalStatus).toBe("STALE");
     expect(resubmitted.drawingStatus).toBe("STALE");
   });
+
+  test("does not approve drawings while a design decision remains", () => {
+    const state = createRound2PrototypeState("DESIGNER");
+    const blocked = reduceRound2Prototype(state, { type: "MARK_REVIEWED" });
+    expect(blocked.drawingStatus).toBe("REVIEW_READY");
+
+    const resolved = reduceRound2Prototype(state, {
+      type: "RESOLVE_DESIGN_DECISION"
+    });
+    const reviewed = reduceRound2Prototype(resolved, {
+      type: "MARK_REVIEWED"
+    });
+    expect(reviewed.drawingStatus).toBe("REVIEWED");
+  });
+
+  test("applies a constrained sink-cabinet width adjustment", () => {
+    const adjusted = reduceRound2Prototype(
+      createRound2PrototypeState("DESIGNER"),
+      { type: "SET_SINK_WIDTH", width: 33 }
+    );
+    expect(adjusted.sinkBaseWidth).toBe(33);
+    expect(adjusted.proposalStatus).toBe("NEEDS_DECISION");
+  });
 });

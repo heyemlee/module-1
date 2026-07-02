@@ -21,6 +21,7 @@ export function createRound2PrototypeState(
     selectedWall: "A",
     selectedObjectId: "a-03",
     issueObjectId: "a-03",
+    sinkBaseWidth: 36,
     activeSheet: "A1",
     drawingZoom: 1
   };
@@ -74,6 +75,12 @@ export function reduceRound2Prototype(
         ...state,
         selectedWall: action.wall,
         selectedObjectId: action.objectId
+      };
+    case "SET_SINK_WIDTH":
+      return {
+        ...state,
+        sinkBaseWidth: action.width,
+        proposalStatus: "NEEDS_DECISION"
       };
     case "RESOLVE_DESIGN_DECISION":
       return { ...state, proposalStatus: "READY", issueObjectId: null };
