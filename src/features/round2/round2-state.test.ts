@@ -93,4 +93,21 @@ describe("Round 2 prototype state", () => {
     expect(replaced.proposalStatus).toBe("STALE");
     expect(replaced.drawingStatus).toBe("STALE");
   });
+
+  test("stores precise cabinet offsets as a new proposal version", () => {
+    const initial = reduceRound2Prototype(
+      createRound2PrototypeState("DESIGNER"),
+      { type: "LOCK_REFERENCE", snapshotId: "snapshot-1" }
+    );
+    const adjusted = reduceRound2Prototype(initial, {
+      type: "SET_CABINET_OFFSET",
+      objectId: "a-03",
+      x: 2.5,
+      y: 0
+    });
+
+    expect(adjusted.cabinetOffsets["a-03"]).toEqual({ x: 2.5, y: 0 });
+    expect(adjusted.proposalVersion).toBe(initial.proposalVersion + 1);
+    expect(adjusted.proposalStatus).toBe("NEEDS_DECISION");
+  });
 });

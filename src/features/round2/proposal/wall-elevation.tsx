@@ -19,11 +19,13 @@ export function WallElevation({
   wall,
   cabinets,
   selectedObjectId,
+  cabinetOffsets,
   onSelect
 }: {
   wall: WallId;
   cabinets: readonly Round2Cabinet[];
   selectedObjectId: string | null;
+  cabinetOffsets: Record<string, { x: number; y: number }>;
   onSelect: (id: string, wall: WallId) => void;
 }) {
   const wallCabinets = cabinets.filter((cabinet) => cabinet.wall === wall);
@@ -65,17 +67,22 @@ export function WallElevation({
           cursor += width;
           const { y, height } = cabinetHeight(cabinet.kind);
           const selected = selectedObjectId === cabinet.id;
+          const offset = cabinetOffsets[cabinet.id] ?? { x: 0, y: 0 };
+          const adjustedX = x + offset.x * 2;
+          const adjustedY = y - offset.y * 2;
           return (
             <g
               key={cabinet.id}
               data-cabinet-id={cabinet.id}
               data-selected={selected}
+              data-offset-x={offset.x}
+              data-offset-y={offset.y}
               onClick={() => onSelect(cabinet.id, wall)}
               className="cursor-pointer"
             >
               <rect
-                x={x}
-                y={y}
+                x={adjustedX}
+                y={adjustedY}
                 width={Math.max(8, width)}
                 height={height}
                 fill={cabinetFill(cabinet.kind)}
@@ -83,14 +90,14 @@ export function WallElevation({
                 strokeWidth={selected ? 3 : 1.5}
               />
               <path
-                d={`M ${x + 4} ${y + 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + 4}`}
+                d={`M ${adjustedX + 4} ${adjustedY + 4} L ${adjustedX + width / 2} ${adjustedY + height / 2} L ${adjustedX + width - 4} ${adjustedY + 4}`}
                 stroke={cabinet.kind === "upper" ? "#e12821" : "#a7aaa5"}
                 strokeWidth="1"
                 fill="none"
               />
               <text
-                x={x + width / 2}
-                y={y + height / 2 + 5}
+                x={adjustedX + width / 2}
+                y={adjustedY + height / 2 + 5}
                 textAnchor="middle"
                 fontFamily="var(--studio-mono)"
                 fontSize="13"
@@ -99,7 +106,7 @@ export function WallElevation({
                 {cabinet.code}
               </text>
               <text
-                x={x + width / 2}
+                x={adjustedX + width / 2}
                 y="329"
                 textAnchor="middle"
                 fontFamily="var(--studio-mono)"

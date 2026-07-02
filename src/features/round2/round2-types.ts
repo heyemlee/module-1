@@ -37,6 +37,7 @@ export type Round2PrototypeState = {
   selectedObjectId: string | null;
   issueObjectId: string | null;
   sinkBaseWidth: 30 | 33 | 36;
+  cabinetOffsets: Record<string, { x: number; y: number }>;
   activeSheet: DrawingSheetId;
   drawingZoom: number;
 };
@@ -56,6 +57,12 @@ export type Round2PrototypeAction =
   | { type: "SUBMIT_NEW_MEASUREMENT" }
   | { type: "SELECT_WALL"; wall: WallId }
   | { type: "SELECT_OBJECT"; objectId: string; wall: WallId }
+  | {
+      type: "SET_CABINET_OFFSET";
+      objectId: string;
+      x: number;
+      y: number;
+    }
   | { type: "SET_SINK_WIDTH"; width: 30 | 33 | 36 }
   | { type: "RESOLVE_DESIGN_DECISION" }
   | { type: "SET_SHEET"; sheet: DrawingSheetId }

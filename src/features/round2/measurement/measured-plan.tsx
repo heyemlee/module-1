@@ -89,13 +89,6 @@ export function MeasuredPlan({
             strokeLinecap="square"
             fill="none"
           />
-          <path
-            d="M 170 390 L 590 465"
-            stroke="#747a78"
-            strokeWidth="1.5"
-            strokeDasharray="5 9"
-            fill="none"
-          />
         </g>
 
         <g stroke="#65d7dc" fill="#65d7dc" fontFamily="var(--studio-mono)">
@@ -140,9 +133,6 @@ export function MeasuredPlan({
           <text x="337" y="232.5" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="8" fill="#65d7dc">W</text>
         </g>
 
-        <text x="380" y="520" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="10" fill="#777d7a">
-          OPEN SIDE · NO WALL
-        </text>
         <text x="380" y="84" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="11" fill={wallStroke("A")}>
           Wall A
         </text>

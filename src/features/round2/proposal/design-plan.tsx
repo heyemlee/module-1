@@ -19,10 +19,12 @@ function cabinetsForWall(cabinets: readonly Round2Cabinet[], wall: WallId) {
 export function DesignPlan({
   cabinets,
   selectedObjectId,
+  cabinetOffsets,
   onSelect
 }: {
   cabinets: readonly Round2Cabinet[];
   selectedObjectId: string | null;
+  cabinetOffsets: Record<string, { x: number; y: number }>;
   onSelect: (id: string, wall: WallId) => void;
 }) {
   const wallA = cabinetsForWall(cabinets, "A");
@@ -43,8 +45,6 @@ export function DesignPlan({
       >
         <path d={`M ${VIEW.left} ${VIEW.top} H ${VIEW.right} V ${VIEW.rightBottom}`} stroke="#f1f1ec" strokeWidth="12" fill="none" />
         <path d={`M ${VIEW.left} ${VIEW.top} V ${VIEW.leftBottom}`} stroke="#f1f1ec" strokeWidth="12" fill="none" />
-        <path d={`M ${VIEW.left} ${VIEW.leftBottom} L ${VIEW.right} ${VIEW.rightBottom}`} stroke="#747a78" strokeWidth="1.5" strokeDasharray="5 9" fill="none" />
-
         <CabinetRun
           cabinets={wallA}
           wall="A"
@@ -53,6 +53,7 @@ export function DesignPlan({
           available={VIEW.right - VIEW.left - 14}
           horizontal
           selectedObjectId={selectedObjectId}
+          cabinetOffsets={cabinetOffsets}
           onSelect={onSelect}
         />
         <CabinetRun
@@ -63,6 +64,7 @@ export function DesignPlan({
           available={VIEW.leftBottom - VIEW.top - 14}
           horizontal={false}
           selectedObjectId={selectedObjectId}
+          cabinetOffsets={cabinetOffsets}
           onSelect={onSelect}
         />
         <CabinetRun
@@ -73,15 +75,13 @@ export function DesignPlan({
           available={VIEW.rightBottom - VIEW.top - 14}
           horizontal={false}
           selectedObjectId={selectedObjectId}
+          cabinetOffsets={cabinetOffsets}
           onSelect={onSelect}
         />
 
         <line x1="315" y1="125" x2="430" y2="125" stroke="#62b7d2" strokeWidth="14" />
         <text x="372" y="104" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="10" fill="#84bdd6">
           WINDOW 36″
-        </text>
-        <text x="390" y="525" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="10" fill="#777d7a">
-          OPEN SIDE · NO WALL
         </text>
       </svg>
 
@@ -110,6 +110,7 @@ function CabinetRun({
   available,
   horizontal,
   selectedObjectId,
+  cabinetOffsets,
   onSelect
 }: {
   cabinets: readonly Round2Cabinet[];
@@ -119,6 +120,7 @@ function CabinetRun({
   available: number;
   horizontal: boolean;
   selectedObjectId: string | null;
+  cabinetOffsets: Record<string, { x: number; y: number }>;
   onSelect: (id: string, wall: WallId) => void;
 }) {
   const total = cabinets.reduce((sum, cabinet) => sum + cabinet.width, 0) || 1;
@@ -132,18 +134,25 @@ function CabinetRun({
     const height = horizontal ? 58 : length;
     cursor += length;
     const selected = cabinet.id === selectedObjectId;
+    const offset = cabinetOffsets[cabinet.id] ?? { x: 0, y: 0 };
+    const offsetX = offset.x * 2;
+    const offsetY = offset.y * 2;
+    const adjustedX = x + offsetX;
+    const adjustedY = y - offsetY;
 
     return (
       <g
         key={cabinet.id}
         data-cabinet-id={cabinet.id}
         data-selected={selected}
+        data-offset-x={offset.x}
+        data-offset-y={offset.y}
         onClick={() => onSelect(cabinet.id, wall)}
         className="cursor-pointer"
       >
         <rect
-          x={x}
-          y={y}
+          x={adjustedX}
+          y={adjustedY}
           width={Math.max(10, width - 2)}
           height={Math.max(10, height - 2)}
           rx="2"
@@ -152,13 +161,13 @@ function CabinetRun({
           strokeWidth={selected ? 3 : 1.25}
         />
         <text
-          x={x + width / 2}
-          y={y + height / 2 + 3}
+          x={adjustedX + width / 2}
+          y={adjustedY + height / 2 + 3}
           textAnchor="middle"
           fontFamily="var(--studio-mono)"
           fontSize="9"
           fill="#252a27"
-          transform={horizontal ? undefined : `rotate(90 ${x + width / 2} ${y + height / 2})`}
+          transform={horizontal ? undefined : `rotate(90 ${adjustedX + width / 2} ${adjustedY + height / 2})`}
         >
           {cabinet.label}
         </text>

@@ -10,6 +10,7 @@ describe("Round 2 proposal selection", () => {
       <DesignPlan
         cabinets={ROUND2_CABINET_FIXTURE}
         selectedObjectId="a-03"
+        cabinetOffsets={{ "a-03": { x: 2.5, y: 0 } }}
         onSelect={() => {}}
       />
     );
@@ -18,13 +19,18 @@ describe("Round 2 proposal selection", () => {
         wall="A"
         cabinets={ROUND2_CABINET_FIXTURE}
         selectedObjectId="a-03"
+        cabinetOffsets={{ "a-03": { x: 2.5, y: 0 } }}
         onSelect={() => {}}
       />
     );
 
     expect(plan).toContain('data-cabinet-id="a-03"');
     expect(plan).toContain('data-selected="true"');
+    expect(plan).toContain('data-offset-x="2.5"');
+    expect(plan).not.toContain("OPEN SIDE");
+    expect(plan).not.toContain("stroke-dasharray");
     expect(elevation).toContain('data-cabinet-id="a-03"');
     expect(elevation).toContain('data-selected="true"');
+    expect(elevation).toContain('data-offset-x="2.5"');
   });
 });

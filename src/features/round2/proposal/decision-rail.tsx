@@ -19,6 +19,19 @@ export function DecisionRail({
 }) {
   const remeasureRequested =
     state.measurementStatus === "REMEASURE_REQUESTED";
+  const selectedOffset = state.selectedObjectId
+    ? state.cabinetOffsets[state.selectedObjectId] ?? { x: 0, y: 0 }
+    : { x: 0, y: 0 };
+
+  const updateOffset = (axis: "x" | "y", value: number) => {
+    if (!state.selectedObjectId) return;
+    dispatch({
+      type: "SET_CABINET_OFFSET",
+      objectId: state.selectedObjectId,
+      x: axis === "x" ? value : selectedOffset.x,
+      y: axis === "y" ? value : selectedOffset.y
+    });
+  };
 
   return (
     <aside className="h-full min-h-0 overflow-y-auto rounded-[18px] border border-studio-line bg-white/65 p-4 shadow-[0_18px_42px_-32px_rgba(20,20,26,0.28)] backdrop-blur-xl">
@@ -98,6 +111,46 @@ export function DecisionRail({
             ))}
           </select>
         </label>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <label>
+            <span className="text-[10px] font-semibold">Position X</span>
+            <span className="relative mt-1.5 block">
+              <input
+                aria-label="Cabinet position X"
+                type="number"
+                step="0.125"
+                value={selectedOffset.x}
+                disabled={!state.selectedObjectId}
+                onChange={(event) =>
+                  updateOffset("x", Number(event.target.value))
+                }
+                className="h-9 w-full rounded-[9px] border border-studio-line-strong bg-white px-2 pr-7 font-mono text-[10px] outline-none focus:ring-2 focus:ring-studio-action/15 disabled:opacity-50"
+              />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[8px] text-studio-quiet">
+                IN
+              </span>
+            </span>
+          </label>
+          <label>
+            <span className="text-[10px] font-semibold">Position Y</span>
+            <span className="relative mt-1.5 block">
+              <input
+                aria-label="Cabinet position Y"
+                type="number"
+                step="0.125"
+                value={selectedOffset.y}
+                disabled={!state.selectedObjectId}
+                onChange={(event) =>
+                  updateOffset("y", Number(event.target.value))
+                }
+                className="h-9 w-full rounded-[9px] border border-studio-line-strong bg-white px-2 pr-7 font-mono text-[10px] outline-none focus:ring-2 focus:ring-studio-action/15 disabled:opacity-50"
+              />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[8px] text-studio-quiet">
+                IN
+              </span>
+            </span>
+          </label>
+        </div>
       </section>
 
       <section className="py-4">

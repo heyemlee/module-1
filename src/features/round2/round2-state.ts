@@ -25,6 +25,7 @@ export function createRound2PrototypeState(
     selectedObjectId: "a-03",
     issueObjectId: "a-03",
     sinkBaseWidth: 36,
+    cabinetOffsets: {},
     activeSheet: "A1",
     drawingZoom: 1
   };
@@ -95,6 +96,16 @@ export function reduceRound2Prototype(
         ...state,
         selectedWall: action.wall,
         selectedObjectId: action.objectId
+      };
+    case "SET_CABINET_OFFSET":
+      return {
+        ...state,
+        proposalVersion: state.proposalVersion + 1,
+        proposalStatus: "NEEDS_DECISION",
+        cabinetOffsets: {
+          ...state.cabinetOffsets,
+          [action.objectId]: { x: action.x, y: action.y }
+        }
       };
     case "SET_SINK_WIDTH":
       return {

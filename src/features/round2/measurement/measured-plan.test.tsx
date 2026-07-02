@@ -19,5 +19,7 @@ describe("MeasuredPlan", () => {
     expect(html).toContain('data-selected="true"');
     expect(html).toContain("12′ 0″");
     expect(html).toContain("Wall A");
+    expect(html).not.toContain("OPEN SIDE");
+    expect(html).not.toContain("stroke-dasharray");
   });
 });

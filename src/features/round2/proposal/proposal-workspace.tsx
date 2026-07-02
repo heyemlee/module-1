@@ -65,12 +65,14 @@ export function ProposalWorkspace({
         <DesignPlan
           cabinets={ROUND2_CABINET_FIXTURE}
           selectedObjectId={state.selectedObjectId}
+          cabinetOffsets={state.cabinetOffsets}
           onSelect={selectObject}
         />
         <WallElevation
           wall={state.selectedWall}
           cabinets={ROUND2_CABINET_FIXTURE}
           selectedObjectId={state.selectedObjectId}
+          cabinetOffsets={state.cabinetOffsets}
           onSelect={selectObject}
         />
         <div className="lg:col-span-2 xl:col-span-1">
