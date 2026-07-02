@@ -1,4 +1,11 @@
 import type { FloorPlan } from "@/features/round1/floorplan/plan-geometry";
+import type {
+  CabinetKind,
+  MeasurementKey,
+  Round2Model,
+  WallId
+} from "./model/round2-model";
+import type { FillerEnd, NudgeDirection } from "./model/adjustments";
 
 export type Round2DemoRole = "SALES" | "DESIGNER";
 export type Round2Task = "MEASUREMENT" | "PROPOSAL" | "DRAWINGS";
@@ -8,22 +15,18 @@ export type MeasurementStatus =
   | "REMEASURE_REQUESTED";
 export type ProposalStatus = "READY" | "NEEDS_DECISION" | "STALE";
 export type DrawingStatus = "DRAFT" | "REVIEW_READY" | "REVIEWED" | "STALE";
-export type WallId = "A" | "B" | "C";
-export type DrawingSheetId = "A1" | "A2" | "A3" | "A4" | "S1";
+export type DrawingSheetId = string;
 
-export type Round2Measurements = {
-  wallA: number;
-  wallB: number;
-  wallC: number;
-  ceiling: number;
-  windowWidth: number;
-  windowOffset: number;
-};
+export type { MeasurementKey, Round2Model, WallId };
+
+export type Round2Measurements = Record<MeasurementKey, number | null>;
 
 export type Round2PrototypeState = {
   referenceLocked: boolean;
   referenceVersion: number;
   referenceSnapshotId: string | null;
+  reference: Round1ReferenceSource | null;
+  model: Round2Model | null;
   role: Round2DemoRole;
   task: Round2Task;
   measurementVersion: number;
@@ -33,38 +36,35 @@ export type Round2PrototypeState = {
   proposalStatus: ProposalStatus;
   drawingVersion: number;
   drawingStatus: DrawingStatus;
-  selectedWall: WallId;
+  selectedWall: WallId | null;
   selectedObjectId: string | null;
   issueObjectId: string | null;
-  sinkBaseWidth: 30 | 33 | 36;
-  cabinetOffsets: Record<string, { x: number; y: number }>;
+  activeMeasurementKey: MeasurementKey | null;
   activeSheet: DrawingSheetId;
   drawingZoom: number;
 };
 
 export type Round2PrototypeAction =
-  | { type: "LOCK_REFERENCE"; snapshotId: string }
-  | { type: "REPLACE_REFERENCE"; snapshotId: string }
+  | { type: "LOCK_REFERENCE"; reference: Round1ReferenceSource }
+  | { type: "REPLACE_REFERENCE"; reference: Round1ReferenceSource }
   | { type: "OPEN_REFERENCE_HANDOFF" }
   | { type: "SET_ROLE"; role: Round2DemoRole }
   | { type: "SET_TASK"; task: Round2Task }
   | {
       type: "EDIT_MEASUREMENT";
-      field: keyof Round2Measurements;
-      value: number;
+      field: MeasurementKey;
+      value: number | null;
     }
+  | { type: "SET_ACTIVE_MEASUREMENT"; field: MeasurementKey }
   | { type: "SUBMIT_MEASUREMENT" }
   | { type: "REQUEST_REMEASURE"; objectId: string }
   | { type: "SUBMIT_NEW_MEASUREMENT" }
   | { type: "SELECT_WALL"; wall: WallId }
   | { type: "SELECT_OBJECT"; objectId: string; wall: WallId }
-  | {
-      type: "SET_CABINET_OFFSET";
-      objectId: string;
-      x: number;
-      y: number;
-    }
-  | { type: "SET_SINK_WIDTH"; width: 30 | 33 | 36 }
+  | { type: "STEP_CABINET_WIDTH"; objectId: string; widthSixteenths: number }
+  | { type: "NUDGE_GROUP"; objectId: string; direction: NudgeDirection }
+  | { type: "MOVE_FILLER_END"; objectId: string; end: FillerEnd }
+  | { type: "SET_SEGMENT_KIND"; objectId: string; cabinetKind: CabinetKind }
   | { type: "RESOLVE_DESIGN_DECISION" }
   | { type: "SET_SHEET"; sheet: DrawingSheetId }
   | { type: "SET_DRAWING_ZOOM"; zoom: number }

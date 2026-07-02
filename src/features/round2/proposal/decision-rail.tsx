@@ -3,12 +3,17 @@
 import type { Dispatch } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  findSegment,
+  findWall,
+  formatSixteenths,
+  type CabinetKind
+} from "../model/round2-model";
+import { standardWidthOptionsSixteenths } from "../model/adjustments";
 import type {
   Round2PrototypeAction,
   Round2PrototypeState
 } from "../round2-types";
-
-const SINK_WIDTHS = [30, 33, 36] as const;
 
 export function DecisionRail({
   state,
@@ -19,19 +24,20 @@ export function DecisionRail({
 }) {
   const remeasureRequested =
     state.measurementStatus === "REMEASURE_REQUESTED";
-  const selectedOffset = state.selectedObjectId
-    ? state.cabinetOffsets[state.selectedObjectId] ?? { x: 0, y: 0 }
-    : { x: 0, y: 0 };
-
-  const updateOffset = (axis: "x" | "y", value: number) => {
-    if (!state.selectedObjectId) return;
-    dispatch({
-      type: "SET_CABINET_OFFSET",
-      objectId: state.selectedObjectId,
-      x: axis === "x" ? value : selectedOffset.x,
-      y: axis === "y" ? value : selectedOffset.y
-    });
-  };
+  const selectedSegment = findSegment(state.model, state.selectedObjectId);
+  const selectedWall = findWall(state.model, state.selectedWall);
+  const decisions = state.model?.decisionItems ?? [];
+  const canAdjust =
+    state.role === "DESIGNER" &&
+    state.measurementStatus === "SUBMITTED" &&
+    Boolean(selectedSegment);
+  const canResize =
+    canAdjust &&
+    selectedSegment != null &&
+    (selectedSegment.kind === "cabinet" ||
+      selectedSegment.kind === "appliance");
+  const canMoveFiller =
+    canAdjust && selectedSegment?.kind === "filler";
 
   return (
     <aside className="h-full min-h-0 overflow-y-auto rounded-[18px] border border-studio-line bg-white/65 p-4 shadow-[0_18px_42px_-32px_rgba(20,20,26,0.28)] backdrop-blur-xl">
@@ -61,14 +67,16 @@ export function DecisionRail({
         <div className="mt-2 rounded-studio-control border border-studio-line bg-white/70 p-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[12px] font-semibold">
-              {state.selectedObjectId ?? "No selection"}
+              {selectedSegment?.code ?? selectedSegment?.label ?? "No selection"}
             </span>
             <span className="font-mono text-[9px] text-studio-quiet">
-              WALL {state.selectedWall}
+              {selectedWall ? `WALL ${selectedWall.label}` : "NO WALL"}
             </span>
           </div>
           <p className="mt-1 text-[10.5px] leading-4 text-studio-muted">
-            Linked selection across top view and elevation.
+            {selectedSegment
+              ? `${selectedSegment.kind.toUpperCase()} · ${formatSixteenths(selectedSegment.widthSixteenths)}`
+              : "Submit measurements to create a constrained proposal."}
           </p>
         </div>
       </section>
@@ -91,80 +99,204 @@ export function DecisionRail({
         <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
           CONSTRAINED ADJUSTMENT
         </p>
-        <label className="mt-3 block">
-          <span className="text-[11px] font-semibold">Sink base width</span>
-          <select
-            aria-label="Sink base width"
-            value={state.sinkBaseWidth}
-            onChange={(event) =>
-              dispatch({
-                type: "SET_SINK_WIDTH",
-                width: Number(event.target.value) as 30 | 33 | 36
-              })
-            }
-            className="mt-2 h-10 w-full rounded-studio-control border border-studio-line-strong bg-white px-3 font-mono text-[11px] outline-none focus:ring-2 focus:ring-studio-action/15"
-          >
-            {SINK_WIDTHS.map((width) => (
-              <option key={width} value={width}>
-                SB{width} · {width}″
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <label>
-            <span className="text-[10px] font-semibold">Position X</span>
-            <span className="relative mt-1.5 block">
-              <input
-                aria-label="Cabinet position X"
-                type="number"
-                step="0.125"
-                value={selectedOffset.x}
-                disabled={!state.selectedObjectId}
-                onChange={(event) =>
-                  updateOffset("x", Number(event.target.value))
-                }
-                className="h-9 w-full rounded-[9px] border border-studio-line-strong bg-white px-2 pr-7 font-mono text-[10px] outline-none focus:ring-2 focus:ring-studio-action/15 disabled:opacity-50"
-              />
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[8px] text-studio-quiet">
-                IN
-              </span>
-            </span>
-          </label>
-          <label>
-            <span className="text-[10px] font-semibold">Position Y</span>
-            <span className="relative mt-1.5 block">
-              <input
-                aria-label="Cabinet position Y"
-                type="number"
-                step="0.125"
-                value={selectedOffset.y}
-                disabled={!state.selectedObjectId}
-                onChange={(event) =>
-                  updateOffset("y", Number(event.target.value))
-                }
-                className="h-9 w-full rounded-[9px] border border-studio-line-strong bg-white px-2 pr-7 font-mono text-[10px] outline-none focus:ring-2 focus:ring-studio-action/15 disabled:opacity-50"
-              />
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[8px] text-studio-quiet">
-                IN
-              </span>
-            </span>
-          </label>
+        <div className="mt-3 rounded-studio-control border border-studio-line bg-white/70 p-3">
+          {selectedSegment ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-semibold">
+                  {selectedSegment.label}
+                </span>
+                <span className="font-mono text-[9px] text-studio-muted">
+                  {formatSixteenths(selectedSegment.widthSixteenths)}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canAdjust || selectedSegment.kind === "opening"}
+                  aria-label="Nudge selected group left"
+                  onClick={() =>
+                    dispatch({
+                      type: "NUDGE_GROUP",
+                      objectId: selectedSegment.id,
+                      direction: "left"
+                    })
+                  }
+                >
+                  ← 1/16″
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canAdjust || selectedSegment.kind === "opening"}
+                  aria-label="Nudge selected group right"
+                  onClick={() =>
+                    dispatch({
+                      type: "NUDGE_GROUP",
+                      objectId: selectedSegment.id,
+                      direction: "right"
+                    })
+                  }
+                >
+                  1/16″ →
+                </Button>
+              </div>
+
+              <div className="mt-4">
+                <span className="text-[10px] font-semibold">Width</span>
+                <div className="mt-2 grid grid-cols-4 gap-1.5">
+                  {standardWidthOptionsSixteenths().map((width) => (
+                    <button
+                      key={width}
+                      type="button"
+                      disabled={!canResize}
+                      aria-pressed={selectedSegment.widthSixteenths === width}
+                      onClick={() =>
+                        dispatch({
+                          type: "STEP_CABINET_WIDTH",
+                          objectId: selectedSegment.id,
+                          widthSixteenths: width
+                        })
+                      }
+                      className="h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                    >
+                      {width / 16}″
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {canResize && (
+                <div className="mt-4">
+                  <span className="text-[10px] font-semibold">Kind</span>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {kindOptions(selectedSegment.tier).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={
+                          selectedSegment.cabinetKind === option.value
+                        }
+                        onClick={() =>
+                          dispatch({
+                            type: "SET_SEGMENT_KIND",
+                            objectId: selectedSegment.id,
+                            cabinetKind: option.value
+                          })
+                        }
+                        className="h-8 rounded-[8px] border border-studio-line bg-white text-[9px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {canMoveFiller && (
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      dispatch({
+                        type: "MOVE_FILLER_END",
+                        objectId: selectedSegment.id,
+                        end: "start"
+                      })
+                    }
+                  >
+                    Move start
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      dispatch({
+                        type: "MOVE_FILLER_END",
+                        objectId: selectedSegment.id,
+                        end: "end"
+                      })
+                    }
+                  >
+                    Move end
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-[10.5px] leading-4 text-studio-muted">
+              Select a cabinet or filler after submitting measurements.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="border-b border-studio-line py-4">
+        <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
+          WALL BALANCE
+        </p>
+        <div className="mt-3 space-y-2">
+          {(state.model?.walls ?? []).map((wall) => {
+            const baseTotal = wall.segments
+              .filter((segment) => segment.tier === "base")
+              .reduce((sum, segment) => sum + segment.widthSixteenths, 0);
+            return (
+              <div
+                key={wall.id}
+                className="flex items-center justify-between rounded-[9px] border border-studio-line bg-white/65 px-2.5 py-2"
+              >
+                <span className="text-[10px] font-semibold">
+                  Wall {wall.label}
+                </span>
+                <span className="font-mono text-[9px] text-studio-muted">
+                  {formatSixteenths(baseTotal)} / {formatSixteenths(wall.lengthSixteenths)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       <section className="py-4">
-        <div className="rounded-studio-control border border-[#d8bd84] bg-[#fbf4e4] p-3">
-          <p className="font-mono text-[8px] tracking-[0.12em] text-[#805617]">
-            SYSTEM CHECK
-          </p>
-          <p className="mt-1.5 text-[12px] font-semibold text-[#5f4318]">
-            Hood clearance needs a decision
-          </p>
-          <p className="mt-1 text-[10.5px] leading-4 text-[#755827]">
-            Selected range position leaves 1½″ less than the preferred side clearance.
-          </p>
-        </div>
+        {decisions.length > 0 ? (
+          <div className="space-y-2">
+            {decisions.map((decision) => (
+              <div
+                key={decision.id}
+                className="rounded-studio-control border border-[#d8bd84] bg-[#fbf4e4] p-3"
+              >
+                <p className="font-mono text-[8px] tracking-[0.12em] text-[#805617]">
+                  SYSTEM CHECK
+                </p>
+                <p className="mt-1.5 text-[12px] font-semibold text-[#5f4318]">
+                  {decision.title}
+                </p>
+                <p className="mt-1 text-[10.5px] leading-4 text-[#755827]">
+                  {decision.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-studio-control border border-studio-line bg-white/70 p-3">
+            <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
+              SYSTEM CHECK
+            </p>
+            <p className="mt-1.5 text-[12px] font-semibold text-studio-ink">
+              No filler decisions
+            </p>
+            <p className="mt-1 text-[10.5px] leading-4 text-studio-muted">
+              Autofill segments close to the submitted wall dimensions.
+            </p>
+          </div>
+        )}
 
         {remeasureRequested ? (
           <div className="mt-3 rounded-studio-control border border-[#d8bd84] bg-white/70 p-3">
@@ -190,6 +322,7 @@ export function DecisionRail({
             <Button
               type="button"
               size="sm"
+              disabled={decisions.length === 0}
               onClick={() => dispatch({ type: "RESOLVE_DESIGN_DECISION" })}
             >
               Resolve decision
@@ -215,4 +348,15 @@ export function DecisionRail({
       </section>
     </aside>
   );
+}
+
+function kindOptions(
+  tier: "upper" | "base" | "full"
+): { value: CabinetKind; label: string }[] {
+  if (tier === "upper") return [{ value: "upper", label: "Upper" }];
+  return [
+    { value: "base", label: "Base" },
+    { value: "sink", label: "Sink" },
+    { value: "tall", label: "Tall" }
+  ];
 }

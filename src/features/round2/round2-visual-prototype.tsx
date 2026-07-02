@@ -49,13 +49,13 @@ export function Round2VisualPrototype({
       role={state.role}
       round1Href={`/projects/${projectId}/round1`}
       nextReferenceVersion={state.referenceVersion + 1}
-      onLock={(snapshotId) =>
+      onLock={(lockedReference) =>
         dispatch({
           type:
             state.referenceVersion === 0
               ? "LOCK_REFERENCE"
               : "REPLACE_REFERENCE",
-          snapshotId
+          reference: lockedReference
         })
       }
     />

@@ -1,36 +1,56 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ROUND2_CABINET_FIXTURE } from "../round2-fixtures";
+import { ROUND1_REFERENCE_FIXTURE } from "../round2-fixtures";
+import { autofillRound2Model } from "../model/autofill";
+import { deriveWallsFromRound1 } from "../model/derive-walls";
+import { initializeMeasurements } from "../model/round2-model";
 import { DesignPlan } from "./design-plan";
 import { WallElevation } from "./wall-elevation";
 
 describe("Round 2 proposal selection", () => {
-  test("marks the same cabinet selected in plan and elevation", () => {
+  test("marks the same model segment selected in plan and elevation", () => {
+    const model = submittedModel();
+    const selected = model.walls[0].segments.find(
+      (segment) => segment.tier === "base"
+    )!;
+
     const plan = renderToStaticMarkup(
       <DesignPlan
-        cabinets={ROUND2_CABINET_FIXTURE}
-        selectedObjectId="a-03"
-        cabinetOffsets={{ "a-03": { x: 2.5, y: 0 } }}
+        model={model}
+        selectedObjectId={selected.id}
         onSelect={() => {}}
       />
     );
     const elevation = renderToStaticMarkup(
       <WallElevation
-        wall="A"
-        cabinets={ROUND2_CABINET_FIXTURE}
-        selectedObjectId="a-03"
-        cabinetOffsets={{ "a-03": { x: 2.5, y: 0 } }}
+        wallId={selected.wallId}
+        model={model}
+        selectedObjectId={selected.id}
         onSelect={() => {}}
       />
     );
 
-    expect(plan).toContain('data-cabinet-id="a-03"');
+    expect(plan).toContain(`data-segment-id="${selected.id}"`);
     expect(plan).toContain('data-selected="true"');
-    expect(plan).toContain('data-offset-x="2.5"');
     expect(plan).not.toContain("OPEN SIDE");
-    expect(plan).not.toContain("stroke-dasharray");
-    expect(elevation).toContain('data-cabinet-id="a-03"');
+    expect(elevation).toContain(`data-segment-id="${selected.id}"`);
     expect(elevation).toContain('data-selected="true"');
-    expect(elevation).toContain('data-offset-x="2.5"');
   });
 });
+
+function submittedModel() {
+  const model = deriveWallsFromRound1(ROUND1_REFERENCE_FIXTURE.floorPlan);
+  const measurements = Object.fromEntries(
+    Object.keys(initializeMeasurements(model)).map((key) => [
+      key,
+      key === "room.ceiling"
+        ? 96 * 16
+        : key.endsWith(".width")
+          ? 36 * 16
+          : key.endsWith(".offset")
+            ? 42 * 16
+            : 150 * 16
+    ])
+  );
+  return autofillRound2Model(model, measurements);
+}

@@ -1,37 +1,47 @@
 "use client";
 
-import type { Round2Cabinet, WallId } from "../round2-types";
+import {
+  findWall,
+  formatSixteenths,
+  type Round2Model,
+  type WallId,
+  type WallSegment
+} from "../model/round2-model";
 
-function cabinetHeight(kind: Round2Cabinet["kind"]) {
-  if (kind === "upper") return { y: 92, height: 88 };
-  if (kind === "tall" || kind === "appliance") return { y: 92, height: 214 };
+function segmentHeight(segment: WallSegment) {
+  if (segment.tier === "upper") return { y: 92, height: 88 };
+  if (segment.tier === "full") return { y: 92, height: 214 };
   return { y: 214, height: 92 };
 }
 
-function cabinetFill(kind: Round2Cabinet["kind"]) {
-  if (kind === "sink") return "#eef7f4";
-  if (kind === "appliance") return "#edf5f7";
-  if (kind === "filler") return "#f7f2e7";
+function segmentFill(segment: WallSegment) {
+  if (segment.cabinetKind === "sink") return "#eef7f4";
+  if (segment.cabinetKind === "tall") return "#f1ecf7";
+  if (segment.kind === "opening") return "#dceff7";
+  if (segment.kind === "appliance") return "#edf5f7";
+  if (segment.kind === "filler") return "#f0dda0";
   return "#fbfbf8";
 }
 
 export function WallElevation({
-  wall,
-  cabinets,
+  wallId,
+  model,
   selectedObjectId,
-  cabinetOffsets,
   onSelect
 }: {
-  wall: WallId;
-  cabinets: readonly Round2Cabinet[];
+  wallId: WallId | null;
+  model: Round2Model | null;
   selectedObjectId: string | null;
-  cabinetOffsets: Record<string, { x: number; y: number }>;
   onSelect: (id: string, wall: WallId) => void;
 }) {
-  const wallCabinets = cabinets.filter((cabinet) => cabinet.wall === wall);
-  const total = wallCabinets.reduce((sum, cabinet) => sum + cabinet.width, 0) || 1;
+  const wall = findWall(model, wallId);
+  const total =
+    wall?.lengthSixteenths ??
+    wall?.segments.reduce((sum, segment) => sum + segment.widthSixteenths, 0) ??
+    1;
   const usable = 500;
-  let cursor = 0;
+  const upper = wall?.segments.filter((segment) => segment.tier === "upper") ?? [];
+  const base = wall?.segments.filter((segment) => segment.tier === "base") ?? [];
 
   return (
     <div className="h-full min-h-[440px] overflow-hidden rounded-[18px] border border-studio-paper-line bg-[#fbfbf8] shadow-[0_18px_42px_-30px_rgba(20,20,26,0.32)]">
@@ -40,7 +50,9 @@ export function WallElevation({
           <p className="font-mono text-[9px] tracking-[0.14em] text-studio-quiet">
             SELECTED ELEVATION
           </p>
-          <h3 className="mt-1 text-[15px] font-semibold">Wall {wall}</h3>
+          <h3 className="mt-1 text-[15px] font-semibold">
+            {wall ? `Wall ${wall.label}` : "No wall"}
+          </h3>
         </div>
         <span className="font-mono text-[9px] text-studio-quiet">1:30</span>
       </div>
@@ -48,77 +60,133 @@ export function WallElevation({
       <svg
         viewBox="0 0 640 380"
         role="img"
-        aria-label={`Wall ${wall} cabinet elevation`}
+        aria-label={wall ? `Wall ${wall.label} cabinet elevation` : "Cabinet elevation"}
         className="h-[calc(100%-68px)] min-h-[360px] w-full"
       >
         <g data-elevation-layer="dimensions" stroke="#079ca5" fill="#079ca5" fontFamily="var(--studio-mono)">
           <path d="M 70 42 V 54 M 570 42 V 54 M 70 48 H 570" strokeWidth="1" />
-          <text x="320" y="37" textAnchor="middle" fontSize="11">150 3/8″</text>
+          <text x="320" y="37" textAnchor="middle" fontSize="11">
+            {formatSixteenths(wall?.lengthSixteenths)}
+          </text>
           <path d="M 586 92 H 598 M 586 306 H 598 M 592 92 V 306" strokeWidth="1" />
-          <text x="611" y="199" textAnchor="middle" fontSize="10" transform="rotate(90 611 199)">95 13/16″</text>
+          <text x="611" y="199" textAnchor="middle" fontSize="10" transform="rotate(90 611 199)">
+            {formatSixteenths(model?.ceilingHeightSixteenths)}
+          </text>
           <path d="M 58 214 H 66 M 58 306 H 66 M 62 214 V 306" strokeWidth="1" />
-          <text x="49" y="260" textAnchor="middle" fontSize="10" transform="rotate(-90 49 260)">36″</text>
+          <text x="49" y="260" textAnchor="middle" fontSize="10" transform="rotate(-90 49 260)">34 1/2″</text>
         </g>
 
         <line x1="70" y1="306" x2="570" y2="306" stroke="#292929" strokeWidth="2" />
-        {wallCabinets.map((cabinet) => {
-          const width = (cabinet.width / total) * usable;
-          const x = 70 + cursor;
-          cursor += width;
-          const { y, height } = cabinetHeight(cabinet.kind);
-          const selected = selectedObjectId === cabinet.id;
-          const offset = cabinetOffsets[cabinet.id] ?? { x: 0, y: 0 };
-          const adjustedX = x + offset.x * 2;
-          const adjustedY = y - offset.y * 2;
-          return (
-            <g
-              key={cabinet.id}
-              data-cabinet-id={cabinet.id}
-              data-selected={selected}
-              data-offset-x={offset.x}
-              data-offset-y={offset.y}
-              onClick={() => onSelect(cabinet.id, wall)}
-              className="cursor-pointer"
-            >
-              <rect
-                x={adjustedX}
-                y={adjustedY}
-                width={Math.max(8, width)}
-                height={height}
-                fill={cabinetFill(cabinet.kind)}
-                stroke={selected ? "#079ca5" : "#2c2c2c"}
-                strokeWidth={selected ? 3 : 1.5}
-              />
+        {wall ? (
+          <>
+            <ElevationRun
+              wallId={wall.id}
+              segments={upper}
+              total={total}
+              usable={usable}
+              selectedObjectId={selectedObjectId}
+              onSelect={onSelect}
+            />
+            <ElevationRun
+              wallId={wall.id}
+              segments={base}
+              total={total}
+              usable={usable}
+              selectedObjectId={selectedObjectId}
+              onSelect={onSelect}
+            />
+          </>
+        ) : (
+          <text
+            x="320"
+            y="198"
+            textAnchor="middle"
+            fontFamily="var(--studio-mono)"
+            fontSize="12"
+            fill="#8b8b85"
+          >
+            SUBMIT MEASUREMENTS TO AUTOFILL
+          </text>
+        )}
+      </svg>
+    </div>
+  );
+}
+
+function ElevationRun({
+  wallId,
+  segments,
+  total,
+  usable,
+  selectedObjectId,
+  onSelect
+}: {
+  wallId: WallId;
+  segments: WallSegment[];
+  total: number;
+  usable: number;
+  selectedObjectId: string | null;
+  onSelect: (id: string, wall: WallId) => void;
+}) {
+  let cursor = 0;
+  return (
+    <g>
+      {segments.map((segment) => {
+        const safeWidth = Math.max(0, segment.widthSixteenths);
+        const width = (safeWidth / total) * usable;
+        const x = 70 + cursor;
+        cursor += width;
+        const { y, height } = segmentHeight(segment);
+        const selected = selectedObjectId === segment.id;
+        return (
+          <g
+            key={segment.id}
+            data-segment-id={segment.id}
+            data-cabinet-id={segment.id}
+            data-selected={selected}
+            onClick={() => onSelect(segment.id, wallId)}
+            className="cursor-pointer"
+          >
+            <rect
+              x={x}
+              y={y}
+              width={Math.max(8, width)}
+              height={height}
+              fill={segmentFill(segment)}
+              stroke={selected ? "#079ca5" : "#2c2c2c"}
+              strokeWidth={selected ? 3 : 1.5}
+            />
+            {segment.kind !== "filler" && segment.kind !== "opening" && (
               <path
-                d={`M ${adjustedX + 4} ${adjustedY + 4} L ${adjustedX + width / 2} ${adjustedY + height / 2} L ${adjustedX + width - 4} ${adjustedY + 4}`}
-                stroke={cabinet.kind === "upper" ? "#e12821" : "#a7aaa5"}
+                d={`M ${x + 4} ${y + 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + 4}`}
+                stroke={segment.tier === "upper" ? "#e12821" : "#a7aaa5"}
                 strokeWidth="1"
                 fill="none"
               />
-              <text
-                x={adjustedX + width / 2}
-                y={adjustedY + height / 2 + 5}
-                textAnchor="middle"
-                fontFamily="var(--studio-mono)"
-                fontSize="13"
-                fill="#e12821"
-              >
-                {cabinet.code}
-              </text>
-              <text
-                x={adjustedX + width / 2}
-                y="329"
-                textAnchor="middle"
-                fontFamily="var(--studio-mono)"
-                fontSize="9"
-                fill="#079ca5"
-              >
-                {cabinet.width / 16}″
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
+            )}
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + 5}
+              textAnchor="middle"
+              fontFamily="var(--studio-mono)"
+              fontSize="13"
+              fill={segment.kind === "filler" ? "#7a5b00" : "#e12821"}
+            >
+              {segment.code ?? segment.label}
+            </text>
+            <text
+              x={x + width / 2}
+              y="329"
+              textAnchor="middle"
+              fontFamily="var(--studio-mono)"
+              fontSize="9"
+              fill="#079ca5"
+            >
+              {formatSixteenths(segment.widthSixteenths)}
+            </text>
+          </g>
+        );
+      })}
+    </g>
   );
 }

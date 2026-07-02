@@ -1,35 +1,34 @@
 "use client";
 
-import type { Round2Cabinet, WallId } from "../round2-types";
+import {
+  type Round2Model,
+  type Round2Wall,
+  type WallId,
+  type WallSegment
+} from "../model/round2-model";
 
-const VIEW = { left: 155, top: 125, right: 625, leftBottom: 405, rightBottom: 470 };
+const VIEW = { left: 155, top: 125, right: 625, bottom: 470 };
 
-function fillForKind(kind: Round2Cabinet["kind"]) {
-  if (kind === "sink") return "#c9ddd5";
-  if (kind === "appliance") return "#c4d6dc";
-  if (kind === "filler") return "#d9cda9";
-  if (kind === "tall") return "#d8d0e2";
+function fillForSegment(segment: WallSegment) {
+  if (segment.cabinetKind === "sink") return "#c9ddd5";
+  if (segment.cabinetKind === "tall") return "#d8d0e2";
+  if (segment.kind === "appliance") return "#c4d6dc";
+  if (segment.kind === "filler") return "#d9c061";
+  if (segment.kind === "opening") return "#7dbbd6";
   return "#d9ddd8";
 }
 
-function cabinetsForWall(cabinets: readonly Round2Cabinet[], wall: WallId) {
-  return cabinets.filter((cabinet) => cabinet.wall === wall);
-}
-
 export function DesignPlan({
-  cabinets,
+  model,
   selectedObjectId,
-  cabinetOffsets,
   onSelect
 }: {
-  cabinets: readonly Round2Cabinet[];
+  model: Round2Model | null;
   selectedObjectId: string | null;
-  cabinetOffsets: Record<string, { x: number; y: number }>;
   onSelect: (id: string, wall: WallId) => void;
 }) {
-  const wallA = cabinetsForWall(cabinets, "A");
-  const wallB = cabinetsForWall(cabinets, "B");
-  const wallC = cabinetsForWall(cabinets, "C");
+  const walls = model?.walls ?? [];
+  const segments = walls.flatMap((wall) => topViewSegments(wall));
 
   return (
     <div className="relative h-full min-h-[440px] overflow-hidden rounded-[18px] border border-white/10 bg-[#17191a]">
@@ -43,135 +42,201 @@ export function DesignPlan({
         aria-label="Cabinet proposal top view"
         className="relative h-full w-full"
       >
-        <path d={`M ${VIEW.left} ${VIEW.top} H ${VIEW.right} V ${VIEW.rightBottom}`} stroke="#f1f1ec" strokeWidth="12" fill="none" />
-        <path d={`M ${VIEW.left} ${VIEW.top} V ${VIEW.leftBottom}`} stroke="#f1f1ec" strokeWidth="12" fill="none" />
-        <CabinetRun
-          cabinets={wallA}
-          wall="A"
-          startX={VIEW.left + 7}
-          startY={VIEW.top + 7}
-          available={VIEW.right - VIEW.left - 14}
-          horizontal
-          selectedObjectId={selectedObjectId}
-          cabinetOffsets={cabinetOffsets}
-          onSelect={onSelect}
-        />
-        <CabinetRun
-          cabinets={wallB}
-          wall="B"
-          startX={VIEW.left + 7}
-          startY={VIEW.top + 7}
-          available={VIEW.leftBottom - VIEW.top - 14}
-          horizontal={false}
-          selectedObjectId={selectedObjectId}
-          cabinetOffsets={cabinetOffsets}
-          onSelect={onSelect}
-        />
-        <CabinetRun
-          cabinets={wallC}
-          wall="C"
-          startX={VIEW.right - 61}
-          startY={VIEW.top + 7}
-          available={VIEW.rightBottom - VIEW.top - 14}
-          horizontal={false}
-          selectedObjectId={selectedObjectId}
-          cabinetOffsets={cabinetOffsets}
-          onSelect={onSelect}
-        />
+        {walls.map((wall) => {
+          const line = wallLine(wall);
+          return (
+            <path
+              key={wall.id}
+              d={`M ${line.x1} ${line.y1} L ${line.x2} ${line.y2}`}
+              stroke="#f1f1ec"
+              strokeWidth="12"
+              fill="none"
+            />
+          );
+        })}
 
-        <line x1="315" y1="125" x2="430" y2="125" stroke="#62b7d2" strokeWidth="14" />
-        <text x="372" y="104" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="10" fill="#84bdd6">
-          WINDOW 36″
-        </text>
+        {walls.map((wall) => (
+          <SegmentRun
+            key={wall.id}
+            wall={wall}
+            segments={topViewSegments(wall)}
+            selectedObjectId={selectedObjectId}
+            onSelect={onSelect}
+          />
+        ))}
+
+        {walls.flatMap((wall) =>
+          wall.fixedPoints
+            .filter((point) => point.type === "window" || point.type === "door")
+            .map((point) => {
+              const line = wallLine(wall);
+              const center = {
+                x: line.x1 + (line.x2 - line.x1) * point.positionRatio,
+                y: line.y1 + (line.y2 - line.y1) * point.positionRatio
+              };
+              return (
+                <text
+                  key={point.id}
+                  x={center.x}
+                  y={center.y - 20}
+                  textAnchor="middle"
+                  fontFamily="var(--studio-mono)"
+                  fontSize="10"
+                  fill="#84bdd6"
+                >
+                  {point.label.toUpperCase()}
+                </text>
+              );
+            })
+        )}
       </svg>
 
       <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-1.5 rounded-[12px] border border-white/10 bg-black/25 p-2 backdrop-blur-md">
-        {cabinets.map((cabinet) => (
-          <button
-            key={cabinet.id}
-            type="button"
-            aria-pressed={selectedObjectId === cabinet.id}
-            onClick={() => onSelect(cabinet.id, cabinet.wall)}
-            className="rounded-[7px] border border-white/10 bg-white/[0.06] px-2 py-1 font-mono text-[9px] text-white/60 outline-none transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-[#65d7dc] aria-pressed:border-[#65d7dc] aria-pressed:bg-[#65d7dc] aria-pressed:text-[#101415]"
-          >
-            {cabinet.label}
-          </button>
-        ))}
+        {segments.length === 0 ? (
+          <span className="px-2 py-1 font-mono text-[9px] text-white/45">
+            SUBMIT MEASUREMENTS TO AUTOFILL
+          </span>
+        ) : (
+          segments.map((segment) => (
+            <button
+              key={segment.id}
+              type="button"
+              aria-pressed={selectedObjectId === segment.id}
+              onClick={() => onSelect(segment.id, segment.wallId)}
+              className="rounded-[7px] border border-white/10 bg-white/[0.06] px-2 py-1 font-mono text-[9px] text-white/60 outline-none transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-[#65d7dc] aria-pressed:border-[#65d7dc] aria-pressed:bg-[#65d7dc] aria-pressed:text-[#101415]"
+            >
+              {segment.code ?? segment.label}
+            </button>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function CabinetRun({
-  cabinets,
+function SegmentRun({
   wall,
-  startX,
-  startY,
-  available,
-  horizontal,
+  segments,
   selectedObjectId,
-  cabinetOffsets,
   onSelect
 }: {
-  cabinets: readonly Round2Cabinet[];
-  wall: WallId;
-  startX: number;
-  startY: number;
-  available: number;
-  horizontal: boolean;
+  wall: Round2Wall;
+  segments: WallSegment[];
   selectedObjectId: string | null;
-  cabinetOffsets: Record<string, { x: number; y: number }>;
   onSelect: (id: string, wall: WallId) => void;
 }) {
-  const total = cabinets.reduce((sum, cabinet) => sum + cabinet.width, 0) || 1;
+  const total =
+    wall.lengthSixteenths ??
+    (segments.reduce((sum, segment) => sum + segment.widthSixteenths, 0) || 1);
+  const available =
+    wall.sourceWall === "TOP" || wall.sourceWall === "BOTTOM"
+      ? VIEW.right - VIEW.left - 14
+      : VIEW.bottom - VIEW.top - 14;
   let cursor = 0;
 
-  return cabinets.map((cabinet) => {
-    const length = (cabinet.width / total) * available;
-    const x = horizontal ? startX + cursor : startX;
-    const y = horizontal ? startY : startY + cursor;
-    const width = horizontal ? length : 54;
-    const height = horizontal ? 58 : length;
-    cursor += length;
-    const selected = cabinet.id === selectedObjectId;
-    const offset = cabinetOffsets[cabinet.id] ?? { x: 0, y: 0 };
-    const offsetX = offset.x * 2;
-    const offsetY = offset.y * 2;
-    const adjustedX = x + offsetX;
-    const adjustedY = y - offsetY;
+  return (
+    <g>
+      {segments.map((segment) => {
+        const safeWidth = Math.max(0, segment.widthSixteenths);
+        const length = (safeWidth / total) * available;
+        const rect = segmentRect(wall, cursor, length);
+        cursor += length;
+        const selected = segment.id === selectedObjectId;
+        return (
+          <g
+            key={segment.id}
+            data-segment-id={segment.id}
+            data-cabinet-id={segment.id}
+            data-selected={selected}
+            onClick={() => onSelect(segment.id, wall.id)}
+            className="cursor-pointer"
+          >
+            <rect
+              x={rect.x}
+              y={rect.y}
+              width={Math.max(8, rect.width - 2)}
+              height={Math.max(8, rect.height - 2)}
+              rx="2"
+              fill={fillForSegment(segment)}
+              stroke={selected ? "#65d7dc" : "#7d8580"}
+              strokeWidth={selected ? 3 : 1.25}
+            />
+            <text
+              x={rect.x + rect.width / 2}
+              y={rect.y + rect.height / 2 + 3}
+              textAnchor="middle"
+              fontFamily="var(--studio-mono)"
+              fontSize="9"
+              fill="#252a27"
+              transform={rect.rotate}
+            >
+              {segment.code ?? segment.label}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
 
-    return (
-      <g
-        key={cabinet.id}
-        data-cabinet-id={cabinet.id}
-        data-selected={selected}
-        data-offset-x={offset.x}
-        data-offset-y={offset.y}
-        onClick={() => onSelect(cabinet.id, wall)}
-        className="cursor-pointer"
-      >
-        <rect
-          x={adjustedX}
-          y={adjustedY}
-          width={Math.max(10, width - 2)}
-          height={Math.max(10, height - 2)}
-          rx="2"
-          fill={fillForKind(cabinet.kind)}
-          stroke={selected ? "#65d7dc" : "#7d8580"}
-          strokeWidth={selected ? 3 : 1.25}
-        />
-        <text
-          x={adjustedX + width / 2}
-          y={adjustedY + height / 2 + 3}
-          textAnchor="middle"
-          fontFamily="var(--studio-mono)"
-          fontSize="9"
-          fill="#252a27"
-          transform={horizontal ? undefined : `rotate(90 ${adjustedX + width / 2} ${adjustedY + height / 2})`}
-        >
-          {cabinet.label}
-        </text>
-      </g>
-    );
-  });
+function topViewSegments(wall: Round2Wall): WallSegment[] {
+  const base = wall.segments.filter(
+    (segment) => segment.tier === "base" || segment.tier === "full"
+  );
+  return base.length > 0
+    ? base
+    : wall.segments.filter((segment) => segment.tier === "upper");
+}
+
+function wallLine(wall: Round2Wall) {
+  if (wall.sourceWall === "TOP") {
+    return { x1: VIEW.left, y1: VIEW.top, x2: VIEW.right, y2: VIEW.top };
+  }
+  if (wall.sourceWall === "RIGHT") {
+    return { x1: VIEW.right, y1: VIEW.top, x2: VIEW.right, y2: VIEW.bottom };
+  }
+  if (wall.sourceWall === "BOTTOM") {
+    return { x1: VIEW.right, y1: VIEW.bottom, x2: VIEW.left, y2: VIEW.bottom };
+  }
+  return { x1: VIEW.left, y1: VIEW.bottom, x2: VIEW.left, y2: VIEW.top };
+}
+
+function segmentRect(
+  wall: Round2Wall,
+  cursor: number,
+  length: number
+): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotate?: string;
+} {
+  if (wall.sourceWall === "TOP") {
+    return { x: VIEW.left + 7 + cursor, y: VIEW.top + 7, width: length, height: 58 };
+  }
+  if (wall.sourceWall === "RIGHT") {
+    return {
+      x: VIEW.right - 61,
+      y: VIEW.top + 7 + cursor,
+      width: 54,
+      height: length,
+      rotate: `rotate(90 ${VIEW.right - 34} ${VIEW.top + 7 + cursor + length / 2})`
+    };
+  }
+  if (wall.sourceWall === "BOTTOM") {
+    return {
+      x: VIEW.right - 7 - cursor - length,
+      y: VIEW.bottom - 61,
+      width: length,
+      height: 54
+    };
+  }
+  return {
+    x: VIEW.left + 7,
+    y: VIEW.bottom - 7 - cursor - length,
+    width: 54,
+    height: length,
+    rotate: `rotate(-90 ${VIEW.left + 34} ${VIEW.bottom - 7 - cursor - length / 2})`
+  };
 }

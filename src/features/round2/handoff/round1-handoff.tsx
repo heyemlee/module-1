@@ -17,7 +17,7 @@ export function Round1Handoff({
 }: {
   reference: Round1ReferenceSource | null;
   role: Round2DemoRole;
-  onLock: (snapshotId: string) => void;
+  onLock: (reference: Round1ReferenceSource) => void;
   nextReferenceVersion: number;
   round1Href?: string;
 }) {
@@ -112,7 +112,7 @@ export function Round1Handoff({
                 type="button"
                 className="mt-5 w-full"
                 disabled={!reference.complete}
-                onClick={() => onLock(reference.id)}
+                onClick={() => onLock(reference)}
               >
                 {nextReferenceVersion === 1
                   ? "Lock for Round 2"

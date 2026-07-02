@@ -1,38 +1,52 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { Round2Measurements, WallId } from "../round2-types";
+import {
+  formatSixteenths,
+  openingWidthMeasurementKey,
+  wallLengthMeasurementKey,
+  type MeasurementKey,
+  type Round2FixedPoint,
+  type Round2Model,
+  type Round2Wall,
+  type WallId
+} from "../model/round2-model";
+import type { Round2Measurements } from "../round2-types";
 
-function formatSixteenths(value: number) {
-  const totalInches = Math.floor(value / 16);
-  const feet = Math.floor(totalInches / 12);
-  const inches = totalInches % 12;
-  return `${feet}′ ${inches}″`;
-}
+const VIEW = {
+  left: 170,
+  top: 145,
+  right: 590,
+  bottom: 430
+};
 
-const WALL_BUTTONS: readonly {
-  id: WallId;
-  label: string;
-  position: string;
-}[] = [
-  { id: "A", label: "Wall A", position: "left-1/2 top-3 -translate-x-1/2" },
-  { id: "B", label: "Wall B", position: "left-3 top-1/2 -translate-y-1/2" },
-  { id: "C", label: "Wall C", position: "right-3 top-1/2 -translate-y-1/2" }
-];
+type Line = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
 
 export function MeasuredPlan({
+  model,
   measurements,
   selectedWall,
   selectedObjectId,
-  onSelectWall
+  activeMeasurementKey,
+  onSelectWall,
+  onSelectMeasurement
 }: {
+  model: Round2Model | null;
   measurements: Round2Measurements;
-  selectedWall: WallId;
+  selectedWall: WallId | null;
   selectedObjectId: string | null;
+  activeMeasurementKey: MeasurementKey | null;
   onSelectWall: (wall: WallId) => void;
+  onSelectMeasurement: (field: MeasurementKey) => void;
 }) {
-  const wallStroke = (wall: WallId) =>
-    selectedWall === wall ? "#65d7dc" : "#f0f0eb";
+  const walls = model?.walls ?? [];
+  const wallStroke = (wall: Round2Wall) =>
+    selectedWall === wall.id ? "#65d7dc" : "#f0f0eb";
 
   return (
     <div className="relative h-full min-h-[420px] overflow-hidden rounded-[18px] border border-white/10 bg-[#17191a] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -55,121 +69,339 @@ export function MeasuredPlan({
           </filter>
         </defs>
 
-        <g filter="url(#round2-plan-shadow)">
-          <path
-            d="M 170 145 H 590 V 465"
-            fill="#f7f7f2"
-            fillOpacity=".025"
-            stroke="none"
-          />
-          <path
-            data-wall="A"
-            data-selected={selectedWall === "A"}
-            d="M 170 145 H 590"
-            stroke={wallStroke("A")}
-            strokeWidth="12"
-            strokeLinecap="square"
-            fill="none"
-          />
-          <path
-            data-wall="B"
-            data-selected={selectedWall === "B"}
-            d="M 170 145 V 390"
-            stroke={wallStroke("B")}
-            strokeWidth="12"
-            strokeLinecap="square"
-            fill="none"
-          />
-          <path
-            data-wall="C"
-            data-selected={selectedWall === "C"}
-            d="M 590 145 V 465"
-            stroke={wallStroke("C")}
-            strokeWidth="12"
-            strokeLinecap="square"
-            fill="none"
-          />
-        </g>
-
-        <g stroke="#65d7dc" fill="#65d7dc" fontFamily="var(--studio-mono)">
-          <path d="M 170 98 V 113 M 590 98 V 113 M 170 105 H 590" strokeWidth="1" />
-          <text x="380" y="94" textAnchor="middle" fontSize="12">
-            {formatSixteenths(measurements.wallA)}
+        {walls.length === 0 ? (
+          <text
+            x="380"
+            y="280"
+            textAnchor="middle"
+            fontFamily="var(--studio-mono)"
+            fontSize="13"
+            fill="rgba(255,255,255,.55)"
+          >
+            LOCK ROUND 1 REFERENCE
           </text>
-          <path d="M 126 145 H 140 M 126 390 H 140 M 133 145 V 390" strokeWidth="1" />
-          <text x="116" y="270" textAnchor="middle" fontSize="12" transform="rotate(-90 116 270)">
-            {formatSixteenths(measurements.wallB)}
-          </text>
-          <path d="M 620 145 H 635 M 620 465 H 635 M 628 145 V 465" strokeWidth="1" />
-          <text x="648" y="305" textAnchor="middle" fontSize="12" transform="rotate(90 648 305)">
-            {formatSixteenths(measurements.wallC)}
-          </text>
-        </g>
+        ) : (
+          <>
+            <g filter="url(#round2-plan-shadow)">
+              {walls.map((wall) => {
+                const line = wallLine(wall);
+                const measured = wall.lengthSixteenths != null;
+                return (
+                  <path
+                    key={wall.id}
+                    data-wall={wall.id}
+                    data-source-wall={wall.sourceWall}
+                    data-selected={selectedWall === wall.id}
+                    d={`M ${line.x1} ${line.y1} L ${line.x2} ${line.y2}`}
+                    stroke={wallStroke(wall)}
+                    strokeWidth="12"
+                    strokeLinecap="square"
+                    strokeDasharray={measured ? undefined : "16 10"}
+                    fill="none"
+                    onClick={() => onSelectWall(wall.id)}
+                    className="cursor-pointer"
+                  />
+                );
+              })}
+            </g>
 
-        <g>
-          <rect x="323" y="139" width="104" height="12" fill="#4b8fae" />
-          <text x="375" y="129" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="10" fill="#84bdd6">
-            WINDOW {formatSixteenths(measurements.windowWidth)}
-          </text>
-        </g>
+            <g stroke="#65d7dc" fill="#65d7dc" fontFamily="var(--studio-mono)">
+              {walls.map((wall) => (
+                <WallDimension
+                  key={wall.id}
+                  wall={wall}
+                  activeMeasurementKey={activeMeasurementKey}
+                  onSelectMeasurement={onSelectMeasurement}
+                />
+              ))}
+            </g>
 
-        <g stroke="#8d9691" strokeWidth="1.5">
-          <rect x="278" y="151" width="88" height="62" rx="3" fill="#cdd6d1" />
-          <rect x="366" y="151" width="68" height="62" rx="3" fill="#cad8dc" />
-          <rect x="176" y="240" width="62" height="94" rx="3" fill="#d4d7d1" />
-          <rect x="522" y="280" width="62" height="92" rx="3" fill="#d4d7d1" />
-        </g>
-        <g fontFamily="var(--studio-mono)" fontSize="10" fill="#303633" textAnchor="middle">
-          <text x="322" y="186">SINK</text>
-          <text x="400" y="186">DW</text>
-          <text x="207" y="289" transform="rotate(-90 207 289)">FRIDGE</text>
-          <text x="553" y="326" transform="rotate(90 553 326)">RANGE</text>
-        </g>
+            <g>
+              {walls.flatMap((wall) =>
+                wall.fixedPoints
+                  .filter((point) => point.type === "window" || point.type === "door")
+                  .map((point) => (
+                    <OpeningMark
+                      key={point.id}
+                      wall={wall}
+                      point={point}
+                      measurements={measurements}
+                      onSelectMeasurement={onSelectMeasurement}
+                    />
+                  ))
+              )}
+            </g>
 
-        <g>
-          <circle cx="311" cy="229" r="12" fill="#1d2425" stroke="#65d7dc" strokeWidth="1.5" />
-          <circle cx="337" cy="229" r="12" fill="#1d2425" stroke="#65d7dc" strokeWidth="1.5" />
-          <text x="311" y="232.5" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="8" fill="#65d7dc">D</text>
-          <text x="337" y="232.5" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="8" fill="#65d7dc">W</text>
-        </g>
+            <g>
+              {walls.flatMap((wall) =>
+                wall.fixedPoints
+                  .filter((point) => point.type === "appliance")
+                  .map((point) => (
+                    <FixedPointMark key={point.id} wall={wall} point={point} />
+                  ))
+              )}
+            </g>
 
-        <text x="380" y="84" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="11" fill={wallStroke("A")}>
-          Wall A
-        </text>
-        <text x="96" y="270" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="11" fill={wallStroke("B")} transform="rotate(-90 96 270)">
-          Wall B
-        </text>
-        <text x="670" y="305" textAnchor="middle" fontFamily="var(--studio-mono)" fontSize="11" fill={wallStroke("C")} transform="rotate(90 670 305)">
-          Wall C
-        </text>
+            <g fontFamily="var(--studio-mono)" fontSize="11">
+              {walls.map((wall) => {
+                const label = wallLabelPosition(wall);
+                return (
+                  <text
+                    key={wall.id}
+                    x={label.x}
+                    y={label.y}
+                    textAnchor="middle"
+                    fill={wallStroke(wall)}
+                    transform={label.rotate}
+                  >
+                    Wall {wall.label}
+                  </text>
+                );
+              })}
+            </g>
+          </>
+        )}
       </svg>
 
       <div className="absolute inset-0">
-        {WALL_BUTTONS.map((wall) => (
+        {walls.map((wall) => (
           <button
             key={wall.id}
             type="button"
-            aria-label={`Select ${wall.label}`}
+            aria-label={`Select Wall ${wall.label}`}
             aria-pressed={selectedWall === wall.id}
             onClick={() => onSelectWall(wall.id)}
             className={cn(
               "absolute z-10 grid size-9 place-items-center rounded-full border font-mono text-[9px] outline-none backdrop-blur-md transition-colors focus-visible:ring-2 focus-visible:ring-[#65d7dc]",
-              wall.position,
+              wallButtonPosition(wall),
               selectedWall === wall.id
                 ? "border-[#65d7dc] bg-[#65d7dc] text-[#101415]"
                 : "border-white/15 bg-black/35 text-white/65 hover:border-white/30 hover:text-white"
             )}
           >
-            {wall.id}
+            {wall.label}
           </button>
         ))}
       </div>
 
       <span className="sr-only" aria-live="polite">
         {selectedObjectId
-          ? `${selectedObjectId} selected on Wall ${selectedWall}`
-          : `Wall ${selectedWall} selected`}
+          ? `${selectedObjectId} selected on Wall ${selectedWall ?? ""}`
+          : selectedWall
+            ? `Wall ${selectedWall} selected`
+            : "No wall selected"}
       </span>
     </div>
   );
+}
+
+function WallDimension({
+  wall,
+  activeMeasurementKey,
+  onSelectMeasurement
+}: {
+  wall: Round2Wall;
+  activeMeasurementKey: MeasurementKey | null;
+  onSelectMeasurement: (field: MeasurementKey) => void;
+}) {
+  const key = wallLengthMeasurementKey(wall.id);
+  const active = key === activeMeasurementKey;
+  const label = formatSixteenths(wall.lengthSixteenths);
+  const color = active ? "#f0c36a" : "#65d7dc";
+
+  if (wall.sourceWall === "TOP") {
+    return (
+      <g
+        data-measurement-key={key}
+        onClick={() => onSelectMeasurement(key)}
+        className="cursor-pointer"
+        stroke={color}
+        fill={color}
+      >
+        <path d={`M ${VIEW.left} 98 V 113 M ${VIEW.right} 98 V 113 M ${VIEW.left} 105 H ${VIEW.right}`} strokeWidth="1" />
+        <text x={(VIEW.left + VIEW.right) / 2} y="94" textAnchor="middle" fontSize="12">
+          {label}
+        </text>
+      </g>
+    );
+  }
+
+  if (wall.sourceWall === "RIGHT") {
+    return (
+      <g
+        data-measurement-key={key}
+        onClick={() => onSelectMeasurement(key)}
+        className="cursor-pointer"
+        stroke={color}
+        fill={color}
+      >
+        <path d={`M 620 ${VIEW.top} H 635 M 620 ${VIEW.bottom} H 635 M 628 ${VIEW.top} V ${VIEW.bottom}`} strokeWidth="1" />
+        <text x="648" y={(VIEW.top + VIEW.bottom) / 2} textAnchor="middle" fontSize="12" transform={`rotate(90 648 ${(VIEW.top + VIEW.bottom) / 2})`}>
+          {label}
+        </text>
+      </g>
+    );
+  }
+
+  if (wall.sourceWall === "BOTTOM") {
+    return (
+      <g
+        data-measurement-key={key}
+        onClick={() => onSelectMeasurement(key)}
+        className="cursor-pointer"
+        stroke={color}
+        fill={color}
+      >
+        <path d={`M ${VIEW.left} 462 V 477 M ${VIEW.right} 462 V 477 M ${VIEW.left} 470 H ${VIEW.right}`} strokeWidth="1" />
+        <text x={(VIEW.left + VIEW.right) / 2} y="496" textAnchor="middle" fontSize="12">
+          {label}
+        </text>
+      </g>
+    );
+  }
+
+  return (
+    <g
+      data-measurement-key={key}
+      onClick={() => onSelectMeasurement(key)}
+      className="cursor-pointer"
+      stroke={color}
+      fill={color}
+    >
+      <path d={`M 126 ${VIEW.top} H 140 M 126 ${VIEW.bottom} H 140 M 133 ${VIEW.top} V ${VIEW.bottom}`} strokeWidth="1" />
+      <text x="116" y={(VIEW.top + VIEW.bottom) / 2} textAnchor="middle" fontSize="12" transform={`rotate(-90 116 ${(VIEW.top + VIEW.bottom) / 2})`}>
+        {label}
+      </text>
+    </g>
+  );
+}
+
+function OpeningMark({
+  wall,
+  point,
+  measurements,
+  onSelectMeasurement
+}: {
+  wall: Round2Wall;
+  point: Round2FixedPoint;
+  measurements: Round2Measurements;
+  onSelectMeasurement: (field: MeasurementKey) => void;
+}) {
+  const key = openingWidthMeasurementKey(point.id);
+  const width = measurements[key] ?? point.widthSixteenths ?? null;
+  const line = wallLine(wall);
+  const lineLength = linePixelLength(line);
+  const wallLength = wall.lengthSixteenths;
+  const widthPx =
+    wallLength && width
+      ? Math.max(20, (width / wallLength) * lineLength)
+      : 76;
+  const startRatio =
+    wallLength && point.offsetSixteenths != null
+      ? point.offsetSixteenths / wallLength
+      : point.positionRatio;
+  const start = pointOnLine(line, Math.min(1, Math.max(0, startRatio)));
+  const end = pointOnLine(
+    line,
+    Math.min(1, Math.max(0, startRatio + widthPx / lineLength))
+  );
+  const label = `${point.label.toUpperCase()} ${formatSixteenths(width)}`;
+
+  return (
+    <g
+      data-fixed-point-id={point.id}
+      data-measurement-key={key}
+      onClick={() => onSelectMeasurement(key)}
+      className="cursor-pointer"
+      stroke="#4b8fae"
+      fill="#84bdd6"
+    >
+      <line
+        x1={start.x}
+        y1={start.y}
+        x2={end.x}
+        y2={end.y}
+        strokeWidth="14"
+      />
+      <text
+        x={(start.x + end.x) / 2}
+        y={(start.y + end.y) / 2 - 18}
+        textAnchor="middle"
+        fontFamily="var(--studio-mono)"
+        fontSize="10"
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
+function FixedPointMark({
+  wall,
+  point
+}: {
+  wall: Round2Wall;
+  point: Round2FixedPoint;
+}) {
+  const line = wallLine(wall);
+  const pointOnWall = pointOnLine(line, point.positionRatio);
+  return (
+    <g fontFamily="var(--studio-mono)" fontSize="9" textAnchor="middle">
+      <circle
+        cx={pointOnWall.x}
+        cy={pointOnWall.y}
+        r="15"
+        fill="#d4d7d1"
+        stroke="#8d9691"
+        strokeWidth="1.5"
+      />
+      <text x={pointOnWall.x} y={pointOnWall.y + 3} fill="#303633">
+        {point.symbol?.slice(0, 2).toUpperCase() ?? point.label.slice(0, 2)}
+      </text>
+    </g>
+  );
+}
+
+function wallLine(wall: Round2Wall): Line {
+  if (wall.sourceWall === "TOP") {
+    return { x1: VIEW.left, y1: VIEW.top, x2: VIEW.right, y2: VIEW.top };
+  }
+  if (wall.sourceWall === "RIGHT") {
+    return { x1: VIEW.right, y1: VIEW.top, x2: VIEW.right, y2: VIEW.bottom };
+  }
+  if (wall.sourceWall === "BOTTOM") {
+    return { x1: VIEW.right, y1: VIEW.bottom, x2: VIEW.left, y2: VIEW.bottom };
+  }
+  return { x1: VIEW.left, y1: VIEW.bottom, x2: VIEW.left, y2: VIEW.top };
+}
+
+function linePixelLength(line: Line): number {
+  return Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+}
+
+function pointOnLine(line: Line, ratio: number): { x: number; y: number } {
+  return {
+    x: line.x1 + (line.x2 - line.x1) * ratio,
+    y: line.y1 + (line.y2 - line.y1) * ratio
+  };
+}
+
+function wallLabelPosition(wall: Round2Wall): {
+  x: number;
+  y: number;
+  rotate?: string;
+} {
+  if (wall.sourceWall === "TOP") return { x: 380, y: 84 };
+  if (wall.sourceWall === "RIGHT") {
+    return { x: 670, y: 288, rotate: "rotate(90 670 288)" };
+  }
+  if (wall.sourceWall === "BOTTOM") return { x: 380, y: 520 };
+  return { x: 96, y: 288, rotate: "rotate(-90 96 288)" };
+}
+
+function wallButtonPosition(wall: Round2Wall): string {
+  if (wall.sourceWall === "TOP") return "left-1/2 top-3 -translate-x-1/2";
+  if (wall.sourceWall === "RIGHT") return "right-3 top-1/2 -translate-y-1/2";
+  if (wall.sourceWall === "BOTTOM") return "bottom-3 left-1/2 -translate-x-1/2";
+  return "left-3 top-1/2 -translate-y-1/2";
 }

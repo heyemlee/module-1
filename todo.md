@@ -2,7 +2,11 @@
 
 Date: 2026-07-02
 Branch: codex/round2-visual-prototype
-Status: 未开始
+Status: 阶段 0–4 已完成；阶段 5 收尾待办
+
+Last updated: 2026-07-02
+Validation: `npm test` 通过(489 passed / 1 skipped)；`npx tsc --noEmit` 通过；浏览器已走通
+lock → measurement → submit → drawings review，并验证 A1/A2/S1 模型驱动输出。
 
 ## 背景与问题
 
@@ -43,94 +47,94 @@ Status: 未开始
 
 ## 阶段 0 — 核心模型与 Round 1 派生(地基)
 
-- [ ] 新建 `src/features/round2/model/round2-model.ts`:
-  - [ ] `Round2Model = { walls: Round2Wall[]; ... }`
-  - [ ] `Round2Wall = { id; label ("A"/"B"/...动态); lengthSixteenths | null(未实测); segments: WallSegment[] }`
-  - [ ] `WallSegment` 判别联合:`cabinet | filler | appliance | opening(窗/门) | gap`,
+- [x] 新建 `src/features/round2/model/round2-model.ts`:
+  - [x] `Round2Model = { walls: Round2Wall[]; ... }`
+  - [x] `Round2Wall = { id; label ("A"/"B"/...动态); lengthSixteenths | null(未实测); segments: WallSegment[] }`
+  - [x] `WallSegment` 判别联合:`cabinet | filler | appliance | opening(窗/门) | gap`,
         宽度为 1/16″ 整数;cabinet 带 kind(base/upper/sink/tall)、标准宽度档位、全局编号位
-  - [ ] 分数格式化工具 `formatSixteenths()`(30″、¾″、150 3/8″)+ 单测
-- [ ] 新建 `src/features/round2/model/derive-walls.ts`:
-  - [ ] `deriveWallsFromRound1(floorPlan: FloorPlan): DerivedWall[]` —
+  - [x] 分数格式化工具 `formatSixteenths()`(30″、¾″、150 3/8″)+ 单测
+- [x] 新建 `src/features/round2/model/derive-walls.ts`:
+  - [x] `deriveWallsFromRound1(floorPlan: FloorPlan): DerivedWall[]` —
         由 `baseCabinets/wallCabinets` 的 `wall` 字段(TOP/LEFT/RIGHT/BOTTOM)判定哪些墙参与,
         按顺时针顺序命名 A/B/C...
-  - [ ] 提取每面墙的固定点:window / door / markers(水电)/ 电器意向,只保留所属墙 + 相对顺序
-  - [ ] 覆盖布局:ONE_WALL、L(左右)、U、GALLEY;peninsula / island 先降级为备注项(见"暂缓")
-  - [ ] 单测:每种 layoutPreference 一个 fixture,断言墙数、命名、固定点归属
-- [ ] `Round1ReferenceSource` 增加派生结果或在 LOCK_REFERENCE 时计算并存入 state
+  - [x] 提取每面墙的固定点:window / door / markers(水电)/ 电器意向,只保留所属墙 + 相对顺序
+  - [x] 覆盖布局:ONE_WALL、L(左右)、U、GALLEY;peninsula / island 先降级为备注项(见"暂缓")
+  - [x] 单测:每种 layoutPreference 一个 fixture,断言墙数、命名、固定点归属
+- [x] `Round1ReferenceSource` 增加派生结果或在 LOCK_REFERENCE 时计算并存入 state
 
 验收:galley 快照派生出 2 面对墙,U 型派生出 3 面墙,窗归属正确;`npm test` 通过。
 
 ## 阶段 1 — 量尺工作区:字段派生 + 图上录入
 
-- [ ] `round2-types.ts`:`Round2Measurements` 由固定 6 字段改为按派生墙/固定点动态生成的
+- [x] `round2-types.ts`:`Round2Measurements` 由固定 6 字段改为按派生墙/固定点动态生成的
       `Record<measureKey, number | null>`(总长、天花、每个 opening 的宽度与 offset)
-- [ ] `round2-state.ts`:
-  - [ ] `createRound2PrototypeState` 不再引用 `ROUND2_MEASUREMENT_FIXTURE`;
+- [x] `round2-state.ts`:
+  - [x] `createRound2PrototypeState` 不再引用 `ROUND2_MEASUREMENT_FIXTURE`;
         LOCK_REFERENCE / REPLACE_REFERENCE 时由派生结果初始化空白量尺(状态 DRAFT)
-  - [ ] `EDIT_MEASUREMENT` 按动态 key 工作;未完成必填项时禁止 SUBMIT
-- [ ] `measurement-workspace.tsx`:字段列表由派生墙生成(分组:每面墙一组 + ROOM + OPENINGS);
+  - [x] `EDIT_MEASUREMENT` 按动态 key 工作;未完成必填项时禁止 SUBMIT
+- [x] `measurement-workspace.tsx`:字段列表由派生墙生成(分组:每面墙一组 + ROOM + OPENINGS);
       进度条按真实完成度计算(替换写死的 72% / 06/08)
-- [ ] `measured-plan.tsx`:
-  - [ ] 平面图按派生墙拓扑绘制(不再固定三面 U 型)
-  - [ ] 尺寸链可点击:点某段 → 聚焦左侧对应输入框(双向:改输入框图即时重排)
-  - [ ] 未实测段显示占位样式(虚线 + "待量"),已实测段显示分数英寸
-- [ ] 引导顺序:总长 → 固定点 offset → 下一面墙(当前项高亮)
-- [ ] 更新 / 补齐 `measured-plan.test.tsx`、`round2-state.test.ts`
+- [x] `measured-plan.tsx`:
+  - [x] 平面图按派生墙拓扑绘制(不再固定三面 U 型)
+  - [x] 尺寸链可点击:点某段 → 聚焦左侧对应输入框(双向:改输入框图即时重排)
+  - [x] 未实测段显示占位样式(虚线 + "待量"),已实测段显示分数英寸
+- [x] 引导顺序:总长 → 固定点 offset → 下一面墙(当前项高亮)
+- [x] 更新 / 补齐 `measured-plan.test.tsx`、`round2-state.test.ts`
 
 验收:锁定 galley 参考后量尺页出现 2 面墙字段;每输入一个值平面图即时变化;
 未量完不能提交。
 
 ## 阶段 2 — 自动布柜引擎 + 挡板
 
-- [ ] 新建 `src/features/round2/model/autofill.ts`:
-  - [ ] `autofillWall(wall, intent): WallSegment[]` — 纯函数、确定性:
+- [x] 新建 `src/features/round2/model/autofill.ts`:
+  - [x] `autofillWall(wall, intent): WallSegment[]` — 纯函数、确定性:
         标准柜宽档位(9/12/15/18/21/24/27/30/33/36),先放电器/水槽固定段,
         再铺柜体,余数生成挡板置于墙端(默认)或转角侧
-  - [ ] 转角处理:相邻墙相接处预留 corner 段(盲角柜或 filler,先做 filler + 备注)
-  - [ ] 全局编号:按墙序 A→B→C,先吊柜后地柜,#1..#n;挡板独立编号 F1..Fn 进柜体表
-  - [ ] 挡板最小值规则(默认 ½″,可常量配置):低于阈值 → 产出 decision item 数据
-  - [ ] 单测:总宽恒等于墙长(闭合性)、同输入同输出(确定性)、挡板阈值触发决策项
-- [ ] `round2-state.ts`:SUBMIT_MEASUREMENT 后自动执行 autofill,模型进入 state;
+  - [x] 转角处理:相邻墙相接处预留 corner 段(盲角柜或 filler,先做 filler + 备注)
+  - [x] 全局编号:按墙序 A→B→C,先吊柜后地柜,#1..#n;挡板独立编号 F1..Fn 进柜体表
+  - [x] 挡板最小值规则(默认 ½″,可常量配置):低于阈值 → 产出 decision item 数据
+  - [x] 单测:总宽恒等于墙长(闭合性)、同输入同输出(确定性)、挡板阈值触发决策项
+- [x] `round2-state.ts`:SUBMIT_MEASUREMENT 后自动执行 autofill,模型进入 state;
       REPLACE_REFERENCE / SUBMIT_NEW_MEASUREMENT 时重新 autofill 并把 proposal/drawing 置 STALE
-- [ ] 删除 `ROUND2_CABINET_FIXTURE` 的消费方(fixture 文件在阶段 5 统一移除)
+- [x] 删除 `ROUND2_CABINET_FIXTURE` 的消费方(fixture 文件在阶段 5 统一移除)
 
 验收:提交量尺后方案页自动出现铺满的柜体 + 挡板;尺寸链每段之和 === 墙实测总长
 (单测断言)。
 
 ## 阶段 3 — 方案工作区:约束式微调
 
-- [ ] `round2-types.ts` / `round2-state.ts`:
-  - [ ] 移除自由偏移 `SET_CABINET_OFFSET` / `cabinetOffsets`,替换为约束动作:
-    - [ ] `STEP_CABINET_WIDTH`(标准档位换档,差值由同墙挡板吸收)
-    - [ ] `NUDGE_GROUP`(1/16″ 步进,挡板间转移余量;支持 ←/→ 键盘)
-    - [ ] `MOVE_FILLER_END`(挡板挪端:左端/右端/柜间)
-    - [ ] `SET_SEGMENT_KIND`(换柜型,宽度规则同换档)
-  - [ ] 任何微调后重算闭合性;挡板 < 阈值或 < 0 → 生成/更新决策项,proposalStatus 走
+- [x] `round2-types.ts` / `round2-state.ts`:
+  - [x] 移除自由偏移 `SET_CABINET_OFFSET` / `cabinetOffsets`,替换为约束动作:
+    - [x] `STEP_CABINET_WIDTH`(标准档位换档,差值由同墙挡板吸收)
+    - [x] `NUDGE_GROUP`(1/16″ 步进,挡板间转移余量;支持 ←/→ 键盘)
+    - [x] `MOVE_FILLER_END`(挡板挪端:左端/右端/柜间)
+    - [x] `SET_SEGMENT_KIND`(换柜型,宽度规则同换档)
+  - [x] 任何微调后重算闭合性;挡板 < 阈值或 < 0 → 生成/更新决策项,proposalStatus 走
         NEEDS_DECISION;恢复后可 RESOLVE
-  - [ ] 泛化 `SET_SINK_WIDTH`(30/33/36)为 `STEP_CABINET_WIDTH` 的特例,删除专用 action
-- [ ] `design-plan.tsx` / `wall-elevation.tsx`:改读 `Round2Model`(墙数动态、选中墙立面
+  - [x] 泛化 `SET_SINK_WIDTH`(30/33/36)为 `STEP_CABINET_WIDTH` 的特例,删除专用 action
+- [x] `design-plan.tsx` / `wall-elevation.tsx`:改读 `Round2Model`(墙数动态、选中墙立面
       按实测比例渲染);挡板渲染为可选中的琥珀色段并显示宽度
-- [ ] `proposal-workspace.tsx`:墙 Tab 由派生墙生成(不再写死 A/B/C);选中柜属性栏:
+- [x] `proposal-workspace.tsx`:墙 Tab 由派生墙生成(不再写死 A/B/C);选中柜属性栏:
       宽度档位 chips + nudge 按钮 + 挡板余量显示
-- [ ] `decision-rail.tsx`:决策项来自模型(挡板不足、量尺冲突),替换演示数据;
+- [x] `decision-rail.tsx`:决策项来自模型(挡板不足、量尺冲突),替换演示数据;
       REQUEST_REMEASURE 保留并关联到具体墙/段
-- [ ] 更新 `proposal-selection.test.tsx`、`decision-rail.test.tsx`、`round2-state.test.ts`
+- [x] 更新 `proposal-selection.test.tsx`、`decision-rail.test.tsx`、`round2-state.test.ts`
 
 验收:改任一柜宽,同墙挡板数值即时变化且尺寸链仍闭合;把挡板压到 ¼″ 出现决策项;
 平面/立面/决策栏三处联动选中。
 
 ## 阶段 4 — 图纸:同一模型渲染
 
-- [ ] `drawing-sheet.tsx` 重写为模型驱动:
-  - [ ] 删除 `PlanSheet` / `ElevationSheet` / `elevationSpecs` 三套硬编码
-  - [ ] A1 平面:按派生墙拓扑 + 实测尺寸绘制,尺寸链(分段 + 总长)自动生成
-  - [ ] 立面页数量动态:每面参与墙一页(A2..A[n+1]),`ROUND2_SHEETS` 由模型生成
-  - [ ] 立面含:柜体红叉门线、红色编号、上下双层尺寸链、竖向总高/台面高标注、
+- [x] `drawing-sheet.tsx` 重写为模型驱动:
+  - [x] 删除 `PlanSheet` / `ElevationSheet` / `elevationSpecs` 三套硬编码
+  - [x] A1 平面:按派生墙拓扑 + 实测尺寸绘制,尺寸链(分段 + 总长)自动生成
+  - [x] 立面页数量动态:每面参与墙一页(A2..A[n+1]),`ROUND2_SHEETS` 由模型生成
+  - [x] 立面含:柜体红叉门线、红色编号、上下双层尺寸链、竖向总高/台面高标注、
         窗/门蓝色开口
-- [ ] `cabinet-schedule.tsx`(S1):从模型生成行,含挡板行(F 编号、宽度、位置);
+- [x] `cabinet-schedule.tsx`(S1):从模型生成行,含挡板行(F 编号、宽度、位置);
       保留 measurement/proposal 版本水印
-- [ ] `drawing-review.tsx`:sheet 切换、zoom、MARK_REVIEWED 逻辑不变,仅换数据源
-- [ ] 更新 `drawing-sheet.test.tsx`(断言:图纸编号与方案页一致、尺寸链闭合、
+- [x] `drawing-review.tsx`:sheet 切换、zoom、MARK_REVIEWED 逻辑不变,仅换数据源
+- [x] 更新 `drawing-sheet.test.tsx`(断言:图纸编号与方案页一致、尺寸链闭合、
       galley 参考只出 2 张立面)
 
 验收:方案页看到的 #编号/宽度/挡板与 A 系图纸、S1 柜体表逐项一致;

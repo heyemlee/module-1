@@ -3,14 +3,12 @@
 import type { Dispatch } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ROUND2_SHEETS } from "../round2-fixtures";
 import type {
-  DrawingSheetId,
   Round2PrototypeAction,
   Round2PrototypeState
 } from "../round2-types";
 import { CabinetSchedule } from "./cabinet-schedule";
-import { DrawingSheet } from "./drawing-sheet";
+import { DrawingSheet, drawingSheetsForModel } from "./drawing-sheet";
 
 export function DrawingReview({
   state,
@@ -25,6 +23,9 @@ export function DrawingReview({
 }) {
   const canReview =
     state.proposalStatus === "READY" && state.drawingStatus !== "STALE";
+  const sheets = drawingSheetsForModel(state.model);
+  const activeSheet =
+    sheets.find((sheet) => sheet.id === state.activeSheet) ?? sheets[0];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#d8d9d6]">
@@ -68,15 +69,15 @@ export function DrawingReview({
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 bg-white/55 px-4 py-2">
           <div className="flex flex-wrap gap-1.5">
-            {ROUND2_SHEETS.map((sheet) => (
+            {sheets.map((sheet) => (
               <button
                 key={sheet.id}
                 type="button"
-                aria-pressed={state.activeSheet === sheet.id}
+                aria-pressed={activeSheet.id === sheet.id}
                 onClick={() =>
                   dispatch({
                     type: "SET_SHEET",
-                    sheet: sheet.id as DrawingSheetId
+                    sheet: sheet.id
                   })
                 }
                 className="rounded-[9px] border border-black/10 bg-white/65 px-3 py-2 font-mono text-[9px] text-[#5d5d58] outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-studio-action aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
@@ -124,11 +125,18 @@ export function DrawingReview({
             style={{ transform: `scale(${state.drawingZoom})` }}
           >
             <div className="overflow-hidden border border-black/20 bg-white shadow-[0_28px_75px_-35px_rgba(0,0,0,0.5)]">
-              {state.activeSheet === "S1" ? (
-                <CabinetSchedule />
+              {activeSheet.id === "S1" ? (
+                <CabinetSchedule
+                  model={state.model}
+                  customerName={customerName}
+                  projectName={projectName}
+                  measurementVersion={state.measurementVersion}
+                  proposalVersion={state.proposalVersion}
+                />
               ) : (
                 <DrawingSheet
-                  sheet={state.activeSheet}
+                  sheet={activeSheet}
+                  model={state.model}
                   measurementVersion={state.measurementVersion}
                   proposalVersion={state.proposalVersion}
                   customerName={customerName}
