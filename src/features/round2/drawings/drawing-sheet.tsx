@@ -14,12 +14,16 @@ type DrawingSheetProps = {
   sheet: Exclude<DrawingSheetId, "S1">;
   measurementVersion: number;
   proposalVersion: number;
+  customerName: string;
+  projectName: string;
 };
 
 export function DrawingSheet({
   sheet,
   measurementVersion,
-  proposalVersion
+  proposalVersion,
+  customerName,
+  projectName
 }: DrawingSheetProps) {
   const title =
     sheet === "A1"
@@ -43,7 +47,9 @@ export function DrawingSheet({
         <line x1="690" y1="648" x2="690" y2="690" stroke={COLORS.ink} />
         <line x1="842" y1="648" x2="842" y2="690" stroke={COLORS.ink} />
         <text x="48" y="669" fontSize="16" fontWeight="700">{sheet} · {title}</text>
-        <text x="48" y="684" fontSize="9" fill={COLORS.muted}>MIKE · MAIN KITCHEN · ROUND 2 VISUAL PROTOTYPE</text>
+        <text x="48" y="684" fontSize="9" fill={COLORS.muted}>
+          {customerName.toUpperCase()} · {projectName.toUpperCase()} · ROUND 2 VISUAL PROTOTYPE
+        </text>
         <text x="704" y="665" fontSize="9">MEASUREMENT v{measurementVersion}</text>
         <text x="704" y="681" fontSize="9">PROPOSAL v{proposalVersion}</text>
         <text x="858" y="665" fontSize="9">SCALE</text>

@@ -48,8 +48,15 @@ export function Round2VisualPrototype({
       reference={reference}
       role={state.role}
       round1Href={`/projects/${projectId}/round1`}
+      nextReferenceVersion={state.referenceVersion + 1}
       onLock={(snapshotId) =>
-        dispatch({ type: "LOCK_REFERENCE", snapshotId })
+        dispatch({
+          type:
+            state.referenceVersion === 0
+              ? "LOCK_REFERENCE"
+              : "REPLACE_REFERENCE",
+          snapshotId
+        })
       }
     />
   ) : state.task === "MEASUREMENT" ? (
@@ -57,7 +64,12 @@ export function Round2VisualPrototype({
     ) : state.task === "PROPOSAL" ? (
       <ProposalWorkspace state={state} dispatch={dispatch} />
     ) : (
-      <DrawingReview state={state} dispatch={dispatch} />
+      <DrawingReview
+        state={state}
+        dispatch={dispatch}
+        customerName={customerName}
+        projectName={projectName}
+      />
     );
 
   return (
@@ -83,7 +95,7 @@ export function Round2VisualPrototype({
                 <span>ROUND 2</span>
                 <span className="size-1 rounded-full bg-[#a7a79f]" />
                 <span>VISUAL PROTOTYPE</span>
-                <span className="hidden sm:inline">· CHANGES ARE NOT SAVED</span>
+                <span className="hidden xl:inline">· CHANGES ARE NOT SAVED</span>
                 {state.referenceLocked && (
                   <span className="hidden lg:inline">
                     · ROUND 1 REF v{state.referenceVersion}
@@ -94,7 +106,7 @@ export function Round2VisualPrototype({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden rounded-full border border-studio-line bg-white/60 px-2.5 py-1 font-mono text-[8.5px] tracking-[0.08em] text-studio-muted md:inline">
+            <span className="hidden rounded-full border border-studio-line bg-white/60 px-2.5 py-1 font-mono text-[8.5px] tracking-[0.08em] text-studio-muted xl:inline">
               {state.role} VIEW
             </span>
             <Button
@@ -110,6 +122,18 @@ export function Round2VisualPrototype({
             >
               View as {state.role === "SALES" ? "Designer" : "Sales"}
             </Button>
+            {state.referenceLocked && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  dispatch({ type: "OPEN_REFERENCE_HANDOFF" })
+                }
+              >
+                Change Round 1
+              </Button>
+            )}
           </div>
         </header>
       }

@@ -28,7 +28,7 @@ export function Round2TaskNavigation({
                 aria-current={active ? "step" : undefined}
                 onClick={() => onTaskChange(item.id)}
                 className={cn(
-                  "flex min-h-[58px] w-full items-center justify-center gap-2 border-b-2 px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-studio-action sm:justify-start sm:gap-3 sm:px-[18px]",
+                  "flex min-h-[58px] w-full items-center justify-center gap-2 border-b-2 px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-studio-action sm:justify-start sm:px-3 lg:gap-3 lg:px-[18px]",
                   active
                     ? "border-studio-ink bg-white/70"
                     : "border-transparent hover:bg-white/40"

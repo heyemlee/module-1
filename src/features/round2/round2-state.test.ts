@@ -94,6 +94,20 @@ describe("Round 2 prototype state", () => {
     expect(replaced.drawingStatus).toBe("STALE");
   });
 
+  test("can reopen the Round 1 handoff before relocking another snapshot", () => {
+    const locked = reduceRound2Prototype(
+      createRound2PrototypeState("DESIGNER"),
+      { type: "LOCK_REFERENCE", snapshotId: "snapshot-1" }
+    );
+    const reopened = reduceRound2Prototype(locked, {
+      type: "OPEN_REFERENCE_HANDOFF"
+    });
+
+    expect(reopened.referenceLocked).toBe(false);
+    expect(reopened.referenceVersion).toBe(1);
+    expect(reopened.referenceSnapshotId).toBe("snapshot-1");
+  });
+
   test("stores precise cabinet offsets as a new proposal version", () => {
     const initial = reduceRound2Prototype(
       createRound2PrototypeState("DESIGNER"),

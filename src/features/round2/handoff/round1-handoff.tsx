@@ -12,11 +12,13 @@ export function Round1Handoff({
   reference,
   role,
   onLock,
+  nextReferenceVersion,
   round1Href = "#"
 }: {
   reference: Round1ReferenceSource | null;
   role: Round2DemoRole;
   onLock: (snapshotId: string) => void;
+  nextReferenceVersion: number;
   round1Href?: string;
 }) {
   return (
@@ -102,7 +104,7 @@ export function Round1Handoff({
                   LOCK EFFECT
                 </p>
                 <p className="mt-1.5 text-[10.5px] leading-4 text-[#755827]">
-                  Creates Reference v1. Round 2 changes become proposal versions and never rewrite this snapshot.
+                  Creates Reference v{nextReferenceVersion}. Round 2 changes become proposal versions and never rewrite this snapshot.
                 </p>
               </div>
 
@@ -112,7 +114,9 @@ export function Round1Handoff({
                 disabled={!reference.complete}
                 onClick={() => onLock(reference.id)}
               >
-                Lock for Round 2
+                {nextReferenceVersion === 1
+                  ? "Lock for Round 2"
+                  : "Relock for Round 2"}
               </Button>
               <p className="mt-2 text-center font-mono text-[8px] tracking-[0.09em] text-studio-quiet">
                 {role} · AUTHORIZED TO LOCK

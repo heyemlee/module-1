@@ -14,10 +14,14 @@ import { DrawingSheet } from "./drawing-sheet";
 
 export function DrawingReview({
   state,
-  dispatch
+  dispatch,
+  customerName,
+  projectName
 }: {
   state: Round2PrototypeState;
   dispatch: Dispatch<Round2PrototypeAction>;
+  customerName: string;
+  projectName: string;
 }) {
   const canReview =
     state.proposalStatus === "READY" && state.drawingStatus !== "STALE";
@@ -127,6 +131,8 @@ export function DrawingReview({
                   sheet={state.activeSheet}
                   measurementVersion={state.measurementVersion}
                   proposalVersion={state.proposalVersion}
+                  customerName={customerName}
+                  projectName={projectName}
                 />
               )}
             </div>

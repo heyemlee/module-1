@@ -45,6 +45,7 @@ export type Round2PrototypeState = {
 export type Round2PrototypeAction =
   | { type: "LOCK_REFERENCE"; snapshotId: string }
   | { type: "REPLACE_REFERENCE"; snapshotId: string }
+  | { type: "OPEN_REFERENCE_HANDOFF" }
   | { type: "SET_ROLE"; role: Round2DemoRole }
   | { type: "SET_TASK"; task: Round2Task }
   | {

@@ -10,6 +10,7 @@ describe("Round1Handoff", () => {
         reference={ROUND1_REFERENCE_FIXTURE}
         role="SALES"
         onLock={() => {}}
+        nextReferenceVersion={1}
       />
     );
 
@@ -20,5 +21,19 @@ describe("Round1Handoff", () => {
     expect(html).toContain("Fridge");
     expect(html).toContain("Lock for Round 2");
     expect(html).not.toContain("Field Measurement");
+  });
+
+  test("explains that relocking creates a new reference version", () => {
+    const html = renderToStaticMarkup(
+      <Round1Handoff
+        reference={ROUND1_REFERENCE_FIXTURE}
+        role="DESIGNER"
+        onLock={() => {}}
+        nextReferenceVersion={2}
+      />
+    );
+
+    expect(html).toContain("Creates Reference v2");
+    expect(html).toContain("Relock for Round 2");
   });
 });

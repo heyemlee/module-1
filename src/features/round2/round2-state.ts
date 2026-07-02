@@ -53,6 +53,8 @@ export function reduceRound2Prototype(
         proposalStatus: "STALE",
         drawingStatus: "STALE"
       };
+    case "OPEN_REFERENCE_HANDOFF":
+      return { ...state, referenceLocked: false };
     case "SET_ROLE":
       return {
         ...state,
