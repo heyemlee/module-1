@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import {
   findWall,
   formatSixteenths,
@@ -27,12 +28,14 @@ export function WallElevation({
   wallId,
   model,
   selectedObjectId,
-  onSelect
+  onSelect,
+  onSelectWall
 }: {
   wallId: WallId | null;
   model: Round2Model | null;
   selectedObjectId: string | null;
   onSelect: (id: string, wall: WallId) => void;
+  onSelectWall?: (wall: WallId) => void;
 }) {
   const wall = findWall(model, wallId);
   const total =
@@ -44,21 +47,38 @@ export function WallElevation({
   const base = wall?.segments.filter((segment) => segment.tier === "base") ?? [];
 
   return (
-    <div className="h-full min-h-[440px] overflow-hidden rounded-[18px] border border-studio-paper-line bg-[#fbfbf8] shadow-[0_18px_42px_-30px_rgba(20,20,26,0.32)]">
-      <div className="flex items-center justify-between border-b border-studio-paper-line px-4 py-3">
+    <div className="relative h-full min-h-[440px] overflow-hidden rounded-[18px] border border-studio-line bg-white shadow-[0_18px_42px_-30px_rgba(20,20,26,0.28)]">
+      <div className="pointer-events-none absolute inset-0 opacity-100 [background-image:linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <div className="relative z-10 flex items-center justify-between border-b border-studio-line/40 px-4 py-3">
         <div>
-          <p className="font-mono text-[9px] tracking-[0.14em] text-studio-quiet">
+          <p className="font-mono text-[9px] tracking-[0.14em] text-black/45">
             SELECTED ELEVATION
           </p>
-          <h3 className="mt-1 text-[15px] font-semibold">
-            {wall ? `Wall ${wall.label}` : "No wall"}
-          </h3>
+          <div className="mt-1.5 flex items-center gap-1 rounded-[8px] border border-studio-line/40 bg-white p-0.5 shadow-sm">
+            {(model?.walls ?? []).map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                aria-pressed={wallId === w.id}
+                onClick={() => onSelectWall?.(w.id)}
+                className={cn(
+                  "flex h-7 px-3 items-center justify-center rounded-[6px] font-mono text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-studio-action",
+                  wallId === w.id
+                    ? "bg-studio-ink text-white"
+                    : "text-black/60 hover:bg-black/5 hover:text-studio-ink"
+                )}
+              >
+                Wall {w.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="font-mono text-[9px] text-studio-quiet">1:30</span>
+        <span className="font-mono text-[9px] text-black/45">1:30</span>
       </div>
 
       <svg
         viewBox="0 0 640 380"
+        preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label={wall ? `Wall ${wall.label} cabinet elevation` : "Cabinet elevation"}
         className="h-[calc(100%-68px)] min-h-[360px] w-full"

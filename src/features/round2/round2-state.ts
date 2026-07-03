@@ -61,20 +61,23 @@ export function reduceRound2Prototype(
     case "OPEN_REFERENCE_HANDOFF":
       return { ...state, referenceLocked: false };
     case "SET_ROLE":
-      return {
-        ...state,
-        role: action.role,
-        task: action.role === "SALES" ? "MEASUREMENT" : "PROPOSAL"
-      };
+      // Switching the demo "view as" role must not jump the user into a stage,
+      // and never into a stage that is still gated (proposal before submit).
+      return { ...state, role: action.role };
     case "SET_TASK":
-      return state.referenceLocked ? { ...state, task: action.task } : state;
-    case "EDIT_MEASUREMENT":
+      if (!state.referenceLocked) return state;
       if (
-        !state.model ||
-        (state.role === "DESIGNER" && state.measurementStatus !== "DRAFT")
+        (action.task === "PROPOSAL" || action.task === "DRAWINGS") &&
+        !proposalUnlocked(state)
       ) {
         return state;
       }
+      return { ...state, task: action.task };
+    case "EDIT_MEASUREMENT":
+      // Field measurement stays editable for whoever is on the step, including
+      // after a submit: editing reverts the stage to DRAFT and marks the
+      // downstream proposal/drawings stale until it is submitted again.
+      if (!state.model) return state;
       return updateMeasurements(state, {
         ...state.measurements,
         [action.field]: action.value
@@ -146,6 +149,18 @@ export function reduceRound2Prototype(
   }
 }
 
+/**
+ * The proposal and drawings stages are gated until field measurement has been
+ * submitted at least once — that submit is what autofills the wall segments the
+ * downstream stages render. Editing measurements afterwards keeps them unlocked
+ * (segments persist, just marked stale) so the user can move back and forth.
+ */
+export function proposalUnlocked(state: Round2PrototypeState): boolean {
+  return (
+    !!state.model && state.model.walls.some((wall) => wall.segments.length > 0)
+  );
+}
+
 function lockReference(
   state: Round2PrototypeState,
   reference: Round1ReferenceSource,
@@ -163,6 +178,10 @@ function lockReference(
     referenceSnapshotId: reference.id,
     reference,
     model,
+    // Locking always opens the field-measurement stage first, for both roles:
+    // the proposal/drawings are derived from measurements, so there is nothing
+    // meaningful to show on the proposal tab until measurements are submitted.
+    task: "MEASUREMENT",
     measurements,
     measurementStatus: "DRAFT",
     proposalStatus: "STALE",
@@ -210,6 +229,7 @@ function submitMeasurement(
   return {
     ...state,
     model,
+    task: "PROPOSAL",
     measurementVersion: newVersion
       ? state.measurementVersion + 1
       : state.measurementVersion,

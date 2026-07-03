@@ -29,43 +29,6 @@ export function DrawingReview({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#d8d9d6]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-studio-line bg-white/70 px-5 py-3 backdrop-blur-xl">
-        <div>
-          <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.12em] text-studio-quiet">
-            <span>DRAWING v{state.drawingVersion}</span>
-            <span>·</span>
-            <span>MEASUREMENT v{state.measurementVersion}</span>
-            <span>·</span>
-            <span>PROPOSAL v{state.proposalVersion}</span>
-          </div>
-          <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.02em]">
-            Professional drawing set
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "rounded-full px-2.5 py-1 font-mono text-[8px] tracking-[0.08em]",
-              state.drawingStatus === "REVIEWED"
-                ? "bg-studio-ink text-white"
-                : state.drawingStatus === "STALE"
-                  ? "bg-[#f0dfd9] text-[#8a3b2f]"
-                  : "bg-[#f6ead4] text-[#815416]"
-            )}
-          >
-            {state.drawingStatus.replaceAll("_", " ")}
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!canReview}
-            onClick={() => dispatch({ type: "MARK_REVIEWED" })}
-          >
-            Mark reviewed
-          </Button>
-        </div>
-      </header>
-
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 bg-white/55 px-4 py-2">
           <div className="flex flex-wrap gap-1.5">
@@ -86,36 +49,61 @@ export function DrawingReview({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Zoom out"
-              onClick={() =>
-                dispatch({
-                  type: "SET_DRAWING_ZOOM",
-                  zoom: state.drawingZoom - 0.25
-                })
-              }
-              className="grid size-9 place-items-center rounded-[9px] border border-black/10 bg-white/70 font-mono text-[13px]"
-            >
-              −
-            </button>
-            <span className="min-w-14 text-center font-mono text-[9px] text-[#686863]">
-              {Math.round(state.drawingZoom * 100)}%
-            </span>
-            <button
-              type="button"
-              aria-label="Zoom in"
-              onClick={() =>
-                dispatch({
-                  type: "SET_DRAWING_ZOOM",
-                  zoom: state.drawingZoom + 0.25
-                })
-              }
-              className="grid size-9 place-items-center rounded-[9px] border border-black/10 bg-white/70 font-mono text-[13px]"
-            >
-              +
-            </button>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Zoom out"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_DRAWING_ZOOM",
+                    zoom: state.drawingZoom - 0.25
+                  })
+                }
+                className="grid size-9 place-items-center rounded-[9px] border border-black/10 bg-white/70 font-mono text-[13px]"
+              >
+                −
+              </button>
+              <span className="min-w-14 text-center font-mono text-[9px] text-[#686863]">
+                {Math.round(state.drawingZoom * 100)}%
+              </span>
+              <button
+                type="button"
+                aria-label="Zoom in"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_DRAWING_ZOOM",
+                    zoom: state.drawingZoom + 0.25
+                  })
+                }
+                className="grid size-9 place-items-center rounded-[9px] border border-black/10 bg-white/70 font-mono text-[13px]"
+              >
+                +
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 border-l border-black/10 pl-4">
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-mono text-[8px] tracking-[0.08em]",
+                  state.drawingStatus === "REVIEWED"
+                    ? "bg-studio-ink text-white"
+                    : state.drawingStatus === "STALE"
+                      ? "bg-[#f0dfd9] text-[#8a3b2f]"
+                      : "bg-[#f6ead4] text-[#815416]"
+                )}
+              >
+                {state.drawingStatus.replaceAll("_", " ")}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canReview}
+                onClick={() => dispatch({ type: "MARK_REVIEWED" })}
+              >
+                Mark reviewed
+              </Button>
+            </div>
           </div>
         </div>
 

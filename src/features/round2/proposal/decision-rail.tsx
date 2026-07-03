@@ -41,13 +41,8 @@ export function DecisionRail({
 
   return (
     <aside className="h-full min-h-0 overflow-y-auto rounded-[18px] border border-studio-line bg-white/65 p-4 shadow-[0_18px_42px_-32px_rgba(20,20,26,0.28)] backdrop-blur-xl">
-      <div className="flex items-start justify-between gap-3 border-b border-studio-line pb-4">
-        <div>
-          <p className="font-mono text-[9px] tracking-[0.15em] text-studio-quiet">
-            DECISION QUEUE
-          </p>
-          <h3 className="mt-1.5 text-[16px] font-semibold">Design context</h3>
-        </div>
+      <div className="flex items-center justify-between gap-3 border-b border-studio-line pb-4">
+        <h3 className="text-[16px] font-semibold">Design context</h3>
         <span
           className={cn(
             "rounded-full px-2 py-1 font-mono text-[8px] tracking-[0.08em]",

@@ -31,13 +31,14 @@ export function DesignPlan({
   const segments = walls.flatMap((wall) => topViewSegments(wall));
 
   return (
-    <div className="relative h-full min-h-[440px] overflow-hidden rounded-[18px] border border-white/10 bg-[#17191a]">
-      <div className="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
-      <p className="absolute left-5 top-4 z-10 font-mono text-[9px] tracking-[0.16em] text-white/45">
+    <div className="relative h-full min-h-[440px] overflow-hidden rounded-[18px] border border-studio-line bg-white shadow-[0_18px_42px_-30px_rgba(20,20,26,0.28)]">
+      <div className="pointer-events-none absolute inset-0 opacity-100 [background-image:linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <p className="absolute left-5 top-4 z-10 font-mono text-[9px] tracking-[0.16em] text-black/45">
         TOP VIEW · CABINET PROPOSAL
       </p>
       <svg
-        viewBox="0 0 780 570"
+        viewBox="80 60 620 460"
+        preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label="Cabinet proposal top view"
         className="relative h-full w-full"
@@ -48,8 +49,9 @@ export function DesignPlan({
             <path
               key={wall.id}
               d={`M ${line.x1} ${line.y1} L ${line.x2} ${line.y2}`}
-              stroke="#f1f1ec"
+              stroke="#151515"
               strokeWidth="12"
+              strokeLinecap="square"
               fill="none"
             />
           );
@@ -82,7 +84,7 @@ export function DesignPlan({
                   textAnchor="middle"
                   fontFamily="var(--studio-mono)"
                   fontSize="10"
-                  fill="#84bdd6"
+                  fill="#079ca5"
                 >
                   {point.label.toUpperCase()}
                 </text>
@@ -91,9 +93,9 @@ export function DesignPlan({
         )}
       </svg>
 
-      <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-1.5 rounded-[12px] border border-white/10 bg-black/25 p-2 backdrop-blur-md">
+      <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-1.5 rounded-[12px] border border-studio-line bg-white/60 p-2 backdrop-blur-md">
         {segments.length === 0 ? (
-          <span className="px-2 py-1 font-mono text-[9px] text-white/45">
+          <span className="px-2 py-1 font-mono text-[9px] text-black/45">
             SUBMIT MEASUREMENTS TO AUTOFILL
           </span>
         ) : (
@@ -103,7 +105,7 @@ export function DesignPlan({
               type="button"
               aria-pressed={selectedObjectId === segment.id}
               onClick={() => onSelect(segment.id, segment.wallId)}
-              className="rounded-[7px] border border-white/10 bg-white/[0.06] px-2 py-1 font-mono text-[9px] text-white/60 outline-none transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-[#65d7dc] aria-pressed:border-[#65d7dc] aria-pressed:bg-[#65d7dc] aria-pressed:text-[#101415]"
+              className="rounded-[7px] border border-studio-line bg-white px-2 py-1 font-mono text-[9px] text-black/60 outline-none transition-colors hover:bg-black/5 hover:text-black focus-visible:ring-2 focus-visible:ring-[#079ca5] aria-pressed:border-[#079ca5] aria-pressed:bg-[#079ca5] aria-pressed:text-white"
             >
               {segment.code ?? segment.label}
             </button>
@@ -158,7 +160,7 @@ function SegmentRun({
               height={Math.max(8, rect.height - 2)}
               rx="2"
               fill={fillForSegment(segment)}
-              stroke={selected ? "#65d7dc" : "#7d8580"}
+              stroke={selected ? "#079ca5" : "#7d8580"}
               strokeWidth={selected ? 3 : 1.25}
             />
             <text

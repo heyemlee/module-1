@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   createRound2PrototypeState,
+  proposalUnlocked,
   reduceRound2Prototype
 } from "./round2-state";
 import { ROUND1_REFERENCE_FIXTURE } from "./round2-fixtures";
@@ -15,7 +16,7 @@ describe("Round 2 prototype state", () => {
     expect(createRound2PrototypeState("DESIGNER").task).toBe("PROPOSAL");
   });
 
-  test("allows Designer to fill draft measurements but keeps submitted measurements read only", () => {
+  test("keeps field measurement editable and resubmittable after submit", () => {
     const state = lock(createRound2PrototypeState("DESIGNER"));
     const field = Object.keys(state.measurements)[0];
     const draftEdit = reduceRound2Prototype(state, {
@@ -26,12 +27,40 @@ describe("Round 2 prototype state", () => {
     expect(draftEdit.measurements[field]).toBe(2304);
 
     const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    expect(submitted.measurementStatus).toBe("SUBMITTED");
+
     const submittedEdit = reduceRound2Prototype(submitted, {
       type: "EDIT_MEASUREMENT",
       field,
       value: 2400
     });
-    expect(submittedEdit.measurements[field]).toBe(submitted.measurements[field]);
+    // Editing after submit is allowed; it reverts the stage to draft and marks
+    // the downstream proposal stale until it is resubmitted.
+    expect(submittedEdit.measurements[field]).toBe(2400);
+    expect(submittedEdit.measurementStatus).toBe("DRAFT");
+    expect(submittedEdit.proposalStatus).toBe("STALE");
+  });
+
+  test("gates proposal and drawings until measurement is submitted", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    expect(proposalUnlocked(locked)).toBe(false);
+
+    const blocked = reduceRound2Prototype(locked, {
+      type: "SET_TASK",
+      task: "PROPOSAL"
+    });
+    expect(blocked.task).toBe("MEASUREMENT");
+
+    const submitted = reduceRound2Prototype(completeMeasurements(locked), {
+      type: "SUBMIT_MEASUREMENT"
+    });
+    expect(proposalUnlocked(submitted)).toBe(true);
+
+    const advanced = reduceRound2Prototype(submitted, {
+      type: "SET_TASK",
+      task: "PROPOSAL"
+    });
+    expect(advanced.task).toBe("PROPOSAL");
   });
 
   test("requires complete dynamic measurements before submit autofills proposal model", () => {
@@ -134,6 +163,14 @@ describe("Round 2 prototype state", () => {
       "B",
       "C"
     ]);
+  });
+
+  test("locking opens field measurement first, even for a Designer", () => {
+    const designer = createRound2PrototypeState("DESIGNER");
+    expect(designer.task).toBe("PROPOSAL");
+
+    const locked = lock(designer);
+    expect(locked.task).toBe("MEASUREMENT");
   });
 
   test("replacing the Round 1 reference invalidates downstream output", () => {

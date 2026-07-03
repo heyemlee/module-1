@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { CheckIcon, LockClosedIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
+import { LayoutPreview } from "@/features/round1/layout-preview";
 import type {
   Round1ReferenceSource,
   Round2DemoRole
@@ -59,8 +60,16 @@ export function Round1Handoff({
                   COMPLETE
                 </span>
               </div>
-              <div className="bg-[#17191a] p-4 sm:p-6">
-                <ReferencePlan reference={reference} />
+              <div className="bg-studio-canvas p-4 sm:p-6">
+                <div className="mx-auto aspect-[760/560] max-h-[500px] w-full">
+                  <LayoutPreview
+                    plan={reference.floorPlan}
+                    referenceMode
+                    showHeader={false}
+                    highlightDraggableItems={false}
+                    showPositionObjects
+                  />
+                </div>
               </div>
               <div className="grid gap-px border-t border-studio-line bg-studio-line sm:grid-cols-3">
                 <ReferenceMetric label="LAYOUT" value={reference.layoutLabel} />
@@ -136,69 +145,6 @@ export function Round1Handoff({
         )}
       </div>
     </div>
-  );
-}
-
-function ReferencePlan({ reference }: { reference: Round1ReferenceSource }) {
-  const plan = reference.floorPlan;
-  return (
-    <svg
-      viewBox={`0 0 ${plan.canvas.w} ${plan.canvas.h}`}
-      role="img"
-      aria-label={`Round 1 ${reference.layoutLabel} reference plan`}
-      className="mx-auto block aspect-[760/560] max-h-[500px] w-full"
-    >
-      <rect
-        x={plan.room.x}
-        y={plan.room.y}
-        width={plan.room.w}
-        height={plan.room.h}
-        fill="#202324"
-        stroke="#f0f0eb"
-        strokeWidth={plan.room.thickness}
-      />
-      <rect
-        x={plan.room.x + plan.room.thickness}
-        y={plan.room.y + plan.room.thickness}
-        width={plan.room.w - plan.room.thickness * 2}
-        height={plan.room.h - plan.room.thickness * 2}
-        fill="#17191a"
-      />
-      {[...plan.baseCabinets, ...plan.wallCabinets, ...plan.peninsulaCabinets].map(
-        (cabinet, index) => (
-          <g key={`${cabinet.code}-${index}`}>
-            <rect
-              x={cabinet.x}
-              y={cabinet.y}
-              width={cabinet.w}
-              height={cabinet.h}
-              fill="#d7dad5"
-              stroke="#8e9690"
-              strokeWidth="1.5"
-            />
-            <text
-              x={cabinet.x + cabinet.w / 2}
-              y={cabinet.y + cabinet.h / 2 + 3}
-              textAnchor="middle"
-              fontFamily="var(--studio-mono)"
-              fontSize="9"
-              fill="#292e2b"
-            >
-              {cabinet.code}
-            </text>
-          </g>
-        )
-      )}
-      {plan.window && (
-        <rect
-          x={plan.window.x}
-          y={plan.window.y}
-          width={plan.window.w}
-          height={plan.window.h}
-          fill="#4f98b8"
-        />
-      )}
-    </svg>
   );
 }
 

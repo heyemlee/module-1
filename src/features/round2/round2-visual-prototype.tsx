@@ -11,6 +11,7 @@ import { MeasurementWorkspace } from "./measurement/measurement-workspace";
 import { ProposalWorkspace } from "./proposal/proposal-workspace";
 import {
   createRound2PrototypeState,
+  proposalUnlocked,
   reduceRound2Prototype
 } from "./round2-state";
 import { Round2TaskNavigation } from "./round2-task-navigation";
@@ -142,6 +143,7 @@ export function Round2VisualPrototype({
           <Round2TaskNavigation
             task={state.task}
             onTaskChange={(task) => dispatch({ type: "SET_TASK", task })}
+            proposalUnlocked={proposalUnlocked(state)}
           />
         ) : (
           <div className="flex min-h-[58px] items-center justify-between gap-4 px-5">

@@ -38,8 +38,9 @@ export function MeasurementWorkspace({
   state: Round2PrototypeState;
   dispatch: Dispatch<Round2PrototypeAction>;
 }) {
-  const readOnly =
-    state.role === "DESIGNER" && state.measurementStatus !== "DRAFT";
+  // Field measurement is re-editable at any point (before and after submit), so
+  // the user can return from a later stage, change values, and re-submit.
+  const submitted = state.measurementStatus === "SUBMITTED";
   const fields = useMemo(
     () => buildMeasurementFields(state.model),
     [state.model]
@@ -83,9 +84,7 @@ export function MeasurementWorkspace({
               v{state.measurementVersion}
             </span>
           </div>
-          <p className="mt-2 max-w-[34ch] text-[12.5px] leading-5 text-studio-muted">
-            Enter field dimensions in inches. The measured plan updates as each source value changes.
-          </p>
+
           <div className="mt-5 flex items-center gap-3">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/10">
               <span
@@ -153,7 +152,6 @@ export function MeasurementWorkspace({
                       type="number"
                       min={0}
                       step={0.0625}
-                      disabled={readOnly}
                       value={value == null ? "" : value / 16}
                       onFocus={() =>
                         dispatch({
@@ -180,25 +178,23 @@ export function MeasurementWorkspace({
         </div>
 
         <div className="sticky bottom-0 border-t border-studio-line bg-[rgba(248,248,246,0.94)] p-5 backdrop-blur-xl">
-          {readOnly ? (
-            <div className="rounded-studio-control border border-studio-line bg-white/65 p-3">
-              <p className="font-mono text-[9px] tracking-[0.1em] text-studio-quiet">
-                SOURCE LOCKED
-              </p>
-              <p className="mt-1 text-[12px] font-semibold">
-                Submitted measurement v{state.measurementVersion} · read only
-              </p>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              className="w-full"
-              disabled={!complete}
-              onClick={() => dispatch({ type: "SUBMIT_MEASUREMENT" })}
-            >
-              Submit measurement v{state.measurementVersion}
-            </Button>
+          {submitted && (
+            <p className="mb-2 flex items-center gap-1.5 font-mono text-[9px] tracking-[0.1em] text-studio-quiet">
+              <span className="size-1.5 rounded-full bg-studio-ink" />
+              MEASUREMENT v{state.measurementVersion} SUBMITTED · EDIT AND RESUBMIT
+              TO UPDATE THE PROPOSAL
+            </p>
           )}
+          <Button
+            type="button"
+            className="w-full"
+            disabled={!complete}
+            onClick={() => dispatch({ type: "SUBMIT_MEASUREMENT" })}
+          >
+            {submitted
+              ? `Resubmit measurement v${state.measurementVersion}`
+              : `Submit measurement v${state.measurementVersion}`}
+          </Button>
         </div>
       </aside>
 

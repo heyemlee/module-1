@@ -26,11 +26,17 @@ import {
 } from "./layout-preview-shapes";
 
 type LayoutPreviewProps = {
-  normalized: Round1Normalized;
-  cabinets: Cabinet[];
-  confirmationItems: ConfirmationItem[];
-  positionOverrides: PositionOverrides;
-  onPositionOverridesChange: Dispatch<SetStateAction<PositionOverrides>>;
+  /**
+   * Inputs for computing the plan from scratch. All optional: when a precomputed
+   * `plan` is supplied (e.g. a frozen snapshot's geometry), these are ignored and
+   * a caller can render the plan read-only without re-deriving it. Required only
+   * for the interactive Round 1 intake path, which always provides them.
+   */
+  normalized?: Round1Normalized;
+  cabinets?: Cabinet[];
+  confirmationItems?: ConfirmationItem[];
+  positionOverrides?: PositionOverrides;
+  onPositionOverridesChange?: Dispatch<SetStateAction<PositionOverrides>>;
   highlightDraggableItems: boolean;
   showPositionObjects: boolean;
   /** Optional external ref to the rendered SVG (for client-side rasterization). */
@@ -38,7 +44,8 @@ type LayoutPreviewProps = {
   /**
    * Optional precomputed plan. When provided it is rendered as-is instead of
    * recomputing from inputs — used to bind the AI reference image to the exact
-   * frozen `snapshot.floorPlan`.
+   * frozen `snapshot.floorPlan`, and to show that same frozen plan read-only in
+   * the Round 2 handoff.
    */
   plan?: FloorPlan;
   /**
@@ -68,6 +75,13 @@ type DragState = "idle" | "dragging" | "snapping" | "invalid";
 
 const INK = "#1a1a1c";
 const LINE = "#3c3c3a";
+// Stable defaults so callers that only pass a precomputed `plan` (read-only
+// renders like the Round 2 handoff) don't need the interactive-path inputs, and
+// so the memo deps stay referentially stable across renders.
+const EMPTY_CABINETS: Cabinet[] = [];
+const EMPTY_CONFIRMATIONS: ConfirmationItem[] = [];
+const EMPTY_POSITION_OVERRIDES: PositionOverrides = {};
+const NOOP_POSITION_OVERRIDES: Dispatch<SetStateAction<PositionOverrides>> = () => {};
 const UNLABELED_APPLIANCE_SYMBOLS = new Set([
   "range",
   "sink",
@@ -83,10 +97,10 @@ const UNLABELED_APPLIANCE_KEYS = new Set([
 
 function LayoutPreviewImpl({
   normalized,
-  cabinets,
-  confirmationItems,
-  positionOverrides,
-  onPositionOverridesChange,
+  cabinets = EMPTY_CABINETS,
+  confirmationItems = EMPTY_CONFIRMATIONS,
+  positionOverrides = EMPTY_POSITION_OVERRIDES,
+  onPositionOverridesChange = NOOP_POSITION_OVERRIDES,
   highlightDraggableItems,
   showPositionObjects,
   svgRef: externalSvgRef,
@@ -101,13 +115,22 @@ function LayoutPreviewImpl({
 
   const internalSvgRef = useRef<SVGSVGElement>(null);
   const svgRef = externalSvgRef ?? internalSvgRef;
-  const computedPlan = useMemo(
-    () => buildFloorPlan(normalized, cabinets, confirmationItems.length, positionOverrides),
-    [cabinets, confirmationItems.length, normalized, positionOverrides]
-  );
   // A precomputed plan (the frozen snapshot geometry) takes precedence so the
-  // reference image is bound to exactly what was locked.
-  const plan = planProp ?? computedPlan;
+  // reference image is bound to exactly what was locked. When it is supplied we
+  // skip `buildFloorPlan` entirely, so callers can render a frozen plan without
+  // providing `normalized`/`cabinets`.
+  const computedPlan = useMemo(
+    () =>
+      planProp ??
+      buildFloorPlan(
+        normalized as Round1Normalized,
+        cabinets,
+        confirmationItems.length,
+        positionOverrides
+      ),
+    [cabinets, confirmationItems.length, normalized, planProp, positionOverrides]
+  );
+  const plan = computedPlan;
   const resolvedStage: PreviewStage = referenceMode
     ? "adjust"
     : previewStage ?? (showPositionObjects ? "adjust" : "room");
