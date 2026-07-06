@@ -7,6 +7,11 @@ import {
 } from "./model/adjustments";
 import { deriveWallsFromRound1 } from "./model/derive-walls";
 import {
+  buildIntentConfirmationDecisions,
+  initializeDesignIntent,
+  setDesignIntentAnswer
+} from "./model/design-intent";
+import {
   applyMeasurementsToModel,
   initializeMeasurements,
   measurementsComplete,
@@ -36,6 +41,7 @@ export function createRound2PrototypeState(
     measurementVersion: 1,
     measurementStatus: "DRAFT",
     measurements: {},
+    designIntent: { answers: {}, confirmedKeys: [] },
     proposalVersion: 1,
     proposalStatus: "STALE",
     drawingVersion: 1,
@@ -84,6 +90,25 @@ export function reduceRound2Prototype(
       }, action.field);
     case "SET_ACTIVE_MEASUREMENT":
       return { ...state, activeMeasurementKey: action.field };
+    case "SET_DESIGN_INTENT":
+      if (!state.model) return state;
+      return {
+        ...state,
+        designIntent: setDesignIntentAnswer(
+          state.designIntent,
+          action.key,
+          action.value
+        ),
+        measurementStatus: "DRAFT",
+        proposalStatus:
+          state.measurementStatus === "SUBMITTED"
+            ? "STALE"
+            : state.proposalStatus,
+        drawingStatus:
+          state.measurementStatus === "SUBMITTED"
+            ? "STALE"
+            : state.drawingStatus
+      };
     case "SUBMIT_MEASUREMENT":
       return submitMeasurement(state, false);
     case "REQUEST_REMEASURE":
@@ -183,6 +208,7 @@ function lockReference(
     // meaningful to show on the proposal tab until measurements are submitted.
     task: "MEASUREMENT",
     measurements,
+    designIntent: initializeDesignIntent(model),
     measurementStatus: "DRAFT",
     proposalStatus: "STALE",
     drawingStatus: "STALE",
@@ -221,7 +247,11 @@ function submitMeasurement(
     return state;
   }
 
-  const model = autofillRound2Model(state.model, state.measurements);
+  const model = autofillRound2Model(
+    state.model,
+    state.measurements,
+    state.designIntent
+  );
   const firstSelectable = firstSelectableSegment(model);
   const proposalStatus =
     model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY";
@@ -262,8 +292,21 @@ function applyProposalAdjustment(
 ): Round2PrototypeState {
   if (!state.model || state.role !== "DESIGNER") return state;
 
-  const model = adjust(state.model);
-  if (model === state.model) return state;
+  const adjustedModel = adjust(state.model);
+  if (adjustedModel === state.model) return state;
+  const model = {
+    ...adjustedModel,
+    decisionItems: [
+      ...adjustedModel.decisionItems.filter(
+        (item) => !item.id.startsWith("decision-intent-")
+      ),
+      ...buildIntentConfirmationDecisions(
+        adjustedModel,
+        state.designIntent,
+        state.measurements
+      )
+    ]
+  };
   const selectedSegment = firstSegmentById(model, selectedObjectId);
   const proposalStatus =
     model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY";

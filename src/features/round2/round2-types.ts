@@ -6,6 +6,11 @@ import type {
   WallId
 } from "./model/round2-model";
 import type { FillerEnd, NudgeDirection } from "./model/adjustments";
+import type {
+  DesignIntentKey,
+  DesignIntentValue,
+  Round2DesignIntent
+} from "./model/design-intent";
 
 export type Round2DemoRole = "SALES" | "DESIGNER";
 export type Round2Task = "MEASUREMENT" | "PROPOSAL" | "DRAWINGS";
@@ -17,7 +22,14 @@ export type ProposalStatus = "READY" | "NEEDS_DECISION" | "STALE";
 export type DrawingStatus = "DRAFT" | "REVIEW_READY" | "REVIEWED" | "STALE";
 export type DrawingSheetId = string;
 
-export type { MeasurementKey, Round2Model, WallId };
+export type {
+  DesignIntentKey,
+  DesignIntentValue,
+  MeasurementKey,
+  Round2DesignIntent,
+  Round2Model,
+  WallId
+};
 
 export type Round2Measurements = Record<MeasurementKey, number | null>;
 
@@ -32,6 +44,7 @@ export type Round2PrototypeState = {
   measurementVersion: number;
   measurementStatus: MeasurementStatus;
   measurements: Round2Measurements;
+  designIntent: Round2DesignIntent;
   proposalVersion: number;
   proposalStatus: ProposalStatus;
   drawingVersion: number;
@@ -56,6 +69,11 @@ export type Round2PrototypeAction =
       value: number | null;
     }
   | { type: "SET_ACTIVE_MEASUREMENT"; field: MeasurementKey }
+  | {
+      type: "SET_DESIGN_INTENT";
+      key: DesignIntentKey;
+      value: DesignIntentValue;
+    }
   | { type: "SUBMIT_MEASUREMENT" }
   | { type: "REQUEST_REMEASURE"; objectId: string }
   | { type: "SUBMIT_NEW_MEASUREMENT" }

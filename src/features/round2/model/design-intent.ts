@@ -1,0 +1,291 @@
+import type { Wall as Round1Wall } from "@/features/round1/floorplan/plan-geometry";
+import {
+  ceilingMeasurementKey,
+  formatSixteenths,
+  type Round2DecisionItem,
+  type Round2Model,
+  type WallId
+} from "./round2-model";
+
+export type CornerStrategy = "lazySusan" | "blindBase" | "deadCorner";
+export type UpperTermination = "standard" | "ceiling";
+export type FlatMouldingStyle = "none" | "flat2" | "flat3";
+export type TallCabinetLocation = "auto" | `wall:${WallId}`;
+export type TrashPulloutPreference = "sinkLeft" | "sinkRight" | "none";
+export type CabinetFrontPreference =
+  | "drawerForward"
+  | "balanced"
+  | "doorForward";
+export type HoodStyle = "cabinetInsert" | "chimney" | "underCabinet";
+export type HardwareStyle = "handle" | "fingerPull";
+export type SinkWindowAlignment = "align" | "keepRound1";
+
+export type DesignIntentValue =
+  | CornerStrategy
+  | UpperTermination
+  | FlatMouldingStyle
+  | TallCabinetLocation
+  | TrashPulloutPreference
+  | CabinetFrontPreference
+  | HoodStyle
+  | HardwareStyle
+  | SinkWindowAlignment;
+
+export type DesignIntentKey = string;
+
+export type Round2DesignIntent = {
+  answers: Record<DesignIntentKey, DesignIntentValue>;
+  confirmedKeys: DesignIntentKey[];
+};
+
+export type DesignIntentQuestionKind =
+  | "corner-strategy"
+  | "upper-termination"
+  | "flat-moulding"
+  | "tall-location"
+  | "trash-pullout"
+  | "cabinet-fronts"
+  | "hood-style"
+  | "hardware"
+  | "sink-window-alignment";
+
+export type DesignIntentOption = {
+  value: DesignIntentValue;
+  label: string;
+};
+
+export type DesignIntentQuestion = {
+  key: DesignIntentKey;
+  kind: DesignIntentQuestionKind;
+  label: string;
+  helper: string;
+  defaultValue: DesignIntentValue;
+  options: DesignIntentOption[];
+  wallId: WallId;
+  objectId: string;
+};
+
+type CornerDefinition = {
+  id: "TL" | "TR" | "BL" | "BR";
+  walls: readonly [Round1Wall, Round1Wall];
+};
+
+const CORNERS: readonly CornerDefinition[] = [
+  { id: "TL", walls: ["TOP", "LEFT"] },
+  { id: "TR", walls: ["TOP", "RIGHT"] },
+  { id: "BR", walls: ["BOTTOM", "RIGHT"] },
+  { id: "BL", walls: ["BOTTOM", "LEFT"] }
+];
+
+export function buildDesignIntentQuestions(
+  model: Round2Model | null,
+  measurements: Record<string, number | null>
+): DesignIntentQuestion[] {
+  if (!model || model.walls.length === 0) return [];
+
+  const firstWall = model.walls[0];
+  const wallBySource = new Map(
+    model.walls.map((wall) => [wall.sourceWall, wall])
+  );
+  const questions: DesignIntentQuestion[] = [];
+
+  for (const corner of CORNERS) {
+    const first = wallBySource.get(corner.walls[0]);
+    const second = wallBySource.get(corner.walls[1]);
+    if (!first || !second) continue;
+    questions.push({
+      key: `corner.${corner.id}.strategy`,
+      kind: "corner-strategy",
+      label: `Corner ${first.label}–${second.label} strategy`,
+      helper: "Default reserves fillers on both walls until the corner is confirmed.",
+      defaultValue: "deadCorner",
+      options: [
+        { value: "lazySusan", label: "Lazy Susan" },
+        { value: "blindBase", label: "Blind base" },
+        { value: "deadCorner", label: "Dead corner" }
+      ],
+      wallId: first.id,
+      objectId: `corner-${corner.id.toLowerCase()}`
+    });
+  }
+
+  const ceiling =
+    measurements[ceilingMeasurementKey()] ?? model.ceilingHeightSixteenths;
+  const ceilingLabel =
+    ceiling == null ? "the measured ceiling" : `${formatSixteenths(ceiling)} ceiling`;
+
+  questions.push(
+    {
+      key: "uppers.termination",
+      kind: "upper-termination",
+      label: `Run upper cabinets to ${ceilingLabel}?`,
+      helper: "Phase 8 will choose the closest standard upper height.",
+      defaultValue: "standard",
+      options: [
+        { value: "standard", label: "Standard height" },
+        { value: "ceiling", label: "To ceiling" }
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    },
+    {
+      key: "uppers.moulding",
+      kind: "flat-moulding",
+      label: "Flat moulding treatment",
+      helper: "Three inches is the preferred installation allowance.",
+      defaultValue: "flat3",
+      options: [
+        { value: "none", label: "None" },
+        { value: "flat2", label: "2″ flat" },
+        { value: "flat3", label: "3″ flat" }
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    },
+    {
+      key: "tall.location",
+      kind: "tall-location",
+      label: "Tall cabinet location",
+      helper: "Auto keeps tall cabinets near a wall end and away from windows.",
+      defaultValue: "auto",
+      options: [
+        { value: "auto", label: "Auto" },
+        ...model.walls.map((wall) => ({
+          value: `wall:${wall.id}` as TallCabinetLocation,
+          label: `Wall ${wall.label}`
+        }))
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    },
+    {
+      key: "trash.location",
+      kind: "trash-pullout",
+      label: "Trash pullout near the sink",
+      helper: "Default places the pullout on the sink side with more open run.",
+      defaultValue: "sinkRight",
+      options: [
+        { value: "sinkLeft", label: "Sink left" },
+        { value: "sinkRight", label: "Sink right" },
+        { value: "none", label: "None" }
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    },
+    {
+      key: "fronts.balance",
+      kind: "cabinet-fronts",
+      label: "Drawer-to-door preference",
+      helper: "This sets the starting mix; individual cabinets remain editable.",
+      defaultValue: "balanced",
+      options: [
+        { value: "drawerForward", label: "More drawers" },
+        { value: "balanced", label: "Balanced" },
+        { value: "doorForward", label: "More doors" }
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    },
+    {
+      key: "hood.style",
+      kind: "hood-style",
+      label: "Range hood form",
+      helper: "Cabinet insert keeps the upper run visually continuous.",
+      defaultValue: "cabinetInsert",
+      options: [
+        { value: "cabinetInsert", label: "Cabinet insert" },
+        { value: "chimney", label: "Chimney" },
+        { value: "underCabinet", label: "Under cabinet" }
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    },
+    {
+      key: "hardware.style",
+      kind: "hardware",
+      label: "Global hardware default",
+      helper: "The proposal can override this cabinet by cabinet.",
+      defaultValue: "handle",
+      options: [
+        { value: "handle", label: "Handle" },
+        { value: "fingerPull", label: "Finger pull" }
+      ],
+      wallId: firstWall.id,
+      objectId: firstWall.id
+    }
+  );
+
+  for (const wall of model.walls) {
+    const window = wall.fixedPoints.find((point) => point.type === "window");
+    const sink = wall.fixedPoints.find(
+      (point) => point.type === "appliance" && point.symbol === "sink"
+    );
+    if (!window || !sink) continue;
+    questions.push({
+      key: `sink-window.${wall.id}.alignment`,
+      kind: "sink-window-alignment",
+      label: `Center the sink under Wall ${wall.label} window?`,
+      helper: "This becomes a fixed alignment rule during autofill.",
+      defaultValue: "align",
+      options: [
+        { value: "align", label: "Center under window" },
+        { value: "keepRound1", label: "Keep Round 1 intent" }
+      ],
+      wallId: wall.id,
+      objectId: window.id
+    });
+  }
+
+  return questions;
+}
+
+export function initializeDesignIntent(
+  model: Round2Model | null
+): Round2DesignIntent {
+  return {
+    answers: Object.fromEntries(
+      buildDesignIntentQuestions(model, {}).map((question) => [
+        question.key,
+        question.defaultValue
+      ])
+    ),
+    confirmedKeys: []
+  };
+}
+
+export function setDesignIntentAnswer(
+  intent: Round2DesignIntent,
+  key: DesignIntentKey,
+  value: DesignIntentValue
+): Round2DesignIntent {
+  return {
+    answers: { ...intent.answers, [key]: value },
+    confirmedKeys: intent.confirmedKeys.includes(key)
+      ? intent.confirmedKeys
+      : [...intent.confirmedKeys, key]
+  };
+}
+
+export function buildIntentConfirmationDecisions(
+  model: Round2Model,
+  intent: Round2DesignIntent,
+  measurements: Record<string, number | null>
+): Round2DecisionItem[] {
+  const confirmed = new Set(intent.confirmedKeys);
+  return buildDesignIntentQuestions(model, measurements)
+    .filter((question) => !confirmed.has(question.key))
+    .map((question) => {
+      const answer = intent.answers[question.key] ?? question.defaultValue;
+      const option =
+        question.options.find((item) => item.value === answer) ??
+        question.options.find((item) => item.value === question.defaultValue);
+      return {
+        id: `decision-intent-${question.key}`,
+        objectId: question.objectId,
+        wallId: question.wallId,
+        severity: "warning",
+        title: `Confirmation required: ${question.label}`,
+        body: `Default “${option?.label ?? answer}” was applied. Confirm or revise this design intent before final review.`
+      };
+    });
+}

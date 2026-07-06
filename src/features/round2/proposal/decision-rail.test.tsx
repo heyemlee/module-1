@@ -21,7 +21,8 @@ describe("DecisionRail", () => {
     expect(html).toContain("Request remeasure");
     expect(html).toContain("Resolve decision");
     expect(html).toContain("WALL A");
-    expect(html).toContain("No filler decisions");
+    expect(html).toContain("Confirmation required");
+    expect(html).toContain("Default “Dead corner” was applied");
   });
 });
 

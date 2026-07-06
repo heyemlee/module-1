@@ -3,10 +3,10 @@
 Date: 2026-07-02(第一轮)/ 2026-07-06(第二轮规划)
 Branch: codex/round2-visual-prototype
 Status: 第一轮(阶段 0–5)代码完成,仅剩三布局手动浏览器 QA(需 seed 项目,用户侧验收);
-第二轮阶段 6(柜体标准表)已完成,阶段 7–10 待实施
+第二轮阶段 6(柜体标准表)、阶段 7(设计意向收集)已完成,阶段 8–10 待实施
 
 Last updated: 2026-07-06
-Validation: `npm test` 通过(513 passed / 1 skipped)；`npx tsc --noEmit` 通过;
+Validation: `npm test` 通过(526 passed / 1 skipped)；`npx tsc --noEmit` 通过;
 `npm run build` 成功。已走通 lock → measurement → submit → drawings review,
 并验证 A1/A2/S1 模型驱动输出。死 fixture(`ROUND2_MEASUREMENT_FIXTURE` /
 `ROUND2_CABINET_FIXTURE` / `ROUND2_SHEETS`)与孤立类型 `Round2Cabinet` 已删除。
@@ -214,20 +214,26 @@ autofill 结果与微调档位同步变化。
 
 ## 阶段 7 — 设计意向收集(并入量尺工作区,不新增阶段)
 
-- [ ] `round2-types.ts` 新增 `Round2DesignIntent`:
-  - [ ] 每个转角一项:`lazySusan | blindBase | deadCorner`(默认 deadCorner=双侧 filler 占位)
-  - [ ] 吊柜到顶与否 + flat moulding 形式(默认档位由天花实测推导,见阶段 8 高度链)
-  - [ ] tall 柜位置意向、垃圾拉篮(默认水槽侧)、抽屉柜/门板柜比例偏好、烟机形式
-  - [ ] 全局五金默认:`handle | fingerPull`
-- [ ] 题目列表由派生拓扑 + 实测动态生成(与量尺字段同一派生机制):
+- [x] `round2-types.ts` 新增 `Round2DesignIntent`:
+  - [x] 每个转角一项:`lazySusan | blindBase | deadCorner`(默认 deadCorner=双侧 filler 占位)
+  - [x] 吊柜到顶与否 + flat moulding 形式(默认档位由天花实测推导,见阶段 8 高度链)
+  - [x] tall 柜位置意向、垃圾拉篮(默认水槽侧)、抽屉柜/门板柜比例偏好、烟机形式
+  - [x] 全局五金默认:`handle | fingerPull`
+- [x] 题目列表由派生拓扑 + 实测动态生成(与量尺字段同一派生机制):
       有几个转角出几道转角题;同墙有窗才问水槽对窗;天花实测决定"到顶"怎么问
-- [ ] `measurement-workspace.tsx`:新增 DESIGN INTENT 分组(与 ROOM / OPENINGS 并列),
+- [x] `measurement-workspace.tsx`:新增 DESIGN INTENT 分组(与 ROOM / OPENINGS 并列),
       chip 选择题 8–12 题;引导顺序末站:总长 → offset → 下一面墙 → 意向 → 提交
-- [ ] 全部有默认值,**不阻塞 SUBMIT**;未确认项在 autofill 后生成
+- [x] 全部有默认值,**不阻塞 SUBMIT**;未确认项在 autofill 后生成
       Confirmation Required 决策项(沿用 Round 1 哲学)
-- [ ] `round2-state.ts`:intent 存入 state;SUBMIT_MEASUREMENT 时传给 autofill;
+- [x] `round2-state.ts`:intent 存入 state;SUBMIT_MEASUREMENT 时传给 autofill;
       REPLACE_REFERENCE 时重置
-- [ ] 单测:拓扑→题目派生(galley 0 转角题 / L 型 1 / U 型 2);跳过默认值 → 决策项生成
+- [x] 单测:拓扑→题目派生(galley 0 转角题 / L 型 1 / U 型 2);跳过默认值 → 决策项生成
+
+实现说明:`model/design-intent.ts` 是题目、默认值、确认状态与待确认决策的唯一派生边界;
+`Round2DesignIntent` 只保存答案与显式确认 key。水槽对窗题仅在同墙同时存在 window 与
+sink 固定点时出现;选择默认 chip 也会记为已确认。意向修改与量尺修改一样会将已提交的
+proposal/drawing 标记为 STALE,重新提交后再进入 autofill;后续柜体微调会重新派生并
+保留未确认的 intent 决策。
 
 验收:U 型项目量尺页出现 2 道转角题;全部跳过仍可提交出方案,
 但决策栏出现对应"按默认值填充,待确认"项。

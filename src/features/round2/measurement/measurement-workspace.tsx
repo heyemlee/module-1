@@ -14,6 +14,10 @@ import {
   type MeasurementField,
   type MeasurementKey
 } from "../model/round2-model";
+import {
+  buildDesignIntentQuestions,
+  type DesignIntentQuestion
+} from "../model/design-intent";
 import { MeasuredPlan } from "./measured-plan";
 import { InchField } from "./inch-field";
 import type {
@@ -45,6 +49,14 @@ export function MeasurementWorkspace({
   const fields = useMemo(
     () => buildMeasurementFields(state.model),
     [state.model]
+  );
+  const intentQuestions = useMemo(
+    () => buildDesignIntentQuestions(state.model, state.measurements),
+    [state.measurements, state.model]
+  );
+  const confirmedIntentKeys = useMemo(
+    () => new Set(state.designIntent.confirmedKeys),
+    [state.designIntent.confirmedKeys]
   );
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const completeCount = fields.filter(
@@ -163,6 +175,40 @@ export function MeasurementWorkspace({
               );
             })
           )}
+
+          {intentQuestions.length > 0 && (
+            <section className="border-t border-studio-line pt-5">
+              <div className="mb-3 flex items-end justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[9px] tracking-[0.15em] text-studio-quiet">
+                    DESIGN INTENT
+                  </p>
+                  <p className="mt-1 text-[10.5px] leading-4 text-studio-muted">
+                    Defaults do not block submission; skipped items become
+                    Confirmation Required.
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-[8px] text-studio-quiet">
+                  {confirmedIntentKeys.size}/{intentQuestions.length}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {intentQuestions.map((question) => (
+                  <DesignIntentQuestionCard
+                    key={question.key}
+                    question={question}
+                    selectedValue={
+                      state.designIntent.answers[question.key] ??
+                      question.defaultValue
+                    }
+                    confirmed={confirmedIntentKeys.has(question.key)}
+                    dispatch={dispatch}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <div className="sticky bottom-0 border-t border-studio-line bg-[rgba(248,248,246,0.94)] p-5 backdrop-blur-xl">
@@ -199,6 +245,68 @@ export function MeasurementWorkspace({
           }
         />
       </section>
+    </div>
+  );
+}
+
+function DesignIntentQuestionCard({
+  question,
+  selectedValue,
+  confirmed,
+  dispatch
+}: {
+  question: DesignIntentQuestion;
+  selectedValue: string;
+  confirmed: boolean;
+  dispatch: Dispatch<Round2PrototypeAction>;
+}) {
+  return (
+    <div className="rounded-[12px] border border-studio-line bg-white/55 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[12px] font-semibold leading-4 text-studio-ink">
+          {question.label}
+        </p>
+        <span
+          className={cn(
+            "shrink-0 font-mono text-[8px] tracking-[0.08em]",
+            confirmed ? "text-studio-quiet" : "text-[#9a5b17]"
+          )}
+        >
+          {confirmed ? "CONFIRMED" : "DEFAULT · CONFIRM"}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {question.options.map((option) => {
+          const selected = option.value === selectedValue;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              className={cn(
+                "rounded-full border px-2.5 py-1.5 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-ink/25",
+                selected
+                  ? confirmed
+                    ? "border-studio-ink bg-studio-ink text-white"
+                    : "border-[#c79b4b] bg-[#fbf4e4] text-[#6b4a18]"
+                  : "border-studio-line-strong bg-white text-studio-muted hover:border-studio-ink hover:text-studio-ink"
+              )}
+              onClick={() =>
+                dispatch({
+                  type: "SET_DESIGN_INTENT",
+                  key: question.key,
+                  value: option.value
+                })
+              }
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[10px] leading-4 text-studio-quiet">
+        {question.helper}
+      </p>
     </div>
   );
 }

@@ -9,6 +9,10 @@ import {
   formatSixteenths
 } from "./round2-model";
 import { CABINET_STANDARDS } from "./cabinet-standards";
+import {
+  buildIntentConfirmationDecisions,
+  type Round2DesignIntent
+} from "./design-intent";
 
 const CABINET_WIDTHS_DESCENDING = [
   ...CABINET_STANDARDS.base.widthsSixteenths
@@ -27,7 +31,8 @@ type ReservedSegment = {
 
 export function autofillRound2Model(
   model: Round2Model,
-  measurements: Record<string, number | null> = {}
+  measurements: Record<string, number | null> = {},
+  intent?: Round2DesignIntent
 ): Round2Model {
   const measuredModel = applyMeasurementsToModel(model, measurements);
   const decisionItems: Round2DecisionItem[] = [];
@@ -86,10 +91,23 @@ export function autofillRound2Model(
     return { ...wall, segments: numbered };
   });
 
-  return {
+  const filledModel = {
     ...measuredModel,
     walls,
     decisionItems
+  };
+  if (!intent) return filledModel;
+
+  return {
+    ...filledModel,
+    decisionItems: [
+      ...decisionItems,
+      ...buildIntentConfirmationDecisions(
+        filledModel,
+        intent,
+        measurements
+      )
+    ]
   };
 }
 

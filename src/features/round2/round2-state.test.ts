@@ -78,10 +78,90 @@ describe("Round 2 prototype state", () => {
     });
 
     expect(submitted.measurementStatus).toBe("SUBMITTED");
-    expect(submitted.proposalStatus).toBe("READY");
+    expect(submitted.proposalStatus).toBe("NEEDS_DECISION");
     expect(submitted.drawingStatus).toBe("REVIEW_READY");
     expect(submitted.model?.walls[0].segments.length).toBeGreaterThan(0);
     expect(submitted.selectedObjectId).toBeTruthy();
+    expect(
+      submitted.model?.decisionItems.some((item) =>
+        item.title.includes("Confirmation required")
+      )
+    ).toBe(true);
+  });
+
+  test("initializes design-intent defaults without treating them as confirmed", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+
+    expect(Object.keys(locked.designIntent.answers).length).toBeGreaterThan(0);
+    expect(locked.designIntent.answers["hardware.style"]).toBe("handle");
+    expect(locked.designIntent.confirmedKeys).toEqual([]);
+  });
+
+  test("confirms a design-intent answer when a chip is selected", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    const updated = reduceRound2Prototype(locked, {
+      type: "SET_DESIGN_INTENT",
+      key: "hardware.style",
+      value: "fingerPull"
+    });
+
+    expect(updated.designIntent.answers["hardware.style"]).toBe("fingerPull");
+    expect(updated.designIntent.confirmedKeys).toEqual(["hardware.style"]);
+  });
+
+  test("replacing the reference resets design intent to fresh defaults", () => {
+    const locked = reduceRound2Prototype(
+      lock(createRound2PrototypeState("SALES")),
+      {
+        type: "SET_DESIGN_INTENT",
+        key: "hardware.style",
+        value: "fingerPull"
+      }
+    );
+    const replaced = reduceRound2Prototype(locked, {
+      type: "REPLACE_REFERENCE",
+      reference: referenceWithId("fresh-layout")
+    });
+
+    expect(replaced.designIntent.answers["hardware.style"]).toBe("handle");
+    expect(replaced.designIntent.confirmedKeys).toEqual([]);
+  });
+
+  test("submits without intent confirmation and removes confirmed defaults from decisions", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    const confirmed = reduceRound2Prototype(locked, {
+      type: "SET_DESIGN_INTENT",
+      key: "hardware.style",
+      value: "handle"
+    });
+    const submitted = reduceRound2Prototype(completeMeasurements(confirmed), {
+      type: "SUBMIT_MEASUREMENT"
+    });
+
+    expect(submitted.measurementStatus).toBe("SUBMITTED");
+    expect(
+      submitted.model?.decisionItems.some(
+        (item) => item.id === "decision-intent-hardware.style"
+      )
+    ).toBe(false);
+    expect(submitted.model?.decisionItems.length).toBeGreaterThan(0);
+  });
+
+  test("keeps unconfirmed intent decisions after a proposal adjustment", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const adjusted = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: 33 * 16
+    });
+
+    expect(
+      adjusted.model?.decisionItems.some((item) =>
+        item.id.startsWith("decision-intent-")
+      )
+    ).toBe(true);
+    expect(adjusted.proposalStatus).toBe("NEEDS_DECISION");
   });
 
   test("remeasure blocks review and a new version makes outputs stale", () => {
