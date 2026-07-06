@@ -7,6 +7,7 @@ import {
   type ToolExecutor,
   type ToolSpec
 } from "./provider";
+import { getPreferredOpenAIApiKey } from "@/infrastructure/openai-api-keys";
 
 type FetchImpl = typeof fetch;
 
@@ -173,16 +174,16 @@ async function safeReadError(response: Response): Promise<string> {
 
 /**
  * Builds an OpenAI chat provider from environment configuration. Throws
- * `LLMProviderNotConfiguredError` when `OPENAI_API_KEY` is absent.
+ * `LLMProviderNotConfiguredError` when no prioritized OpenAI API key is set.
  */
 export function createOpenAILLMProvider(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): LLMProvider {
-  const apiKey = env.OPENAI_API_KEY?.trim();
+  const apiKey = getPreferredOpenAIApiKey(env)?.apiKey;
   if (!apiKey) {
     throw new LLMProviderNotConfiguredError(
-      "LLM_PROVIDER=openai but OPENAI_API_KEY is not set"
+      "LLM_PROVIDER=openai but no prioritized OpenAI API key is set"
     );
   }
   const baseUrl = (env.OPENAI_BASE_URL?.trim() || DEFAULT_OPENAI_BASE_URL).replace(
