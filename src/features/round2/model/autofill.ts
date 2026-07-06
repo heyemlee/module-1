@@ -5,7 +5,8 @@ import {
   type Round2Model,
   type Round2Wall,
   type SegmentTier,
-  type WallSegment
+  type WallSegment,
+  formatSixteenths
 } from "./round2-model";
 import { CABINET_STANDARDS } from "./cabinet-standards";
 
@@ -34,6 +35,23 @@ export function autofillRound2Model(
   let fillerNumber = 1;
 
   const walls = measuredModel.walls.map((wall) => {
+    for (const point of wall.fixedPoints) {
+      if (
+        point.type === "appliance" &&
+        point.symbol !== "hood" &&
+        applianceStandard(point) == null
+      ) {
+        decisionItems.push({
+          id: `decision-${point.id}-appliance-width`,
+          objectId: point.id,
+          wallId: wall.id,
+          severity: "blocking",
+          title: "Appliance width required",
+          body: `${point.label} needs a customer-confirmed width before autofill.`
+        });
+      }
+    }
+
     if (wall.lengthSixteenths == null) return { ...wall, segments: [] };
 
     const upper = autofillWallTier(wall, "upper");
@@ -57,7 +75,7 @@ export function autofillRound2Model(
             wallId: wall.id,
             severity: "warning",
             title: `Wall ${wall.label} filler below minimum`,
-            body: `${code} is narrower than 1/2". Request a design decision or remeasure.`
+            body: `${code} is narrower than ${formatSixteenths(CABINET_STANDARDS.filler.minSixteenths)}. Request a design decision or remeasure.`
           });
         }
         return { ...segment, code };
@@ -224,38 +242,67 @@ function applianceReservations(wall: Round2Wall): ReservedSegment[] {
   const length = wall.lengthSixteenths ?? 0;
   return wall.fixedPoints
     .filter((point) => point.type === "appliance")
-    .map((point) => {
+    .flatMap((point) => {
       const standard = applianceStandard(point);
+      if (!standard) return [];
       const width = standard.widthSixteenths;
-      return {
-        fixedPoint: point,
-        desiredStart: Math.round(point.positionRatio * Math.max(0, length - width)),
-        width,
-        kind: "appliance" as const,
-        label: standard.label,
-        cabinetKind: point.symbol === "sink" ? ("sink" as const) : point.symbol === "fridge" || point.symbol === "oven" || point.symbol === "microwave" ? ("tall" as const) : undefined
-      };
+      return [
+        {
+          fixedPoint: point,
+          desiredStart: Math.round(
+            point.positionRatio * Math.max(0, length - width)
+          ),
+          width,
+          kind: "appliance" as const,
+          label: standard.label,
+          cabinetKind:
+            point.symbol === "sink"
+              ? ("sink" as const)
+              : point.symbol === "fridge" ||
+                  point.symbol === "oven" ||
+                  point.symbol === "microwave"
+                ? ("tall" as const)
+                : undefined
+        }
+      ];
     });
 }
 
 function applianceStandard(
   point: Round2FixedPoint
-): { widthSixteenths: number; label: string } {
+): { widthSixteenths: number; label: string } | null {
+  if (point.symbol === "hood") return null;
+
   const appliances = CABINET_STANDARDS.appliances;
-  if (point.symbol === "dishwasher") return appliances.dishwasher;
-  if (point.symbol === "range") return appliances.range;
-  if (point.symbol === "fridge") return appliances.refrigerator;
-  if (point.symbol === "sink") {
-    const widthSixteenths = appliances.sinkBase.defaultWidthSixteenths;
+  const definition =
+    point.symbol === "dishwasher"
+      ? appliances.dishwasher
+      : point.symbol === "range"
+        ? appliances.range
+        : point.symbol === "fridge"
+          ? appliances.refrigerator
+          : point.symbol === "sink"
+            ? appliances.sinkBase
+            : null;
+  const customerWidth =
+    point.widthSixteenths != null && point.widthSixteenths > 0
+      ? point.widthSixteenths
+      : null;
+
+  if (definition) {
+    const widthSixteenths =
+      customerWidth ?? definition.defaultWidthSixteenths;
     return {
       widthSixteenths,
-      label: `${appliances.sinkBase.labelPrefix}${widthSixteenths / 16}`
+      label: `${definition.labelPrefix}${widthSixteenths / 16}`
     };
   }
-  return {
-    widthSixteenths: appliances.fallbackWidthSixteenths,
-    label: point.label
-  };
+
+  if (customerWidth) {
+    return { widthSixteenths: customerWidth, label: point.label };
+  }
+
+  return null;
 }
 
 function formatWidth(value: number): string {

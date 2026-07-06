@@ -29,7 +29,7 @@ describe("Round 2 autofill", () => {
     const model = autofillRound2Model(modelWithWall(wallWithLength(36 * 16 + 4)));
 
     expect(model.decisionItems).toHaveLength(2);
-    expect(model.decisionItems[0].body).toContain("1/2");
+    expect(model.decisionItems[0].body).toContain("3/4");
     expect(
       model.walls[0].segments.some(
         (segment) =>
@@ -43,47 +43,79 @@ describe("Round 2 autofill", () => {
   test.each([
     {
       symbol: "dishwasher",
-      expected: CABINET_STANDARDS.appliances.dishwasher
+      expected: expectedAppliance(CABINET_STANDARDS.appliances.dishwasher)
     },
     {
       symbol: "range",
-      expected: CABINET_STANDARDS.appliances.range
+      expected: expectedAppliance(CABINET_STANDARDS.appliances.range)
     },
     {
       symbol: "sink",
-      expected: {
-        widthSixteenths:
-          CABINET_STANDARDS.appliances.sinkBase.defaultWidthSixteenths,
-        label: `${CABINET_STANDARDS.appliances.sinkBase.labelPrefix}${
-          CABINET_STANDARDS.appliances.sinkBase.defaultWidthSixteenths / 16
-        }`
-      }
+      expected: expectedAppliance(CABINET_STANDARDS.appliances.sinkBase)
     },
     {
       symbol: "fridge",
-      expected: CABINET_STANDARDS.appliances.refrigerator
+      expected: expectedAppliance(CABINET_STANDARDS.appliances.refrigerator)
     }
   ])("preserves the $symbol appliance reservation", ({ symbol, expected }) => {
-    const wall = wallWithLength(120 * 16);
-    wall.fixedPoints = [
-      {
-        id: `fixed-${symbol}`,
-        type: "appliance",
-        label: symbol,
-        sourceWall: "TOP",
-        order: 0,
-        positionRatio: 0.5,
-        symbol
-      }
-    ];
-
-    const filled = autofillRound2Model(modelWithWall(wall));
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithAppliance(symbol))
+    );
     const appliance = filled.walls[0].segments.find(
       (segment) => segment.tier === "base" && segment.kind === "appliance"
     );
 
     expect(appliance).toMatchObject(expected);
   });
+
+  test("uses a customer-provided fixed-point width over the default", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithAppliance("range", 33 * 16))
+    );
+    const range = filled.walls[0].segments.find(
+      (segment) => segment.sourceFixedPointId === "fixed-range"
+    );
+
+    expect(range).toMatchObject({
+      widthSixteenths: 33 * 16,
+      label: "RNG33"
+    });
+  });
+
+  test("does not reserve base width for a hood", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithAppliance("hood"))
+    );
+
+    expect(
+      filled.walls[0].segments.some(
+        (segment) => segment.sourceFixedPointId === "fixed-hood"
+      )
+    ).toBe(false);
+    expect(filled.decisionItems).toHaveLength(0);
+  });
+
+  test.each(["oven", "microwave"])(
+    "blocks %s autofill when no customer width is available",
+    (symbol) => {
+      const filled = autofillRound2Model(
+        modelWithWall(wallWithAppliance(symbol))
+      );
+
+      expect(
+        filled.walls[0].segments.some(
+          (segment) => segment.sourceFixedPointId === `fixed-${symbol}`
+        )
+      ).toBe(false);
+      expect(filled.decisionItems).toContainEqual(
+        expect.objectContaining({
+          objectId: `fixed-${symbol}`,
+          severity: "blocking",
+          title: "Appliance width required"
+        })
+      );
+    }
+  );
 });
 
 function wallWithLength(lengthSixteenths: number): Round2Wall {
@@ -103,5 +135,37 @@ function modelWithWall(wall: Round2Wall): Round2Model {
     ceilingHeightSixteenths: 96 * 16,
     walls: [wall],
     decisionItems: []
+  };
+}
+
+function wallWithAppliance(
+  symbol: string,
+  widthSixteenths?: number
+): Round2Wall {
+  const wall = wallWithLength(120 * 16);
+  wall.fixedPoints = [
+    {
+      id: `fixed-${symbol}`,
+      type: "appliance",
+      label: symbol,
+      sourceWall: "TOP",
+      order: 0,
+      positionRatio: 0.5,
+      symbol,
+      widthSixteenths
+    }
+  ];
+  return wall;
+}
+
+function expectedAppliance(definition: {
+  defaultWidthSixteenths: number;
+  labelPrefix: string;
+}) {
+  return {
+    widthSixteenths: definition.defaultWidthSixteenths,
+    label: `${definition.labelPrefix}${
+      definition.defaultWidthSixteenths / 16
+    }`
   };
 }

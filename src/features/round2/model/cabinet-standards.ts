@@ -19,8 +19,10 @@ const ascendingDimensionsSchema = z
 
 const applianceSchema = z
   .object({
-    widthSixteenths: dimensionSchema,
-    label: z.string().min(1)
+    widthOptionsSixteenths: ascendingDimensionsSchema,
+    defaultWidthSixteenths: dimensionSchema,
+    labelPrefix: z.string().min(1),
+    customerProvided: z.literal(true)
   })
   .strict();
 
@@ -29,6 +31,7 @@ export const cabinetStandardsSchema = z
     base: z
       .object({
         widthsSixteenths: ascendingDimensionsSchema,
+        heightSixteenths: dimensionSchema,
         doorRule: z
           .object({
             singleDoorMaxSixteenths: dimensionSchema,
@@ -46,7 +49,8 @@ export const cabinetStandardsSchema = z
       .strict(),
     vertical: z
       .object({
-        counterHeightSixteenths: dimensionSchema,
+        countertopThicknessSixteenths: dimensionSchema,
+        finishedCounterHeightSixteenths: dimensionSchema,
         backsplashMinSixteenths: dimensionSchema,
         flatMoulding: z
           .object({
@@ -60,22 +64,22 @@ export const cabinetStandardsSchema = z
     filler: z
       .object({
         minSixteenths: dimensionSchema,
-        preferredSixteenths: dimensionSchema
+        preferredSixteenths: dimensionSchema,
+        commonWidthsSixteenths: ascendingDimensionsSchema
       })
       .strict(),
     corner: z
       .object({
         lazySusan: z
           .object({
-            modelNominalWidthSixteenths: dimensionSchema,
-            cabinetEnvelopeWidthSixteenths: dimensionSchema,
+            widthOptionsSixteenths: ascendingDimensionsSchema,
             heightSixteenths: dimensionSchema,
             depthSixteenths: dimensionSchema
           })
           .strict(),
         blindBase: z
           .object({
-            cabinetEnvelopeWidthSixteenths: dimensionSchema,
+            widthOptionsSixteenths: ascendingDimensionsSchema,
             heightSixteenths: dimensionSchema,
             depthSixteenths: dimensionSchema,
             adjacentWallPullSixteenths: dimensionSchema
@@ -87,15 +91,8 @@ export const cabinetStandardsSchema = z
       .object({
         dishwasher: applianceSchema,
         range: applianceSchema,
-        sinkBase: z
-          .object({
-            widthOptionsSixteenths: ascendingDimensionsSchema,
-            defaultWidthSixteenths: dimensionSchema,
-            labelPrefix: z.string().min(1)
-          })
-          .strict(),
-        refrigerator: applianceSchema,
-        fallbackWidthSixteenths: dimensionSchema
+        sinkBase: applianceSchema,
+        refrigerator: applianceSchema
       })
       .strict(),
     depths: z
@@ -121,17 +118,18 @@ export const cabinetStandardsSchema = z
       });
     }
 
-    const sinkBase = standards.appliances.sinkBase;
-    if (
-      !sinkBase.widthOptionsSixteenths.includes(
-        sinkBase.defaultWidthSixteenths
-      )
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Default sink width must be an allowed option",
-        path: ["appliances", "sinkBase", "defaultWidthSixteenths"]
-      });
+    for (const [key, appliance] of Object.entries(standards.appliances)) {
+      if (
+        !appliance.widthOptionsSixteenths.includes(
+          appliance.defaultWidthSixteenths
+        )
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Default appliance width must be an allowed option",
+          path: ["appliances", key, "defaultWidthSixteenths"]
+        });
+      }
     }
 
     const moulding = standards.vertical.flatMoulding;
@@ -146,15 +144,16 @@ export const cabinetStandardsSchema = z
       });
     }
 
-    const lazySusan = standards.corner.lazySusan;
     if (
-      lazySusan.cabinetEnvelopeWidthSixteenths <
-      lazySusan.modelNominalWidthSixteenths
+      standards.base.heightSixteenths +
+        standards.vertical.countertopThicknessSixteenths !==
+      standards.vertical.finishedCounterHeightSixteenths
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Lazy Susan envelope must cover its nominal model width",
-        path: ["corner", "lazySusan", "cabinetEnvelopeWidthSixteenths"]
+        message:
+          "Base height plus countertop thickness must equal finished counter height",
+        path: ["vertical", "finishedCounterHeightSixteenths"]
       });
     }
   });
@@ -188,22 +187,26 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
       widthsSixteenths: [9, 12, 15, 18, 21, 24, 27, 30, 33, 36].map(
         (value) => value * 16
       ),
+      heightSixteenths: 34 * 16 + 8,
       doorRule: {
         singleDoorMaxSixteenths: 21 * 16,
         doubleDoorMinSixteenths: 24 * 16
       }
     },
     upper: {
-      standardHeightsSixteenths: [30, 36, 40].map((value) => value * 16),
+      standardHeightsSixteenths: [30, 36, 40, 42].map(
+        (value) => value * 16
+      ),
       hoodHeightsSixteenths: [12, 15, 18, 21, 24].map(
         (value) => value * 16
       ),
-      refrigeratorHeightsSixteenths: [12, 15, 18].map(
+      refrigeratorHeightsSixteenths: [12, 15, 18, 21, 24].map(
         (value) => value * 16
       )
     },
     vertical: {
-      counterHeightSixteenths: 34 * 16 + 8,
+      countertopThicknessSixteenths: 1 * 16 + 8,
+      finishedCounterHeightSixteenths: 36 * 16,
       backsplashMinSixteenths: 18 * 16,
       flatMoulding: {
         minSixteenths: 2 * 16,
@@ -212,33 +215,50 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
       }
     },
     filler: {
-      minSixteenths: 8,
-      preferredSixteenths: 3 * 16
+      minSixteenths: 12,
+      preferredSixteenths: 3 * 16,
+      commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
     },
     corner: {
       lazySusan: {
-        modelNominalWidthSixteenths: 36 * 16,
-        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        widthOptionsSixteenths: [33, 36].map((value) => value * 16),
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16
       },
       blindBase: {
-        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        widthOptionsSixteenths: [39, 42, 45].map((value) => value * 16),
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16,
         adjacentWallPullSixteenths: 3 * 16
       }
     },
     appliances: {
-      dishwasher: { widthSixteenths: 24 * 16, label: "DW24" },
-      range: { widthSixteenths: 30 * 16, label: "RNG30" },
-      sinkBase: {
-        widthOptionsSixteenths: [30, 33, 36].map((value) => value * 16),
-        defaultWidthSixteenths: 36 * 16,
-        labelPrefix: "SB"
+      dishwasher: {
+        widthOptionsSixteenths: [24 * 16],
+        defaultWidthSixteenths: 24 * 16,
+        labelPrefix: "DW",
+        customerProvided: true
       },
-      refrigerator: { widthSixteenths: 36 * 16, label: "REF36" },
-      fallbackWidthSixteenths: 30 * 16
+      range: {
+        widthOptionsSixteenths: [30, 33].map((value) => value * 16),
+        defaultWidthSixteenths: 30 * 16,
+        labelPrefix: "RNG",
+        customerProvided: true
+      },
+      sinkBase: {
+        widthOptionsSixteenths: [30, 33, 36, 39].map(
+          (value) => value * 16
+        ),
+        defaultWidthSixteenths: 36 * 16,
+        labelPrefix: "SB",
+        customerProvided: true
+      },
+      refrigerator: {
+        widthOptionsSixteenths: [36 * 16],
+        defaultWidthSixteenths: 36 * 16,
+        labelPrefix: "REF",
+        customerProvided: true
+      }
     },
     depths: {
       baseSixteenths: 24 * 16,

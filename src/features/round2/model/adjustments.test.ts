@@ -6,6 +6,7 @@ import {
   setSegmentKind,
   standardWidthOptionsSixteenths,
   stepCabinetWidth,
+  updateModelDecisions,
   wallTierTotal
 } from "./adjustments";
 import { CABINET_STANDARDS } from "./cabinet-standards";
@@ -82,6 +83,20 @@ describe("Round 2 constrained adjustments", () => {
 
     expect(segment?.cabinetKind).toBe("sink");
     expect(segment?.label).toBe("SB30");
+  });
+
+  test("describes the configured 3/4-inch filler minimum", () => {
+    const wall = wallWithSegments();
+    wall.segments = wall.segments.map((segment) =>
+      segment.id === "a-base-filler"
+        ? { ...segment, widthSixteenths: 8 }
+        : segment
+    );
+    wall.lengthSixteenths = wallTierTotal(wall, "base");
+
+    const updated = updateModelDecisions(modelWithWall(wall));
+
+    expect(updated.decisionItems[0].body).toContain("3/4");
   });
 });
 

@@ -155,7 +155,7 @@ export function updateModelDecisions(model: Round2Model): Round2Model {
           wallId: wall.id,
           severity: "warning",
           title: `Wall ${wall.label} filler below minimum`,
-          body: `${segment.code ?? segment.label} is narrower than 1/2". Request a design decision or remeasure.`
+          body: `${segment.code ?? segment.label} is narrower than ${formatSixteenths(CABINET_STANDARDS.filler.minSixteenths)}. Request a design decision or remeasure.`
         });
       }
     }

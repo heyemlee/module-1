@@ -12,24 +12,30 @@ describe("Round 2 cabinet standards", () => {
   });
 
   test("defines the approved cabinet dimensions in sixteenths", () => {
-    expect(CABINET_STANDARDS.base.widthsSixteenths).toEqual(
-      [9, 12, 15, 18, 21, 24, 27, 30, 33, 36].map((value) => value * 16)
-    );
-    expect(CABINET_STANDARDS.base.doorRule).toEqual({
-      singleDoorMaxSixteenths: 21 * 16,
-      doubleDoorMinSixteenths: 24 * 16
+    expect(CABINET_STANDARDS.base).toEqual({
+      widthsSixteenths: [9, 12, 15, 18, 21, 24, 27, 30, 33, 36].map(
+        (value) => value * 16
+      ),
+      heightSixteenths: 34 * 16 + 8,
+      doorRule: {
+        singleDoorMaxSixteenths: 21 * 16,
+        doubleDoorMinSixteenths: 24 * 16
+      }
     });
     expect(CABINET_STANDARDS.upper).toEqual({
-      standardHeightsSixteenths: [30, 36, 40].map((value) => value * 16),
+      standardHeightsSixteenths: [30, 36, 40, 42].map(
+        (value) => value * 16
+      ),
       hoodHeightsSixteenths: [12, 15, 18, 21, 24].map(
         (value) => value * 16
       ),
-      refrigeratorHeightsSixteenths: [12, 15, 18].map(
+      refrigeratorHeightsSixteenths: [12, 15, 18, 21, 24].map(
         (value) => value * 16
       )
     });
     expect(CABINET_STANDARDS.vertical).toEqual({
-      counterHeightSixteenths: 34 * 16 + 8,
+      countertopThicknessSixteenths: 1 * 16 + 8,
+      finishedCounterHeightSixteenths: 36 * 16,
       backsplashMinSixteenths: 18 * 16,
       flatMoulding: {
         minSixteenths: 2 * 16,
@@ -38,8 +44,9 @@ describe("Round 2 cabinet standards", () => {
       }
     });
     expect(CABINET_STANDARDS.filler).toEqual({
-      minSixteenths: 8,
-      preferredSixteenths: 3 * 16
+      minSixteenths: 12,
+      preferredSixteenths: 3 * 16,
+      commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
     });
     expect(CABINET_STANDARDS.depths).toEqual({
       baseSixteenths: 24 * 16,
@@ -52,28 +59,44 @@ describe("Round 2 cabinet standards", () => {
   test("defines the approved corner and appliance standards", () => {
     expect(CABINET_STANDARDS.corner).toEqual({
       lazySusan: {
-        modelNominalWidthSixteenths: 36 * 16,
-        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        widthOptionsSixteenths: [33, 36].map((value) => value * 16),
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16
       },
       blindBase: {
-        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        widthOptionsSixteenths: [39, 42, 45].map((value) => value * 16),
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16,
         adjacentWallPullSixteenths: 3 * 16
       }
     });
     expect(CABINET_STANDARDS.appliances).toEqual({
-      dishwasher: { widthSixteenths: 24 * 16, label: "DW24" },
-      range: { widthSixteenths: 30 * 16, label: "RNG30" },
-      sinkBase: {
-        widthOptionsSixteenths: [30, 33, 36].map((value) => value * 16),
-        defaultWidthSixteenths: 36 * 16,
-        labelPrefix: "SB"
+      dishwasher: {
+        widthOptionsSixteenths: [24 * 16],
+        defaultWidthSixteenths: 24 * 16,
+        labelPrefix: "DW",
+        customerProvided: true
       },
-      refrigerator: { widthSixteenths: 36 * 16, label: "REF36" },
-      fallbackWidthSixteenths: 30 * 16
+      range: {
+        widthOptionsSixteenths: [30, 33].map((value) => value * 16),
+        defaultWidthSixteenths: 30 * 16,
+        labelPrefix: "RNG",
+        customerProvided: true
+      },
+      sinkBase: {
+        widthOptionsSixteenths: [30, 33, 36, 39].map(
+          (value) => value * 16
+        ),
+        defaultWidthSixteenths: 36 * 16,
+        labelPrefix: "SB",
+        customerProvided: true
+      },
+      refrigerator: {
+        widthOptionsSixteenths: [36 * 16],
+        defaultWidthSixteenths: 36 * 16,
+        labelPrefix: "REF",
+        customerProvided: true
+      }
     });
   });
 
@@ -116,7 +139,7 @@ describe("Round 2 cabinet standards", () => {
     ).toThrow("Door thresholds must not overlap");
   });
 
-  test("requires the default sink width to be an allowed option", () => {
+  test("requires each default appliance width to be an allowed option", () => {
     expect(() =>
       cabinetStandardsSchema.parse({
         ...CABINET_STANDARDS,
@@ -128,7 +151,7 @@ describe("Round 2 cabinet standards", () => {
           }
         }
       })
-    ).toThrow("Default sink width must be an allowed option");
+    ).toThrow("Default appliance width must be an allowed option");
   });
 
   test("rejects an invalid flat-moulding range", () => {
@@ -147,18 +170,17 @@ describe("Round 2 cabinet standards", () => {
     ).toThrow("Flat moulding must satisfy min <= preferred <= max");
   });
 
-  test("rejects a lazy-Susan envelope narrower than its nominal model", () => {
+  test("requires base height plus countertop to equal finished height", () => {
     expect(() =>
       cabinetStandardsSchema.parse({
         ...CABINET_STANDARDS,
-        corner: {
-          ...CABINET_STANDARDS.corner,
-          lazySusan: {
-            ...CABINET_STANDARDS.corner.lazySusan,
-            cabinetEnvelopeWidthSixteenths: 33 * 16
-          }
+        vertical: {
+          ...CABINET_STANDARDS.vertical,
+          finishedCounterHeightSixteenths: 35 * 16
         }
       })
-    ).toThrow("Lazy Susan envelope must cover its nominal model width");
+    ).toThrow(
+      "Base height plus countertop thickness must equal finished counter height"
+    );
   });
 });
