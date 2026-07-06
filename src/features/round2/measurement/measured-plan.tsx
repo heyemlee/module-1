@@ -95,6 +95,7 @@ export function MeasuredPlan({
                     stroke={wallStroke(wall)}
                     strokeWidth={WALL_STROKE}
                     strokeLinecap="square"
+                    strokeDasharray={measured ? undefined : "16 10"}
                     fill="none"
                     onClick={() => onSelectWall(wall.id)}
                     className="cursor-pointer"
