@@ -1,4 +1,3 @@
-import type { Wall as Round1Wall } from "@/features/round1/floorplan/plan-geometry";
 import {
   ceilingMeasurementKey,
   formatSixteenths,
@@ -6,6 +5,7 @@ import {
   type Round2Model,
   type WallId
 } from "./round2-model";
+import { deriveCorners } from "./corners";
 
 export type CornerStrategy = "lazySusan" | "blindBase" | "deadCorner";
 export type UpperTermination = "standard" | "ceiling";
@@ -65,18 +65,6 @@ export type DesignIntentQuestion = {
   objectId: string;
 };
 
-type CornerDefinition = {
-  id: "TL" | "TR" | "BL" | "BR";
-  walls: readonly [Round1Wall, Round1Wall];
-};
-
-const CORNERS: readonly CornerDefinition[] = [
-  { id: "TL", walls: ["TOP", "LEFT"] },
-  { id: "TR", walls: ["TOP", "RIGHT"] },
-  { id: "BR", walls: ["BOTTOM", "RIGHT"] },
-  { id: "BL", walls: ["BOTTOM", "LEFT"] }
-];
-
 export function buildDesignIntentQuestions(
   model: Round2Model | null,
   measurements: Record<string, number | null>
@@ -84,19 +72,13 @@ export function buildDesignIntentQuestions(
   if (!model || model.walls.length === 0) return [];
 
   const firstWall = model.walls[0];
-  const wallBySource = new Map(
-    model.walls.map((wall) => [wall.sourceWall, wall])
-  );
   const questions: DesignIntentQuestion[] = [];
 
-  for (const corner of CORNERS) {
-    const first = wallBySource.get(corner.walls[0]);
-    const second = wallBySource.get(corner.walls[1]);
-    if (!first || !second) continue;
+  for (const corner of deriveCorners(model)) {
     questions.push({
-      key: `corner.${corner.id}.strategy`,
+      key: corner.intentKey,
       kind: "corner-strategy",
-      label: `Corner ${first.label}–${second.label} strategy`,
+      label: `Corner ${corner.primary.label}–${corner.secondary.label} strategy`,
       helper: "Default reserves fillers on both walls until the corner is confirmed.",
       defaultValue: "deadCorner",
       options: [
@@ -104,8 +86,8 @@ export function buildDesignIntentQuestions(
         { value: "blindBase", label: "Blind base" },
         { value: "deadCorner", label: "Dead corner" }
       ],
-      wallId: first.id,
-      objectId: `corner-${corner.id.toLowerCase()}`
+      wallId: corner.primary.id,
+      objectId: corner.objectId
     });
   }
 

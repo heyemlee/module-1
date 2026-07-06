@@ -2,31 +2,46 @@ import {
   applyMeasurementsToModel,
   type Round2DecisionItem,
   type Round2FixedPoint,
+  type Round2HeightProfile,
   type Round2Model,
   type Round2Wall,
   type SegmentTier,
+  type WallId,
   type WallSegment,
   formatSixteenths
 } from "./round2-model";
 import { CABINET_STANDARDS } from "./cabinet-standards";
+import { deriveCorners, type Round2Corner } from "./corners";
 import {
   buildIntentConfirmationDecisions,
   type Round2DesignIntent
 } from "./design-intent";
 
-const CABINET_WIDTHS_DESCENDING = [
-  ...CABINET_STANDARDS.base.widthsSixteenths
-].sort((a, b) => b - a);
-const MIN_CABINET_WIDTH_SIXTEENTHS =
-  CABINET_STANDARDS.base.widthsSixteenths[0];
+const BASE_WIDTHS_ASCENDING = CABINET_STANDARDS.base.widthsSixteenths;
+const BASE_WIDTHS_DESCENDING = [...BASE_WIDTHS_ASCENDING].sort(
+  (a, b) => b - a
+);
+const MIN_CABINET_WIDTH_SIXTEENTHS = BASE_WIDTHS_ASCENDING[0];
+const FILLER_PREFERRED_SIXTEENTHS =
+  CABINET_STANDARDS.filler.preferredSixteenths;
 
-type ReservedSegment = {
+type FillTier = Extract<SegmentTier, "upper" | "base">;
+type FillerSide = "start" | "end";
+
+/** Corner segments for one wall, ordered outward from the corner. */
+type TierInsets = { start: WallSegment[]; end: WallSegment[] };
+
+type PlacedReservation = {
   fixedPoint: Round2FixedPoint;
-  desiredStart: number;
+  start: number;
   width: number;
   kind: "appliance" | "opening";
   label: string;
   cabinetKind?: "sink" | "tall";
+};
+
+type Reservation = Omit<PlacedReservation, "start"> & {
+  desiredStart: number;
 };
 
 export function autofillRound2Model(
@@ -36,10 +51,8 @@ export function autofillRound2Model(
 ): Round2Model {
   const measuredModel = applyMeasurementsToModel(model, measurements);
   const decisionItems: Round2DecisionItem[] = [];
-  let cabinetNumber = 1;
-  let fillerNumber = 1;
 
-  const walls = measuredModel.walls.map((wall) => {
+  for (const wall of measuredModel.walls) {
     for (const point of wall.fixedPoints) {
       if (
         point.type === "appliance" &&
@@ -56,23 +69,27 @@ export function autofillRound2Model(
         });
       }
     }
+  }
 
+  const insetsByWall = buildCornerInsets(measuredModel, intent);
+
+  let cabinetNumber = 1;
+  let fillerNumber = 1;
+  const walls = measuredModel.walls.map((wall) => {
     if (wall.lengthSixteenths == null) return { ...wall, segments: [] };
 
-    const upper = autofillWallTier(wall, "upper");
-    const base = autofillWallTier(wall, "base");
+    const insets = insetsByWall.get(wall.id) ?? { start: [], end: [] };
+    const base = fillBaseTier(wall, insets, intent, decisionItems);
+    const upper = deriveUpperTier(wall, base, intent);
     const numbered = [...upper, ...base].map((segment) => {
-      if (
-        segment.kind === "cabinet" ||
-        segment.kind === "appliance"
-      ) {
+      if (segment.kind === "cabinet" || segment.kind === "appliance") {
         return { ...segment, code: `#${cabinetNumber++}` };
       }
       if (segment.kind === "filler") {
         const code = `F${fillerNumber++}`;
         if (
           segment.widthSixteenths > 0 &&
-          segment.widthSixteenths < CABINET_STANDARDS.filler.minSixteenths
+          segment.widthSixteenths < FILLER_PREFERRED_SIXTEENTHS
         ) {
           decisionItems.push({
             id: `decision-${segment.id}`,
@@ -80,7 +97,7 @@ export function autofillRound2Model(
             wallId: wall.id,
             severity: "warning",
             title: `Wall ${wall.label} filler below minimum`,
-            body: `${code} is narrower than ${formatSixteenths(CABINET_STANDARDS.filler.minSixteenths)}. Request a design decision or remeasure.`
+            body: `${code} is ${formatSixteenths(segment.widthSixteenths)}, narrower than the ${formatSixteenths(FILLER_PREFERRED_SIXTEENTHS)} preferred filler. Step a neighbor width or approve the scribe.`
           });
         }
         return { ...segment, code };
@@ -91,9 +108,17 @@ export function autofillRound2Model(
     return { ...wall, segments: numbered };
   });
 
-  const filledModel = {
+  const height = deriveHeightProfile(
+    measuredModel.ceilingHeightSixteenths,
+    intent,
+    measuredModel.walls[0] ?? null
+  );
+  decisionItems.push(...height.decisions);
+
+  const filledModel: Round2Model = {
     ...measuredModel,
     walls,
+    heightProfile: height.profile,
     decisionItems
   };
   if (!intent) return filledModel;
@@ -102,188 +127,813 @@ export function autofillRound2Model(
     ...filledModel,
     decisionItems: [
       ...decisionItems,
-      ...buildIntentConfirmationDecisions(
-        filledModel,
-        intent,
-        measurements
-      )
+      ...buildIntentConfirmationDecisions(filledModel, intent, measurements)
     ]
   };
 }
 
-export function autofillWall(wall: Round2Wall): WallSegment[] {
-  if (wall.lengthSixteenths == null) return [];
-  return [
-    ...autofillWallTier(wall, "upper"),
-    ...autofillWallTier(wall, "base")
-  ];
+// Rule 1 — corners are resolved before any wall run is filled. A corner
+// consumes width on both walls, so each wall's fillable interval starts
+// inside its corner insets.
+function buildCornerInsets(
+  model: Round2Model,
+  intent?: Round2DesignIntent
+): Map<WallId, TierInsets> {
+  const insets = new Map<WallId, TierInsets>();
+  const tierFor = (wallId: WallId): TierInsets => {
+    const existing = insets.get(wallId);
+    if (existing) return existing;
+    const created: TierInsets = { start: [], end: [] };
+    insets.set(wallId, created);
+    return created;
+  };
+
+  for (const corner of deriveCorners(model)) {
+    const strategy = intent?.answers[corner.intentKey] ?? "deadCorner";
+    const cornerId = corner.id.toLowerCase();
+    const primaryId = corner.primary.id.toLowerCase();
+    const secondaryId = corner.secondary.id.toLowerCase();
+    const baseDepth = CABINET_STANDARDS.depths.baseSixteenths;
+
+    if (strategy === "lazySusan") {
+      const width = pickCornerWidth(
+        CABINET_STANDARDS.corner.lazySusan.widthOptionsSixteenths,
+        [corner.primary, corner.secondary]
+      );
+      tierFor(corner.primary.id)[corner.primaryEnd].push({
+        id: `${primaryId}-base-corner-${cornerId}`,
+        wallId: corner.primary.id,
+        tier: "base",
+        kind: "cabinet",
+        cabinetKind: "corner",
+        widthSixteenths: width,
+        standardWidthSixteenths: width,
+        label: `LS${width / 16}`,
+        sourceCornerId: corner.id
+      });
+      tierFor(corner.secondary.id)[corner.secondaryEnd].push({
+        id: `${secondaryId}-base-corner-${cornerId}-return`,
+        wallId: corner.secondary.id,
+        tier: "base",
+        kind: "gap",
+        widthSixteenths: width,
+        label: `LS${width / 16} return`,
+        sourceCornerId: corner.id
+      });
+    } else if (strategy === "blindBase") {
+      const width = pickCornerWidth(
+        CABINET_STANDARDS.corner.blindBase.widthOptionsSixteenths,
+        [corner.primary]
+      );
+      tierFor(corner.primary.id)[corner.primaryEnd].push({
+        id: `${primaryId}-base-corner-${cornerId}`,
+        wallId: corner.primary.id,
+        tier: "base",
+        kind: "cabinet",
+        cabinetKind: "corner",
+        widthSixteenths: width,
+        standardWidthSixteenths: width,
+        label: `BB${width / 16}`,
+        sourceCornerId: corner.id
+      });
+      tierFor(corner.secondary.id)[corner.secondaryEnd].push(
+        {
+          id: `${secondaryId}-base-corner-${cornerId}-body`,
+          wallId: corner.secondary.id,
+          tier: "base",
+          kind: "gap",
+          widthSixteenths: baseDepth,
+          label: "Blind corner",
+          sourceCornerId: corner.id
+        },
+        {
+          id: `${secondaryId}-base-corner-${cornerId}-pull`,
+          wallId: corner.secondary.id,
+          tier: "base",
+          kind: "filler",
+          widthSixteenths:
+            CABINET_STANDARDS.corner.blindBase.adjacentWallPullSixteenths,
+          label: `F${CABINET_STANDARDS.corner.blindBase.adjacentWallPullSixteenths / 16}`,
+          sourceCornerId: corner.id
+        }
+      );
+    } else {
+      for (const [wall, end, suffix] of [
+        [corner.primary, corner.primaryEnd, ""],
+        [corner.secondary, corner.secondaryEnd, "-return"]
+      ] as const) {
+        tierFor(wall.id)[end].push({
+          id: `${wall.id.toLowerCase()}-base-corner-${cornerId}-filler${suffix}`,
+          wallId: wall.id,
+          tier: "base",
+          kind: "filler",
+          widthSixteenths: baseDepth,
+          label: `F${baseDepth / 16}`,
+          sourceCornerId: corner.id
+        });
+      }
+    }
+  }
+
+  return insets;
 }
 
-function autofillWallTier(
-  wall: Round2Wall,
-  tier: Extract<SegmentTier, "upper" | "base">
-): WallSegment[] {
-  if (wall.lengthSixteenths == null) return [];
-
-  const reserved =
-    tier === "upper" ? openingReservations(wall) : applianceReservations(wall);
-  return fillRunAroundReserved(wall, tier, reserved);
+// The intent question only picks the strategy; the width tier is derived as
+// the largest option both walls can host ("宁少而宽").
+function pickCornerWidth(
+  options: readonly number[],
+  walls: readonly Round2Wall[]
+): number {
+  const limit = Math.min(
+    ...walls.map((wall) => wall.lengthSixteenths ?? Number.POSITIVE_INFINITY)
+  );
+  const fitting = options.filter((option) => option <= limit);
+  return fitting.length > 0
+    ? fitting[fitting.length - 1]
+    : options[0];
 }
 
-function fillRunAroundReserved(
+function fillBaseTier(
   wall: Round2Wall,
-  tier: Extract<SegmentTier, "upper" | "base">,
-  reserved: ReservedSegment[]
+  insets: TierInsets,
+  intent: Round2DesignIntent | undefined,
+  decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   const length = wall.lengthSixteenths ?? 0;
-  const segments: WallSegment[] = [];
-  let cursor = 0;
-  let sequence = 1;
+  let startInsets = insets.start;
+  let endInsets = [...insets.end].reverse();
+  let fillStart = segmentTotal(startInsets);
+  let fillEnd = length - segmentTotal(endInsets);
 
-  for (const item of reserved.sort(
-    (a, b) => a.desiredStart - b.desiredStart || a.fixedPoint.id.localeCompare(b.fixedPoint.id)
-  )) {
-    const start = Math.max(cursor, Math.min(item.desiredStart, length));
-    const width = Math.min(item.width, Math.max(0, length - start));
-    if (start > cursor) {
-      segments.push(
-        ...fillSpan(wall, tier, start - cursor, sequence, item.kind === "opening")
-      );
-      sequence += 1;
-    }
-    if (width > 0) {
-      segments.push({
-        id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${item.kind}-${item.fixedPoint.id}`,
-        wallId: wall.id,
-        tier,
-        kind: item.kind,
-        widthSixteenths: width,
-        label: item.label,
-        cabinetKind: item.cabinetKind,
-        standardWidthSixteenths: width,
-        sourceFixedPointId: item.fixedPoint.id
-      });
-      sequence += 1;
-      cursor = start + width;
-    }
-  }
-
-  if (cursor < length) {
-    segments.push(...fillSpan(wall, tier, length - cursor, sequence, false));
-  }
-
-  const total = segments.reduce((sum, segment) => sum + segment.widthSixteenths, 0);
-  if (total < length) {
-    segments.push({
-      id: `${wall.id.toLowerCase()}-${tier}-closure-filler`,
+  if (fillStart > fillEnd) {
+    decisionItems.push({
+      id: `decision-${wall.id}-corner-overflow`,
+      objectId: wall.id,
       wallId: wall.id,
-      tier,
-      kind: "filler",
-      widthSixteenths: length - total,
-      label: `F${formatWidth(length - total)}`
+      severity: "blocking",
+      title: `Wall ${wall.label} too short for corner strategy`,
+      body: `Corner reservations need ${formatSixteenths(fillStart + (length - fillEnd))} but the wall measures ${formatSixteenths(length)}. Revise the corner intent or remeasure.`
+    });
+    startInsets = [];
+    endInsets = [];
+    fillStart = 0;
+    fillEnd = length;
+  }
+
+  const reservations = packReservations(
+    baseReservations(wall, fillStart, fillEnd, intent),
+    fillStart,
+    fillEnd
+  );
+
+  const segments: WallSegment[] = [...startInsets];
+  let cursor = fillStart;
+  let sequence = 1;
+  const hasStartCorner = startInsets.length > 0;
+  const hasEndCorner = endInsets.length > 0;
+
+  const pushSpan = (spanStart: number, spanEnd: number) => {
+    if (spanEnd <= spanStart) return;
+    const side = fillerSideForSpan(
+      spanStart,
+      spanEnd,
+      fillStart,
+      fillEnd,
+      hasStartCorner,
+      hasEndCorner,
+      length
+    );
+    segments.push(...fillSpan(wall, "base", spanStart, spanEnd, sequence, side));
+    sequence += 1;
+  };
+
+  for (const item of reservations) {
+    pushSpan(cursor, item.start);
+    segments.push({
+      id: `${wall.id.toLowerCase()}-base-${sequence}-${item.kind}-${item.fixedPoint.id}`,
+      wallId: wall.id,
+      tier: "base",
+      kind: item.kind,
+      widthSixteenths: item.width,
+      label: item.label,
+      cabinetKind: item.cabinetKind,
+      standardWidthSixteenths: item.width,
+      sourceFixedPointId: item.fixedPoint.id
+    });
+    sequence += 1;
+    cursor = item.start + item.width;
+  }
+  pushSpan(cursor, fillEnd);
+  segments.push(...endInsets);
+
+  return tagFunctionalNeighbors(segments, intent);
+}
+
+// Rule 2 — fixed points become anchors: the sink centers on the window, the
+// range follows the gas marker, the fridge hugs a wall end, the dishwasher
+// docks against the sink. Doors block the base run entirely.
+function baseReservations(
+  wall: Round2Wall,
+  fillStart: number,
+  fillEnd: number,
+  intent?: Round2DesignIntent
+): Reservation[] {
+  const length = wall.lengthSixteenths ?? 0;
+  const items: Reservation[] = [];
+
+  for (const point of wall.fixedPoints) {
+    if (point.type !== "door") continue;
+    const width = Math.max(0, point.widthSixteenths ?? 0);
+    if (width === 0) continue;
+    items.push({
+      fixedPoint: point,
+      desiredStart:
+        point.offsetSixteenths ??
+        Math.round(point.positionRatio * Math.max(0, length - width)),
+      width,
+      kind: "opening",
+      label: point.label
     });
   }
 
-  return segments;
+  const sinkPoint = wall.fixedPoints.find(
+    (point) => point.type === "appliance" && point.symbol === "sink"
+  );
+  const window = wall.fixedPoints.find((point) => point.type === "window");
+  let sinkStart: number | null = null;
+  let sinkWidth = 0;
+
+  if (sinkPoint) {
+    const standard = applianceStandard(sinkPoint);
+    if (standard) {
+      sinkWidth = standard.widthSixteenths;
+      const alignment =
+        intent?.answers[`sink-window.${wall.id}.alignment`] ?? "align";
+      const windowCenter =
+        window &&
+        window.offsetSixteenths != null &&
+        window.widthSixteenths != null
+          ? window.offsetSixteenths + Math.round(window.widthSixteenths / 2)
+          : null;
+      sinkStart =
+        alignment === "align" && windowCenter != null
+          ? windowCenter - Math.round(sinkWidth / 2)
+          : Math.round(sinkPoint.positionRatio * Math.max(0, length - sinkWidth));
+      items.push({
+        fixedPoint: sinkPoint,
+        desiredStart: sinkStart,
+        width: sinkWidth,
+        kind: "appliance",
+        label: standard.label,
+        cabinetKind: "sink"
+      });
+    }
+  }
+
+  for (const point of wall.fixedPoints) {
+    if (
+      point.type !== "appliance" ||
+      point.symbol === "sink" ||
+      point.symbol === "hood"
+    ) {
+      continue;
+    }
+    const standard = applianceStandard(point);
+    if (!standard) continue;
+    const width = standard.widthSixteenths;
+    let desiredStart = Math.round(
+      point.positionRatio * Math.max(0, length - width)
+    );
+    if (point.symbol === "range") {
+      const gas = wall.fixedPoints.find(
+        (item) => item.type === "marker" && item.symbol === "G"
+      );
+      if (gas) {
+        desiredStart = Math.round(gas.positionRatio * length - width / 2);
+      }
+    } else if (point.symbol === "fridge") {
+      desiredStart = point.positionRatio < 0.5 ? fillStart : fillEnd - width;
+    } else if (point.symbol === "dishwasher" && sinkPoint && sinkStart != null) {
+      desiredStart =
+        point.positionRatio <= sinkPoint.positionRatio
+          ? sinkStart - width
+          : sinkStart + sinkWidth;
+    }
+    items.push({
+      fixedPoint: point,
+      desiredStart,
+      width,
+      kind: "appliance",
+      label: standard.label,
+      cabinetKind:
+        point.symbol === "fridge" ||
+        point.symbol === "oven" ||
+        point.symbol === "microwave"
+          ? "tall"
+          : undefined
+    });
+  }
+
+  return items;
 }
 
+function packReservations(
+  reservations: Reservation[],
+  fillStart: number,
+  fillEnd: number
+): PlacedReservation[] {
+  const placed: PlacedReservation[] = [];
+  let cursor = fillStart;
+
+  for (const item of [...reservations].sort(
+    (a, b) =>
+      a.desiredStart - b.desiredStart ||
+      a.fixedPoint.id.localeCompare(b.fixedPoint.id)
+  )) {
+    const start = Math.max(
+      cursor,
+      Math.min(item.desiredStart, fillEnd - item.width)
+    );
+    const width = Math.min(item.width, Math.max(0, fillEnd - start));
+    if (width <= 0) continue;
+    placed.push({ ...item, start, width });
+    cursor = start + width;
+  }
+
+  return placed;
+}
+
+// Rule 3 + 4 — zones between anchors are packed with the fewest wide
+// cabinets; the remainder becomes a filler pushed to the corner side or the
+// wall end. A sub-preferred remainder first tries to grow by stepping one
+// cabinet down a width tier.
 function fillSpan(
   wall: Round2Wall,
-  tier: Extract<SegmentTier, "upper" | "base">,
-  spanWidth: number,
+  tier: FillTier,
+  spanStart: number,
+  spanEnd: number,
   sequence: number,
-  adjacentToOpening: boolean
+  fillerSide: FillerSide
 ): WallSegment[] {
-  const segments: WallSegment[] = [];
-  let remaining = Math.max(0, spanWidth);
-  let local = 1;
+  const span = spanEnd - spanStart;
+  if (span <= 0) return [];
 
+  const widths: number[] = [];
+  let remaining = span;
   while (remaining >= MIN_CABINET_WIDTH_SIXTEENTHS) {
-    const width =
-      CABINET_WIDTHS_DESCENDING.find((candidate) => candidate <= remaining) ??
-      null;
+    const width = BASE_WIDTHS_DESCENDING.find(
+      (candidate) => candidate <= remaining
+    );
     if (!width) break;
-    segments.push({
-      id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local}-cabinet`,
-      wallId: wall.id,
-      tier,
-      kind: "cabinet",
-      widthSixteenths: width,
-      label: `${tier === "upper" ? "W" : "B"}${width / 16}`,
-      cabinetKind: tier === "upper" ? "upper" : "base",
-      standardWidthSixteenths: width
-    });
+    widths.push(width);
     remaining -= width;
-    local += 1;
   }
 
-  if (remaining > 0 || segments.length === 0) {
-    const fillerWidth = remaining > 0 ? remaining : spanWidth;
-    if (fillerWidth > 0) {
-      segments.push({
-        id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local}-filler`,
+  if (remaining > 0 && remaining < FILLER_PREFERRED_SIXTEENTHS) {
+    const index = widths.findIndex(
+      (width) => previousWidthTier(width) != null
+    );
+    if (index !== -1) {
+      const stepped = previousWidthTier(widths[index]) as number;
+      remaining += widths[index] - stepped;
+      widths[index] = stepped;
+    }
+  }
+
+  const prefix = tier === "upper" ? "W" : "B";
+  const cabinets = widths.map((width, local) => ({
+    id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local + 1}-cabinet`,
+    wallId: wall.id,
+    tier,
+    kind: "cabinet" as const,
+    widthSixteenths: width,
+    label: `${prefix}${width / 16}`,
+    cabinetKind: tier === "upper" ? ("upper" as const) : ("base" as const),
+    standardWidthSixteenths: width
+  }));
+
+  const filler: WallSegment[] =
+    remaining > 0
+      ? [
+          {
+            id: `${wall.id.toLowerCase()}-${tier}-${sequence}-filler`,
+            wallId: wall.id,
+            tier,
+            kind: "filler",
+            widthSixteenths: remaining,
+            label: `F${Math.round(remaining / 16)}`
+          }
+        ]
+      : [];
+
+  return fillerSide === "start" ? [...filler, ...cabinets] : [...cabinets, ...filler];
+}
+
+function fillerSideForSpan(
+  spanStart: number,
+  spanEnd: number,
+  fillStart: number,
+  fillEnd: number,
+  hasStartCorner: boolean,
+  hasEndCorner: boolean,
+  length: number
+): FillerSide {
+  const first = spanStart === fillStart;
+  const last = spanEnd === fillEnd;
+  if (first && last) {
+    return hasStartCorner && !hasEndCorner ? "start" : "end";
+  }
+  if (first) return "start";
+  if (last) return "end";
+  return (spanStart + spanEnd) / 2 <= length / 2 ? "start" : "end";
+}
+
+function previousWidthTier(width: number): number | null {
+  const index = BASE_WIDTHS_ASCENDING.indexOf(width);
+  return index > 0 ? BASE_WIDTHS_ASCENDING[index - 1] : null;
+}
+
+// Rule 3 (functional adjacency) — the cabinets flanking the range become
+// drawer bases and the cabinet on the intent side of the sink hosts the
+// trash pullout. Both stay ordinary base cabinets geometrically.
+function tagFunctionalNeighbors(
+  segments: WallSegment[],
+  intent?: Round2DesignIntent
+): WallSegment[] {
+  const tagged = [...segments];
+
+  const rangeIndex = tagged.findIndex(
+    (segment) =>
+      segment.kind === "appliance" &&
+      segment.label.startsWith(CABINET_STANDARDS.appliances.range.labelPrefix)
+  );
+  if (rangeIndex !== -1) {
+    for (const neighborIndex of [rangeIndex - 1, rangeIndex + 1]) {
+      const neighbor = tagged[neighborIndex];
+      if (neighbor?.kind === "cabinet" && neighbor.cabinetKind === "base") {
+        tagged[neighborIndex] = {
+          ...neighbor,
+          label: `DB${Math.round(neighbor.widthSixteenths / 16)}`
+        };
+      }
+    }
+  }
+
+  const trashPreference = intent?.answers["trash.location"] ?? "sinkRight";
+  if (trashPreference === "none") return tagged;
+  const sinkIndex = tagged.findIndex(
+    (segment) => segment.cabinetKind === "sink"
+  );
+  if (sinkIndex === -1) return tagged;
+  const step = trashPreference === "sinkLeft" ? -1 : 1;
+  for (
+    let index = sinkIndex + step;
+    index >= 0 && index < tagged.length;
+    index += step
+  ) {
+    const segment = tagged[index];
+    if (segment.kind === "opening" || segment.kind === "gap") break;
+    if (
+      segment.kind === "cabinet" &&
+      segment.cabinetKind === "base" &&
+      !segment.label.startsWith("DB")
+    ) {
+      tagged[index] = {
+        ...segment,
+        label: `WB${Math.round(segment.widthSixteenths / 16)}`
+      };
+      break;
+    }
+  }
+  return tagged;
+}
+
+// Rule 5 — the upper tier is a projection of the base tier: seams copy up,
+// the hood follows the range width, the fridge gets a deep upper, tall units
+// leave a gap, and window/door openings are carved out afterwards.
+function deriveUpperTier(
+  wall: Round2Wall,
+  baseSegments: WallSegment[],
+  intent?: Round2DesignIntent
+): WallSegment[] {
+  const length = wall.lengthSixteenths ?? 0;
+  if (length === 0) return [];
+
+  type Placed = { segment: WallSegment; start: number; end: number };
+  const basePlaced: Placed[] = [];
+  let position = 0;
+  for (const segment of baseSegments) {
+    basePlaced.push({
+      segment,
+      start: position,
+      end: position + segment.widthSixteenths
+    });
+    position += segment.widthSixteenths;
+  }
+
+  type OpeningInterval = {
+    point: Round2FixedPoint;
+    start: number;
+    end: number;
+  };
+  const openings: OpeningInterval[] = [];
+  for (const placed of basePlaced) {
+    if (placed.segment.kind !== "opening") continue;
+    const point = wall.fixedPoints.find(
+      (item) => item.id === placed.segment.sourceFixedPointId
+    );
+    if (point) openings.push({ point, start: placed.start, end: placed.end });
+  }
+  for (const point of wall.fixedPoints) {
+    if (point.type !== "window") continue;
+    const width = Math.max(0, point.widthSixteenths ?? 0);
+    if (width === 0) continue;
+    const start = Math.min(
+      Math.max(
+        point.offsetSixteenths ??
+          Math.round(point.positionRatio * Math.max(0, length - width)),
+        0
+      ),
+      length - width
+    );
+    openings.push({ point, start, end: start + width });
+  }
+
+  const cuts = new Set<number>([0, length]);
+  for (const placed of basePlaced) {
+    cuts.add(placed.start);
+    cuts.add(placed.end);
+  }
+  for (const opening of openings) {
+    cuts.add(Math.max(0, opening.start));
+    cuts.add(Math.min(length, opening.end));
+  }
+  const bounds = [...cuts]
+    .filter((value) => value >= 0 && value <= length)
+    .sort((a, b) => a - b);
+
+  type Piece = {
+    type: "opening" | "hood" | "fridgeUpper" | "gap" | "cabinet" | "filler";
+    ref: string;
+    label: string;
+    width: number;
+    cabinetKind?: "upper";
+    sourceFixedPointId?: string;
+    sourceCornerId?: string;
+  };
+  const pieces: Piece[] = [];
+
+  for (let index = 0; index < bounds.length - 1; index += 1) {
+    const from = bounds[index];
+    const to = bounds[index + 1];
+    if (to <= from) continue;
+    const width = to - from;
+
+    const opening = openings.find(
+      (item) => item.start <= from && to <= item.end
+    );
+    const piece = opening
+      ? ({
+          type: "opening",
+          ref: opening.point.id,
+          label: opening.point.label,
+          width,
+          sourceFixedPointId: opening.point.id
+        } as Piece)
+      : mapBaseToUpperPiece(
+          wall,
+          basePlaced.find((item) => item.start <= from && to <= item.end),
+          width,
+          intent
+        );
+    if (!piece) continue;
+
+    const previous = pieces[pieces.length - 1];
+    if (previous && previous.type === piece.type && previous.ref === piece.ref) {
+      previous.width += piece.width;
+    } else {
+      pieces.push(piece);
+    }
+  }
+
+  return pieces.map((piece, index) => {
+    const id = `${wall.id.toLowerCase()}-upper-${index + 1}-${piece.type}`;
+    if (piece.type === "opening") {
+      return {
+        id,
         wallId: wall.id,
-        tier,
-        kind: "filler",
-        widthSixteenths: fillerWidth,
-        label: adjacentToOpening ? `Opening filler ${formatWidth(fillerWidth)}` : `F${formatWidth(fillerWidth)}`
+        tier: "upper" as const,
+        kind: "opening" as const,
+        widthSixteenths: piece.width,
+        label: piece.label,
+        sourceFixedPointId: piece.sourceFixedPointId
+      };
+    }
+    if (piece.type === "gap") {
+      return {
+        id,
+        wallId: wall.id,
+        tier: "upper" as const,
+        kind: "gap" as const,
+        widthSixteenths: piece.width,
+        label: piece.label,
+        sourceCornerId: piece.sourceCornerId,
+        sourceFixedPointId: piece.sourceFixedPointId
+      };
+    }
+    if (piece.type === "filler") {
+      return {
+        id,
+        wallId: wall.id,
+        tier: "upper" as const,
+        kind: "filler" as const,
+        widthSixteenths: piece.width,
+        label: `F${Math.round(piece.width / 16)}`,
+        sourceCornerId: piece.sourceCornerId
+      };
+    }
+    const label =
+      piece.type === "hood"
+        ? `HD${Math.round(piece.width / 16)}`
+        : piece.type === "fridgeUpper"
+          ? `WR${Math.round(piece.width / 16)}`
+          : `W${Math.round(piece.width / 16)}`;
+    return {
+      id,
+      wallId: wall.id,
+      tier: "upper" as const,
+      kind: "cabinet" as const,
+      widthSixteenths: piece.width,
+      label,
+      cabinetKind: "upper" as const,
+      standardWidthSixteenths: piece.width,
+      sourceFixedPointId: piece.sourceFixedPointId
+    };
+  });
+}
+
+function mapBaseToUpperPiece(
+  wall: Round2Wall,
+  placed: { segment: WallSegment } | undefined,
+  width: number,
+  intent?: Round2DesignIntent
+): {
+  type: "hood" | "fridgeUpper" | "gap" | "cabinet" | "filler";
+  ref: string;
+  label: string;
+  width: number;
+  sourceFixedPointId?: string;
+  sourceCornerId?: string;
+} | null {
+  if (!placed) return null;
+  const base = placed.segment;
+
+  if (base.sourceCornerId && base.kind !== "cabinet") {
+    return {
+      type: "gap",
+      ref: base.id,
+      label: "Corner clearance",
+      width,
+      sourceCornerId: base.sourceCornerId
+    };
+  }
+
+  if (base.kind === "appliance") {
+    const point = wall.fixedPoints.find(
+      (item) => item.id === base.sourceFixedPointId
+    );
+    if (point?.symbol === "range") {
+      const hoodStyle = intent?.answers["hood.style"] ?? "cabinetInsert";
+      if (hoodStyle === "chimney") {
+        return {
+          type: "gap",
+          ref: base.id,
+          label: "Chimney hood zone",
+          width,
+          sourceFixedPointId: point.id
+        };
+      }
+      return {
+        type: "hood",
+        ref: base.id,
+        label: "",
+        width,
+        sourceFixedPointId: point.id
+      };
+    }
+    if (point?.symbol === "fridge") {
+      return {
+        type: "fridgeUpper",
+        ref: base.id,
+        label: "",
+        width,
+        sourceFixedPointId: point.id
+      };
+    }
+    if (base.cabinetKind === "tall") {
+      return {
+        type: "gap",
+        ref: base.id,
+        label: "Tall unit",
+        width,
+        sourceFixedPointId: base.sourceFixedPointId
+      };
+    }
+    // Sink and dishwasher runs carry ordinary uppers aligned to their seams.
+    return { type: "cabinet", ref: base.id, label: "", width };
+  }
+
+  if (base.kind === "filler") {
+    return { type: "filler", ref: base.id, label: "", width };
+  }
+  if (base.kind === "gap" || base.kind === "opening") {
+    return { type: "gap", ref: base.id, label: base.label, width };
+  }
+
+  // Seam-copied upper; slivers left by window carving become fillers.
+  if (width < MIN_CABINET_WIDTH_SIXTEENTHS) {
+    return { type: "filler", ref: base.id, label: "", width };
+  }
+  return { type: "cabinet", ref: base.id, label: "", width };
+}
+
+// Rule 6 — the height chain consumes the measured ceiling: the upper height
+// is the largest standard tier that fits under counter + backsplash +
+// moulding, and the flat moulding size is a derived product.
+function deriveHeightProfile(
+  ceilingHeightSixteenths: number | null,
+  intent: Round2DesignIntent | undefined,
+  wall: Round2Wall | null
+): { profile: Round2HeightProfile | null; decisions: Round2DecisionItem[] } {
+  if (ceilingHeightSixteenths == null || !wall) {
+    return { profile: null, decisions: [] };
+  }
+
+  const vertical = CABINET_STANDARDS.vertical;
+  const counter = vertical.finishedCounterHeightSixteenths;
+  const backsplash = vertical.backsplashMinSixteenths;
+  const termination = intent?.answers["uppers.termination"] ?? "standard";
+  const style = intent?.answers["uppers.moulding"] ?? "flat3";
+  const styleMoulding =
+    style === "none"
+      ? 0
+      : style === "flat2"
+        ? vertical.flatMoulding.minSixteenths
+        : vertical.flatMoulding.preferredSixteenths;
+  const available = ceilingHeightSixteenths - counter - backsplash;
+  const tiers = [...CABINET_STANDARDS.upper.standardHeightsSixteenths].sort(
+    (a, b) => b - a
+  );
+  const decisions: Round2DecisionItem[] = [];
+
+  let upperHeight: number;
+  let moulding = styleMoulding;
+
+  if (termination === "ceiling") {
+    const mouldingMin = style === "none" ? 0 : vertical.flatMoulding.minSixteenths;
+    const mouldingMax = style === "none" ? 0 : vertical.flatMoulding.maxSixteenths;
+    const fit = tiers.find((tier) => tier <= available - mouldingMin) ?? null;
+    upperHeight = fit ?? Math.max(0, available - mouldingMin);
+    moulding = Math.min(Math.max(available - upperHeight, mouldingMin), mouldingMax);
+    const leftover = available - upperHeight - moulding;
+    if (fit == null || leftover !== 0) {
+      decisions.push({
+        id: "decision-height-ceiling-closure",
+        objectId: wall.id,
+        wallId: wall.id,
+        severity: "warning",
+        title: "Uppers cannot close to the ceiling",
+        body: `A ${formatSixteenths(leftover)} gap remains above ${formatSixteenths(upperHeight)} uppers with ${formatSixteenths(moulding)} moulding. Confirm the reveal or change the moulding intent.`
+      });
+    }
+  } else {
+    const fit = tiers.find((tier) => tier <= available - moulding) ?? null;
+    upperHeight = fit ?? Math.max(0, available - moulding);
+    if (fit == null) {
+      decisions.push({
+        id: "decision-height-no-standard-upper",
+        objectId: wall.id,
+        wallId: wall.id,
+        severity: "warning",
+        title: "No standard upper height fits",
+        body: `Only ${formatSixteenths(available)} remains above the backsplash. Confirm a custom upper height.`
       });
     }
   }
 
-  return segments;
+  return {
+    profile: {
+      counterSixteenths: counter,
+      backsplashSixteenths: backsplash,
+      upperHeightSixteenths: upperHeight,
+      mouldingSixteenths: moulding
+    },
+    decisions
+  };
 }
 
-function openingReservations(wall: Round2Wall): ReservedSegment[] {
-  const length = wall.lengthSixteenths ?? 0;
-  return wall.fixedPoints
-    .filter((point) => point.type === "window" || point.type === "door")
-    .map((point) => {
-      const width = Math.max(0, point.widthSixteenths ?? 0);
-      const measuredOffset = point.offsetSixteenths;
-      const desiredStart =
-        measuredOffset == null
-          ? Math.round(point.positionRatio * Math.max(0, length - width))
-          : measuredOffset;
-      return {
-        fixedPoint: point,
-        desiredStart,
-        width,
-        kind: "opening" as const,
-        label: point.label
-      };
-    })
-    .filter((item) => item.width > 0);
-}
-
-function applianceReservations(wall: Round2Wall): ReservedSegment[] {
-  const length = wall.lengthSixteenths ?? 0;
-  return wall.fixedPoints
-    .filter((point) => point.type === "appliance")
-    .flatMap((point) => {
-      const standard = applianceStandard(point);
-      if (!standard) return [];
-      const width = standard.widthSixteenths;
-      return [
-        {
-          fixedPoint: point,
-          desiredStart: Math.round(
-            point.positionRatio * Math.max(0, length - width)
-          ),
-          width,
-          kind: "appliance" as const,
-          label: standard.label,
-          cabinetKind:
-            point.symbol === "sink"
-              ? ("sink" as const)
-              : point.symbol === "fridge" ||
-                  point.symbol === "oven" ||
-                  point.symbol === "microwave"
-                ? ("tall" as const)
-                : undefined
-        }
-      ];
-    });
+function segmentTotal(segments: readonly WallSegment[]): number {
+  return segments.reduce((sum, segment) => sum + segment.widthSixteenths, 0);
 }
 
 function applianceStandard(
@@ -321,8 +971,4 @@ function applianceStandard(
   }
 
   return null;
-}
-
-function formatWidth(value: number): string {
-  return `${Math.round(value / 16)}″`;
 }

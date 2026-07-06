@@ -5,7 +5,7 @@ export type MeasurementKey = string;
 
 export type SegmentTier = "upper" | "base" | "full";
 
-export type CabinetKind = "base" | "upper" | "sink" | "tall";
+export type CabinetKind = "base" | "upper" | "sink" | "tall" | "corner";
 
 export type WallSegmentKind =
   | "cabinet"
@@ -44,6 +44,7 @@ export type WallSegment = {
   cabinetKind?: CabinetKind;
   standardWidthSixteenths?: number;
   sourceFixedPointId?: string;
+  sourceCornerId?: string;
 };
 
 export type Round2Wall = {
@@ -65,9 +66,17 @@ export type Round2DecisionItem = {
   body: string;
 };
 
+export type Round2HeightProfile = {
+  counterSixteenths: number;
+  backsplashSixteenths: number;
+  upperHeightSixteenths: number;
+  mouldingSixteenths: number;
+};
+
 export type Round2Model = {
   walls: Round2Wall[];
   ceilingHeightSixteenths: number | null;
+  heightProfile?: Round2HeightProfile | null;
   decisionItems: Round2DecisionItem[];
 };
 

@@ -343,6 +343,10 @@ function withLabel(segment: WallSegment): WallSegment {
   }
 
   const width = Math.round(segment.widthSixteenths / 16);
+  if (segment.cabinetKind === "corner") {
+    const prefix = /^[A-Z]+/.exec(segment.label)?.[0] ?? "LS";
+    return { ...segment, label: `${prefix}${width}` };
+  }
   if (segment.cabinetKind === "sink") {
     return { ...segment, label: `SB${width}` };
   }

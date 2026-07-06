@@ -75,7 +75,7 @@ export function CabinetSchedule({
                   {heightForSegment(segment)}
                 </td>
                 <td className="px-2 py-3 text-right">
-                  {segment.tier === "upper" ? "12″" : "24″"}
+                  {depthForSegment(segment)}
                 </td>
                 <td className="px-2 py-3 text-[#696969]">
                   {noteForSegment(segment)}
@@ -113,9 +113,22 @@ function heightForSegment(segment: WallSegment): string {
   return HEIGHT_BY_TIER[segment.tier] ?? "34 1/2″";
 }
 
+function depthForSegment(segment: WallSegment): string {
+  if (segment.tier !== "upper") return "24″";
+  // Refrigerator uppers are the one deep cabinet in the upper run.
+  return segment.label.startsWith("WR") ? "24″" : "12″";
+}
+
 function noteForSegment(segment: WallSegment): string {
   if (segment.kind === "filler") return "Filler panel / scribe";
+  if (segment.cabinetKind === "corner") {
+    return "Corner strategy from design intent";
+  }
   if (segment.kind === "appliance") return "Verify appliance specification";
   if (segment.cabinetKind === "sink") return "Sink base";
+  if (segment.label.startsWith("WB")) return "Trash pullout base";
+  if (segment.label.startsWith("DB")) return "Drawer base";
+  if (segment.label.startsWith("HD")) return "Hood cabinet";
+  if (segment.label.startsWith("WR")) return "Refrigerator upper";
   return "Model-driven proposal";
 }
