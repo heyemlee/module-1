@@ -15,6 +15,7 @@ import {
   type MeasurementKey
 } from "../model/round2-model";
 import { MeasuredPlan } from "./measured-plan";
+import { InchField } from "./inch-field";
 import type {
   Round2PrototypeAction,
   Round2PrototypeState
@@ -59,12 +60,8 @@ export function MeasurementWorkspace({
     inputRefs.current[state.activeMeasurementKey]?.focus();
   }, [state.activeMeasurementKey]);
 
-  const editMeasurement = (field: MeasurementKey, rawValue: string) => {
-    dispatch({
-      type: "EDIT_MEASUREMENT",
-      field,
-      value: rawValue === "" ? null : Math.round(Number(rawValue) * 16)
-    });
+  const editMeasurement = (field: MeasurementKey, sixteenths: number | null) => {
+    dispatch({ type: "EDIT_MEASUREMENT", field, value: sixteenths });
   };
 
   return (
@@ -143,31 +140,22 @@ export function MeasurementWorkspace({
                       {status.toUpperCase()}
                     </span>
                   </span>
-                  <span className="relative mt-2 block">
-                    <input
-                      ref={(element) => {
-                        inputRefs.current[item.key] = element;
-                      }}
-                      aria-label={item.label}
-                      type="number"
-                      min={0}
-                      step={0.0625}
-                      value={value == null ? "" : value / 16}
-                      onFocus={() =>
-                        dispatch({
-                          type: "SET_ACTIVE_MEASUREMENT",
-                          field: item.key
-                        })
-                      }
-                      onChange={(event) =>
-                        editMeasurement(item.key, event.target.value)
-                      }
-                      className="h-11 w-full rounded-studio-control border border-studio-line-strong bg-white px-3 pr-12 font-mono text-[13px] outline-none transition-colors focus:border-studio-ink focus:ring-2 focus:ring-studio-ink/10 disabled:cursor-not-allowed disabled:bg-black/[0.035] disabled:text-studio-muted"
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[9px] text-studio-quiet">
-                      IN
-                    </span>
-                  </span>
+                  <InchField
+                    ariaLabel={item.label}
+                    value={value ?? null}
+                    inputRef={(element) => {
+                      inputRefs.current[item.key] = element;
+                    }}
+                    onFocus={() =>
+                      dispatch({
+                        type: "SET_ACTIVE_MEASUREMENT",
+                        field: item.key
+                      })
+                    }
+                    onChange={(sixteenths) =>
+                      editMeasurement(item.key, sixteenths)
+                    }
+                  />
                   <span className="mt-1.5 block text-[10.5px] text-studio-quiet">
                     {item.helper}
                   </span>
