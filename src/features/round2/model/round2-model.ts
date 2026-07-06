@@ -33,6 +33,20 @@ export type Round2FixedPoint = {
   offsetSixteenths?: number | null;
 };
 
+export type FrontAccessory = "trashPullout" | "spicePullout" | "lazySusan";
+
+/**
+ * Cabinet front configuration. Only exceptions a designer made are stored;
+ * defaults derive from the door rule and design intent (see model/front.ts).
+ */
+export type WallSegmentFront = {
+  doorCount?: 0 | 1 | 2;
+  /** Relative drawer heights, top to bottom. Empty means no drawer stack. */
+  drawerStack?: number[];
+  hardware?: "handle" | "fingerPull";
+  accessories?: FrontAccessory[];
+};
+
 export type WallSegment = {
   id: string;
   wallId: WallId;
@@ -45,6 +59,7 @@ export type WallSegment = {
   standardWidthSixteenths?: number;
   sourceFixedPointId?: string;
   sourceCornerId?: string;
+  front?: WallSegmentFront;
 };
 
 export type Round2Wall = {

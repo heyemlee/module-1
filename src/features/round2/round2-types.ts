@@ -2,8 +2,10 @@ import type { FloorPlan } from "@/features/round1/floorplan/plan-geometry";
 import type {
   CabinetKind,
   MeasurementKey,
+  Round2HeightProfile,
   Round2Model,
-  WallId
+  WallId,
+  WallSegmentFront
 } from "./model/round2-model";
 import type { FillerEnd, NudgeDirection } from "./model/adjustments";
 import type {
@@ -27,8 +29,10 @@ export type {
   DesignIntentValue,
   MeasurementKey,
   Round2DesignIntent,
+  Round2HeightProfile,
   Round2Model,
-  WallId
+  WallId,
+  WallSegmentFront
 };
 
 export type Round2Measurements = Record<MeasurementKey, number | null>;
@@ -83,6 +87,8 @@ export type Round2PrototypeAction =
   | { type: "NUDGE_GROUP"; objectId: string; direction: NudgeDirection }
   | { type: "MOVE_FILLER_END"; objectId: string; end: FillerEnd }
   | { type: "SET_SEGMENT_KIND"; objectId: string; cabinetKind: CabinetKind }
+  | { type: "SET_SEGMENT_FRONT"; objectId: string; front: WallSegmentFront }
+  | { type: "SET_HEIGHT_PROFILE"; profile: Partial<Round2HeightProfile> }
   | { type: "RESOLVE_DESIGN_DECISION" }
   | { type: "SET_SHEET"; sheet: DrawingSheetId }
   | { type: "SET_DRAWING_ZOOM"; zoom: number }

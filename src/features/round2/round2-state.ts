@@ -2,6 +2,8 @@ import { autofillRound2Model } from "./model/autofill";
 import {
   moveFillerEnd,
   nudgeGroup,
+  setHeightProfile,
+  setSegmentFront,
   setSegmentKind,
   stepCabinetWidth
 } from "./model/adjustments";
@@ -154,6 +156,19 @@ export function reduceRound2Prototype(
           setSegmentKind(model, action.objectId, action.cabinetKind),
         action.objectId
       );
+    case "SET_SEGMENT_FRONT":
+      return applyProposalAdjustment(
+        state,
+        (model) => setSegmentFront(model, action.objectId, action.front),
+        action.objectId
+      );
+    case "SET_HEIGHT_PROFILE":
+      // Global height chain: no object selection involved.
+      return applyProposalAdjustment(
+        state,
+        (model) => setHeightProfile(model, action.profile),
+        null
+      );
     case "RESOLVE_DESIGN_DECISION":
       return { ...state, proposalStatus: "READY", issueObjectId: null };
     case "SET_SHEET":
@@ -288,7 +303,7 @@ function firstSelectableSegment(
 function applyProposalAdjustment(
   state: Round2PrototypeState,
   adjust: (model: Round2Model) => Round2Model,
-  selectedObjectId: string
+  selectedObjectId: string | null
 ): Round2PrototypeState {
   if (!state.model || state.role !== "DESIGNER") return state;
 
@@ -307,7 +322,9 @@ function applyProposalAdjustment(
       )
     ]
   };
-  const selectedSegment = firstSegmentById(model, selectedObjectId);
+  const selectedSegment = selectedObjectId
+    ? firstSegmentById(model, selectedObjectId)
+    : null;
   const proposalStatus =
     model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY";
 
@@ -318,7 +335,7 @@ function applyProposalAdjustment(
     proposalStatus,
     drawingStatus: "STALE",
     selectedWall: selectedSegment?.wallId ?? state.selectedWall,
-    selectedObjectId,
+    selectedObjectId: selectedObjectId ?? state.selectedObjectId,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
   };
 }

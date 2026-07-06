@@ -7,9 +7,16 @@ import {
   findSegment,
   findWall,
   formatSixteenths,
-  type CabinetKind
+  type CabinetKind,
+  type FrontAccessory
 } from "../model/round2-model";
-import { standardWidthOptionsSixteenths } from "../model/adjustments";
+import {
+  heightProfileTotal,
+  standardWidthOptionsSixteenths
+} from "../model/adjustments";
+import { CABINET_STANDARDS } from "../model/cabinet-standards";
+import { ACCESSORY_LABELS, describeFront, resolveSegmentFront } from "../model/front";
+import { InchField } from "../measurement/inch-field";
 import type {
   Round2PrototypeAction,
   Round2PrototypeState
@@ -38,6 +45,12 @@ export function DecisionRail({
       selectedSegment.kind === "appliance");
   const canMoveFiller =
     canAdjust && selectedSegment?.kind === "filler";
+  const selectedFront = selectedSegment
+    ? resolveSegmentFront(selectedSegment, state.designIntent)
+    : null;
+  const heightProfile = state.model?.heightProfile ?? null;
+  const canEditGlobals =
+    state.role === "DESIGNER" && state.measurementStatus === "SUBMITTED";
 
   return (
     <aside className="h-full min-h-0 overflow-y-auto rounded-[18px] border border-studio-line bg-white/65 p-4 shadow-[0_18px_42px_-32px_rgba(20,20,26,0.28)] backdrop-blur-xl">
@@ -163,7 +176,111 @@ export function DecisionRail({
                     </button>
                   ))}
                 </div>
+                {canResize && (
+                  <InchField
+                    value={selectedSegment.widthSixteenths}
+                    onChange={(value) => {
+                      if (value != null && value > 0) {
+                        dispatch({
+                          type: "STEP_CABINET_WIDTH",
+                          objectId: selectedSegment.id,
+                          widthSixteenths: value
+                        });
+                      }
+                    }}
+                    ariaLabel="Custom cabinet width"
+                    disabled={!canResize}
+                  />
+                )}
               </div>
+
+              {selectedFront && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold">Front</span>
+                    <span className="font-mono text-[8px] text-studio-muted">
+                      {describeFront(selectedFront)}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {FACE_OPTIONS.map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        disabled={!canAdjust}
+                        aria-pressed={
+                          selectedFront.doorCount === option.doorCount &&
+                          selectedFront.drawerStack.length ===
+                            option.drawerStack.length
+                        }
+                        onClick={() =>
+                          dispatch({
+                            type: "SET_SEGMENT_FRONT",
+                            objectId: selectedSegment.id,
+                            front: {
+                              doorCount: option.doorCount,
+                              drawerStack: option.drawerStack
+                            }
+                          })
+                        }
+                        className="h-8 rounded-[8px] border border-studio-line bg-white text-[9px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {(["handle", "fingerPull"] as const).map((hardware) => (
+                      <button
+                        key={hardware}
+                        type="button"
+                        disabled={!canAdjust}
+                        aria-pressed={selectedFront.hardware === hardware}
+                        onClick={() =>
+                          dispatch({
+                            type: "SET_SEGMENT_FRONT",
+                            objectId: selectedSegment.id,
+                            front: { hardware }
+                          })
+                        }
+                        className="h-8 rounded-[8px] border border-studio-line bg-white text-[9px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                      >
+                        {hardware === "handle" ? "Handle" : "Finger pull"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {ACCESSORY_OPTIONS.map((accessory) => {
+                      const active =
+                        selectedFront.accessories.includes(accessory);
+                      return (
+                        <button
+                          key={accessory}
+                          type="button"
+                          disabled={!canAdjust}
+                          aria-pressed={active}
+                          onClick={() =>
+                            dispatch({
+                              type: "SET_SEGMENT_FRONT",
+                              objectId: selectedSegment.id,
+                              front: {
+                                accessories: active
+                                  ? selectedFront.accessories.filter(
+                                      (item) => item !== accessory
+                                    )
+                                  : [...selectedFront.accessories, accessory]
+                              }
+                            })
+                          }
+                          className="h-8 rounded-[8px] border border-studio-line bg-white text-[8px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                        >
+                          {ACCESSORY_LABELS[accessory]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {canResize && (
                 <div className="mt-4">
@@ -232,6 +349,75 @@ export function DecisionRail({
           )}
         </div>
       </section>
+
+      {heightProfile && (
+        <section className="border-b border-studio-line py-4">
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
+              HEIGHT CHAIN · ALL WALLS
+            </p>
+            <span className="font-mono text-[8px] text-studio-muted">
+              Σ {formatSixteenths(heightProfileTotal(heightProfile))} /{" "}
+              {formatSixteenths(state.model?.ceilingHeightSixteenths)}
+            </span>
+          </div>
+          <div className="mt-3 rounded-studio-control border border-studio-line bg-white/70 p-3">
+            <span className="text-[10px] font-semibold">Upper height</span>
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
+              {CABINET_STANDARDS.upper.standardHeightsSixteenths.map(
+                (height) => (
+                  <button
+                    key={height}
+                    type="button"
+                    disabled={!canEditGlobals}
+                    aria-pressed={
+                      heightProfile.upperHeightSixteenths === height
+                    }
+                    onClick={() =>
+                      dispatch({
+                        type: "SET_HEIGHT_PROFILE",
+                        profile: { upperHeightSixteenths: height }
+                      })
+                    }
+                    className="h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                  >
+                    {height / 16}″
+                  </button>
+                )
+              )}
+            </div>
+            <span className="mt-3 block text-[10px] font-semibold">
+              Flat moulding
+            </span>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {MOULDING_OPTIONS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  disabled={!canEditGlobals}
+                  aria-pressed={
+                    heightProfile.mouldingSixteenths === option.value
+                  }
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_HEIGHT_PROFILE",
+                      profile: { mouldingSixteenths: option.value }
+                    })
+                  }
+                  className="h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[9.5px] leading-4 text-studio-muted">
+              Counter {formatSixteenths(heightProfile.counterSixteenths)} ·
+              backsplash {formatSixteenths(heightProfile.backsplashSixteenths)}.
+              One change updates every wall elevation and A-sheet.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="border-b border-studio-line py-4">
         <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
@@ -344,6 +530,29 @@ export function DecisionRail({
     </aside>
   );
 }
+
+const FACE_OPTIONS: {
+  label: string;
+  doorCount: 0 | 1 | 2;
+  drawerStack: number[];
+}[] = [
+  { label: "1 door", doorCount: 1, drawerStack: [] },
+  { label: "2 doors", doorCount: 2, drawerStack: [] },
+  { label: "2 drawers", doorCount: 0, drawerStack: [1, 1] },
+  { label: "3 drawers", doorCount: 0, drawerStack: [1, 1, 1] }
+];
+
+const ACCESSORY_OPTIONS: FrontAccessory[] = [
+  "trashPullout",
+  "spicePullout",
+  "lazySusan"
+];
+
+const MOULDING_OPTIONS = [
+  { label: "None", value: 0 },
+  { label: "2″ flat", value: 2 * 16 },
+  { label: "3″ flat", value: 3 * 16 }
+];
 
 function kindOptions(
   tier: "upper" | "base" | "full"

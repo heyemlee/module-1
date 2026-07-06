@@ -2,11 +2,16 @@ import type { ReactNode } from "react";
 import {
   formatSixteenths,
   findWall,
+  type Round2HeightProfile,
   type Round2Model,
   type Round2Wall,
   type WallId,
   type WallSegment
 } from "../model/round2-model";
+import { CABINET_STANDARDS } from "../model/cabinet-standards";
+import { assignDimensionLanes } from "../model/dimension-lanes";
+import { resolveSegmentFront, type ResolvedFront } from "../model/front";
+import type { Round2DesignIntent } from "../model/design-intent";
 import type { DrawingSheetId } from "../round2-types";
 
 const COLORS = {
@@ -30,6 +35,7 @@ export type DrawingSheetDefinition = {
 type DrawingSheetProps = {
   sheet: DrawingSheetDefinition;
   model: Round2Model | null;
+  intent?: Round2DesignIntent;
   measurementVersion: number;
   proposalVersion: number;
   customerName: string;
@@ -56,6 +62,7 @@ export function drawingSheetsForModel(
 export function DrawingSheet({
   sheet,
   model,
+  intent,
   measurementVersion,
   proposalVersion,
   customerName,
@@ -82,7 +89,7 @@ export function DrawingSheet({
       {sheet.id === "A1" ? (
         <PlanSheet model={model} />
       ) : (
-        <ElevationSheet wall={wall} model={model} />
+        <ElevationSheet wall={wall} model={model} intent={intent} />
       )}
 
       <TitleBlock
@@ -270,22 +277,25 @@ function PlanWallDimensions({ wall }: { wall: Round2Wall }) {
 
 function ElevationSheet({
   wall,
-  model
+  model,
+  intent
 }: {
   wall: Round2Wall | null;
   model: Round2Model | null;
+  intent?: Round2DesignIntent;
 }) {
   const segments = wall?.segments ?? [];
   const upper = segments.filter((segment) => segment.tier === "upper");
-  const base = segments.filter((segment) => segment.tier === "base");
+  const base = segments.filter((segment) => segment.tier !== "upper");
   const total = wall?.lengthSixteenths ?? 1;
+  const layout = sheetVerticalLayout(model);
 
   return (
     <g>
       <g data-drawing-layer="structure" stroke={COLORS.ink} fill="none">
-        <line x1="90" y1="562" x2="910" y2="562" strokeWidth="2" />
-        <line x1="110" y1="120" x2="110" y2="562" strokeWidth="2" />
-        <line x1="890" y1="120" x2="890" y2="562" strokeWidth="2" />
+        <line x1="90" y1={ELEVATION.floor} x2="910" y2={ELEVATION.floor} strokeWidth="2" />
+        <line x1="110" y1={ELEVATION.ceiling} x2="110" y2={ELEVATION.floor} strokeWidth="2" />
+        <line x1="890" y1={ELEVATION.ceiling} x2="890" y2={ELEVATION.floor} strokeWidth="2" />
         {wall?.fixedPoints
           .filter((point) => point.type === "window" || point.type === "door")
           .map((point) => {
@@ -299,19 +309,21 @@ function ElevationSheet({
                 Math.round(point.positionRatio * (wall.lengthSixteenths ?? 1))) /
                 (wall.lengthSixteenths ?? 1)) *
                 780;
+            const top = layout.upperTop;
+            const bottom = layout.upperBottom;
             return (
               <g key={point.id} stroke={COLORS.opening}>
-                <rect x={x} y="210" width={width} height="150" strokeWidth="2" />
-                <line x1={x + width / 2} y1="210" x2={x + width / 2} y2="360" />
-                <line x1={x} y1="285" x2={x + width} y2="285" />
+                <rect x={x} y={top} width={width} height={bottom - top} strokeWidth="2" />
+                <line x1={x + width / 2} y1={top} x2={x + width / 2} y2={bottom} />
+                <line x1={x} y1={(top + bottom) / 2} x2={x + width} y2={(top + bottom) / 2} />
               </g>
             );
           })}
       </g>
 
       <g data-drawing-layer="cabinet-boundaries" stroke={COLORS.cabinet} fill="none" strokeWidth="2">
-        <ElevationRun segments={upper} total={total} />
-        <ElevationRun segments={base} total={total} />
+        <ElevationRun segments={upper} total={total} layout={layout} intent={intent} />
+        <ElevationRun segments={base} total={total} layout={layout} intent={intent} />
       </g>
 
       <g data-drawing-layer="cabinet-numbers" fill={COLORS.number} fontFamily="var(--studio-mono)" fontSize="18" textAnchor="middle">
@@ -320,7 +332,7 @@ function ElevationSheet({
             key={segment.id}
             data-segment-id={segment.id}
             x={x + width / 2}
-            y={elevationBox(segment).y + elevationBox(segment).height / 2 + 6}
+            y={elevationBox(segment, layout).y + elevationBox(segment, layout).height / 2 + 6}
             fill={segment.kind === "filler" ? COLORS.filler : COLORS.number}
           >
             {segment.code ?? segment.label}
@@ -330,11 +342,40 @@ function ElevationSheet({
 
       <g data-drawing-layer="dimensions" stroke={COLORS.dimension} fill={COLORS.dimension} fontFamily="var(--studio-mono)" fontSize="10">
         <Dimension x1={110} x2={890} y={82} label={formatSixteenths(wall?.lengthSixteenths)} />
-        {upper.length > 0 && <Dimension x1={130} x2={870} y={103} label={segmentChain(upper)} />}
-        {base.length > 0 && <Dimension x1={130} x2={870} y={596} label={segmentChain(base)} />}
-        <DimensionVertical x={932} y1={120} y2={562} label={formatSixteenths(model?.ceilingHeightSixteenths)} />
-        <DimensionVertical x={910} y1={390} y2={562} label="34 1/2″" />
-        <DimensionVertical x={910} y1={210} y2={390} label="36″" />
+        {upper.length > 0 && (
+          <SegmentChainDimensions
+            segments={upper}
+            total={total}
+            baselineY={106}
+            direction={-1}
+          />
+        )}
+        {base.length > 0 && (
+          <SegmentChainDimensions
+            segments={base}
+            total={total}
+            baselineY={ELEVATION.floor + 26}
+            direction={1}
+          />
+        )}
+        <DimensionVertical
+          x={932}
+          y1={ELEVATION.ceiling}
+          y2={ELEVATION.floor}
+          label={formatSixteenths(model?.ceilingHeightSixteenths)}
+        />
+        <DimensionVertical
+          x={910}
+          y1={layout.baseTop}
+          y2={ELEVATION.floor}
+          label={formatSixteenths(layout.profile.counterSixteenths)}
+        />
+        <DimensionVertical
+          x={910}
+          y1={layout.upperTop}
+          y2={layout.upperBottom}
+          label={formatSixteenths(layout.profile.upperHeightSixteenths)}
+        />
       </g>
 
       <g fontFamily="var(--studio-mono)" fill={COLORS.muted} fontSize="9">
@@ -346,17 +387,77 @@ function ElevationSheet({
   );
 }
 
-function ElevationRun({
+/**
+ * Per-segment dimension chain with staggered lanes so narrow neighbors never
+ * run their labels together.
+ */
+function SegmentChainDimensions({
   segments,
-  total
+  total,
+  baselineY,
+  direction
 }: {
   segments: WallSegment[];
   total: number;
+  baselineY: number;
+  direction: 1 | -1;
+}) {
+  const placements = elevationPlacements(segments, total);
+  const lanes = assignDimensionLanes(
+    placements.map(({ width }) => width),
+    52
+  );
+  return (
+    <g data-drawing-layer="segment-chain">
+      <line x1={110} y1={baselineY} x2={890} y2={baselineY} strokeWidth="0.75" />
+      {placements.map(({ segment, x, width }, index) => {
+        if (segment.kind === "gap") return null;
+        const labelY = baselineY + direction * (4 + lanes[index] * 14);
+        return (
+          <g key={segment.id}>
+            <line x1={x} y1={baselineY - 5} x2={x} y2={baselineY + 5} strokeWidth="0.75" />
+            {lanes[index] > 0 && (
+              <line
+                x1={x + width / 2}
+                y1={baselineY}
+                x2={x + width / 2}
+                y2={labelY - direction * 4}
+                strokeWidth="0.5"
+              />
+            )}
+            <text
+              x={x + width / 2}
+              y={labelY + (direction === 1 ? 8 : 0)}
+              textAnchor="middle"
+              stroke="none"
+            >
+              {formatSixteenths(segment.widthSixteenths)}
+            </text>
+          </g>
+        );
+      })}
+      <line x1={890} y1={baselineY - 5} x2={890} y2={baselineY + 5} strokeWidth="0.75" />
+    </g>
+  );
+}
+
+function ElevationRun({
+  segments,
+  total,
+  layout,
+  intent
+}: {
+  segments: WallSegment[];
+  total: number;
+  layout: SheetVerticalLayout;
+  intent?: Round2DesignIntent;
 }) {
   return (
     <g>
       {elevationPlacements(segments, total).map(({ segment, x, width }) => {
-        const { y, height } = elevationBox(segment);
+        const { y, height } = elevationBox(segment, layout);
+        if (segment.kind === "gap") return null;
+        const front = resolveSegmentFront(segment, intent);
         return (
           <g key={segment.id}>
             <rect
@@ -368,7 +469,13 @@ function ElevationRun({
               stroke={segment.kind === "filler" ? COLORS.filler : COLORS.cabinet}
             />
             {segment.kind !== "filler" && segment.kind !== "opening" && (
-              <CabinetFace x={x} y={y} width={Math.max(2, width)} height={height} />
+              <CabinetFace
+                x={x}
+                y={y}
+                width={Math.max(2, width)}
+                height={height}
+                front={front}
+              />
             )}
           </g>
         );
@@ -381,21 +488,43 @@ function CabinetFace({
   x,
   y,
   width,
-  height
+  height,
+  front
 }: {
   x: number;
   y: number;
   width: number;
   height: number;
+  front: ResolvedFront | null;
 }) {
+  if (front && front.drawerStack.length > 0) {
+    const totalUnits = front.drawerStack.reduce((sum, unit) => sum + unit, 0);
+    let offset = 0;
+    return (
+      <g stroke={COLORS.ink} fill="none" strokeWidth="1.1" data-face="drawers">
+        <rect x={x + 3} y={y + 3} width={Math.max(1, width - 6)} height={height - 6} />
+        {front.drawerStack.map((unit, index) => {
+          offset += unit;
+          const lineY = y + 3 + (offset / totalUnits) * (height - 6);
+          return index < front.drawerStack.length - 1 ? (
+            <line key={index} x1={x + 3} y1={lineY} x2={x + width - 3} y2={lineY} />
+          ) : null;
+        })}
+      </g>
+    );
+  }
+
+  const doors = front?.doorCount ?? 2;
   return (
-    <g stroke={COLORS.ink} fill="none" strokeWidth="1.1">
+    <g stroke={COLORS.ink} fill="none" strokeWidth="1.1" data-face={doors === 1 ? "single-door" : "double-door"}>
       <rect x={x + 3} y={y + 3} width={Math.max(1, width - 6)} height={height - 6} />
-      {width > 34 && (
+      {doors === 2 && width > 34 && (
         <line x1={x + width / 2} y1={y + 3} x2={x + width / 2} y2={y + height - 3} />
       )}
       <path d={`M ${x + 3} ${y + 3} L ${x + width / 2} ${y + height / 2} L ${x + 3} ${y + height - 3}`} stroke={COLORS.number} />
-      <path d={`M ${x + width - 3} ${y + 3} L ${x + width / 2} ${y + height / 2} L ${x + width - 3} ${y + height - 3}`} stroke={COLORS.number} />
+      {doors === 2 && (
+        <path d={`M ${x + width - 3} ${y + 3} L ${x + width / 2} ${y + height / 2} L ${x + width - 3} ${y + height - 3}`} stroke={COLORS.number} />
+      )}
     </g>
   );
 }
@@ -550,10 +679,48 @@ function dimensionLineForWall(wall: Round2Wall) {
   return { x1: 120, y1: PLAN.top, x2: 120, y2: PLAN.bottom };
 }
 
-function elevationBox(segment: WallSegment): { y: number; height: number } {
-  if (segment.tier === "upper") return { y: 178, height: 116 };
-  if (segment.cabinetKind === "tall") return { y: 178, height: 384 };
-  return { y: 390, height: 172 };
+// Elevation canvas: the floor and ceiling lines are fixed; every cabinet
+// height in between scales from the model height profile.
+const ELEVATION = { floor: 562, ceiling: 120 } as const;
+
+type SheetVerticalLayout = {
+  baseTop: number;
+  upperTop: number;
+  upperBottom: number;
+  profile: Round2HeightProfile;
+};
+
+function sheetVerticalLayout(model: Round2Model | null): SheetVerticalLayout {
+  const vertical = CABINET_STANDARDS.vertical;
+  const profile = model?.heightProfile ?? {
+    counterSixteenths: vertical.finishedCounterHeightSixteenths,
+    backsplashSixteenths: vertical.backsplashMinSixteenths,
+    upperHeightSixteenths:
+      CABINET_STANDARDS.upper.standardHeightsSixteenths[1],
+    mouldingSixteenths: vertical.flatMoulding.preferredSixteenths
+  };
+  const ceiling = model?.ceilingHeightSixteenths ?? 96 * 16;
+  const scale = (ELEVATION.floor - ELEVATION.ceiling) / Math.max(1, ceiling);
+  const baseTop = ELEVATION.floor - profile.counterSixteenths * scale;
+  const upperBottom = baseTop - profile.backsplashSixteenths * scale;
+  const upperTop = upperBottom - profile.upperHeightSixteenths * scale;
+  return { baseTop, upperTop, upperBottom, profile };
+}
+
+function elevationBox(
+  segment: WallSegment,
+  layout: SheetVerticalLayout
+): { y: number; height: number } {
+  if (segment.tier === "upper") {
+    return {
+      y: layout.upperTop,
+      height: layout.upperBottom - layout.upperTop
+    };
+  }
+  if (segment.tier === "full" || segment.cabinetKind === "tall") {
+    return { y: layout.upperTop, height: ELEVATION.floor - layout.upperTop };
+  }
+  return { y: layout.baseTop, height: ELEVATION.floor - layout.baseTop };
 }
 
 function elevationPlacements(segments: WallSegment[], total: number) {
@@ -564,12 +731,6 @@ function elevationPlacements(segments: WallSegment[], total: number) {
     cursor += width;
     return placement;
   });
-}
-
-function segmentChain(segments: WallSegment[]): string {
-  return segments
-    .map((segment) => formatSixteenths(segment.widthSixteenths))
-    .join(" · ");
 }
 
 function clamp01(value: number): number {

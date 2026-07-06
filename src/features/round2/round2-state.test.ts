@@ -282,6 +282,42 @@ describe("Round 2 prototype state", () => {
     expect(reopened.referenceSnapshotId).toBe(ROUND1_REFERENCE_FIXTURE.id);
   });
 
+  test("stores a front exception and marks the drawings stale", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const adjusted = reduceRound2Prototype(submitted, {
+      type: "SET_SEGMENT_FRONT",
+      objectId: selected.id,
+      front: { doorCount: 1, hardware: "fingerPull" }
+    });
+    const segment = segmentById(adjusted, selected.id);
+
+    expect(segment?.front).toEqual({ doorCount: 1, hardware: "fingerPull" });
+    expect(segment?.widthSixteenths).toBe(selected.widthSixteenths);
+    expect(adjusted.drawingStatus).toBe("STALE");
+    expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
+  });
+
+  test("steps the global height profile and keeps the selection", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    expect(submitted.model?.heightProfile).not.toBeNull();
+
+    const adjusted = reduceRound2Prototype(submitted, {
+      type: "SET_HEIGHT_PROFILE",
+      profile: { upperHeightSixteenths: 30 * 16 }
+    });
+
+    expect(adjusted.model?.heightProfile?.upperHeightSixteenths).toBe(30 * 16);
+    expect(adjusted.selectedObjectId).toBe(submitted.selectedObjectId);
+    expect(adjusted.drawingStatus).toBe("STALE");
+
+    const sales = reduceRound2Prototype(
+      { ...submitted, role: "SALES" },
+      { type: "SET_HEIGHT_PROFILE", profile: { upperHeightSixteenths: 30 * 16 } }
+    );
+    expect(sales.model?.heightProfile?.upperHeightSixteenths).not.toBe(30 * 16);
+  });
+
   test("nudges a selected segment by redistributing filler", () => {
     const initial = submitComplete(createRound2PrototypeState("DESIGNER"));
     const selected = firstResizableSegment(initial);

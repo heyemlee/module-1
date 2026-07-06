@@ -4,6 +4,8 @@ import {
   type Round2Wall,
   type WallSegment
 } from "../model/round2-model";
+import { describeFront, resolveSegmentFront } from "../model/front";
+import type { Round2DesignIntent } from "../model/design-intent";
 
 const HEIGHT_BY_TIER: Record<string, string> = {
   upper: "36″",
@@ -13,12 +15,14 @@ const HEIGHT_BY_TIER: Record<string, string> = {
 
 export function CabinetSchedule({
   model,
+  intent,
   customerName,
   projectName,
   measurementVersion,
   proposalVersion
 }: {
   model: Round2Model | null;
+  intent?: Round2DesignIntent;
   customerName: string;
   projectName: string;
   measurementVersion: number;
@@ -50,13 +54,14 @@ export function CabinetSchedule({
             <th className="px-2 py-3 text-right">WIDTH</th>
             <th className="px-2 py-3 text-right">HEIGHT</th>
             <th className="px-2 py-3 text-right">DEPTH</th>
+            <th className="px-2 py-3">FRONT</th>
             <th className="px-2 py-3">NOTES</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr className="border-b border-black/10">
-              <td className="px-2 py-4 text-[#696969]" colSpan={7}>
+              <td className="px-2 py-4 text-[#696969]" colSpan={8}>
                 Submit measurements to generate the cabinet schedule.
               </td>
             </tr>
@@ -76,6 +81,9 @@ export function CabinetSchedule({
                 </td>
                 <td className="px-2 py-3 text-right">
                   {depthForSegment(segment)}
+                </td>
+                <td className="px-2 py-3">
+                  {describeFront(resolveSegmentFront(segment, intent))}
                 </td>
                 <td className="px-2 py-3 text-[#696969]">
                   {noteForSegment(segment)}

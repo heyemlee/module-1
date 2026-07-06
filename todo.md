@@ -3,11 +3,11 @@
 Date: 2026-07-02(第一轮)/ 2026-07-06(第二轮规划)
 Branch: codex/round2-visual-prototype
 Status: 第一轮(阶段 0–5)代码完成,仅剩三布局手动浏览器 QA(需 seed 项目,用户侧验收);
-第二轮阶段 6(柜体标准表)、阶段 7(设计意向收集)、阶段 8(规则驱动 autofill)已完成,
-阶段 9–10 待实施
+第二轮阶段 6(柜体标准表)、阶段 7(设计意向收集)、阶段 8(规则驱动 autofill)、
+阶段 9(立面优先编辑)已完成,阶段 10(收尾 + 浏览器 QA)待实施
 
 Last updated: 2026-07-06
-Validation: `npm test` 通过(539 passed / 1 skipped)；`npx tsc --noEmit` 通过;
+Validation: `npm test` 通过(561 passed / 1 skipped)；`npx tsc --noEmit` 通过;
 `npm run build` 成功。已走通 lock → measurement → submit → drawings review,
 并验证 A1/A2/S1 模型驱动输出。死 fixture(`ROUND2_MEASUREMENT_FIXTURE` /
 `ROUND2_CABINET_FIXTURE` / `ROUND2_SHEETS`)与孤立类型 `Round2Cabinet` 已删除。
@@ -282,29 +282,43 @@ deadCorner 双侧 24″ filler 占位。门洞现在同时阻断地柜与吊柜(
 
 核心:立面不是新编辑器,是把现有约束 action 换触发入口;三类输入全部打到同一模型。
 
-- [ ] `proposal-workspace.tsx` 布局对调:立面占大位(带墙 Tab),俯视图缩为左下 minimap,
+- [x] `proposal-workspace.tsx` 布局对调:立面占大位(带墙 Tab),俯视图缩为左下 minimap,
       右侧保留决策栏 + 选中属性卡
-- [ ] **宽度链 = 输入框**(复用量尺阶段 `inch-field.tsx` 模式):点上/下尺寸链标签 →
+- [x] **宽度链 = 输入框**(复用量尺阶段 `inch-field.tsx` 模式):点上/下尺寸链标签 →
       标准档位 chips + 自定义;映射到现有 `STEP_CABINET_WIDTH` / `NUDGE_GROUP` /
       `MOVE_FILLER_END`,**零新 action**,差值照旧由同墙挡板吸收
-- [ ] 尺寸链标签防重叠:窄段错行/引线标注,消除 "27'36″"、"3624″" 粘连
+- [x] 尺寸链标签防重叠:窄段错行/引线标注,消除 "27'36″"、"3624″" 粘连
       (`wall-elevation.tsx` + `drawing-sheet.tsx`;已旗标为独立后台任务,可先行单独做)
-- [ ] **高度链(新)**:`Round2Model.heightProfile { counterSixteenths; backsplashSixteenths;
+- [x] **高度链(新)**:`Round2Model.heightProfile { counterSixteenths; backsplashSixteenths;
       upperHeightSixteenths; mouldingSixteenths }` + `SET_HEIGHT_PROFILE` action;
       全局生效(改一处所有墙立面同步);校验 Σ ≤ `ceilingHeightSixteenths`,
       超出/余隙异常 → 决策项;立面纵向渲染从写死坐标(92/214/306)改为按 heightProfile 比例
-- [ ] **柜体正面配置(新)**:`WallSegment.front? { doorCount: 1|2; drawerStack: number[];
+- [x] **柜体正面配置(新)**:`WallSegment.front? { doorCount: 1|2; drawerStack: number[];
       hardware; accessories: (trashPullout|spicePullout|lazySusan)[] }` +
       `SET_SEGMENT_FRONT` action;默认由标准表 doorRule + intent 派生,**front 只存例外**;
       立面即时渲染单门/对开 V 线与抽屉分割线;流入 S1 柜体表新列(门/抽/配件)
-- [ ] `design-plan.tsx` 改只读投影:base 24″ 实线 + upper 12″ 虚线叠加 + tall 全深 +
+- [x] `design-plan.tsx` 改只读投影:base 24″ 实线 + upper 12″ 虚线叠加 + tall 全深 +
       转角块 + 开口,尺寸链自动生成(横向来自 segment 宽度,纵深来自标准表);
       交互仅剩点击 → `SELECT_OBJECT` 跳对应墙立面(双向联动已有)
-- [ ] 属性卡:宽度档位 / 门型 / 抽高组合 / 配件 / 五金 chips(mockup 已定稿于本次讨论)
-- [ ] 更新测试:`proposal-selection`、立面渲染(front V 线/抽屉线)、S1 新列、
+- [x] 属性卡:宽度档位 / 门型 / 抽高组合 / 配件 / 五金 chips(mockup 已定稿于本次讨论)
+- [x] 更新测试:`proposal-selection`、立面渲染(front V 线/抽屉线)、S1 新列、
       heightProfile 校验与决策项
 - 阶段内实施顺序:宽度链输入(纯 UI,见效最快)→ front + S1 → heightProfile
       (牵扯立面纵向渲染改造)
+
+实现说明(2026-07-06):`WallSegment.front` 类型定义在 round2-model.ts(避免与
+model/front.ts 循环依赖),`resolveSegmentFront` 是唯一派生边界 —— DB/WB/LS 标签、
+doorRule、intent(fronts.balance / hardware.style)给默认值,front 字段只落例外;
+`drawerStack` 为相对抽高单元(标准表无成品抽高数据,见阶段 6),默认三抽 [1,1,1]。
+"自定义宽度"通过放开 `STEP_CABINET_WIDTH` 对非标准档位的限制实现(仍要求正整数
+1/16″,差值照旧由挡板吸收),未新增 action;`SET_HEIGHT_PROFILE` 经
+`updateModelDecisions` 校验 Σ ≤ 天花,超出出 blocking 决策项,微调后仍会重算。
+立面纵向与 A 系图纸(drawing-sheet)统一从 heightProfile 比例渲染,右侧竖向
+尺寸链(台面高/吊柜高/总高)同步来自 profile;标签防重叠抽为
+`model/dimension-lanes.ts`(窄段交替落 1/2 车道 + 引线),立面与图纸共用。
+俯视图 minimap 移除了底部段落 chip 输入条,upper 虚线层不可点击(单向投影);
+分段尺寸链保留在立面,俯视图只标每墙总长 + 开口。宽度链编辑浮层(chips +
+InchField + nudge + 挡板挪端)仅设计师角色且量尺已提交时可打开。
 
 验收:全程只在立面 + 属性卡操作即可完成微调;俯视图与图纸随动且无任何独立输入口;
 高度链改吊柜档位,所有墙立面与 A 系图纸同步变化。

@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { Round2Model, Round2Wall } from "./round2-model";
 import {
+  heightProfileTotal,
   moveFillerEnd,
   nudgeGroup,
+  setHeightProfile,
+  setSegmentFront,
   setSegmentKind,
   standardWidthOptionsSixteenths,
   stepCabinetWidth,
@@ -83,6 +86,88 @@ describe("Round 2 constrained adjustments", () => {
 
     expect(segment?.cabinetKind).toBe("sink");
     expect(segment?.label).toBe("SB30");
+  });
+
+  test("accepts a custom width from the width-chain input", () => {
+    const model = modelWithWall(wallWithSegments());
+    const adjusted = stepCabinetWidth(model, "a-base-cabinet", 31 * 16 + 8);
+    const wall = adjusted.walls[0];
+
+    expect(segmentWidth(wall, "a-base-cabinet")).toBe(31 * 16 + 8);
+    expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+  });
+
+  test("rejects zero or fractional custom widths", () => {
+    const model = modelWithWall(wallWithSegments());
+    expect(stepCabinetWidth(model, "a-base-cabinet", 0)).toBe(model);
+    expect(stepCabinetWidth(model, "a-base-cabinet", 30.5)).toBe(model);
+  });
+
+  test("stores a front exception without moving any widths", () => {
+    const model = modelWithWall(wallWithSegments());
+    const adjusted = setSegmentFront(model, "a-base-cabinet", {
+      doorCount: 1,
+      accessories: ["trashPullout"]
+    });
+    const segment = adjusted.walls[0].segments.find(
+      (item) => item.id === "a-base-cabinet"
+    );
+
+    expect(segment?.front).toEqual({
+      doorCount: 1,
+      accessories: ["trashPullout"]
+    });
+    expect(segment?.widthSixteenths).toBe(30 * 16);
+    expect(wallTierTotal(adjusted.walls[0], "base")).toBe(
+      adjusted.walls[0].lengthSixteenths
+    );
+  });
+
+  test("merges later front exceptions onto earlier ones", () => {
+    const model = setSegmentFront(
+      modelWithWall(wallWithSegments()),
+      "a-base-cabinet",
+      { doorCount: 1 }
+    );
+    const adjusted = setSegmentFront(model, "a-base-cabinet", {
+      hardware: "fingerPull"
+    });
+    const segment = adjusted.walls[0].segments.find(
+      (item) => item.id === "a-base-cabinet"
+    );
+
+    expect(segment?.front).toEqual({ doorCount: 1, hardware: "fingerPull" });
+  });
+
+  test("flags the height chain when it exceeds the measured ceiling", () => {
+    const model = {
+      ...modelWithWall(wallWithSegments()),
+      heightProfile: {
+        counterSixteenths: 36 * 16,
+        backsplashSixteenths: 18 * 16,
+        upperHeightSixteenths: 36 * 16,
+        mouldingSixteenths: 3 * 16
+      }
+    };
+
+    const stepped = setHeightProfile(model, { upperHeightSixteenths: 42 * 16 });
+
+    expect(heightProfileTotal(stepped.heightProfile!)).toBe(99 * 16);
+    expect(stepped.decisionItems).toContainEqual(
+      expect.objectContaining({
+        id: "decision-height-chain-overflow",
+        severity: "blocking"
+      })
+    );
+
+    const restored = setHeightProfile(stepped, {
+      upperHeightSixteenths: 36 * 16
+    });
+    expect(
+      restored.decisionItems.filter((item) =>
+        item.id.startsWith("decision-height-chain")
+      )
+    ).toHaveLength(0);
   });
 
   test("describes the configured 3/4-inch filler minimum", () => {

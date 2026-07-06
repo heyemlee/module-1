@@ -2,11 +2,13 @@ import { CABINET_STANDARDS } from "./cabinet-standards";
 import {
   type CabinetKind,
   type Round2DecisionItem,
+  type Round2HeightProfile,
   type Round2Model,
   type Round2Wall,
   type SegmentTier,
   type WallId,
   type WallSegment,
+  type WallSegmentFront,
   formatSixteenths
 } from "./round2-model";
 
@@ -17,13 +19,20 @@ export function standardWidthOptionsSixteenths(): number[] {
   return [...CABINET_STANDARDS.base.widthsSixteenths];
 }
 
+// Accepts any positive width: the chips offer the standard tiers, but the
+// width-chain input also takes custom values. The delta is still absorbed by
+// a same-tier filler, so the chain stays closed either way.
 export function stepCabinetWidth(
   model: Round2Model,
   segmentId: string,
   targetWidthSixteenths: number
 ): Round2Model {
-  const standard = standardWidthOptionsSixteenths();
-  if (!standard.includes(targetWidthSixteenths)) return model;
+  if (
+    !Number.isInteger(targetWidthSixteenths) ||
+    targetWidthSixteenths <= 0
+  ) {
+    return model;
+  }
 
   const context = findSegmentContext(model, segmentId);
   if (!context || !canResizeSegment(context.segment)) return model;
@@ -130,8 +139,68 @@ export function setSegmentKind(
   return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
 }
 
+/**
+ * Stores a front-configuration exception on a segment. Pure face change: no
+ * widths move, so the dimension chain and decisions are untouched.
+ */
+export function setSegmentFront(
+  model: Round2Model,
+  segmentId: string,
+  front: WallSegmentFront
+): Round2Model {
+  const context = findSegmentContext(model, segmentId);
+  if (!context) return model;
+
+  const segments = context.wall.segments.map((segment) =>
+    segment.id === segmentId
+      ? { ...segment, front: { ...segment.front, ...front } }
+      : segment
+  );
+  return replaceWallSegments(model, context.wall.id, segments);
+}
+
+/**
+ * Updates the global height chain. One change re-renders every wall
+ * elevation; the ceiling check runs with the other model decisions.
+ */
+export function setHeightProfile(
+  model: Round2Model,
+  patch: Partial<Round2HeightProfile>
+): Round2Model {
+  if (!model.heightProfile) return model;
+  return updateModelDecisions({
+    ...model,
+    heightProfile: { ...model.heightProfile, ...patch }
+  });
+}
+
+export function heightProfileTotal(profile: Round2HeightProfile): number {
+  return (
+    profile.counterSixteenths +
+    profile.backsplashSixteenths +
+    profile.upperHeightSixteenths +
+    profile.mouldingSixteenths
+  );
+}
+
 export function updateModelDecisions(model: Round2Model): Round2Model {
   const decisionItems: Round2DecisionItem[] = [];
+
+  if (
+    model.heightProfile &&
+    model.ceilingHeightSixteenths != null &&
+    heightProfileTotal(model.heightProfile) > model.ceilingHeightSixteenths
+  ) {
+    const wallId = model.walls[0]?.id ?? "A";
+    decisionItems.push({
+      id: "decision-height-chain-overflow",
+      objectId: wallId,
+      wallId,
+      severity: "blocking",
+      title: "Height chain exceeds the ceiling",
+      body: `Counter, backsplash, uppers and moulding total ${formatSixteenths(heightProfileTotal(model.heightProfile))} against a ${formatSixteenths(model.ceilingHeightSixteenths)} ceiling. Step the upper height or moulding down.`
+    });
+  }
 
   for (const wall of model.walls) {
     for (const segment of wall.segments) {

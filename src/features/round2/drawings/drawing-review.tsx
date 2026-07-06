@@ -116,6 +116,7 @@ export function DrawingReview({
               {activeSheet.id === "S1" ? (
                 <CabinetSchedule
                   model={state.model}
+                  intent={state.designIntent}
                   customerName={customerName}
                   projectName={projectName}
                   measurementVersion={state.measurementVersion}
@@ -125,6 +126,7 @@ export function DrawingReview({
                 <DrawingSheet
                   sheet={activeSheet}
                   model={state.model}
+                  intent={state.designIntent}
                   measurementVersion={state.measurementVersion}
                   proposalVersion={state.proposalVersion}
                   customerName={customerName}
