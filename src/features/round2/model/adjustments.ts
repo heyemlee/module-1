@@ -1,7 +1,4 @@
-import {
-  FILLER_MIN_SIXTEENTHS,
-  STANDARD_CABINET_WIDTHS_SIXTEENTHS
-} from "./autofill";
+import { CABINET_STANDARDS } from "./cabinet-standards";
 import {
   type CabinetKind,
   type Round2DecisionItem,
@@ -17,7 +14,7 @@ export type NudgeDirection = "left" | "right";
 export type FillerEnd = "start" | "end";
 
 export function standardWidthOptionsSixteenths(): number[] {
-  return [...STANDARD_CABINET_WIDTHS_SIXTEENTHS].sort((a, b) => a - b);
+  return [...CABINET_STANDARDS.base.widthsSixteenths];
 }
 
 export function stepCabinetWidth(
@@ -150,7 +147,7 @@ export function updateModelDecisions(model: Round2Model): Round2Model {
         });
       } else if (
         segment.widthSixteenths > 0 &&
-        segment.widthSixteenths < FILLER_MIN_SIXTEENTHS
+        segment.widthSixteenths < CABINET_STANDARDS.filler.minSixteenths
       ) {
         decisionItems.push({
           id: `decision-${segment.id}-minimum`,

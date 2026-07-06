@@ -4,11 +4,19 @@ import {
   moveFillerEnd,
   nudgeGroup,
   setSegmentKind,
+  standardWidthOptionsSixteenths,
   stepCabinetWidth,
   wallTierTotal
 } from "./adjustments";
+import { CABINET_STANDARDS } from "./cabinet-standards";
 
 describe("Round 2 constrained adjustments", () => {
+  test("offers exactly the widths from the shared cabinet standards", () => {
+    expect(standardWidthOptionsSixteenths()).toEqual(
+      CABINET_STANDARDS.base.widthsSixteenths
+    );
+  });
+
   test("steps cabinet width and absorbs the delta into same-tier filler", () => {
     const model = modelWithWall(wallWithSegments());
     const adjusted = stepCabinetWidth(model, "a-base-cabinet", 33 * 16);

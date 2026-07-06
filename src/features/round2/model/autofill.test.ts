@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
-  FILLER_MIN_SIXTEENTHS,
   autofillRound2Model,
   autofillWall
 } from "./autofill";
+import { CABINET_STANDARDS } from "./cabinet-standards";
 import type { Round2Model, Round2Wall } from "./round2-model";
 
 describe("Round 2 autofill", () => {
@@ -34,9 +34,55 @@ describe("Round 2 autofill", () => {
       model.walls[0].segments.some(
         (segment) =>
           segment.kind === "filler" &&
-          segment.widthSixteenths < FILLER_MIN_SIXTEENTHS
+          segment.widthSixteenths <
+            CABINET_STANDARDS.filler.minSixteenths
       )
     ).toBe(true);
+  });
+
+  test.each([
+    {
+      symbol: "dishwasher",
+      expected: CABINET_STANDARDS.appliances.dishwasher
+    },
+    {
+      symbol: "range",
+      expected: CABINET_STANDARDS.appliances.range
+    },
+    {
+      symbol: "sink",
+      expected: {
+        widthSixteenths:
+          CABINET_STANDARDS.appliances.sinkBase.defaultWidthSixteenths,
+        label: `${CABINET_STANDARDS.appliances.sinkBase.labelPrefix}${
+          CABINET_STANDARDS.appliances.sinkBase.defaultWidthSixteenths / 16
+        }`
+      }
+    },
+    {
+      symbol: "fridge",
+      expected: CABINET_STANDARDS.appliances.refrigerator
+    }
+  ])("preserves the $symbol appliance reservation", ({ symbol, expected }) => {
+    const wall = wallWithLength(120 * 16);
+    wall.fixedPoints = [
+      {
+        id: `fixed-${symbol}`,
+        type: "appliance",
+        label: symbol,
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.5,
+        symbol
+      }
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const appliance = filled.walls[0].segments.find(
+      (segment) => segment.tier === "base" && segment.kind === "appliance"
+    );
+
+    expect(appliance).toMatchObject(expected);
   });
 });
 

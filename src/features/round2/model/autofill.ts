@@ -7,12 +7,13 @@ import {
   type SegmentTier,
   type WallSegment
 } from "./round2-model";
+import { CABINET_STANDARDS } from "./cabinet-standards";
 
-export const STANDARD_CABINET_WIDTHS_SIXTEENTHS = [
-  36, 33, 30, 27, 24, 21, 18, 15, 12, 9
-].map((width) => width * 16);
-
-export const FILLER_MIN_SIXTEENTHS = 8;
+const CABINET_WIDTHS_DESCENDING = [
+  ...CABINET_STANDARDS.base.widthsSixteenths
+].sort((a, b) => b - a);
+const MIN_CABINET_WIDTH_SIXTEENTHS =
+  CABINET_STANDARDS.base.widthsSixteenths[0];
 
 type ReservedSegment = {
   fixedPoint: Round2FixedPoint;
@@ -48,7 +49,7 @@ export function autofillRound2Model(
         const code = `F${fillerNumber++}`;
         if (
           segment.widthSixteenths > 0 &&
-          segment.widthSixteenths < FILLER_MIN_SIXTEENTHS
+          segment.widthSixteenths < CABINET_STANDARDS.filler.minSixteenths
         ) {
           decisionItems.push({
             id: `decision-${segment.id}`,
@@ -161,9 +162,9 @@ function fillSpan(
   let remaining = Math.max(0, spanWidth);
   let local = 1;
 
-  while (remaining >= 9 * 16) {
+  while (remaining >= MIN_CABINET_WIDTH_SIXTEENTHS) {
     const width =
-      STANDARD_CABINET_WIDTHS_SIXTEENTHS.find((candidate) => candidate <= remaining) ??
+      CABINET_WIDTHS_DESCENDING.find((candidate) => candidate <= remaining) ??
       null;
     if (!width) break;
     segments.push({
@@ -224,32 +225,37 @@ function applianceReservations(wall: Round2Wall): ReservedSegment[] {
   return wall.fixedPoints
     .filter((point) => point.type === "appliance")
     .map((point) => {
-      const width = applianceWidth(point);
+      const standard = applianceStandard(point);
+      const width = standard.widthSixteenths;
       return {
         fixedPoint: point,
         desiredStart: Math.round(point.positionRatio * Math.max(0, length - width)),
         width,
         kind: "appliance" as const,
-        label: applianceLabel(point),
+        label: standard.label,
         cabinetKind: point.symbol === "sink" ? ("sink" as const) : point.symbol === "fridge" || point.symbol === "oven" || point.symbol === "microwave" ? ("tall" as const) : undefined
       };
     });
 }
 
-function applianceWidth(point: Round2FixedPoint): number {
-  if (point.symbol === "dishwasher") return 24 * 16;
-  if (point.symbol === "range") return 30 * 16;
-  if (point.symbol === "sink") return 36 * 16;
-  if (point.symbol === "fridge") return 36 * 16;
-  return 30 * 16;
-}
-
-function applianceLabel(point: Round2FixedPoint): string {
-  if (point.symbol === "sink") return "SB36";
-  if (point.symbol === "dishwasher") return "DW24";
-  if (point.symbol === "range") return "RNG30";
-  if (point.symbol === "fridge") return "REF36";
-  return point.label;
+function applianceStandard(
+  point: Round2FixedPoint
+): { widthSixteenths: number; label: string } {
+  const appliances = CABINET_STANDARDS.appliances;
+  if (point.symbol === "dishwasher") return appliances.dishwasher;
+  if (point.symbol === "range") return appliances.range;
+  if (point.symbol === "fridge") return appliances.refrigerator;
+  if (point.symbol === "sink") {
+    const widthSixteenths = appliances.sinkBase.defaultWidthSixteenths;
+    return {
+      widthSixteenths,
+      label: `${appliances.sinkBase.labelPrefix}${widthSixteenths / 16}`
+    };
+  }
+  return {
+    widthSixteenths: appliances.fallbackWidthSixteenths,
+    label: point.label
+  };
 }
 
 function formatWidth(value: number): string {
