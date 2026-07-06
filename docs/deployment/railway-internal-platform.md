@@ -9,7 +9,10 @@
 
 ```text
 DATABASE_URL=provided by Railway Postgres
-OPENAI_API_KEY=company OpenAI key
+OPENAI_API_KEY_PRIMARY=first-choice company OpenAI key
+OPENAI_API_KEY_SECONDARY=second-choice company OpenAI key
+OPENAI_API_KEY_TERTIARY=third-choice company OpenAI key
+OPENAI_API_KEY_PRIORITY=PRIMARY,SECONDARY,TERTIARY
 OPENAI_IMAGE_MODEL=gpt-image-2
 LLM_PROVIDER=openai
 OPENAI_MODEL=gpt-4o-mini
@@ -28,7 +31,10 @@ SEED_ADMIN_NAME=Admin
 3. Set the Variables above. `DATABASE_URL` must reference the database with
    `${{Postgres.DATABASE_URL}}` so migrations run over Railway's internal
    network (no SSL config needed; the `pg` client uses a plain connection
-   string).
+   string). Image generation tries the OpenAI keys in `OPENAI_API_KEY_PRIORITY`
+   order and automatically falls back to the next configured key when a
+   generation request fails. The OpenAI chat agent uses the first configured
+   key in the same priority order when `LLM_PROVIDER=openai`.
 4. Service -> Settings -> Deploy -> Pre-deploy Command:
 
    ```bash

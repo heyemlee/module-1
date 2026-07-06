@@ -1,4 +1,5 @@
 import type { VisionClient } from "@/server/round1/rendering-verification";
+import { getPreferredOpenAIApiKey } from "@/infrastructure/openai-api-keys";
 
 type FetchImpl = typeof fetch;
 
@@ -64,7 +65,7 @@ export function createVisionClientFromEnv(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): VisionClient | null {
-  const apiKey = env.OPENAI_API_KEY?.trim();
+  const apiKey = getPreferredOpenAIApiKey(env)?.apiKey;
   if (!apiKey) return null;
   return createOpenAIVisionClient({
     apiKey,

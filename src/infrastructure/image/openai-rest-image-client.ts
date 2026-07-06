@@ -3,6 +3,10 @@ import {
   type ImageClient,
   type OpenAIImageAdapter
 } from "./openai-image-adapter";
+import {
+  getConfiguredOpenAIApiKeys,
+  type OpenAIApiKeySlot
+} from "@/infrastructure/openai-api-keys";
 
 type FetchImpl = typeof fetch;
 
@@ -169,23 +173,80 @@ async function safeReadError(response: Response): Promise<string> {
 
 /**
  * Builds a live OpenAI image adapter from environment configuration. Returns
- * `null` when `OPENAI_API_KEY` is absent so callers can fall back to the
- * deterministic mock background instead of failing.
+ * `null` when no prioritized OpenAI API keys are configured.
  */
 export function createOpenAIImageAdapterFromEnv(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): OpenAIImageAdapter | null {
-  const apiKey = env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
+  const apiKeys = getConfiguredOpenAIApiKeys(env);
+  if (apiKeys.length === 0) {
     return null;
   }
 
-  const client = createOpenAIRestImageClient({
-    apiKey,
-    baseUrl: env.OPENAI_BASE_URL?.trim() || undefined,
-    fetchImpl: deps.fetchImpl
-  });
+  const adapters = apiKeys.map(({ slot, apiKey }) => ({
+    slot,
+    adapter: createOpenAIImageAdapter({
+      env,
+      client: createOpenAIRestImageClient({
+        apiKey,
+        baseUrl: env.OPENAI_BASE_URL?.trim() || undefined,
+        fetchImpl: deps.fetchImpl
+      })
+    })
+  }));
 
-  return createOpenAIImageAdapter({ env, client });
+  if (adapters.length === 1) {
+    return adapters[0].adapter;
+  }
+
+  return createFailoverOpenAIImageAdapter(adapters);
+}
+
+export function hasOpenAIImageApiKey(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  return getConfiguredOpenAIApiKeys(env).length > 0;
+}
+
+function createFailoverOpenAIImageAdapter(
+  adapters: Array<{ slot: OpenAIApiKeySlot; adapter: OpenAIImageAdapter }>
+): OpenAIImageAdapter {
+  return {
+    generateLayoutBackground(input) {
+      return runWithApiKeyFallback(adapters, (adapter) =>
+        adapter.generateLayoutBackground(input)
+      );
+    },
+
+    generateConceptRendering(input) {
+      return runWithApiKeyFallback(adapters, (adapter) =>
+        adapter.generateConceptRendering(input)
+      );
+    }
+  };
+}
+
+async function runWithApiKeyFallback<T>(
+  adapters: Array<{ slot: OpenAIApiKeySlot; adapter: OpenAIImageAdapter }>,
+  operation: (adapter: OpenAIImageAdapter) => Promise<T>
+): Promise<T> {
+  let lastError: unknown;
+
+  for (const { adapter } of adapters) {
+    try {
+      return await operation(adapter);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    `OpenAI image generation failed for all configured API keys; last error: ${formatFallbackError(lastError)}`
+  );
+}
+
+function formatFallbackError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "UNKNOWN_ERROR";
 }

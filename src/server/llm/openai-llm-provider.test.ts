@@ -42,10 +42,39 @@ function finalResponse(text: string) {
 }
 
 describe("createOpenAILLMProvider", () => {
-  test("throws when OPENAI_API_KEY is missing", () => {
+  test("throws when prioritized OpenAI API keys are missing", () => {
     expect(() => createOpenAILLMProvider({})).toThrow(
       LLMProviderNotConfiguredError
     );
+    expect(() => createOpenAILLMProvider({ OPENAI_API_KEY: "legacy-key" })).toThrow(
+      LLMProviderNotConfiguredError
+    );
+  });
+
+  test("uses the first configured key from OPENAI_API_KEY_PRIORITY", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(finalResponse("ok"));
+    const provider = createOpenAILLMProvider(
+      {
+        OPENAI_API_KEY_PRIMARY: "primary-key",
+        OPENAI_API_KEY_SECONDARY: "secondary-key",
+        OPENAI_API_KEY_PRIORITY: "SECONDARY,PRIMARY"
+      },
+      { fetchImpl }
+    );
+
+    await provider.runAgentLoop(
+      {
+        systemPrompt: "system",
+        history: [],
+        userMessage: "hello",
+        tools: []
+      },
+      vi.fn()
+    );
+
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer secondary-key"
+    });
   });
 
   test("runs the tool loop: calls the tool, feeds back the result, returns final reply", async () => {
@@ -57,7 +86,7 @@ describe("createOpenAILLMProvider", () => {
     const executeTool = vi.fn().mockResolvedValue({ ok: true });
 
     const provider = createOpenAILLMProvider(
-      { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "test-model" },
+      { OPENAI_API_KEY_PRIMARY: "test-key", OPENAI_MODEL: "test-model" },
       { fetchImpl }
     );
 
@@ -100,7 +129,7 @@ describe("createOpenAILLMProvider", () => {
     const executeTool = vi.fn();
 
     const provider = createOpenAILLMProvider(
-      { OPENAI_API_KEY: "test-key" },
+      { OPENAI_API_KEY_PRIMARY: "test-key" },
       { fetchImpl }
     );
 

@@ -13,6 +13,14 @@ function okFetch(b64: string) {
   );
 }
 
+function authorizationHeader(fetchImpl: ReturnType<typeof vi.fn>, callIndex: number) {
+  const init = fetchImpl.mock.calls[callIndex]?.[1] as
+    | (RequestInit & { headers: Record<string, string> })
+    | undefined;
+  if (!init) throw new Error(`missing fetch call ${callIndex}`);
+  return init.headers.Authorization;
+}
+
 describe("createOpenAIRestImageClient", () => {
   test("posts to the OpenAI images endpoint and parses b64_json", async () => {
     const fetchImpl = okFetch("abc");
@@ -170,13 +178,74 @@ describe("createOpenAIRestImageClient", () => {
 });
 
 describe("createOpenAIImageAdapterFromEnv", () => {
-  test("returns null when OPENAI_API_KEY is absent", () => {
+  test("returns null when prioritized OpenAI API keys are absent", () => {
     expect(createOpenAIImageAdapterFromEnv({})).toBeNull();
     expect(createOpenAIImageAdapterFromEnv({ OPENAI_API_KEY: "  " })).toBeNull();
   });
 
-  test("returns an adapter when OPENAI_API_KEY is present", () => {
-    const adapter = createOpenAIImageAdapterFromEnv({ OPENAI_API_KEY: "sk-test" });
+  test("returns null when only the legacy OPENAI_API_KEY is present", () => {
+    expect(createOpenAIImageAdapterFromEnv({ OPENAI_API_KEY: "sk-test" })).toBeNull();
+  });
+
+  test("returns an adapter when a prioritized OpenAI API key is present", () => {
+    const adapter = createOpenAIImageAdapterFromEnv({ OPENAI_API_KEY_PRIMARY: "sk-test" });
     expect(adapter).not.toBeNull();
+  });
+
+  test("tries configured API keys in custom priority order until one succeeds", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("primary exhausted", { status: 429 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ b64_json: "rendered" }] }), {
+          status: 200
+        })
+      );
+
+    const adapter = createOpenAIImageAdapterFromEnv(
+      {
+        OPENAI_API_KEY_PRIMARY: "sk-primary",
+        OPENAI_API_KEY_SECONDARY: "sk-secondary",
+        OPENAI_API_KEY_TERTIARY: "sk-tertiary",
+        OPENAI_API_KEY_PRIORITY: "PRIMARY,SECONDARY,TERTIARY"
+      },
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+    expect(adapter).not.toBeNull();
+    if (!adapter) throw new Error("expected adapter");
+
+    await expect(
+      adapter.generateConceptRendering({
+        prompt: "concept kitchen",
+        size: "1536x1024",
+        referenceImagesBase64: [Buffer.from("plan").toString("base64")]
+      })
+    ).resolves.toEqual({ model: "gpt-image-2", imageBase64: "rendered" });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(authorizationHeader(fetchImpl, 0)).toBe("Bearer sk-primary");
+    expect(authorizationHeader(fetchImpl, 1)).toBe("Bearer sk-secondary");
+  });
+
+  test("honors priority when the first configured slot is not PRIMARY", async () => {
+    const fetchImpl = okFetch("from-secondary");
+
+    const adapter = createOpenAIImageAdapterFromEnv(
+      {
+        OPENAI_API_KEY_PRIMARY: "sk-primary",
+        OPENAI_API_KEY_SECONDARY: "sk-secondary",
+        OPENAI_API_KEY_PRIORITY: "SECONDARY,PRIMARY"
+      },
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+    expect(adapter).not.toBeNull();
+    if (!adapter) throw new Error("expected adapter");
+
+    await adapter.generateLayoutBackground({
+      prompt: "top-down kitchen",
+      size: "1024x1024"
+    });
+
+    expect(authorizationHeader(fetchImpl, 0)).toBe("Bearer sk-secondary");
   });
 });
