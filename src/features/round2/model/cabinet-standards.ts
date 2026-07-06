@@ -34,22 +34,27 @@ export const cabinetStandardsSchema = z
             singleDoorMaxSixteenths: dimensionSchema,
             doubleDoorMinSixteenths: dimensionSchema
           })
-          .strict(),
-        drawerStacksSixteenths: z
-          .array(z.array(dimensionSchema).min(1))
-          .min(1)
+          .strict()
       })
       .strict(),
     upper: z
       .object({
-        heightsSixteenths: ascendingDimensionsSchema
+        standardHeightsSixteenths: ascendingDimensionsSchema,
+        hoodHeightsSixteenths: ascendingDimensionsSchema,
+        refrigeratorHeightsSixteenths: ascendingDimensionsSchema
       })
       .strict(),
     vertical: z
       .object({
         counterHeightSixteenths: dimensionSchema,
         backsplashMinSixteenths: dimensionSchema,
-        flatMouldingAllowanceSixteenths: dimensionSchema
+        flatMoulding: z
+          .object({
+            minSixteenths: dimensionSchema,
+            preferredSixteenths: dimensionSchema,
+            maxSixteenths: dimensionSchema
+          })
+          .strict()
       })
       .strict(),
     filler: z
@@ -62,13 +67,17 @@ export const cabinetStandardsSchema = z
       .object({
         lazySusan: z
           .object({
-            wallASixteenths: dimensionSchema,
-            wallBSixteenths: dimensionSchema
+            modelNominalWidthSixteenths: dimensionSchema,
+            cabinetEnvelopeWidthSixteenths: dimensionSchema,
+            heightSixteenths: dimensionSchema,
+            depthSixteenths: dimensionSchema
           })
           .strict(),
         blindBase: z
           .object({
-            minCabinetWidthSixteenths: dimensionSchema,
+            cabinetEnvelopeWidthSixteenths: dimensionSchema,
+            heightSixteenths: dimensionSchema,
+            depthSixteenths: dimensionSchema,
             adjacentWallPullSixteenths: dimensionSchema
           })
           .strict()
@@ -93,6 +102,7 @@ export const cabinetStandardsSchema = z
       .object({
         baseSixteenths: dimensionSchema,
         upperSixteenths: dimensionSchema,
+        refrigeratorUpperSixteenths: dimensionSchema,
         tallSixteenths: dimensionSchema
       })
       .strict()
@@ -121,6 +131,30 @@ export const cabinetStandardsSchema = z
         code: z.ZodIssueCode.custom,
         message: "Default sink width must be an allowed option",
         path: ["appliances", "sinkBase", "defaultWidthSixteenths"]
+      });
+    }
+
+    const moulding = standards.vertical.flatMoulding;
+    if (
+      moulding.minSixteenths > moulding.preferredSixteenths ||
+      moulding.preferredSixteenths > moulding.maxSixteenths
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flat moulding must satisfy min <= preferred <= max",
+        path: ["vertical", "flatMoulding"]
+      });
+    }
+
+    const lazySusan = standards.corner.lazySusan;
+    if (
+      lazySusan.cabinetEnvelopeWidthSixteenths <
+      lazySusan.modelNominalWidthSixteenths
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Lazy Susan envelope must cover its nominal model width",
+        path: ["corner", "lazySusan", "cabinetEnvelopeWidthSixteenths"]
       });
     }
   });
@@ -157,19 +191,25 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
       doorRule: {
         singleDoorMaxSixteenths: 21 * 16,
         doubleDoorMinSixteenths: 24 * 16
-      },
-      drawerStacksSixteenths: [
-        [6, 12, 12].map((value) => value * 16),
-        [6, 6, 9, 9].map((value) => value * 16)
-      ]
+      }
     },
     upper: {
-      heightsSixteenths: [30, 36, 42].map((value) => value * 16)
+      standardHeightsSixteenths: [30, 36, 40].map((value) => value * 16),
+      hoodHeightsSixteenths: [12, 15, 18, 21, 24].map(
+        (value) => value * 16
+      ),
+      refrigeratorHeightsSixteenths: [12, 15, 18].map(
+        (value) => value * 16
+      )
     },
     vertical: {
       counterHeightSixteenths: 34 * 16 + 8,
       backsplashMinSixteenths: 18 * 16,
-      flatMouldingAllowanceSixteenths: 3 * 16
+      flatMoulding: {
+        minSixteenths: 2 * 16,
+        preferredSixteenths: 3 * 16,
+        maxSixteenths: 3 * 16
+      }
     },
     filler: {
       minSixteenths: 8,
@@ -177,11 +217,15 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
     },
     corner: {
       lazySusan: {
-        wallASixteenths: 36 * 16,
-        wallBSixteenths: 36 * 16
+        modelNominalWidthSixteenths: 36 * 16,
+        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        heightSixteenths: 34 * 16 + 8,
+        depthSixteenths: 24 * 16
       },
       blindBase: {
-        minCabinetWidthSixteenths: 39 * 16,
+        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        heightSixteenths: 34 * 16 + 8,
+        depthSixteenths: 24 * 16,
         adjacentWallPullSixteenths: 3 * 16
       }
     },
@@ -199,6 +243,7 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
     depths: {
       baseSixteenths: 24 * 16,
       upperSixteenths: 12 * 16,
+      refrigeratorUpperSixteenths: 24 * 16,
       tallSixteenths: 24 * 16
     }
   })

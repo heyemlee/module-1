@@ -19,17 +19,23 @@ describe("Round 2 cabinet standards", () => {
       singleDoorMaxSixteenths: 21 * 16,
       doubleDoorMinSixteenths: 24 * 16
     });
-    expect(CABINET_STANDARDS.base.drawerStacksSixteenths).toEqual([
-      [6, 12, 12].map((value) => value * 16),
-      [6, 6, 9, 9].map((value) => value * 16)
-    ]);
-    expect(CABINET_STANDARDS.upper.heightsSixteenths).toEqual(
-      [30, 36, 42].map((value) => value * 16)
-    );
+    expect(CABINET_STANDARDS.upper).toEqual({
+      standardHeightsSixteenths: [30, 36, 40].map((value) => value * 16),
+      hoodHeightsSixteenths: [12, 15, 18, 21, 24].map(
+        (value) => value * 16
+      ),
+      refrigeratorHeightsSixteenths: [12, 15, 18].map(
+        (value) => value * 16
+      )
+    });
     expect(CABINET_STANDARDS.vertical).toEqual({
       counterHeightSixteenths: 34 * 16 + 8,
       backsplashMinSixteenths: 18 * 16,
-      flatMouldingAllowanceSixteenths: 3 * 16
+      flatMoulding: {
+        minSixteenths: 2 * 16,
+        preferredSixteenths: 3 * 16,
+        maxSixteenths: 3 * 16
+      }
     });
     expect(CABINET_STANDARDS.filler).toEqual({
       minSixteenths: 8,
@@ -38,6 +44,7 @@ describe("Round 2 cabinet standards", () => {
     expect(CABINET_STANDARDS.depths).toEqual({
       baseSixteenths: 24 * 16,
       upperSixteenths: 12 * 16,
+      refrigeratorUpperSixteenths: 24 * 16,
       tallSixteenths: 24 * 16
     });
   });
@@ -45,11 +52,15 @@ describe("Round 2 cabinet standards", () => {
   test("defines the approved corner and appliance standards", () => {
     expect(CABINET_STANDARDS.corner).toEqual({
       lazySusan: {
-        wallASixteenths: 36 * 16,
-        wallBSixteenths: 36 * 16
+        modelNominalWidthSixteenths: 36 * 16,
+        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        heightSixteenths: 34 * 16 + 8,
+        depthSixteenths: 24 * 16
       },
       blindBase: {
-        minCabinetWidthSixteenths: 39 * 16,
+        cabinetEnvelopeWidthSixteenths: 39 * 16,
+        heightSixteenths: 34 * 16 + 8,
+        depthSixteenths: 24 * 16,
         adjacentWallPullSixteenths: 3 * 16
       }
     });
@@ -118,5 +129,36 @@ describe("Round 2 cabinet standards", () => {
         }
       })
     ).toThrow("Default sink width must be an allowed option");
+  });
+
+  test("rejects an invalid flat-moulding range", () => {
+    expect(() =>
+      cabinetStandardsSchema.parse({
+        ...CABINET_STANDARDS,
+        vertical: {
+          ...CABINET_STANDARDS.vertical,
+          flatMoulding: {
+            minSixteenths: 3 * 16,
+            preferredSixteenths: 2 * 16,
+            maxSixteenths: 3 * 16
+          }
+        }
+      })
+    ).toThrow("Flat moulding must satisfy min <= preferred <= max");
+  });
+
+  test("rejects a lazy-Susan envelope narrower than its nominal model", () => {
+    expect(() =>
+      cabinetStandardsSchema.parse({
+        ...CABINET_STANDARDS,
+        corner: {
+          ...CABINET_STANDARDS.corner,
+          lazySusan: {
+            ...CABINET_STANDARDS.corner.lazySusan,
+            cabinetEnvelopeWidthSixteenths: 33 * 16
+          }
+        }
+      })
+    ).toThrow("Lazy Susan envelope must cover its nominal model width");
   });
 });
