@@ -192,6 +192,54 @@ describe("createOpenAIImageAdapterFromEnv", () => {
     expect(adapter).not.toBeNull();
   });
 
+  test("routes through the CRS relay Responses API when OPENAI_IMAGE_WIRE_API=responses", async () => {
+    const sse =
+      `data: ${JSON.stringify({
+        type: "response.output_item.done",
+        item: { type: "image_generation_call", result: "RELAYIMG" }
+      })}` + "\n\ndata: [DONE]\n\n";
+    const fetchImpl = vi.fn(
+      async (_url: string, _init: RequestInit): Promise<Response> =>
+        new Response(sse, { status: 200 })
+    );
+
+    const adapter = createOpenAIImageAdapterFromEnv(
+      {
+        OPENAI_IMAGE_WIRE_API: "responses",
+        OPENAI_API_KEY_PRIMARY: "cr-key",
+        OPENAI_BASE_URL_PRIMARY: "https://relay.example.com/openai/v1",
+        OPENAI_IMAGE_MODEL: "gpt-5.5"
+      },
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+    expect(adapter).not.toBeNull();
+    if (!adapter) throw new Error("expected adapter");
+
+    const result = await adapter.generateConceptRendering({
+      prompt: "concept kitchen",
+      size: "1024x1536",
+      referenceImagesBase64: [Buffer.from("plan").toString("base64")]
+    });
+
+    // Hits the relay's /responses endpoint, not the REST /images/edits.
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://relay.example.com/openai/v1/responses"
+    );
+    expect(authorizationHeader(fetchImpl, 0)).toBe("Bearer cr-key");
+    const body = JSON.parse(
+      (fetchImpl.mock.calls[0][1] as RequestInit).body as string
+    );
+    expect(body.stream).toBe(true);
+    expect(body.model).toBe("gpt-5.5");
+    // The floor-plan reference is attached as an input_image part.
+    expect(
+      body.input[0].content.some(
+        (part: { type: string }) => part.type === "input_image"
+      )
+    ).toBe(true);
+    expect(result.imageBase64).toBe("RELAYIMG");
+  });
+
   test("tries configured API keys in custom priority order until one succeeds", async () => {
     const fetchImpl = vi
       .fn()

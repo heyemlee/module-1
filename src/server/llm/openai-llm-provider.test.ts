@@ -2,43 +2,56 @@ import { describe, expect, test, vi } from "vitest";
 import { createOpenAILLMProvider } from "./openai-llm-provider";
 import { LLMProviderNotConfiguredError } from "./provider";
 
-function jsonResponse(body: unknown): Response {
+// The relay streams `chat.completion.chunk` SSE, so mocks emit that wire.
+function sseResponse(chunks: unknown[]): Response {
+  const text =
+    chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+    "\n\ndata: [DONE]\n\n";
   return {
     ok: true,
     status: 200,
-    async json() {
-      return body;
-    },
     async text() {
-      return JSON.stringify(body);
+      return text;
     }
   } as unknown as Response;
 }
 
+// Tool call split across delta fragments (id+name first, then argument text),
+// exactly how the relay streams it.
 function toolCallResponse(name: string, args: unknown) {
-  return jsonResponse({
-    choices: [
-      {
-        message: {
-          role: "assistant",
-          content: null,
-          tool_calls: [
-            {
-              id: "call_1",
-              type: "function",
-              function: { name, arguments: JSON.stringify(args) }
-            }
-          ]
+  return sseResponse([
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: "assistant",
+            tool_calls: [
+              { index: 0, id: "call_1", type: "function", function: { name, arguments: "" } }
+            ]
+          }
         }
-      }
-    ]
-  });
+      ]
+    },
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }]
+          }
+        }
+      ]
+    },
+    { choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] }
+  ]);
 }
 
 function finalResponse(text: string) {
-  return jsonResponse({
-    choices: [{ message: { role: "assistant", content: text } }]
-  });
+  return sseResponse([
+    { choices: [{ index: 0, delta: { role: "assistant", content: text } }] },
+    { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }
+  ]);
 }
 
 describe("createOpenAILLMProvider", () => {
