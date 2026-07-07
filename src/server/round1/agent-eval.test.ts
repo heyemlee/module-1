@@ -37,7 +37,7 @@
  *   RUN_AGENT_EVAL=1 EVAL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... \
  *     npx vitest run src/server/round1/agent-eval.test.ts
  *   # override models / endpoint:
- *   ... EVAL_MODELS=gpt-4o-mini,gpt-4o [OPENAI_BASE_URL=...] ...
+ *   ... EVAL_MODELS=gpt-4o-mini,gpt-4o [OPENAI_BASE_URL_PRIMARY=...] ...
  */
 import { describe, expect, test } from "vitest";
 import type { Round1FormInput } from "@/domain/round1";

@@ -65,11 +65,11 @@ export function createVisionClientFromEnv(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): VisionClient | null {
-  const apiKey = getPreferredOpenAIApiKey(env)?.apiKey;
-  if (!apiKey) return null;
+  const keyConfig = getPreferredOpenAIApiKey(env);
+  if (!keyConfig) return null;
   return createOpenAIVisionClient({
-    apiKey,
-    baseUrl: env.OPENAI_BASE_URL?.trim() || undefined,
+    apiKey: keyConfig.apiKey,
+    baseUrl: keyConfig.baseUrl,
     model: env.ROUND1_VERIFY_MODEL?.trim() || "gpt-4o",
     fetchImpl: deps.fetchImpl
   });

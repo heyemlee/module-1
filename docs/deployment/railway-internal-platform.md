@@ -10,8 +10,11 @@
 ```text
 DATABASE_URL=provided by Railway Postgres
 OPENAI_API_KEY_PRIMARY=first-choice company OpenAI key
+OPENAI_BASE_URL_PRIMARY=optional proxy URL for the primary key
 OPENAI_API_KEY_SECONDARY=second-choice company OpenAI key
+OPENAI_BASE_URL_SECONDARY=optional proxy URL for the secondary key
 OPENAI_API_KEY_TERTIARY=third-choice company OpenAI key
+OPENAI_BASE_URL_TERTIARY=optional proxy URL for the tertiary key
 OPENAI_API_KEY_PRIORITY=PRIMARY,SECONDARY,TERTIARY
 OPENAI_IMAGE_MODEL=gpt-image-2
 LLM_PROVIDER=openai
@@ -34,7 +37,9 @@ SEED_ADMIN_NAME=Admin
    string). Image generation tries the OpenAI keys in `OPENAI_API_KEY_PRIORITY`
    order and automatically falls back to the next configured key when a
    generation request fails. The OpenAI chat agent uses the first configured
-   key in the same priority order when `LLM_PROVIDER=openai`.
+   key in the same priority order when `LLM_PROVIDER=openai`. Each key slot can
+   use its own `OPENAI_BASE_URL_<SLOT>`; omit a slot's base URL to call the
+   official OpenAI API for that slot.
 4. Service -> Settings -> Deploy -> Pre-deploy Command:
 
    ```bash

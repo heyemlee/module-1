@@ -77,6 +77,36 @@ describe("createOpenAILLMProvider", () => {
     });
   });
 
+  test("uses the base URL for the selected prioritized API key", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(finalResponse("ok"));
+    const provider = createOpenAILLMProvider(
+      {
+        OPENAI_API_KEY_PRIMARY: "proxy-key",
+        OPENAI_API_KEY_SECONDARY: "official-key",
+        OPENAI_API_KEY_PRIORITY: "PRIMARY,SECONDARY",
+        OPENAI_BASE_URL_PRIMARY: "https://proxy.example.com/v1/"
+      },
+      { fetchImpl }
+    );
+
+    await provider.runAgentLoop(
+      {
+        systemPrompt: "system",
+        history: [],
+        userMessage: "hello",
+        tools: []
+      },
+      vi.fn()
+    );
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://proxy.example.com/v1/chat/completions"
+    );
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer proxy-key"
+    });
+  });
+
   test("runs the tool loop: calls the tool, feeds back the result, returns final reply", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()

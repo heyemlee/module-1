@@ -6,22 +6,30 @@ const OPENAI_API_KEY_ENV_BY_SLOT = {
   TERTIARY: "OPENAI_API_KEY_TERTIARY"
 } as const;
 
+const OPENAI_BASE_URL_ENV_BY_SLOT = {
+  PRIMARY: "OPENAI_BASE_URL_PRIMARY",
+  SECONDARY: "OPENAI_BASE_URL_SECONDARY",
+  TERTIARY: "OPENAI_BASE_URL_TERTIARY"
+} as const;
+
 export type OpenAIApiKeySlot = keyof typeof OPENAI_API_KEY_ENV_BY_SLOT;
 
 export type ConfiguredOpenAIApiKey = {
   slot: OpenAIApiKeySlot;
   apiKey: string;
+  baseUrl?: string;
 };
 
 export function getConfiguredOpenAIApiKeys(
   env: Record<string, string | undefined> = process.env
 ): ConfiguredOpenAIApiKey[] {
   return getOpenAIApiKeyPriority(env)
-    .map((slot) => ({
-      slot,
-      apiKey: env[OPENAI_API_KEY_ENV_BY_SLOT[slot]]?.trim()
-    }))
-    .filter((entry): entry is ConfiguredOpenAIApiKey => Boolean(entry.apiKey));
+    .flatMap((slot): ConfiguredOpenAIApiKey[] => {
+      const apiKey = env[OPENAI_API_KEY_ENV_BY_SLOT[slot]]?.trim();
+      if (!apiKey) return [];
+      const baseUrl = env[OPENAI_BASE_URL_ENV_BY_SLOT[slot]]?.trim();
+      return [{ slot, apiKey, ...(baseUrl ? { baseUrl } : {}) }];
+    });
 }
 
 export function getPreferredOpenAIApiKey(

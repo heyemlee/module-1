@@ -227,6 +227,44 @@ describe("createOpenAIImageAdapterFromEnv", () => {
     expect(authorizationHeader(fetchImpl, 1)).toBe("Bearer sk-secondary");
   });
 
+  test("uses the slot-specific base URL for each prioritized API key", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("primary proxy rejected", { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ b64_json: "rendered" }] }), {
+          status: 200
+        })
+      );
+
+    const adapter = createOpenAIImageAdapterFromEnv(
+      {
+        OPENAI_API_KEY_PRIMARY: "cr-primary",
+        OPENAI_API_KEY_SECONDARY: "sk-secondary",
+        OPENAI_API_KEY_PRIORITY: "PRIMARY,SECONDARY",
+        OPENAI_BASE_URL_PRIMARY: "https://proxy.example.com/v1/"
+      },
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+    expect(adapter).not.toBeNull();
+    if (!adapter) throw new Error("expected adapter");
+
+    await adapter.generateConceptRendering({
+      prompt: "concept kitchen",
+      size: "1536x1024",
+      referenceImagesBase64: [Buffer.from("plan").toString("base64")]
+    });
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://proxy.example.com/v1/images/edits"
+    );
+    expect(fetchImpl.mock.calls[1][0]).toBe(
+      "https://api.openai.com/v1/images/edits"
+    );
+    expect(authorizationHeader(fetchImpl, 0)).toBe("Bearer cr-primary");
+    expect(authorizationHeader(fetchImpl, 1)).toBe("Bearer sk-secondary");
+  });
+
   test("honors priority when the first configured slot is not PRIMARY", async () => {
     const fetchImpl = okFetch("from-secondary");
 

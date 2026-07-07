@@ -184,13 +184,13 @@ export function createOpenAIImageAdapterFromEnv(
     return null;
   }
 
-  const adapters = apiKeys.map(({ slot, apiKey }) => ({
+  const adapters = apiKeys.map(({ slot, apiKey, baseUrl }) => ({
     slot,
     adapter: createOpenAIImageAdapter({
       env,
       client: createOpenAIRestImageClient({
         apiKey,
-        baseUrl: env.OPENAI_BASE_URL?.trim() || undefined,
+        baseUrl,
         fetchImpl: deps.fetchImpl
       })
     })
