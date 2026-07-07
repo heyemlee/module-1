@@ -35,30 +35,24 @@ export function ApplianceGlyph({
   }
 }
 
-/**
- * Divided-light window: an inset sash frame with a grid of mullions, matching
- * the standard elevation convention. Column/row counts are derived so panes
- * stay roughly square regardless of the opening size.
- */
 export function WindowGlyph({ x, y, width, height, stroke }: GlyphBox) {
-  const inset = 3;
-  const left = x + inset;
-  const top = y + inset;
-  const frameWidth = Math.max(1, width - inset * 2);
-  const frameHeight = Math.max(1, height - inset * 2);
-  const columns = Math.max(2, Math.min(4, Math.round(frameWidth / 26)));
-  const rows = Math.max(2, Math.min(4, Math.round(frameHeight / 26)));
+  const m = 3;
+  const frameWidth = Math.max(1, width - m * 2);
+  const frameHeight = Math.max(1, height - m * 2);
+  const cx = x + width / 2;
+
   return (
-    <g data-glyph="window" stroke={stroke} strokeWidth="1" fill="none">
-      <rect x={left} y={top} width={frameWidth} height={frameHeight} strokeWidth="1.3" />
-      {Array.from({ length: columns - 1 }, (_, index) => {
-        const mx = left + (frameWidth * (index + 1)) / columns;
-        return <line key={`c${index}`} x1={mx} y1={top} x2={mx} y2={top + frameHeight} />;
-      })}
-      {Array.from({ length: rows - 1 }, (_, index) => {
-        const my = top + (frameHeight * (index + 1)) / rows;
-        return <line key={`r${index}`} x1={left} y1={my} x2={left + frameWidth} y2={my} />;
-      })}
+    <g data-glyph="window" stroke={stroke} fill="none">
+      <rect x={x + m} y={y + m} width={frameWidth} height={frameHeight} strokeWidth="1.5" />
+      <rect
+        x={x + m + 2}
+        y={y + m + 2}
+        width={Math.max(1, frameWidth - 4)}
+        height={Math.max(1, frameHeight - 4)}
+        strokeWidth="1"
+        strokeOpacity="0.5"
+      />
+      <line x1={cx} y1={y + m} x2={cx} y2={y + height - m} strokeWidth="1.5" />
     </g>
   );
 }

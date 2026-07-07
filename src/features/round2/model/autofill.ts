@@ -82,7 +82,10 @@ export function autofillRound2Model(
     const base = fillBaseTier(wall, insets, intent, decisionItems);
     const upper = deriveUpperTier(wall, base, intent);
     const numbered = [...upper, ...base].map((segment) => {
-      if (segment.kind === "cabinet" || segment.kind === "appliance") {
+      if (
+        segment.kind === "cabinet" ||
+        (segment.kind === "appliance" && segment.cabinetKind != null)
+      ) {
         return { ...segment, code: `#${cabinetNumber++}` };
       }
       if (segment.kind === "filler") {
