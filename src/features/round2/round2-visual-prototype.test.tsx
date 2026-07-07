@@ -19,6 +19,8 @@ describe("Round2VisualPrototype", () => {
     expect(html).toContain("Lock for Round 2");
     expect(html).not.toContain("Field Measurement");
     expect(html).toContain("VISUAL PROTOTYPE");
+    expect(html).toContain("DRAFT AUTOSAVED LOCALLY");
+    expect(html).not.toContain("CHANGES ARE NOT SAVED");
     expect(html).toContain("View as Sales");
   });
 });

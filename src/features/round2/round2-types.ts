@@ -62,6 +62,7 @@ export type Round2PrototypeState = {
 };
 
 export type Round2PrototypeAction =
+  | { type: "RESTORE_DRAFT"; state: Round2PrototypeState }
   | { type: "LOCK_REFERENCE"; reference: Round1ReferenceSource }
   | { type: "REPLACE_REFERENCE"; reference: Round1ReferenceSource }
   | { type: "OPEN_REFERENCE_HANDOFF" }

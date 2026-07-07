@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import Link from "next/link";
 import { ChevronLeftIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,11 @@ import {
   proposalUnlocked,
   reduceRound2Prototype
 } from "./round2-state";
+import {
+  browserRound2DraftStorage,
+  loadRound2Draft,
+  saveRound2Draft
+} from "./round2-draft-storage";
 import { Round2TaskNavigation } from "./round2-task-navigation";
 import type {
   Round1ReferenceSource,
@@ -43,6 +48,33 @@ export function Round2VisualPrototype({
     initialDemoRole(actualRole),
     createRound2PrototypeState
   );
+  const draftLoadedRef = useRef(false);
+  const skipNextSaveRef = useRef(false);
+
+  useEffect(() => {
+    const storage = browserRound2DraftStorage();
+    const draft = storage ? loadRound2Draft(storage, projectId) : null;
+
+    draftLoadedRef.current = true;
+    skipNextSaveRef.current = true;
+    dispatch({
+      type: "RESTORE_DRAFT",
+      state: draft ?? createRound2PrototypeState(initialDemoRole(actualRole))
+    });
+  }, [actualRole, projectId]);
+
+  useEffect(() => {
+    if (!draftLoadedRef.current) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+
+    const storage = browserRound2DraftStorage();
+    if (!storage) return;
+
+    saveRound2Draft(storage, projectId, state);
+  }, [projectId, state]);
 
   const workspace = !state.referenceLocked ? (
     <Round1Handoff
@@ -96,7 +128,7 @@ export function Round2VisualPrototype({
                 <span>ROUND 2</span>
                 <span className="size-1 rounded-full bg-[#a7a79f]" />
                 <span>VISUAL PROTOTYPE</span>
-                <span className="hidden xl:inline">· CHANGES ARE NOT SAVED</span>
+                <span className="hidden xl:inline">· DRAFT AUTOSAVED LOCALLY</span>
                 {state.referenceLocked && (
                   <span className="hidden lg:inline">
                     · ROUND 1 REF v{state.referenceVersion}

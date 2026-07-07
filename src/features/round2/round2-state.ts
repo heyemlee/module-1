@@ -62,6 +62,8 @@ export function reduceRound2Prototype(
   action: Round2PrototypeAction
 ): Round2PrototypeState {
   switch (action.type) {
+    case "RESTORE_DRAFT":
+      return action.state;
     case "LOCK_REFERENCE":
       return lockReference(state, action.reference, 1);
     case "REPLACE_REFERENCE":

@@ -34,6 +34,15 @@ const MIN_LABEL_PX = 34;
 const LANE_STEP = 11;
 const IN_BOX_LABEL_CHAR_PX = 6;
 const IN_BOX_LABEL_PADDING_PX = 2;
+const DIMENSION_COLOR = "#079ca5";
+const DIMENSION_FONT_SIZE = 11;
+const DIMENSION_STROKE_WIDTH = 1;
+const OVERALL_DIMENSION_LABEL_Y = 9;
+const OVERALL_DIMENSION_GUIDE_Y = 19;
+const UPPER_CHAIN_LABEL_Y = CEILING_Y - 10;
+const CABINET_FACE_STROKE = "#a7aaa5";
+const TALL_HEIGHT_CHAIN_X = 32;
+const TALL_HEIGHT_LABEL_X = 20;
 
 type VerticalLayout = {
   scale: number;
@@ -79,7 +88,7 @@ function segmentFill(segment: WallSegment) {
   if (segment.cabinetKind === "corner") return "#f4efe2";
   if (segment.kind === "opening") return "#dceff7";
   if (segment.kind === "appliance") return "#edf5f7";
-  if (segment.kind === "filler") return "#f0dda0";
+  if (isFillerLikeSegment(segment)) return "#fff4c2";
   return "#fbfbf8";
 }
 
@@ -123,8 +132,11 @@ export function WallElevation({
 
   return (
     <div className="relative h-full min-h-[440px] overflow-hidden rounded-[18px] border border-studio-line bg-white shadow-[0_18px_42px_-30px_rgba(20,20,26,0.28)]">
-      <div className="pointer-events-none absolute inset-0 opacity-100 [background-image:linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
-      <div className="relative z-10 flex items-center justify-between border-b border-studio-line/40 px-4 py-3">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[68px] opacity-100 [background-image:linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <div
+        data-elevation-layer="header"
+        className="relative z-10 flex items-center justify-between border-b border-studio-line/40 bg-white px-4 py-3"
+      >
         <div>
           <p className="font-mono text-[9px] tracking-[0.14em] text-black/45">
             ELEVATION · PRIMARY EDITOR
@@ -161,9 +173,21 @@ export function WallElevation({
         aria-label={wall ? `Wall ${wall.label} cabinet elevation` : "Cabinet elevation"}
         className="h-[calc(100%-68px)] min-h-[360px] w-full"
       >
-        <g data-elevation-layer="dimensions" stroke="#079ca5" fill="#079ca5" fontFamily="var(--studio-mono)">
-          <path d="M 70 22 V 34 M 570 22 V 34 M 70 28 H 570" strokeWidth="1" />
-          <text x="320" y="17" textAnchor="middle" fontSize="11">
+        <g data-elevation-layer="dimensions" stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
+          <path
+            data-chain-guide="overall"
+            d={`M 70 ${OVERALL_DIMENSION_GUIDE_Y - 6} V ${OVERALL_DIMENSION_GUIDE_Y + 6} M 570 ${OVERALL_DIMENSION_GUIDE_Y - 6} V ${OVERALL_DIMENSION_GUIDE_Y + 6} M 70 ${OVERALL_DIMENSION_GUIDE_Y} H 570`}
+            strokeWidth={DIMENSION_STROKE_WIDTH}
+          />
+          <text
+            data-chain-label="overall"
+            x="320"
+            y={OVERALL_DIMENSION_LABEL_Y}
+            textAnchor="middle"
+            fontSize={DIMENSION_FONT_SIZE}
+            fontWeight={700}
+            fill={DIMENSION_COLOR}
+          >
             {formatSixteenths(wall?.lengthSixteenths)}
           </text>
           <HeightChain model={model} layout={layout} />
@@ -201,7 +225,7 @@ export function WallElevation({
               selectedObjectId={selectedObjectId}
               onActivate={openEditor}
             />
-            <g stroke="#079ca5" fill="#079ca5" fontFamily="var(--studio-mono)">
+            <g stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
               <TallUnitHeights base={base} total={total} layout={layout} />
             </g>
           </>
@@ -242,39 +266,51 @@ function HeightChain({
     <g data-elevation-layer="height-chain">
       <path
         d={`M 586 ${CEILING_Y} H 598 M 586 ${FLOOR_Y} H 598 M 592 ${CEILING_Y} V ${FLOOR_Y}`}
-        strokeWidth="1"
+        strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       <text
+        data-height-label="ceiling"
         x="611"
         y={(CEILING_Y + FLOOR_Y) / 2}
         textAnchor="middle"
-        fontSize="10"
+        fontSize={DIMENSION_FONT_SIZE}
+        fontWeight={700}
+        fill={DIMENSION_COLOR}
+        stroke="none"
         transform={`rotate(90 611 ${(CEILING_Y + FLOOR_Y) / 2})`}
       >
         {formatSixteenths(model?.ceilingHeightSixteenths)}
       </text>
       <path
         d={`M 58 ${layout.baseTop} H 66 M 58 ${FLOOR_Y} H 66 M 62 ${layout.baseTop} V ${FLOOR_Y}`}
-        strokeWidth="1"
+        strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       <text
+        data-height-label="counter"
         x="49"
         y={(layout.baseTop + FLOOR_Y) / 2}
         textAnchor="middle"
-        fontSize="10"
+        fontSize={DIMENSION_FONT_SIZE}
+        fontWeight={400}
+        fill={DIMENSION_COLOR}
+        stroke="none"
         transform={`rotate(-90 49 ${(layout.baseTop + FLOOR_Y) / 2})`}
       >
         {formatSixteenths(profile.counterSixteenths)}
       </text>
       <path
         d={`M 58 ${layout.upperTop} H 66 M 58 ${layout.upperBottom} H 66 M 62 ${layout.upperTop} V ${layout.upperBottom}`}
-        strokeWidth="1"
+        strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       <text
+        data-height-label="upper"
         x="49"
         y={(layout.upperTop + layout.upperBottom) / 2}
         textAnchor="middle"
-        fontSize="10"
+        fontSize={DIMENSION_FONT_SIZE}
+        fontWeight={400}
+        fill={DIMENSION_COLOR}
+        stroke="none"
         transform={`rotate(-90 49 ${(layout.upperTop + layout.upperBottom) / 2})`}
       >
         {formatSixteenths(profile.upperHeightSixteenths)}
@@ -302,26 +338,31 @@ function TallUnitHeights({
     layout.profile.backsplashSixteenths +
     layout.profile.upperHeightSixteenths;
   let cursor = 0;
+  let tallLane = 0;
   return (
     <g data-elevation-layer="tall-height">
       {base.map((segment) => {
         const widthPx = (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH;
-        const x = RUN_LEFT + cursor + Math.min(14, widthPx / 2);
         cursor += widthPx;
         if (segment.cabinetKind !== "tall") return null;
+        const x = TALL_HEIGHT_CHAIN_X - tallLane * 12;
+        const labelX = TALL_HEIGHT_LABEL_X - tallLane * 12;
+        tallLane += 1;
         const mid = (layout.upperTop + FLOOR_Y) / 2;
         return (
           <g key={`tall-${segment.id}`}>
             <path
               d={`M ${x - 4} ${layout.upperTop} H ${x + 4} M ${x - 4} ${FLOOR_Y} H ${x + 4} M ${x} ${layout.upperTop} V ${FLOOR_Y}`}
-              strokeWidth="1"
+              strokeWidth={DIMENSION_STROKE_WIDTH}
             />
             <text
-              x={x + 9}
+              data-tall-height-label={segment.id}
+              x={labelX}
               y={mid}
               textAnchor="middle"
-              fontSize="10"
-              transform={`rotate(90 ${x + 9} ${mid})`}
+              fontSize={DIMENSION_FONT_SIZE}
+              fontWeight={400}
+              transform={`rotate(-90 ${labelX} ${mid})`}
               stroke="none"
             >
               {formatSixteenths(height)}
@@ -367,20 +408,23 @@ function ElevationRun({
         cursor += width;
         const { y, height } = segmentBox(segment, layout);
         const selected = selectedObjectId === segment.id;
-        const lane = labelSide === "above" ? 0 : lanes[index];
-        const displayLabel = segmentDisplayLabel(segment, width);
-        const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
-        const labelY =
-          labelSide === "below"
-            ? FLOOR_Y + 16 + lane * LANE_STEP
-            : Math.max(CEILING_Y - 8, layout.upperTop - 16 - lane * LANE_STEP);
-        const front = resolveSegmentFront(segment, designIntent);
+        const fillerLike = isFillerLikeSegment(segment);
+        const front = fillerLike ? null : resolveSegmentFront(segment, designIntent);
         const role = resolveSegmentRole(segment, { fixedPoints });
         const roleTag = role ? SEGMENT_ROLE_TAGS[role] : null;
         const isWindow =
           segment.kind === "opening" &&
           fixedPoints.find((point) => point.id === segment.sourceFixedPointId)
             ?.type === "window";
+        const lane = labelSide === "above" ? 0 : lanes[index];
+        const displayLabel = isWindow ? null : segmentDisplayLabel(segment, width);
+        const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
+        const labelY =
+          labelSide === "below"
+            ? FLOOR_Y + 16 + lane * LANE_STEP
+            : UPPER_CHAIN_LABEL_Y - lane * LANE_STEP;
+        const guideY =
+          labelSide === "below" ? FLOOR_Y + 6 : labelY + 5;
         const isGapLabel = segment.kind === "gap";
         return (
           <g
@@ -401,6 +445,7 @@ function ElevationRun({
               width={Math.max(8, width)}
               height={height}
               fill={segmentFill(segment)}
+              fillOpacity={1}
               stroke={selected ? "#079ca5" : "#2c2c2c"}
               strokeWidth={selected ? 3 : 1.5}
             />
@@ -411,7 +456,7 @@ function ElevationRun({
                 width={Math.max(8, width)}
                 height={height}
                 front={front}
-                accent={segment.tier === "upper" ? "#e12821" : "#a7aaa5"}
+                accent={CABINET_FACE_STROKE}
               />
             )}
             {role ? (
@@ -455,7 +500,7 @@ function ElevationRun({
                 fill={
                   isGapLabel
                     ? "#5d6b64"
-                    : segment.kind === "filler"
+                    : fillerLike
                       ? "#7a5b00"
                       : "#e12821"
                 }
@@ -481,14 +526,25 @@ function ElevationRun({
             )}
             {segment.kind !== "gap" && (
               <g data-elevation-layer="width-chain">
+                <path
+                  data-chain-guide={segment.id}
+                  d={
+                    labelSide === "above"
+                      ? `M ${x} ${guideY} V ${guideY + 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + 4} V ${guideY}`
+                      : `M ${x} ${guideY} V ${guideY - 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - 4} V ${guideY}`
+                  }
+                  stroke={DIMENSION_COLOR}
+                  strokeWidth={DIMENSION_STROKE_WIDTH}
+                  fill="none"
+                />
                 {lane > 0 && (
                   <line
                     x1={x + width / 2}
-                    y1={labelSide === "below" ? FLOOR_Y + 4 : layout.upperTop - 2}
+                    y1={guideY}
                     x2={x + width / 2}
                     y2={labelY - (labelSide === "below" ? 8 : -3)}
-                    stroke="#079ca5"
-                    strokeWidth="0.6"
+                    stroke={DIMENSION_COLOR}
+                    strokeWidth={DIMENSION_STROKE_WIDTH}
                   />
                 )}
                 <text
@@ -497,8 +553,8 @@ function ElevationRun({
                   y={labelY}
                   textAnchor="middle"
                   fontFamily="var(--studio-mono)"
-                  fontSize="9"
-                  fill="#079ca5"
+                  fontSize={DIMENSION_FONT_SIZE}
+                  fill={DIMENSION_COLOR}
                   className="underline-offset-2 hover:underline"
                 >
                   {formatSixteenths(segment.widthSixteenths)}
@@ -534,6 +590,15 @@ function compactLabelCandidates(label: string): string[] {
   if (normalized === "dead corner") return ["DEAD", "DC"];
   if (normalized === "blind corner") return ["BLIND", "BC"];
   return [label];
+}
+
+function isFillerLikeSegment(segment: WallSegment): boolean {
+  const label = (segment.code ?? segment.label).trim();
+  return (
+    segment.kind === "filler" ||
+    /^F\d/i.test(label) ||
+    segment.widthSixteenths <= CABINET_STANDARDS.filler.preferredSixteenths
+  );
 }
 
 function sanitizeSvgId(value: string): string {
@@ -590,8 +655,8 @@ function SegmentFace({
     return (
       <g data-face="double-door" stroke={accent} strokeWidth="1" fill="none">
         <line x1={x + width / 2} y1={y + 3} x2={x + width / 2} y2={y + height - 3} />
-        <path d={`M ${x + 3} ${y + 3} L ${x + width / 2 - 2} ${y + height / 2} L ${x + 3} ${y + height - 3}`} />
-        <path d={`M ${x + width - 3} ${y + 3} L ${x + width / 2 + 2} ${y + height / 2} L ${x + width - 3} ${y + height - 3}`} />
+        <path d={`M ${x + width / 2 - 2} ${y + 3} L ${x + 3} ${y + height / 2} L ${x + width / 2 - 2} ${y + height - 3}`} />
+        <path d={`M ${x + width / 2 + 2} ${y + 3} L ${x + width - 3} ${y + height / 2} L ${x + width / 2 + 2} ${y + height - 3}`} />
         <AccessoryTag x={x} y={y} front={front} />
       </g>
     );
@@ -600,7 +665,7 @@ function SegmentFace({
   if (front.doorCount === 1) {
     return (
       <g data-face="single-door" stroke={accent} strokeWidth="1" fill="none">
-        <path d={`M ${x + 4} ${y + 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + 4}`} />
+        <path d={`M ${x + 4} ${y + height - 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + height - 4}`} />
         <AccessoryTag x={x} y={y} front={front} />
       </g>
     );
