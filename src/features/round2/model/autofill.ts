@@ -673,7 +673,7 @@ function deriveUpperTier(
     .sort((a, b) => a - b);
 
   type Piece = {
-    type: "opening" | "hood" | "fridgeUpper" | "gap" | "cabinet" | "filler";
+    type: "opening" | "hood" | "gap" | "cabinet" | "filler";
     ref: string;
     label: string;
     width: number;
@@ -755,9 +755,7 @@ function deriveUpperTier(
     const label =
       piece.type === "hood"
         ? `HD${Math.round(piece.width / 16)}`
-        : piece.type === "fridgeUpper"
-          ? `WR${Math.round(piece.width / 16)}`
-          : `W${Math.round(piece.width / 16)}`;
+        : `W${Math.round(piece.width / 16)}`;
     return {
       id,
       wallId: wall.id,
@@ -778,7 +776,7 @@ function mapBaseToUpperPiece(
   width: number,
   intent?: Round2DesignIntent
 ): {
-  type: "hood" | "fridgeUpper" | "gap" | "cabinet" | "filler";
+  type: "hood" | "gap" | "cabinet" | "filler";
   ref: string;
   label: string;
   width: number;
@@ -821,15 +819,9 @@ function mapBaseToUpperPiece(
         sourceFixedPointId: point.id
       };
     }
-    if (point?.symbol === "fridge") {
-      return {
-        type: "fridgeUpper",
-        ref: base.id,
-        label: "",
-        width,
-        sourceFixedPointId: point.id
-      };
-    }
+    // The refrigerator is a single full-height unit (European frameless): the
+    // full-height base box already fills the wall, so the upper tier leaves a
+    // gap over it — no separate deep upper. Same as any other tall unit.
     if (base.cabinetKind === "tall") {
       return {
         type: "gap",

@@ -162,8 +162,9 @@ function SegmentRun({
               y={rect.y + rect.height / 2 + 3}
               textAnchor="middle"
               fontFamily="var(--studio-mono)"
-              fontSize="9"
-              fill="#252a27"
+              fontSize={cornerGap ? "8" : "9"}
+              letterSpacing={cornerGap ? "0.08em" : undefined}
+              fill={cornerGap ? "#5d6b64" : "#252a27"}
               transform={rect.rotate}
             >
               {displayLabel}
@@ -274,9 +275,7 @@ function depthPx(segment: WallSegment): number {
   const depths = CABINET_STANDARDS.depths;
   const sixteenths =
     segment.tier === "upper"
-      ? segment.label.startsWith("WR")
-        ? depths.refrigeratorUpperSixteenths
-        : depths.upperSixteenths
+      ? depths.upperSixteenths
       : segment.cabinetKind === "tall"
         ? depths.tallSixteenths
         : depths.baseSixteenths;
@@ -297,6 +296,7 @@ function planDisplayLabel(segment: WallSegment): string {
   const label = segment.code ?? segment.label;
   const normalized = label.trim().toLowerCase();
   if (normalized === "blind corner") return "BLIND";
+  if (normalized === "dead corner") return "DEAD";
   if (normalized === "corner clearance") return "CLR";
   if (normalized.endsWith(" return")) {
     return label.replace(/\s+return$/i, "");

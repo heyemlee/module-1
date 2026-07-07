@@ -9,6 +9,8 @@ describe("DesignPlan", () => {
       modelWithSegments([
         wall("A", "TOP", [segment("top-blind-base", 45, "cabinet", "BB45")]),
         wall("B", "LEFT", [
+          segment("left-clearance", 12, "gap", "Corner clearance"),
+          segment("left-dead", 12, "gap", "Dead corner"),
           segment("left-blind-body", 24, "gap", "Blind corner"),
           segment("left-blind-pull", 3, "filler", "F3")
         ])
@@ -18,9 +20,15 @@ describe("DesignPlan", () => {
     const rect = rectForSegment(html, "left-blind-body");
 
     expect(html).toContain('data-plan-corner-gap="true"');
-    expect(html).toContain('data-display-label="BLIND"');
+    for (const label of ["CLR", "DEAD", "BLIND"]) {
+      expect(html).toMatch(
+        new RegExp(
+          `data-display-label="${label}"[^>]*font-size="8"[^>]*letter-spacing="0.08em"[^>]*fill="#5d6b64"`
+        )
+      );
+    }
     expect(rect.x).toBe(162);
-    expect(rect.y).toBe(132);
+    expect(rect.y).toBe(198.2);
   });
 
   test("draws bottom wall runs from left to right like the measured model", () => {
@@ -95,6 +103,9 @@ function segment(
     widthSixteenths: inches * 16,
     label,
     cabinetKind: kind === "cabinet" ? "corner" : undefined,
-    sourceCornerId: id.includes("blind") ? "TL" : undefined
+    sourceCornerId:
+      id.includes("blind") || id.includes("clearance") || id.includes("dead")
+        ? "TL"
+        : undefined
   };
 }

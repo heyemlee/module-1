@@ -58,6 +58,98 @@ describe("Round 2 drawing sheets", () => {
     expect(html).toContain("96″");
     expect(html).toContain(firstUpper.code);
     expect(html).toContain('data-drawing-layer="cabinet-boundaries"');
+    expect(html).not.toContain("A2 · WALL A ELEVATION");
+    expect(html).not.toContain("ROUND 2 VISUAL PROTOTYPE");
+  });
+
+  test("keeps elevation labels compact for openings, tall placeholders, and fillers", () => {
+    const model = submittedModel(ROUND1_REFERENCE_FIXTURE.floorPlan, 148 * 16);
+    const wall = model.walls[0];
+    const filler = wall.segments.find((segment) => segment.kind === "filler")!;
+    const opening = {
+      id: "a-window-opening",
+      wallId: wall.id,
+      tier: "upper" as const,
+      kind: "opening" as const,
+      widthSixteenths: 36 * 16,
+      label: "Window",
+      sourceFixedPointId: "a-window"
+    };
+    const tallPlaceholder = {
+      id: "a-tall-placeholder",
+      wallId: wall.id,
+      tier: "full" as const,
+      kind: "cabinet" as const,
+      widthSixteenths: 24 * 16,
+      label: "Tall unit",
+      cabinetKind: "tall" as const
+    };
+    wall.segments = [opening, tallPlaceholder, ...wall.segments];
+    wall.fixedPoints = [
+      ...wall.fixedPoints,
+      {
+        id: "a-window",
+        type: "window",
+        label: "Window",
+        sourceWall: wall.sourceWall,
+        order: 0,
+        positionRatio: 0
+      }
+    ];
+    const sheet = drawingSheetsForModel(model).find((item) => item.id === "A2")!;
+    const html = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={sheet}
+        model={model}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+
+    expect(html).toContain('data-glyph="window"');
+    expect(html).not.toContain('data-segment-id="a-window-opening"');
+    expect(html).not.toContain('data-segment-id="a-tall-placeholder"');
+    expect(html).not.toMatch(/<text[^>]*>Window<\/text>/);
+    expect(html).not.toMatch(/<text[^>]*>Tall unit<\/text>/);
+    expect(html).toMatch(
+      new RegExp(
+        `data-segment-id="${filler.id}"[^>]*fill="#696969"[^>]*font-size="10"`
+      )
+    );
+  });
+
+  test("draws appliance identities on the wall elevation", () => {
+    const model = submittedModel({
+      ...ROUND1_REFERENCE_FIXTURE.floorPlan,
+      appliances: [
+        appliance("fridge", 110),
+        appliance("sink", 340),
+        appliance("dishwasher", 430),
+        appliance("range", 520)
+      ]
+    });
+    const sheet = drawingSheetsForModel(model).find((item) => item.id === "A2")!;
+    const html = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={sheet}
+        model={model}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+
+    for (const role of ["fridge", "sink", "dishwasher", "range"]) {
+      expect(html).toContain(`data-appliance-role="${role}"`);
+      expect(html).toContain(`data-role-tag="${role}"`);
+    }
+    // Default hood style is a cabinet insert projected above the range.
+    expect(html).toContain('data-appliance-role="hood"');
+    // The fridge is a tall unit, so it carries its own overall height dimension.
+    expect(html).toContain('data-drawing-layer="tall-height"');
   });
 
   test("creates elevation sheets from actual wall count", () => {
@@ -71,10 +163,12 @@ describe("Round 2 drawing sheets", () => {
   });
 
   test("renders S1 schedule from model segments including fillers", () => {
-    const model = submittedModel();
+    // 148″ walls leave a sub-tier remainder, so autofill emits fillers.
+    const model = submittedModel(ROUND1_REFERENCE_FIXTURE.floorPlan, 148 * 16);
     const filler = model.walls[0].segments.find(
       (segment) => segment.kind === "filler"
     )!;
+    expect(filler).toBeDefined();
     const html = renderToStaticMarkup(
       <CabinetSchedule
         model={model}
@@ -94,7 +188,10 @@ describe("Round 2 drawing sheets", () => {
   });
 });
 
-function submittedModel(floorPlan: FloorPlan = ROUND1_REFERENCE_FIXTURE.floorPlan) {
+function submittedModel(
+  floorPlan: FloorPlan = ROUND1_REFERENCE_FIXTURE.floorPlan,
+  wallLengthSixteenths = 150 * 16
+) {
   const model = deriveWallsFromRound1(floorPlan);
   const measurements = Object.fromEntries(
     Object.keys(initializeMeasurements(model)).map((key) => [
@@ -105,10 +202,26 @@ function submittedModel(floorPlan: FloorPlan = ROUND1_REFERENCE_FIXTURE.floorPla
           ? 36 * 16
           : key.endsWith(".offset")
             ? 24 * 16
-            : 150 * 16
+            : wallLengthSixteenths
     ])
   );
   return autofillRound2Model(model, measurements);
+}
+
+function appliance(
+  symbol: "fridge" | "sink" | "dishwasher" | "range",
+  x: number
+) {
+  return {
+    x,
+    y: 78,
+    w: 40,
+    h: 40,
+    key: symbol,
+    label: symbol,
+    symbol,
+    wall: "TOP" as const
+  };
 }
 
 function planFor(layoutPreference: string, walls: Wall[]): FloorPlan {

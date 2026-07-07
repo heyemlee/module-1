@@ -260,7 +260,7 @@ describe("Round 2 autofill", () => {
     expectTiersClosed(filled);
   });
 
-  test("gives the fridge a deep upper and hugs it to the wall end", () => {
+  test("hugs the fridge to the wall end as one full-height unit with a gap above", () => {
     const wall = wallWithLength(200 * 16);
     wall.fixedPoints = [
       fixedPoint({ id: "top-appliance-fridge", symbol: "fridge", positionRatio: 0.9 })
@@ -273,11 +273,19 @@ describe("Round 2 autofill", () => {
     );
 
     expect(fridge.start + fridge.segment.widthSixteenths).toBe(200 * 16);
+    // No separate deep upper: the fridge is a single full-height unit, so the
+    // upper tier leaves a gap over it (never a WR cabinet).
     expect(
-      filled.walls[0].segments.find(
+      filled.walls[0].segments.some(
         (segment) => segment.tier === "upper" && segment.label.startsWith("WR")
-      )?.widthSixteenths
-    ).toBe(fridge.segment.widthSixteenths);
+      )
+    ).toBe(false);
+    const upperOverFridge = filled.walls[0].segments.find(
+      (segment) =>
+        segment.tier === "upper" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+    expect(upperOverFridge?.kind).toBe("gap");
   });
 
   test("tags the range flank as a drawer base and the sink side for trash", () => {

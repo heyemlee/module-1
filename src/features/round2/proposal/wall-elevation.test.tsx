@@ -39,11 +39,51 @@ describe("WallElevation", () => {
     expect(new Set(labelYs).size).toBeGreaterThan(1);
   });
 
+  test("keeps upper cabinet width-chain labels above the cabinet box", () => {
+    const model = elevationModel(
+      [
+        { ...cabinet("upper-left", 36 * 16), tier: "upper" },
+        { ...cabinet("upper-right", 36 * 16), tier: "upper" }
+      ],
+      42 * 16,
+      100 * 16
+    );
+    const html = render(model);
+    const upperTop = rectForSegment(html, "upper-left").y;
+    const labelY = chainLabelY(html, "upper-left");
+
+    expect(labelY).toBeLessThanOrEqual(upperTop - 14);
+  });
+
+  test("keeps upper cabinet width-chain labels on one baseline", () => {
+    const model = elevationModel([
+      { ...cabinet("upper-left", 33 * 16), tier: "upper" },
+      { ...cabinet("upper-filler", 3 * 16, "filler"), tier: "upper" },
+      { ...cabinet("upper-center", 30 * 16), tier: "upper" },
+      { ...cabinet("upper-right", 24 * 16), tier: "upper" }
+    ]);
+    const html = render(model);
+
+    const labelYs = [
+      chainLabelY(html, "upper-left"),
+      chainLabelY(html, "upper-filler"),
+      chainLabelY(html, "upper-center"),
+      chainLabelY(html, "upper-right")
+    ];
+
+    expect(new Set(labelYs).size).toBe(1);
+  });
+
   test("uses compact in-box labels for narrow corner clearance segments", () => {
     const model = elevationModel([
       {
-        ...cabinet("corner-clearance", 6 * 16, "gap"),
+        ...cabinet("corner-clearance", 12 * 16, "gap"),
         label: "Corner clearance",
+        sourceCornerId: "TL"
+      },
+      {
+        ...cabinet("dead-corner", 12 * 16, "gap"),
+        label: "Dead corner",
         sourceCornerId: "TL"
       },
       {
@@ -55,12 +95,97 @@ describe("WallElevation", () => {
     ]);
     const html = render(model);
 
-    expect(html).toContain('data-display-label="CLR"');
+    expect(html).toContain('data-display-label="CLEAR"');
+    expect(html).toContain('data-display-label="DEAD"');
     expect(html).toContain('data-display-label="BLIND"');
     expect(html).toContain("<title>Corner clearance</title>");
+    expect(html).toContain("<title>Dead corner</title>");
     expect(html).toContain("<title>Blind corner</title>");
+    for (const label of ["CLEAR", "DEAD", "BLIND"]) {
+      expect(html).toMatch(
+        new RegExp(
+          `data-display-label="${label}"[^>]*font-size="8"[^>]*letter-spacing="0.08em"[^>]*fill="#5d6b64"`
+        )
+      );
+    }
     expect(html).not.toMatch(/<text[^>]*>Corner clearance<\/text>/);
+    expect(html).not.toMatch(/<text[^>]*>Dead corner<\/text>/);
     expect(html).not.toMatch(/<text[^>]*>Blind corner<\/text>/);
+  });
+
+  test("identifies appliance cabinets with glyphs and role tags", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("a-fridge", 36 * 16, "appliance"),
+        label: "REF36",
+        cabinetKind: "tall",
+        sourceFixedPointId: "top-appliance-fridge"
+      },
+      {
+        ...cabinet("a-sink", 36 * 16, "appliance"),
+        label: "SB36",
+        cabinetKind: "sink",
+        sourceFixedPointId: "top-appliance-sink"
+      },
+      {
+        ...cabinet("a-dw", 24 * 16, "appliance"),
+        label: "DW24",
+        sourceFixedPointId: "top-appliance-dishwasher"
+      },
+      {
+        ...cabinet("a-range", 30 * 16, "appliance"),
+        label: "RNG30",
+        sourceFixedPointId: "top-appliance-range"
+      },
+      cabinet("a-b24", 24 * 16)
+    ]);
+    model.walls[0].fixedPoints = (
+      ["fridge", "sink", "dishwasher", "range"] as const
+    ).map((symbol, index) => ({
+      id: `top-appliance-${symbol}`,
+      type: "appliance",
+      label: symbol,
+      sourceWall: "TOP",
+      order: index,
+      positionRatio: index / 4,
+      symbol
+    }));
+    const html = render(model);
+
+    for (const role of ["fridge", "sink", "dishwasher", "range"]) {
+      expect(html).toContain(`data-appliance-role="${role}"`);
+      expect(html).toContain(`data-role-tag="${role}"`);
+    }
+    // The sink base keeps its door face under the faucet glyph.
+    expect(html).toContain('data-face="double-door"');
+    // The fridge is a tall unit, so it carries its own overall height dimension.
+    expect(html).toContain('data-elevation-layer="tall-height"');
+  });
+
+  test("draws window sash lines on window opening segments", () => {
+    const model = elevationModel([
+      cabinet("a-b30", 30 * 16),
+      {
+        ...cabinet("a-window", 36 * 16, "opening"),
+        tier: "upper",
+        label: "Window",
+        sourceFixedPointId: "top-window"
+      },
+      cabinet("a-b36", 36 * 16)
+    ]);
+    model.walls[0].fixedPoints = [
+      {
+        id: "top-window",
+        type: "window",
+        label: "Window",
+        sourceWall: "TOP",
+        order: 0.5,
+        positionRatio: 0.5
+      }
+    ];
+    const html = render(model);
+
+    expect(html).toContain('data-glyph="window"');
   });
 
   test("scales the vertical layout from the height profile", () => {
@@ -103,9 +228,35 @@ function cabinet(
   };
 }
 
+function rectForSegment(
+  html: string,
+  segmentId: string
+): { x: number; y: number } {
+  const groupStart = html.indexOf(`data-segment-id="${segmentId}"`);
+  expect(groupStart).toBeGreaterThan(-1);
+  const segmentHtml = html.slice(groupStart);
+  const match = segmentHtml.match(/<rect x="([^"]+)" y="([^"]+)"/);
+  expect(match).not.toBeNull();
+  return {
+    x: Number(match?.[1]),
+    y: Number(match?.[2])
+  };
+}
+
+function chainLabelY(html: string, segmentId: string): number {
+  const tag = html.match(
+    new RegExp(`<text(?=[^>]*data-chain-label="${segmentId}")[^>]*>`)
+  );
+  expect(tag).not.toBeNull();
+  const y = tag?.[0].match(/\sy="([^"]+)"/);
+  expect(y).not.toBeNull();
+  return Number(y?.[1]);
+}
+
 function elevationModel(
   segments?: WallSegment[],
-  upperHeightSixteenths = 36 * 16
+  upperHeightSixteenths = 36 * 16,
+  ceilingHeightSixteenths = 96 * 16
 ): Round2Model {
   const base = segments ?? [
     cabinet("a-base-1", 30 * 16),
@@ -118,7 +269,7 @@ function elevationModel(
     0
   );
   return {
-    ceilingHeightSixteenths: 96 * 16,
+    ceilingHeightSixteenths,
     heightProfile: {
       counterSixteenths: 36 * 16,
       backsplashSixteenths: 18 * 16,

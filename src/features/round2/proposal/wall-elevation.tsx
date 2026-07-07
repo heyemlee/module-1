@@ -5,11 +5,17 @@ import { cn } from "@/lib/utils";
 import {
   findWall,
   formatSixteenths,
+  type Round2FixedPoint,
   type Round2HeightProfile,
   type Round2Model,
   type WallId,
   type WallSegment
 } from "../model/round2-model";
+import {
+  resolveSegmentRole,
+  SEGMENT_ROLE_TAGS
+} from "../model/segment-role";
+import { ApplianceGlyph, WindowGlyph } from "../appliance-glyphs";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
 import { standardWidthOptionsSixteenths } from "../model/adjustments";
 import { assignDimensionLanes } from "../model/dimension-lanes";
@@ -176,7 +182,7 @@ export function WallElevation({
         {wall ? (
           <>
             <ElevationRun
-              wallId={wall.id}
+              fixedPoints={wall.fixedPoints}
               segments={upper}
               total={total}
               layout={layout}
@@ -186,7 +192,7 @@ export function WallElevation({
               onActivate={openEditor}
             />
             <ElevationRun
-              wallId={wall.id}
+              fixedPoints={wall.fixedPoints}
               segments={base}
               total={total}
               layout={layout}
@@ -195,6 +201,9 @@ export function WallElevation({
               selectedObjectId={selectedObjectId}
               onActivate={openEditor}
             />
+            <g stroke="#079ca5" fill="#079ca5" fontFamily="var(--studio-mono)">
+              <TallUnitHeights base={base} total={total} layout={layout} />
+            </g>
           </>
         ) : (
           <text
@@ -274,8 +283,58 @@ function HeightChain({
   );
 }
 
+/**
+ * Tall units (refrigerator, oven/pantry towers) run floor-to-cabinet-top with
+ * no counter/upper split, so each gets its own overall height dimension drawn
+ * inside its column — mirroring the A-sheet.
+ */
+function TallUnitHeights({
+  base,
+  total,
+  layout
+}: {
+  base: WallSegment[];
+  total: number;
+  layout: VerticalLayout;
+}) {
+  const height =
+    layout.profile.counterSixteenths +
+    layout.profile.backsplashSixteenths +
+    layout.profile.upperHeightSixteenths;
+  let cursor = 0;
+  return (
+    <g data-elevation-layer="tall-height">
+      {base.map((segment) => {
+        const widthPx = (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH;
+        const x = RUN_LEFT + cursor + Math.min(14, widthPx / 2);
+        cursor += widthPx;
+        if (segment.cabinetKind !== "tall") return null;
+        const mid = (layout.upperTop + FLOOR_Y) / 2;
+        return (
+          <g key={`tall-${segment.id}`}>
+            <path
+              d={`M ${x - 4} ${layout.upperTop} H ${x + 4} M ${x - 4} ${FLOOR_Y} H ${x + 4} M ${x} ${layout.upperTop} V ${FLOOR_Y}`}
+              strokeWidth="1"
+            />
+            <text
+              x={x + 9}
+              y={mid}
+              textAnchor="middle"
+              fontSize="10"
+              transform={`rotate(90 ${x + 9} ${mid})`}
+              stroke="none"
+            >
+              {formatSixteenths(height)}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 function ElevationRun({
-  wallId,
+  fixedPoints,
   segments,
   total,
   layout,
@@ -284,7 +343,7 @@ function ElevationRun({
   selectedObjectId,
   onActivate
 }: {
-  wallId: WallId;
+  fixedPoints: Round2FixedPoint[];
   segments: WallSegment[];
   total: number;
   layout: VerticalLayout;
@@ -308,14 +367,21 @@ function ElevationRun({
         cursor += width;
         const { y, height } = segmentBox(segment, layout);
         const selected = selectedObjectId === segment.id;
-        const lane = lanes[index];
+        const lane = labelSide === "above" ? 0 : lanes[index];
         const displayLabel = segmentDisplayLabel(segment, width);
         const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
         const labelY =
           labelSide === "below"
             ? FLOOR_Y + 16 + lane * LANE_STEP
-            : Math.max(56, layout.upperTop - 10 - lane * LANE_STEP);
+            : Math.max(CEILING_Y - 8, layout.upperTop - 16 - lane * LANE_STEP);
         const front = resolveSegmentFront(segment, designIntent);
+        const role = resolveSegmentRole(segment, { fixedPoints });
+        const roleTag = role ? SEGMENT_ROLE_TAGS[role] : null;
+        const isWindow =
+          segment.kind === "opening" &&
+          fixedPoints.find((point) => point.id === segment.sourceFixedPointId)
+            ?.type === "window";
+        const isGapLabel = segment.kind === "gap";
         return (
           <g
             key={segment.id}
@@ -338,7 +404,7 @@ function ElevationRun({
               stroke={selected ? "#079ca5" : "#2c2c2c"}
               strokeWidth={selected ? 3 : 1.5}
             />
-            {front ? (
+            {front && (
               <SegmentFace
                 x={x}
                 y={y}
@@ -347,7 +413,18 @@ function ElevationRun({
                 front={front}
                 accent={segment.tier === "upper" ? "#e12821" : "#a7aaa5"}
               />
+            )}
+            {role ? (
+              <ApplianceGlyph
+                role={role}
+                x={x}
+                y={y}
+                width={Math.max(8, width)}
+                height={height}
+                stroke="#4b5651"
+              />
             ) : (
+              !front &&
               segment.kind === "appliance" && (
                 <path
                   d={`M ${x + 4} ${y + 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + 4}`}
@@ -357,18 +434,49 @@ function ElevationRun({
                 />
               )
             )}
+            {isWindow && (
+              <WindowGlyph
+                x={x}
+                y={y}
+                width={Math.max(8, width)}
+                height={height}
+                stroke="#5a8fb8"
+              />
+            )}
             {displayLabel && (
               <text
                 data-display-label={displayLabel}
                 x={x + width / 2}
-                y={y + height / 2 + 5}
+                y={y + height / 2 + (isGapLabel ? 3 : 5)}
                 textAnchor="middle"
                 fontFamily="var(--studio-mono)"
-                fontSize="13"
-                fill={segment.kind === "filler" ? "#7a5b00" : "#e12821"}
+                fontSize={isGapLabel ? "8" : "13"}
+                letterSpacing={isGapLabel ? "0.08em" : undefined}
+                fill={
+                  isGapLabel
+                    ? "#5d6b64"
+                    : segment.kind === "filler"
+                      ? "#7a5b00"
+                      : "#e12821"
+                }
                 clipPath={`url(#${clipId})`}
               >
                 {displayLabel}
+              </text>
+            )}
+            {roleTag && width >= 26 && (
+              <text
+                data-role-tag={role}
+                x={x + width / 2}
+                y={y + height / 2 + 18}
+                textAnchor="middle"
+                fontFamily="var(--studio-mono)"
+                fontSize="8"
+                letterSpacing="0.08em"
+                fill="#5d6b64"
+                clipPath={`url(#${clipId})`}
+              >
+                {roleTag}
               </text>
             )}
             {segment.kind !== "gap" && (
@@ -422,8 +530,9 @@ function segmentDisplayLabel(
 
 function compactLabelCandidates(label: string): string[] {
   const normalized = label.trim().toLowerCase();
-  if (normalized === "corner clearance") return [label, "CLEAR", "CLR"];
-  if (normalized === "blind corner") return [label, "BLIND", "BC"];
+  if (normalized === "corner clearance") return ["CLEAR", "CLR"];
+  if (normalized === "dead corner") return ["DEAD", "DC"];
+  if (normalized === "blind corner") return ["BLIND", "BC"];
   return [label];
 }
 

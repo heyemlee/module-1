@@ -11,6 +11,11 @@ import {
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
 import { assignDimensionLanes } from "../model/dimension-lanes";
 import { resolveSegmentFront, type ResolvedFront } from "../model/front";
+import {
+  resolveSegmentRole,
+  SEGMENT_ROLE_TAGS
+} from "../model/segment-role";
+import { ApplianceGlyph, WindowGlyph } from "../appliance-glyphs";
 import type { Round2DesignIntent } from "../model/design-intent";
 import type { DrawingSheetId } from "../round2-types";
 
@@ -69,6 +74,10 @@ export function DrawingSheet({
   projectName
 }: DrawingSheetProps) {
   const wall = sheet.wallId ? findWall(model, sheet.wallId) : null;
+  const showTitleBlock = sheet.id === "A1";
+  const sheetHeight = showTitleBlock ? 720 : 650;
+  const outerHeight = showTitleBlock ? 688 : 618;
+  const innerHeight = showTitleBlock ? 660 : 590;
   const title =
     sheet.id === "A1"
       ? "MEASURED FLOOR PLAN"
@@ -78,13 +87,13 @@ export function DrawingSheet({
 
   return (
     <svg
-      viewBox="0 0 1000 720"
+      viewBox={`0 0 1000 ${sheetHeight}`}
       role="img"
       aria-label={`${sheet.id} ${title}`}
       className="block h-auto w-full bg-white"
     >
-      <rect x="16" y="16" width="968" height="688" fill="#fff" stroke={COLORS.ink} strokeWidth="2" />
-      <rect x="30" y="30" width="940" height="660" fill="none" stroke={COLORS.ink} strokeWidth="1" />
+      <rect x="16" y="16" width="968" height={outerHeight} fill="#fff" stroke={COLORS.ink} strokeWidth="2" />
+      <rect x="30" y="30" width="940" height={innerHeight} fill="none" stroke={COLORS.ink} strokeWidth="1" />
 
       {sheet.id === "A1" ? (
         <PlanSheet model={model} />
@@ -92,15 +101,17 @@ export function DrawingSheet({
         <ElevationSheet wall={wall} model={model} intent={intent} />
       )}
 
-      <TitleBlock
-        sheetId={sheet.id}
-        title={title}
-        measurementVersion={measurementVersion}
-        proposalVersion={proposalVersion}
-        customerName={customerName}
-        projectName={projectName}
-        scale={sheet.id === "A1" ? "1:50" : "1:30"}
-      />
+      {showTitleBlock && (
+        <TitleBlock
+          sheetId={sheet.id}
+          title={title}
+          measurementVersion={measurementVersion}
+          proposalVersion={proposalVersion}
+          customerName={customerName}
+          projectName={projectName}
+          scale="1:50"
+        />
+      )}
     </svg>
   );
 }
@@ -296,8 +307,10 @@ function ElevationSheet({
         <line x1="90" y1={ELEVATION.floor} x2="910" y2={ELEVATION.floor} strokeWidth="2" />
         <line x1="110" y1={ELEVATION.ceiling} x2="110" y2={ELEVATION.floor} strokeWidth="2" />
         <line x1="890" y1={ELEVATION.ceiling} x2="890" y2={ELEVATION.floor} strokeWidth="2" />
+        {/* Windows are drawn as sash-grid glyphs inside the cabinet run so they
+            align with the opening segment; doors stay in the structure layer. */}
         {wall?.fixedPoints
-          .filter((point) => point.type === "window" || point.type === "door")
+          .filter((point) => point.type === "door")
           .map((point) => {
             const width =
               wall.lengthSixteenths && point.widthSixteenths
@@ -322,22 +335,53 @@ function ElevationSheet({
       </g>
 
       <g data-drawing-layer="cabinet-boundaries" stroke={COLORS.cabinet} fill="none" strokeWidth="2">
-        <ElevationRun segments={upper} total={total} layout={layout} intent={intent} />
-        <ElevationRun segments={base} total={total} layout={layout} intent={intent} />
+        <ElevationRun segments={upper} total={total} layout={layout} intent={intent} wall={wall} />
+        <ElevationRun segments={base} total={total} layout={layout} intent={intent} wall={wall} />
       </g>
 
       <g data-drawing-layer="cabinet-numbers" fill={COLORS.number} fontFamily="var(--studio-mono)" fontSize="18" textAnchor="middle">
-        {[...elevationPlacements(upper, total), ...elevationPlacements(base, total)].map(({ segment, x, width }) => (
-          <text
-            key={segment.id}
-            data-segment-id={segment.id}
-            x={x + width / 2}
-            y={elevationBox(segment, layout).y + elevationBox(segment, layout).height / 2 + 6}
-            fill={segment.kind === "filler" ? COLORS.filler : COLORS.number}
-          >
-            {segment.code ?? segment.label}
-          </text>
-        ))}
+        {[...elevationPlacements(upper, total), ...elevationPlacements(base, total)].map(({ segment, x, width }) => {
+          // Gaps (corner clearance, tall-unit space above a full-height unit)
+          // are not cabinets — they carry no number or label.
+          if (segment.kind === "gap") return null;
+          const box = elevationBox(segment, layout);
+          const role = resolveSegmentRole(segment, wall);
+          const mainLabel = segment.code ?? segment.label;
+          const showMainLabel =
+            segment.kind !== "opening" &&
+            !(
+              segment.cabinetKind === "tall" &&
+              mainLabel.trim().toLowerCase() === "tall unit"
+            );
+          return (
+            <g key={segment.id}>
+              {showMainLabel && (
+                <text
+                  data-segment-id={segment.id}
+                  x={x + width / 2}
+                  y={box.y + box.height / 2 + (segment.kind === "filler" ? 4 : 6)}
+                  fill={segment.kind === "filler" ? COLORS.muted : COLORS.number}
+                  fontSize={segment.kind === "filler" ? "10" : undefined}
+                  letterSpacing={segment.kind === "filler" ? "0.08em" : undefined}
+                >
+                  {mainLabel}
+                </text>
+              )}
+              {role && (
+                <text
+                  data-role-tag={role}
+                  x={x + width / 2}
+                  y={box.y + box.height / 2 + 24}
+                  fontSize="10"
+                  letterSpacing="0.08em"
+                  fill={COLORS.muted}
+                >
+                  {SEGMENT_ROLE_TAGS[role]}
+                </text>
+              )}
+            </g>
+          );
+        })}
       </g>
 
       <g data-drawing-layer="dimensions" stroke={COLORS.dimension} fill={COLORS.dimension} fontFamily="var(--studio-mono)" fontSize="10">
@@ -376,6 +420,22 @@ function ElevationSheet({
           y2={layout.upperBottom}
           label={formatSixteenths(layout.profile.upperHeightSixteenths)}
         />
+        {/* Tall units (refrigerator, oven/pantry towers) run floor-to-cabinet-top
+            and have no counter/upper split, so they get their own overall
+            height dimension inside the column. */}
+        <g data-drawing-layer="tall-height">
+          {elevationPlacements(base, total)
+            .filter(({ segment }) => segment.cabinetKind === "tall")
+            .map(({ segment, x, width }) => (
+              <DimensionVertical
+                key={`tall-height-${segment.id}`}
+                x={x + Math.min(16, width / 2)}
+                y1={layout.upperTop}
+                y2={ELEVATION.floor}
+                label={formatSixteenths(tallUnitHeightSixteenths(layout.profile))}
+              />
+            ))}
+        </g>
       </g>
 
       <g fontFamily="var(--studio-mono)" fill={COLORS.muted} fontSize="9">
@@ -445,12 +505,14 @@ function ElevationRun({
   segments,
   total,
   layout,
-  intent
+  intent,
+  wall
 }: {
   segments: WallSegment[];
   total: number;
   layout: SheetVerticalLayout;
   intent?: Round2DesignIntent;
+  wall: Round2Wall | null;
 }) {
   return (
     <g>
@@ -458,6 +520,15 @@ function ElevationRun({
         const { y, height } = elevationBox(segment, layout);
         if (segment.kind === "gap") return null;
         const front = resolveSegmentFront(segment, intent);
+        const role = resolveSegmentRole(segment, wall);
+        // Pure appliance boxes (DW/range/fridge/oven/microwave) show the
+        // appliance itself, not a cabinet door face; the sink base keeps its
+        // doors under the faucet.
+        const isApplianceBox = segment.kind === "appliance" && role != null && role !== "sink";
+        const isWindow =
+          segment.kind === "opening" &&
+          wall?.fixedPoints.find((point) => point.id === segment.sourceFixedPointId)
+            ?.type === "window";
         return (
           <g key={segment.id}>
             <rect
@@ -465,16 +536,47 @@ function ElevationRun({
               y={y}
               width={Math.max(2, width)}
               height={height}
-              fill={segment.kind === "filler" ? "#fff7d8" : "#fff"}
-              stroke={segment.kind === "filler" ? COLORS.filler : COLORS.cabinet}
+              fill={
+                segment.kind === "filler"
+                  ? "#fff7d8"
+                  : isWindow
+                    ? "#eef6fb"
+                    : "#fff"
+              }
+              stroke={
+                segment.kind === "filler"
+                  ? COLORS.filler
+                  : isWindow
+                    ? COLORS.opening
+                    : COLORS.cabinet
+              }
             />
-            {segment.kind !== "filler" && segment.kind !== "opening" && (
+            {segment.kind !== "filler" && segment.kind !== "opening" && !isApplianceBox && (
               <CabinetFace
                 x={x}
                 y={y}
                 width={Math.max(2, width)}
                 height={height}
                 front={front}
+              />
+            )}
+            {isWindow && (
+              <WindowGlyph
+                x={x}
+                y={y}
+                width={Math.max(2, width)}
+                height={height}
+                stroke={COLORS.opening}
+              />
+            )}
+            {role && (
+              <ApplianceGlyph
+                role={role}
+                x={x}
+                y={y}
+                width={Math.max(2, width)}
+                height={height}
+                stroke={COLORS.ink}
               />
             )}
           </g>
@@ -705,6 +807,19 @@ function sheetVerticalLayout(model: Round2Model | null): SheetVerticalLayout {
   const upperBottom = baseTop - profile.backsplashSixteenths * scale;
   const upperTop = upperBottom - profile.upperHeightSixteenths * scale;
   return { baseTop, upperTop, upperBottom, profile };
+}
+
+/**
+ * A tall unit spans floor to cabinet-top — the same height as counter +
+ * backsplash + upper, which is where the upper cabinets terminate. Matches the
+ * floor→upperTop pixel span used by elevationBox for tall segments.
+ */
+function tallUnitHeightSixteenths(profile: Round2HeightProfile): number {
+  return (
+    profile.counterSixteenths +
+    profile.backsplashSixteenths +
+    profile.upperHeightSixteenths
+  );
 }
 
 function elevationBox(
