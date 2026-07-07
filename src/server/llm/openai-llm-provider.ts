@@ -180,16 +180,17 @@ export function createOpenAILLMProvider(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): LLMProvider {
-  const apiKey = getPreferredOpenAIApiKey(env)?.apiKey;
-  if (!apiKey) {
+  const keyConfig = getPreferredOpenAIApiKey(env);
+  if (!keyConfig) {
     throw new LLMProviderNotConfiguredError(
       "LLM_PROVIDER=openai but no prioritized OpenAI API key is set"
     );
   }
-  const baseUrl = (env.OPENAI_BASE_URL?.trim() || DEFAULT_OPENAI_BASE_URL).replace(
+  const baseUrl = (keyConfig.baseUrl || DEFAULT_OPENAI_BASE_URL).replace(
     /\/+$/,
     ""
   );
+  const apiKey = keyConfig.apiKey;
   const model = env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
 

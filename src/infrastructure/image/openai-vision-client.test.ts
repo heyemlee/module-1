@@ -34,4 +34,28 @@ describe("createVisionClientFromEnv", () => {
       Authorization: "Bearer sk-secondary"
     });
   });
+
+  test("uses the base URL for the selected prioritized API key", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(okVisionResponse("ok"));
+
+    const client = createVisionClientFromEnv(
+      {
+        OPENAI_API_KEY_PRIMARY: "proxy-key",
+        OPENAI_API_KEY_PRIORITY: "PRIMARY",
+        OPENAI_BASE_URL_PRIMARY: "https://proxy.example.com/v1/"
+      },
+      { fetchImpl }
+    );
+    expect(client).not.toBeNull();
+    if (!client) throw new Error("expected vision client");
+
+    await client.analyze({ prompt: "check", imageBase64: "image" });
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://proxy.example.com/v1/chat/completions"
+    );
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer proxy-key"
+    });
+  });
 });
