@@ -27,10 +27,6 @@ type OpenAIMessage = {
   tool_call_id?: string;
 };
 
-type OpenAIChatResponse = {
-  choices?: Array<{ message?: OpenAIMessage }>;
-};
-
 /**
  * Shared OpenAI-compatible (`/chat/completions` + `tools`) agent loop. Both the
  * OpenAI and DeepSeek providers use this; DeepSeek only differs by base URL,
@@ -68,7 +64,10 @@ export async function runOpenAICompatibleAgentLoop(
           model: config.model,
           messages,
           tools,
-          tool_choice: "auto"
+          tool_choice: "auto",
+          // The CRS relay only accepts streaming requests; OpenAI/DeepSeek also
+          // support it, so stream unconditionally and aggregate the deltas.
+          stream: true
         })
       }
     );
@@ -82,11 +81,7 @@ export async function runOpenAICompatibleAgentLoop(
       );
     }
 
-    const json = (await response.json()) as OpenAIChatResponse;
-    const message = json.choices?.[0]?.message;
-    if (!message) {
-      throw new Error("LLM response did not include a message");
-    }
+    const message = await readStreamedAssistantMessage(response);
 
     messages.push({
       role: "assistant",
@@ -125,6 +120,68 @@ export async function runOpenAICompatibleAgentLoop(
       lastAssistantText ||
       "I gathered what I could but reached my step limit for this turn. Please refine or repeat your request.",
     toolCallsMade
+  };
+}
+
+/**
+ * The relay (and OpenAI/DeepSeek) stream chat completions as
+ * `chat.completion.chunk` SSE. Reassemble the deltas into one assistant
+ * message: concatenate content, and merge tool_call fragments by index (id +
+ * name arrive in the first fragment, then argument text streams in chunks).
+ */
+async function readStreamedAssistantMessage(
+  response: Response
+): Promise<OpenAIMessage> {
+  const text = await response.text();
+  let content = "";
+  const calls = new Map<number, OpenAIToolCall>();
+
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    let chunk: {
+      choices?: Array<{
+        delta?: {
+          content?: string | null;
+          tool_calls?: Array<{
+            index: number;
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
+    };
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) continue;
+    if (typeof delta.content === "string") content += delta.content;
+    for (const fragment of delta.tool_calls ?? []) {
+      let slot = calls.get(fragment.index);
+      if (!slot) {
+        slot = { id: "", type: "function", function: { name: "", arguments: "" } };
+        calls.set(fragment.index, slot);
+      }
+      if (fragment.id) slot.id = fragment.id;
+      if (fragment.function?.name) slot.function.name += fragment.function.name;
+      if (fragment.function?.arguments) {
+        slot.function.arguments += fragment.function.arguments;
+      }
+    }
+  }
+
+  const toolCalls = [...calls.keys()]
+    .sort((a, b) => a - b)
+    .map((key) => calls.get(key)!);
+
+  return {
+    role: "assistant",
+    content: content || null,
+    tool_calls: toolCalls.length > 0 ? toolCalls : undefined
   };
 }
 

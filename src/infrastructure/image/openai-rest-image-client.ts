@@ -7,6 +7,7 @@ import {
   getConfiguredOpenAIApiKeys,
   type OpenAIApiKeySlot
 } from "@/infrastructure/openai-api-keys";
+import { createCrsResponsesImageClient } from "./crs-responses-image-client";
 
 type FetchImpl = typeof fetch;
 
@@ -184,15 +185,31 @@ export function createOpenAIImageAdapterFromEnv(
     return null;
   }
 
+  // OPENAI_IMAGE_WIRE_API=responses routes image generation through the CRS
+  // relay's Responses API + image_generation tool (streamed; the relay has no
+  // standalone /images endpoints). Otherwise use the standard REST images
+  // client. The wire is a global switch; each prioritized key + baseUrl feeds
+  // whichever client is selected, so multi-key failover still applies. The relay
+  // also speaks chat/completions, so image + text can share the same key slot.
+  const useResponsesWire = env.OPENAI_IMAGE_WIRE_API?.trim() === "responses";
+  const imageModel = env.OPENAI_IMAGE_MODEL?.trim();
+
   const adapters = apiKeys.map(({ slot, apiKey, baseUrl }) => ({
     slot,
     adapter: createOpenAIImageAdapter({
       env,
-      client: createOpenAIRestImageClient({
-        apiKey,
-        baseUrl,
-        fetchImpl: deps.fetchImpl
-      })
+      client: useResponsesWire
+        ? createCrsResponsesImageClient({
+            apiKey,
+            baseUrl: baseUrl || "https://claude-relay.liziqiao.com/openai/v1",
+            model: imageModel,
+            fetchImpl: deps.fetchImpl
+          })
+        : createOpenAIRestImageClient({
+            apiKey,
+            baseUrl,
+            fetchImpl: deps.fetchImpl
+          })
     })
   }));
 
