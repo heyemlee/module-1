@@ -79,7 +79,7 @@ export function buildDesignIntentQuestions(
       key: corner.intentKey,
       kind: "corner-strategy",
       label: `Corner ${corner.primary.label}–${corner.secondary.label} strategy`,
-      helper: "Default reserves fillers on both walls until the corner is confirmed.",
+      helper: "Default reserves dead-corner clearance on both walls until the corner is confirmed.",
       defaultValue: "deadCorner",
       options: [
         { value: "lazySusan", label: "Lazy Susan" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type Dispatch } from "react";
+import { useId, useState, type Dispatch } from "react";
 import { cn } from "@/lib/utils";
 import {
   findWall,
@@ -26,6 +26,8 @@ const FLOOR_Y = 306;
 const CEILING_Y = 42;
 const MIN_LABEL_PX = 34;
 const LANE_STEP = 11;
+const IN_BOX_LABEL_CHAR_PX = 6;
+const IN_BOX_LABEL_PADDING_PX = 2;
 
 type VerticalLayout = {
   scale: number;
@@ -295,6 +297,7 @@ function ElevationRun({
     (segment) => (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH
   );
   const lanes = assignDimensionLanes(widthsPx, MIN_LABEL_PX);
+  const labelClipIdPrefix = useId().replaceAll(":", "");
   let cursor = 0;
 
   return (
@@ -306,6 +309,8 @@ function ElevationRun({
         const { y, height } = segmentBox(segment, layout);
         const selected = selectedObjectId === segment.id;
         const lane = lanes[index];
+        const displayLabel = segmentDisplayLabel(segment, width);
+        const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
         const labelY =
           labelSide === "below"
             ? FLOOR_Y + 16 + lane * LANE_STEP
@@ -320,6 +325,10 @@ function ElevationRun({
             onClick={() => onActivate(segment)}
             className="cursor-pointer"
           >
+            <clipPath id={clipId}>
+              <rect x={x} y={y} width={Math.max(8, width)} height={height} />
+            </clipPath>
+            <title>{segment.code ?? segment.label}</title>
             <rect
               x={x}
               y={y}
@@ -348,16 +357,20 @@ function ElevationRun({
                 />
               )
             )}
-            <text
-              x={x + width / 2}
-              y={y + height / 2 + 5}
-              textAnchor="middle"
-              fontFamily="var(--studio-mono)"
-              fontSize="13"
-              fill={segment.kind === "filler" ? "#7a5b00" : "#e12821"}
-            >
-              {segment.code ?? segment.label}
-            </text>
+            {displayLabel && (
+              <text
+                data-display-label={displayLabel}
+                x={x + width / 2}
+                y={y + height / 2 + 5}
+                textAnchor="middle"
+                fontFamily="var(--studio-mono)"
+                fontSize="13"
+                fill={segment.kind === "filler" ? "#7a5b00" : "#e12821"}
+                clipPath={`url(#${clipId})`}
+              >
+                {displayLabel}
+              </text>
+            )}
             {segment.kind !== "gap" && (
               <g data-elevation-layer="width-chain">
                 {lane > 0 && (
@@ -389,6 +402,33 @@ function ElevationRun({
       })}
     </g>
   );
+}
+
+function segmentDisplayLabel(
+  segment: WallSegment,
+  widthPx: number
+): string | null {
+  const label = segment.code ?? segment.label;
+  const candidates = compactLabelCandidates(label);
+  const usableWidth = Math.max(0, widthPx - IN_BOX_LABEL_PADDING_PX * 2);
+  const fitting = candidates.find(
+    (candidate) => candidate.length * IN_BOX_LABEL_CHAR_PX <= usableWidth
+  );
+
+  if (fitting) return fitting;
+  const fallback = candidates.at(-1) ?? label;
+  return fallback.length <= 3 && widthPx >= 18 ? fallback : null;
+}
+
+function compactLabelCandidates(label: string): string[] {
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "corner clearance") return [label, "CLEAR", "CLR"];
+  if (normalized === "blind corner") return [label, "BLIND", "BC"];
+  return [label];
+}
+
+function sanitizeSvgId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
 /**

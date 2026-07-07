@@ -223,12 +223,12 @@ function buildCornerInsets(
         [corner.secondary, corner.secondaryEnd, "-return"]
       ] as const) {
         tierFor(wall.id)[end].push({
-          id: `${wall.id.toLowerCase()}-base-corner-${cornerId}-filler${suffix}`,
+          id: `${wall.id.toLowerCase()}-base-corner-${cornerId}-dead${suffix}`,
           wallId: wall.id,
           tier: "base",
-          kind: "filler",
+          kind: "gap",
           widthSixteenths: baseDepth,
-          label: `F${baseDepth / 16}`,
+          label: "Dead corner",
           sourceCornerId: corner.id
         });
       }

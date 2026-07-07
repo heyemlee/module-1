@@ -39,6 +39,30 @@ describe("WallElevation", () => {
     expect(new Set(labelYs).size).toBeGreaterThan(1);
   });
 
+  test("uses compact in-box labels for narrow corner clearance segments", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("corner-clearance", 6 * 16, "gap"),
+        label: "Corner clearance",
+        sourceCornerId: "TL"
+      },
+      {
+        ...cabinet("blind-corner", 12 * 16, "gap"),
+        label: "Blind corner",
+        sourceCornerId: "TL"
+      },
+      cabinet("wide-1", 102 * 16)
+    ]);
+    const html = render(model);
+
+    expect(html).toContain('data-display-label="CLR"');
+    expect(html).toContain('data-display-label="BLIND"');
+    expect(html).toContain("<title>Corner clearance</title>");
+    expect(html).toContain("<title>Blind corner</title>");
+    expect(html).not.toMatch(/<text[^>]*>Corner clearance<\/text>/);
+    expect(html).not.toMatch(/<text[^>]*>Blind corner<\/text>/);
+  });
+
   test("scales the vertical layout from the height profile", () => {
     const shortUppers = render(elevationModel(undefined, 30 * 16));
     const tallUppers = render(elevationModel(undefined, 42 * 16));

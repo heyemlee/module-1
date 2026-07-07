@@ -21,6 +21,7 @@ const PX_PER_SIXTEENTH =
   BASE_DEPTH_PX / CABINET_STANDARDS.depths.baseSixteenths;
 
 function fillForSegment(segment: WallSegment) {
+  if (isCornerGap(segment)) return "#f3ead5";
   if (segment.cabinetKind === "corner") return "#e5d9b8";
   if (segment.cabinetKind === "sink") return "#c9ddd5";
   if (segment.cabinetKind === "tall") return "#d8d0e2";
@@ -129,17 +130,21 @@ function SegmentRun({
         const depth = depthPx(segment);
         const rect = segmentRect(wall, cursor, length, depth);
         cursor += length;
-        if (segment.kind === "gap" || segment.kind === "opening") return null;
+        if (!shouldRenderPlanSegment(segment)) return null;
         const selected = segment.id === selectedObjectId;
+        const cornerGap = isCornerGap(segment);
+        const displayLabel = planDisplayLabel(segment);
         return (
           <g
             key={segment.id}
             data-segment-id={segment.id}
             data-cabinet-id={segment.id}
             data-selected={selected}
+            data-plan-corner-gap={cornerGap || undefined}
             onClick={() => onSelect(segment.id, wall.id)}
             className="cursor-pointer"
           >
+            <title>{segment.code ?? segment.label}</title>
             <rect
               x={rect.x}
               y={rect.y}
@@ -147,10 +152,12 @@ function SegmentRun({
               height={Math.max(6, rect.height - 2)}
               rx="2"
               fill={fillForSegment(segment)}
-              stroke={selected ? "#079ca5" : "#7d8580"}
+              stroke={selected ? "#079ca5" : cornerGap ? "#a98e54" : "#7d8580"}
               strokeWidth={selected ? 3 : 1.25}
+              strokeDasharray={cornerGap ? "5 3" : undefined}
             />
             <text
+              data-display-label={displayLabel}
               x={rect.x + rect.width / 2}
               y={rect.y + rect.height / 2 + 3}
               textAnchor="middle"
@@ -159,7 +166,7 @@ function SegmentRun({
               fill="#252a27"
               transform={rect.rotate}
             >
-              {segment.code ?? segment.label}
+              {displayLabel}
             </text>
           </g>
         );
@@ -276,6 +283,27 @@ function depthPx(segment: WallSegment): number {
   return sixteenths * PX_PER_SIXTEENTH;
 }
 
+function shouldRenderPlanSegment(segment: WallSegment): boolean {
+  if (segment.kind === "opening") return false;
+  if (segment.kind === "gap") return isCornerGap(segment);
+  return true;
+}
+
+function isCornerGap(segment: WallSegment): boolean {
+  return segment.kind === "gap" && Boolean(segment.sourceCornerId);
+}
+
+function planDisplayLabel(segment: WallSegment): string {
+  const label = segment.code ?? segment.label;
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "blind corner") return "BLIND";
+  if (normalized === "corner clearance") return "CLR";
+  if (normalized.endsWith(" return")) {
+    return label.replace(/\s+return$/i, "");
+  }
+  return label;
+}
+
 function labelOffset(wall: Round2Wall): { x: number; y: number } {
   if (wall.sourceWall === "TOP") return { x: 0, y: -18 };
   if (wall.sourceWall === "BOTTOM") return { x: 0, y: 24 };
@@ -297,9 +325,9 @@ function wallLine(wall: Round2Wall) {
     return { x1: VIEW.right, y1: VIEW.top, x2: VIEW.right, y2: VIEW.bottom };
   }
   if (wall.sourceWall === "BOTTOM") {
-    return { x1: VIEW.right, y1: VIEW.bottom, x2: VIEW.left, y2: VIEW.bottom };
+    return { x1: VIEW.left, y1: VIEW.bottom, x2: VIEW.right, y2: VIEW.bottom };
   }
-  return { x1: VIEW.left, y1: VIEW.bottom, x2: VIEW.left, y2: VIEW.top };
+  return { x1: VIEW.left, y1: VIEW.top, x2: VIEW.left, y2: VIEW.bottom };
 }
 
 function pointOnLine(
@@ -338,7 +366,7 @@ function segmentRect(
   }
   if (wall.sourceWall === "BOTTOM") {
     return {
-      x: VIEW.right - 7 - cursor - length,
+      x: VIEW.left + 7 + cursor,
       y: VIEW.bottom - 7 - depth,
       width: length,
       height: depth
@@ -346,10 +374,10 @@ function segmentRect(
   }
   return {
     x: VIEW.left + 7,
-    y: VIEW.bottom - 7 - cursor - length,
+    y: VIEW.top + 7 + cursor,
     width: depth,
     height: length,
-    rotate: `rotate(-90 ${VIEW.left + 7 + depth / 2} ${VIEW.bottom - 7 - cursor - length / 2})`
+    rotate: `rotate(-90 ${VIEW.left + 7 + depth / 2} ${VIEW.top + 7 + cursor + length / 2})`
   };
 }
 

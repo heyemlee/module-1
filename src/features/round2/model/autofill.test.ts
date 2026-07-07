@@ -93,20 +93,22 @@ describe("Round 2 autofill", () => {
     });
   });
 
-  test("defaults to dead-corner fillers on both walls", () => {
+  test("defaults to dead-corner gaps on both walls", () => {
     const filled = autofillRound2Model(uShapeModel());
     const depth = CABINET_STANDARDS.depths.baseSixteenths;
     const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
     const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
 
     expect(baseTier(top)[0]).toMatchObject({
-      kind: "filler",
+      kind: "gap",
       widthSixteenths: depth,
+      label: "Dead corner",
       sourceCornerId: "TL"
     });
     expect(baseTier(left)[0]).toMatchObject({
-      kind: "filler",
+      kind: "gap",
       widthSixteenths: depth,
+      label: "Dead corner",
       sourceCornerId: "TL"
     });
   });
