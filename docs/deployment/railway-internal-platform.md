@@ -9,6 +9,7 @@
 
 ```text
 DATABASE_URL=provided by Railway Postgres
+DATABASE_SSL_NO_VERIFY=true   # Railway PG (internal or proxy) presents a self-signed cert; required in production or every DB query 500s
 OPENAI_API_KEY_PRIMARY=first-choice company OpenAI key
 OPENAI_BASE_URL_PRIMARY=optional proxy URL for the primary key
 OPENAI_API_KEY_SECONDARY=second-choice company OpenAI key
@@ -17,6 +18,7 @@ OPENAI_API_KEY_TERTIARY=third-choice company OpenAI key
 OPENAI_BASE_URL_TERTIARY=optional proxy URL for the tertiary key
 OPENAI_API_KEY_PRIORITY=PRIMARY,SECONDARY,TERTIARY
 OPENAI_IMAGE_MODEL=gpt-image-2
+OPENAI_IMAGE_WIRE_API=   # set to `responses` to generate images via a relay's Responses API instead of /images
 LLM_PROVIDER=openai
 OPENAI_MODEL=gpt-4o-mini
 SEED_COMPANY_NAME=ABC Cabinet
@@ -32,9 +34,11 @@ SEED_ADMIN_NAME=Admin
    (`next start` binds to Railway's `$PORT` automatically).
 2. New -> Database -> Add PostgreSQL.
 3. Set the Variables above. `DATABASE_URL` must reference the database with
-   `${{Postgres.DATABASE_URL}}` so migrations run over Railway's internal
-   network (no SSL config needed; the `pg` client uses a plain connection
-   string). Image generation tries the OpenAI keys in `OPENAI_API_KEY_PRIORITY`
+   `${{Postgres.DATABASE_URL}}` so the app connects over Railway's internal
+   network. Set `DATABASE_SSL_NO_VERIFY=true`: in production the client requires
+   TLS, and Railway's Postgres presents a self-signed cert, so without it every
+   DB query (including login) fails with `SELF_SIGNED_CERT_IN_CHAIN`. Image
+   generation tries the OpenAI keys in `OPENAI_API_KEY_PRIORITY`
    order and automatically falls back to the next configured key when a
    generation request fails. The OpenAI chat agent uses the first configured
    key in the same priority order when `LLM_PROVIDER=openai`. Each key slot can
