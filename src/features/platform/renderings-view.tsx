@@ -39,6 +39,14 @@ export function RenderingsView({
       <StudioPageHeader
         title="Renderings"
         description={`${project.customerName}. ${project.projectName}`}
+        meta={
+          <Link
+            href={`/projects/${project.id}`}
+            className="inline-block font-mono text-[11px] tracking-[0.1em] text-[#86867f] transition-colors hover:text-studio-ink"
+          >
+            ← PROJECT OVERVIEW
+          </Link>
+        }
         action={
           <Button asChild variant="secondary">
             <Link href={`/projects/${project.id}/round1`}>

@@ -40,6 +40,8 @@ function NewtonsCradle({ label }: { label?: string }) {
   );
 }
 
+const MAX_RENDER_LOAD_ATTEMPTS = 3;
+
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
 
 export function CabinetFillSummaryPanel({
@@ -162,12 +164,47 @@ export function Round1InlineRenderPreview({
 }) {
   // Newest first; "previous" walks toward older (higher index).
   const [index, setIndex] = useState(0);
-  // Track render URLs whose <img> failed to load so we can show the cradle
-  // instead of the browser's broken-image icon on the dark canvas.
+  // Track render URLs whose <img> failed to load (after retries) so we can
+  // show the cradle instead of the browser's broken-image icon on the dark
+  // canvas. A single transient failure fetching the image bytes (e.g. DB pool
+  // contention) shouldn't read as "this rendering is broken" when the
+  // underlying render saved fine, so failures are retried with backoff first.
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const idx = Math.min(index, Math.max(0, renderings.length - 1));
   const current = renderings[idx];
+
+  useEffect(() => {
+    setLoadAttempt(0);
+  }, [current?.url]);
+
   const imageBroken = current ? failedUrls.has(current.url) : false;
+  const imageSrc =
+    current &&
+    (loadAttempt === 0
+      ? current.url
+      : `${current.url}${current.url.includes("?") ? "&" : "?"}retry=${loadAttempt}`);
+
+  const handleImageError = () => {
+    if (!current) return;
+    if (loadAttempt + 1 < MAX_RENDER_LOAD_ATTEMPTS) {
+      const delay = 500 * 2 ** loadAttempt;
+      setTimeout(() => setLoadAttempt((a) => a + 1), delay);
+    } else {
+      setFailedUrls((prev) => new Set(prev).add(current.url));
+    }
+  };
+
+  const retryImage = () => {
+    if (!current) return;
+    setFailedUrls((prev) => {
+      if (!prev.has(current.url)) return prev;
+      const next = new Set(prev);
+      next.delete(current.url);
+      return next;
+    });
+    setLoadAttempt(0);
+  };
   const colorName = current?.doorColorId
     ? cabinetColors.find((c) => c.id === current.doorColorId)?.name ?? null
     : null;
@@ -206,7 +243,13 @@ export function Round1InlineRenderPreview({
       ) : error ? (
         <NewtonsCradle label={`Could not generate the rendering: ${error}`} />
       ) : imageBroken ? (
-        <NewtonsCradle label="Rendering image unavailable." />
+        <button
+          type="button"
+          onClick={retryImage}
+          className="flex h-full w-full flex-col items-center justify-center"
+        >
+          <NewtonsCradle label="Rendering image unavailable. Tap to retry." />
+        </button>
       ) : !current ? (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
           <p className="font-mono text-[10px] tracking-[0.14em] text-white/45">
@@ -220,11 +263,10 @@ export function Round1InlineRenderPreview({
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={current.url}
+            key={imageSrc}
+            src={imageSrc}
             alt="Latest concept rendering"
-            onError={() =>
-              setFailedUrls((prev) => new Set(prev).add(current.url))
-            }
+            onError={handleImageError}
             className={cn(
               "absolute inset-0 h-full w-full",
               fitViewport ? "object-contain" : "object-cover"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogClose,
@@ -8,6 +8,93 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { DownloadButton } from "./download-button";
+
+const MAX_LOAD_ATTEMPTS = 3;
+
+/**
+ * Each thumbnail's <img> makes its own lazy request for the image bytes,
+ * separate from (and later than) the request that generated/saved the
+ * rendering. A single transient failure (DB pool contention, cold connect)
+ * would otherwise render as a permanently broken image even though the
+ * rendering itself saved fine, so this retries a couple of times before
+ * falling back to a manual retry control.
+ */
+function RenderingImage({
+  src,
+  alt,
+  wrapperClassName,
+  imgClassName,
+  eager = false
+}: {
+  src: string;
+  alt: string;
+  wrapperClassName: string;
+  imgClassName?: string;
+  eager?: boolean;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setAttempt(0);
+    setFailed(false);
+  }, [src]);
+
+  const resolvedSrc =
+    attempt === 0 ? src : `${src}${src.includes("?") ? "&" : "?"}retry=${attempt}`;
+
+  const handleError = () => {
+    if (attempt + 1 < MAX_LOAD_ATTEMPTS) {
+      const delay = 500 * 2 ** attempt;
+      setTimeout(() => setAttempt((a) => a + 1), delay);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  if (failed) {
+    return (
+      <div
+        className={`${wrapperClassName} flex flex-col items-center justify-center gap-2 bg-studio-void/60 text-studio-muted`}
+      >
+        <span className="text-[11px]">Image failed to load</span>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setAttempt(0);
+            setFailed(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.stopPropagation();
+            e.preventDefault();
+            setAttempt(0);
+            setFailed(false);
+          }}
+          className="cursor-pointer rounded-full border border-studio-line px-3 py-1 text-[11px] font-medium hover:bg-studio-line/30"
+        >
+          Retry
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      key={resolvedSrc}
+      src={resolvedSrc}
+      alt={alt}
+      loading={eager ? undefined : "lazy"}
+      decoding="async"
+      onError={handleError}
+      className={`${wrapperClassName} ${imgClassName ?? ""}`}
+    />
+  );
+}
 
 export type RenderingCard = {
   id: string;
@@ -50,13 +137,11 @@ export function RenderingsGallery({
               aria-label={`Enlarge concept rendering for ${customerName}`}
               className="relative block w-full cursor-zoom-in overflow-hidden border-b border-studio-line bg-studio-void outline-none focus-visible:ring-2 focus-visible:ring-studio-action"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <RenderingImage
                 src={card.imageUrl}
                 alt={`Concept rendering for ${customerName}`}
-                loading="lazy"
-                decoding="async"
-                className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+                wrapperClassName="aspect-[4/3] w-full"
+                imgClassName="object-cover transition-transform duration-500 group-hover:scale-[1.01]"
               />
               {index === 0 && (
                 <span className="absolute left-3 top-3 inline-flex h-6 items-center rounded-full bg-studio-action px-2.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-studio-action-ink">
@@ -104,11 +189,12 @@ export function RenderingsGallery({
           <DialogTitle className="sr-only">Concept rendering preview</DialogTitle>
           {active && (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <RenderingImage
                 src={active.imageUrl}
                 alt={`Concept rendering for ${customerName}`}
-                className="max-h-[95vh] max-w-[95vw] rounded-lg object-contain shadow-2xl"
+                wrapperClassName="max-h-[95vh] max-w-[95vw]"
+                imgClassName="rounded-lg object-contain shadow-2xl"
+                eager
               />
               {active.colorName && (
                 <div className="pointer-events-none absolute left-4 top-4 rounded-md bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md">
