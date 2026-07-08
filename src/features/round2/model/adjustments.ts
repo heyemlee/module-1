@@ -99,18 +99,42 @@ export function moveFillerEnd(
 
   const segments = [...context.wall.segments];
   const currentIndex = segments.findIndex((segment) => segment.id === segmentId);
+  
+  let leftBound = -1;
+  let rightBound = segments.length;
+  
+  for (let i = currentIndex - 1; i >= 0; i--) {
+    if (segments[i].tier === context.segment.tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
+      leftBound = i;
+      break;
+    }
+  }
+  for (let i = currentIndex + 1; i < segments.length; i++) {
+    if (segments[i].tier === context.segment.tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
+      rightBound = i;
+      break;
+    }
+  }
+
   const [segment] = segments.splice(currentIndex, 1);
-  const tierIndices = segments
+  rightBound--; // Adjust for the removed element
+  
+  const zoneIndices = segments
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.tier === segment.tier)
+    .filter(
+      ({ item, index }) => 
+        item.tier === segment.tier && 
+        index > leftBound && 
+        index < rightBound
+    )
     .map(({ index }) => index);
 
-  if (tierIndices.length === 0) {
-    segments.push(segment);
+  if (zoneIndices.length === 0) {
+    segments.splice(currentIndex, 0, segment);
   } else if (end === "start") {
-    segments.splice(tierIndices[0], 0, segment);
+    segments.splice(zoneIndices[0], 0, segment);
   } else {
-    segments.splice(tierIndices[tierIndices.length - 1] + 1, 0, segment);
+    segments.splice(zoneIndices[zoneIndices.length - 1] + 1, 0, segment);
   }
 
   return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
@@ -226,6 +250,17 @@ export function updateModelDecisions(model: Round2Model): Round2Model {
           title: `Wall ${wall.label} filler below minimum`,
           body: `${segment.code ?? segment.label} is narrower than ${formatSixteenths(CABINET_STANDARDS.filler.minSixteenths)}. Request a design decision or remeasure.`
         });
+      } else if (
+        segment.widthSixteenths > CABINET_STANDARDS.filler.maxSixteenths
+      ) {
+        decisionItems.push({
+          id: `decision-${segment.id}-maximum`,
+          objectId: segment.id,
+          wallId: wall.id,
+          severity: "warning",
+          title: `Wall ${wall.label} filler exceeds maximum`,
+          body: `${segment.code ?? segment.label} is wider than ${formatSixteenths(CABINET_STANDARDS.filler.maxSixteenths)}. Select a larger cabinet width or request a design decision.`
+        });
       }
     }
 
@@ -282,7 +317,15 @@ function replaceWallSegments(
   return {
     ...model,
     walls: model.walls.map((wall) =>
-      wall.id === wallId ? { ...wall, segments } : wall
+      wall.id === wallId
+        ? {
+            ...wall,
+            segments: segments.filter(
+              (segment) =>
+                !(segment.kind === "filler" && segment.widthSixteenths === 0)
+            )
+          }
+        : wall
     )
   };
 }
@@ -305,11 +348,10 @@ function ensureAbsorberFiller(
   );
   if (nearest !== -1) return nearest;
 
-  const id = `${target.wallId.toLowerCase()}-${target.tier}-adjustment-filler`;
-  const existing = segments.findIndex((segment) => segment.id === id);
-  if (existing !== -1) return existing;
+  const id = `${target.id}-adj-filler`;
+  if (segments[targetIndex + 1]?.id === id) return targetIndex + 1;
 
-  segments.push({
+  segments.splice(targetIndex + 1, 0, {
     id,
     wallId: target.wallId,
     tier: target.tier,
@@ -318,7 +360,7 @@ function ensureAbsorberFiller(
     label: "Adjustment filler",
     code: `F${target.wallId}${target.tier === "upper" ? "U" : "B"}`
   });
-  return segments.length - 1;
+  return targetIndex + 1;
 }
 
 function nearestFillerIndex(
@@ -327,14 +369,40 @@ function nearestFillerIndex(
   targetIndex: number,
   delta: number
 ): number {
+  let leftBound = -1;
+  let rightBound = segments.length;
+  
+  for (let i = targetIndex - 1; i >= 0; i--) {
+    if (segments[i].tier === tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
+      leftBound = i;
+      break;
+    }
+  }
+  for (let i = targetIndex + 1; i < segments.length; i++) {
+    if (segments[i].tier === tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
+      rightBound = i;
+      break;
+    }
+  }
+
   const candidates = segments
     .map((segment, index) => ({ segment, index }))
-    .filter(({ segment }) => segment.tier === tier && segment.kind === "filler");
+    .filter(
+      ({ segment, index }) => 
+        segment.tier === tier && 
+        segment.kind === "filler" &&
+        index > leftBound &&
+        index < rightBound
+    );
+    
   const withCapacity =
     delta > 0
       ? candidates.filter(({ segment }) => segment.widthSixteenths >= delta)
       : candidates;
   const pool = withCapacity.length > 0 ? withCapacity : candidates;
+  
+  if (pool.length === 0) return -1;
+  
   return pool.reduce(
     (best, candidate) => {
       const distance = Math.abs(candidate.index - targetIndex);
@@ -354,13 +422,14 @@ function ensureSideFiller(
 ): number {
   if (side === "left") {
     for (let index = targetIndex - 1; index >= 0; index -= 1) {
-      if (segments[index].tier === tier && segments[index].kind === "filler") {
-        return index;
+      if (segments[index].tier === tier) {
+        if (segments[index].kind === "opening" || segments[index].kind === "gap") break;
+        if (segments[index].kind === "filler") return index;
       }
     }
     const target = segments[targetIndex];
     segments.splice(targetIndex, 0, {
-      id: `${target.wallId.toLowerCase()}-${tier}-left-nudge-filler`,
+      id: `${target.id}-left-nudge`,
       wallId: target.wallId,
       tier,
       kind: "filler",
@@ -372,13 +441,14 @@ function ensureSideFiller(
   }
 
   for (let index = targetIndex + 1; index < segments.length; index += 1) {
-    if (segments[index].tier === tier && segments[index].kind === "filler") {
-      return index;
+    if (segments[index].tier === tier) {
+      if (segments[index].kind === "opening" || segments[index].kind === "gap") break;
+      if (segments[index].kind === "filler") return index;
     }
   }
   const target = segments[targetIndex];
   segments.splice(targetIndex + 1, 0, {
-    id: `${target.wallId.toLowerCase()}-${tier}-right-nudge-filler`,
+    id: `${target.id}-right-nudge`,
     wallId: target.wallId,
     tier,
     kind: "filler",

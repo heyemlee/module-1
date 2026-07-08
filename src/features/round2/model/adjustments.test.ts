@@ -37,7 +37,7 @@ describe("Round 2 constrained adjustments", () => {
     const adjusted = stepCabinetWidth(model, "a-base-cabinet", 36 * 16);
     const wall = adjusted.walls[0];
 
-    expect(segmentWidth(wall, "a-base-filler")).toBe(0);
+    expect(segmentWidth(wall, "a-base-filler")).toBeUndefined();
     expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
     expect(adjusted.decisionItems).toHaveLength(0);
 

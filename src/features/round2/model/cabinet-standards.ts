@@ -65,6 +65,7 @@ export const cabinetStandardsSchema = z
       .object({
         minSixteenths: dimensionSchema,
         preferredSixteenths: dimensionSchema,
+        maxSixteenths: dimensionSchema,
         commonWidthsSixteenths: ascendingDimensionsSchema
       })
       .strict(),
@@ -217,6 +218,7 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
     filler: {
       minSixteenths: 12,
       preferredSixteenths: 3 * 16,
+      maxSixteenths: 6 * 16,
       commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
     },
     corner: {
