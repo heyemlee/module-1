@@ -1,7 +1,7 @@
 import { autofillRound2Model } from "./model/autofill";
 import {
-  moveFillerEnd,
   nudgeGroup,
+  setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
   setSegmentKind,
@@ -15,6 +15,7 @@ import {
 } from "./model/design-intent";
 import {
   applyMeasurementsToModel,
+  hasBlockingDecisions,
   initializeMeasurements,
   measurementsComplete,
   requiredMeasurementKeys,
@@ -50,6 +51,7 @@ export function createRound2PrototypeState(
     drawingStatus: "STALE",
     selectedWall: null,
     selectedObjectId: null,
+    lastAbsorbed: null,
     issueObjectId: null,
     activeMeasurementKey: null,
     activeSheet: "A1",
@@ -63,7 +65,8 @@ export function reduceRound2Prototype(
 ): Round2PrototypeState {
   switch (action.type) {
     case "RESTORE_DRAFT":
-      return action.state;
+      // Drafts saved before the absorb-feedback field existed lack it.
+      return { ...action.state, lastAbsorbed: action.state.lastAbsorbed ?? null };
     case "LOCK_REFERENCE":
       return lockReference(state, action.reference, 1);
     case "REPLACE_REFERENCE":
@@ -80,6 +83,11 @@ export function reduceRound2Prototype(
         (action.task === "PROPOSAL" || action.task === "DRAWINGS") &&
         !proposalUnlocked(state)
       ) {
+        return state;
+      }
+      // A blocking decision means the geometry is invalid; the drawings are a
+      // projection of that geometry, so they stay locked until it is fixed.
+      if (action.task === "DRAWINGS" && hasBlockingDecisions(state.model)) {
         return state;
       }
       return { ...state, task: action.task };
@@ -125,30 +133,42 @@ export function reduceRound2Prototype(
     case "SUBMIT_NEW_MEASUREMENT":
       return submitMeasurement(state, true);
     case "SELECT_WALL":
-      return { ...state, selectedWall: action.wall };
+      return { ...state, selectedWall: action.wall, lastAbsorbed: null };
     case "SELECT_OBJECT":
       return {
         ...state,
         selectedWall: action.wall,
-        selectedObjectId: action.objectId
+        selectedObjectId: action.objectId,
+        lastAbsorbed: null
       };
-    case "STEP_CABINET_WIDTH":
-      return applyProposalAdjustment(
+    case "STEP_CABINET_WIDTH": {
+      const before = state.model;
+      const next = applyProposalAdjustment(
         state,
         (model) =>
           stepCabinetWidth(model, action.objectId, action.widthSixteenths),
         action.objectId
       );
+      if (next === state || !before || !next.model) return next;
+      const absorbed = findAbsorbedFiller(before, next.model, action.objectId);
+      return {
+        ...next,
+        lastAbsorbed: absorbed
+          ? { ...absorbed, token: (state.lastAbsorbed?.token ?? 0) + 1 }
+          : null
+      };
+    }
     case "NUDGE_GROUP":
       return applyProposalAdjustment(
         state,
         (model) => nudgeGroup(model, action.objectId, action.direction),
         action.objectId
       );
-    case "MOVE_FILLER_END":
+    case "SET_FILLER_PLACEMENT":
       return applyProposalAdjustment(
         state,
-        (model) => moveFillerEnd(model, action.objectId, action.end),
+        (model) =>
+          setFillerPlacement(model, action.objectId, action.placement),
         action.objectId
       );
     case "SET_SEGMENT_KIND":
@@ -172,6 +192,10 @@ export function reduceRound2Prototype(
         null
       );
     case "RESOLVE_DESIGN_DECISION":
+      // Only advisory decisions (confirmations, sub-minimum fillers) can be
+      // acknowledged. Blocking geometry errors can't be waived away — the
+      // designer has to edit or request a remeasure.
+      if (hasBlockingDecisions(state.model)) return state;
       return { ...state, proposalStatus: "READY", issueObjectId: null };
     case "SET_SHEET":
       return { ...state, activeSheet: action.sheet };
@@ -338,8 +362,40 @@ function applyProposalAdjustment(
     drawingStatus: "STALE",
     selectedWall: selectedSegment?.wallId ?? state.selectedWall,
     selectedObjectId: selectedObjectId ?? state.selectedObjectId,
+    lastAbsorbed: null,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
   };
+}
+
+/**
+ * Finds the filler whose width the last cabinet resize was absorbed into, so
+ * the elevation can pulse it. Fillers that vanished (absorbed down to zero)
+ * have nothing left to highlight and return null.
+ */
+function findAbsorbedFiller(
+  before: Round2Model,
+  after: Round2Model,
+  targetId: string
+): { segmentId: string; deltaSixteenths: number } | null {
+  const beforeWidths = new Map<string, number>();
+  for (const wall of before.walls) {
+    for (const segment of wall.segments) {
+      beforeWidths.set(segment.id, segment.widthSixteenths);
+    }
+  }
+  for (const wall of after.walls) {
+    for (const segment of wall.segments) {
+      if (segment.kind !== "filler" || segment.id === targetId) continue;
+      const previous = beforeWidths.get(segment.id) ?? 0;
+      if (segment.widthSixteenths !== previous) {
+        return {
+          segmentId: segment.id,
+          deltaSixteenths: segment.widthSixteenths - previous
+        };
+      }
+    }
+  }
+  return null;
 }
 
 function firstSegmentById(

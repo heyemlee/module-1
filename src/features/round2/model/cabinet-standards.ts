@@ -216,7 +216,7 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
       }
     },
     filler: {
-      minSixteenths: 12,
+      minSixteenths: 3 * 16,
       preferredSixteenths: 3 * 16,
       maxSixteenths: 6 * 16,
       commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)

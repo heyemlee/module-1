@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import type { Round2Model, WallSegment } from "../model/round2-model";
-import { WallElevation } from "./wall-elevation";
+import {
+  canEditSegmentKind,
+  KIND_OPTIONS,
+  WallElevation
+} from "./wall-elevation";
 
 describe("WallElevation", () => {
   test("keeps the editor header on a solid background above the grid", () => {
@@ -72,10 +76,11 @@ describe("WallElevation", () => {
     ]);
     const html = render(model);
 
-    expect(overallLabelY(html)).toBeLessThan(10);
-    expect(overallGuideY(html)).toBeLessThan(22);
-    expect(chainLabelY(html, "upper-center")).toBeLessThan(38);
-    expect(chainGuideY(html, "upper-center")).toBeLessThan(42);
+    // CEILING_Y is 62: every dimension drawn above the run must clear it.
+    expect(overallLabelY(html)).toBeLessThan(30);
+    expect(overallGuideY(html)).toBeLessThan(40);
+    expect(chainLabelY(html, "upper-center")).toBeLessThan(50);
+    expect(chainGuideY(html, "upper-center")).toBeLessThan(55);
   });
 
   test("points upper chain guide ticks toward the cabinets opposite the base guide", () => {
@@ -133,21 +138,23 @@ describe("WallElevation", () => {
 
     expect(chainLabel).toContain('font-size="11"');
     expect(chainLabel).toContain('fill="#079ca5"');
-    expect(chainGuide).toContain('stroke-width="1"');
+    expect(chainGuide).toContain('stroke-width="2"');
     expect(html).toMatch(/data-elevation-layer="height-chain"[\s\S]*font-size="11"/);
   });
 
-  test("only bolds overall wall and ceiling height dimension labels", () => {
+  test("bolds every dimension label consistently", () => {
+    // Labels were standardized to a single bold weight (commit f7df17b) so
+    // overall/ceiling no longer stand out from per-segment counter/upper.
     const html = render(elevationModel());
     const overall = tagFor(html, "text", 'data-chain-label="overall"');
     const ceiling = tagFor(html, "text", 'data-height-label="ceiling"');
     const counter = tagFor(html, "text", 'data-height-label="counter"');
     const upper = tagFor(html, "text", 'data-height-label="upper"');
 
-    expect(overall).toContain('font-weight="700"');
-    expect(ceiling).toContain('font-weight="700"');
-    expect(counter).toContain('font-weight="400"');
-    expect(upper).toContain('font-weight="400"');
+    expect(overall).toContain('font-weight="bold"');
+    expect(ceiling).toContain('font-weight="bold"');
+    expect(counter).toContain('font-weight="bold"');
+    expect(upper).toContain('font-weight="bold"');
     expect(counter).toContain('font-size="11"');
     expect(upper).toContain('font-size="11"');
     expect(counter).toContain('fill="#079ca5"');
@@ -178,7 +185,7 @@ describe("WallElevation", () => {
     const fillerRect = segmentRectTag(segmentMarkup(html, "light-filler"));
 
     expect(cabinetRect).toContain('fill-opacity="1"');
-    expect(fillerRect).toContain('fill="#fff4c2"');
+    expect(fillerRect).toContain('fill="#fdf9eb"');
     expect(fillerRect).toContain('fill-opacity="1"');
   });
 
@@ -201,9 +208,9 @@ describe("WallElevation", () => {
 
     expect(faceHtml).not.toContain('stroke="#e12821"');
     expect(faceHtml).toContain('stroke="#a7aaa5"');
-    expect(faceHtml).toContain("M 318 210 L 73 256.5 L 318 303");
-    expect(faceHtml).toContain("M 322 210 L 567 256.5 L 322 303");
-    expect(faceHtml).not.toContain("M 73 210 L 318 256.5 L 73 303");
+    expect(faceHtml).toContain("M 318 230 L 73 276.5 L 318 323");
+    expect(faceHtml).toContain("M 322 230 L 567 276.5 L 322 323");
+    expect(faceHtml).not.toContain("M 73 230 L 318 276.5 L 73 323");
   });
 
   test("uses compact in-box labels for narrow corner clearance segments", () => {
@@ -294,6 +301,27 @@ describe("WallElevation", () => {
     expect(html).toContain('data-elevation-layer="tall-height"');
   });
 
+  test("only exposes cabinet kind editing for non-appliance base segments", () => {
+    expect(KIND_OPTIONS.map((option) => option.value)).toEqual([
+      "base",
+      "tall"
+    ]);
+    expect(canEditSegmentKind(cabinet("base-cabinet", 30 * 16))).toBe(true);
+    expect(
+      canEditSegmentKind({
+        ...cabinet("a-dw", 24 * 16, "appliance"),
+        label: "DW24",
+        sourceFixedPointId: "top-appliance-dishwasher"
+      })
+    ).toBe(false);
+    expect(
+      canEditSegmentKind({
+        ...cabinet("upper-cabinet", 30 * 16),
+        tier: "upper"
+      })
+    ).toBe(false);
+  });
+
   test("places tall-unit height dimensions to the far left of the regular height chain", () => {
     const model = elevationModel([
       {
@@ -308,7 +336,7 @@ describe("WallElevation", () => {
     const tallLabel = tagFor(html, "text", 'data-tall-height-label="a-fridge"');
 
     expect(Number(tallLabel.match(/\sx="([^"]+)"/)?.[1])).toBeLessThan(49);
-    expect(tallLabel).toContain('font-weight="400"');
+    expect(tallLabel).toContain('font-weight="bold"');
   });
 
   test("draws window sash lines on window opening segments", () => {
@@ -345,6 +373,29 @@ describe("WallElevation", () => {
     expect(shortUppers).toContain("30″");
     expect(tallUppers).toContain("42″");
     expect(shortUppers).not.toBe(tallUppers);
+  });
+
+  test("pulses the filler that absorbed the last width change", () => {
+    const model = elevationModel();
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={model}
+        selectedObjectId={null}
+        lastAbsorbed={{ segmentId: "a-base-4", deltaSixteenths: 16, token: 1 }}
+        onSelect={() => {}}
+      />
+    );
+
+    expect(html).toContain('data-elevation-layer="absorb-pulse"');
+    expect(html).toContain('data-absorb-delta="16"');
+    expect(html).toContain("+1″");
+  });
+
+  test("renders no pulse layer without an absorbed change", () => {
+    expect(render(elevationModel())).not.toContain(
+      'data-elevation-layer="absorb-pulse"'
+    );
   });
 });
 

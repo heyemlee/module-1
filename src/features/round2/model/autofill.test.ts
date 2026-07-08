@@ -185,14 +185,38 @@ describe("Round 2 autofill", () => {
     ).toHaveLength(0);
   });
 
-  test("emits a decision item when no neighbor can absorb a sliver filler", () => {
+  test("splits a seven-inch remainder into approved filler widths", () => {
+    const filled = autofillRound2Model(modelWithWall(wallWithLength(43 * 16)));
+    const fillers = baseTier(filled.walls[0]).filter(
+      (segment) => segment.kind === "filler"
+    );
+
+    expect(fillers.map((segment) => segment.widthSixteenths)).toEqual([
+      3 * 16,
+      4 * 16
+    ]);
+    expect(fillers.every((segment) => segment.widthSixteenths >= 3 * 16)).toBe(
+      true
+    );
+    expect(fillers.every((segment) => segment.widthSixteenths <= 6 * 16)).toBe(
+      true
+    );
+    expectTiersClosed(filled);
+  });
+
+  test("emits a decision item when no neighbor can absorb a below-minimum gap", () => {
     // 9 1/16″ fits only the smallest cabinet, which has no lower tier.
     const filled = autofillRound2Model(modelWithWall(wallWithLength(9 * 16 + 1)));
+    const base = baseTier(filled.walls[0]);
 
+    expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
+    expect(base).toContainEqual(
+      expect.objectContaining({ kind: "gap", widthSixteenths: 1 })
+    );
     expect(filled.decisionItems).toContainEqual(
       expect.objectContaining({
-        severity: "warning",
-        title: expect.stringContaining("filler below minimum")
+        severity: "blocking",
+        title: expect.stringContaining("gap below filler minimum")
       })
     );
   });

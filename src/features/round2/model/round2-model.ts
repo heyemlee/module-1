@@ -321,6 +321,17 @@ export function findSegment(
   return null;
 }
 
+/**
+ * Blocking decisions (a wall run that overflows or fails to close, an
+ * impossible corner) are geometry errors, not advisories: they hard-gate the
+ * proposal — the design cannot be approved or drawn until they are fixed.
+ */
+export function hasBlockingDecisions(model: Round2Model | null): boolean {
+  return Boolean(
+    model?.decisionItems.some((item) => item.severity === "blocking")
+  );
+}
+
 export function sourceWallLabel(sourceWall: Round1Wall): string {
   if (sourceWall === "TOP") return "Back wall";
   if (sourceWall === "RIGHT") return "Right wall";

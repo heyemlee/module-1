@@ -39,6 +39,7 @@ export function ProposalWorkspace({
               model={state.model}
               designIntent={state.designIntent}
               selectedObjectId={state.selectedObjectId}
+              lastAbsorbed={state.lastAbsorbed}
               canEdit={canEdit}
               onSelect={selectObject}
               onSelectWall={(wall) => dispatch({ type: "SELECT_WALL", wall })}

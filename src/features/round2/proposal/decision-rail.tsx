@@ -3,25 +3,19 @@
 import type { Dispatch } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  findSegment,
-  findWall,
-  formatSixteenths,
-  type CabinetKind,
-  type FrontAccessory
-} from "../model/round2-model";
-import {
-  heightProfileTotal,
-  standardWidthOptionsSixteenths
-} from "../model/adjustments";
+import { formatSixteenths } from "../model/round2-model";
+import { heightProfileTotal } from "../model/adjustments";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
-import { ACCESSORY_LABELS, describeFront, resolveSegmentFront } from "../model/front";
-import { InchField } from "../measurement/inch-field";
 import type {
   Round2PrototypeAction,
   Round2PrototypeState
 } from "../round2-types";
 
+/**
+ * The rail is a checklist, not an editor: proposal status, the open system
+ * checks (click to jump to the object; edits happen on the drawing itself),
+ * the global height chain, and the remeasure escape hatch.
+ */
 export function DecisionRail({
   state,
   dispatch
@@ -29,332 +23,113 @@ export function DecisionRail({
   state: Round2PrototypeState;
   dispatch: Dispatch<Round2PrototypeAction>;
 }) {
-  const remeasureRequested =
-    state.measurementStatus === "REMEASURE_REQUESTED";
-  const selectedSegment = findSegment(state.model, state.selectedObjectId);
-  const selectedWall = findWall(state.model, state.selectedWall);
+  const remeasureRequested = state.measurementStatus === "REMEASURE_REQUESTED";
   const decisions = state.model?.decisionItems ?? [];
-  const canAdjust =
-    state.role === "DESIGNER" &&
-    state.measurementStatus === "SUBMITTED" &&
-    Boolean(selectedSegment);
-  const canResize =
-    canAdjust &&
-    selectedSegment != null &&
-    (selectedSegment.kind === "cabinet" ||
-      selectedSegment.kind === "appliance");
-  const canMoveFiller =
-    canAdjust && selectedSegment?.kind === "filler";
-  const selectedFront = selectedSegment
-    ? resolveSegmentFront(selectedSegment, state.designIntent)
-    : null;
   const heightProfile = state.model?.heightProfile ?? null;
   const canEditGlobals =
     state.role === "DESIGNER" && state.measurementStatus === "SUBMITTED";
+  const blocking = decisions.some((item) => item.severity === "blocking");
+  const ready = state.proposalStatus === "READY" && decisions.length === 0;
 
   return (
     <aside className="h-full min-h-0 overflow-y-auto rounded-[18px] border border-studio-line bg-white/65 p-4 shadow-[0_18px_42px_-32px_rgba(20,20,26,0.28)] backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3 border-b border-studio-line pb-4">
-        <h3 className="text-[16px] font-semibold">Design context</h3>
-        <span
-          className={cn(
-            "rounded-full px-2 py-1 font-mono text-[8px] tracking-[0.08em]",
-            state.proposalStatus === "READY"
-              ? "bg-black/8 text-studio-muted"
-              : "bg-[#f6ead4] text-[#815416]"
-          )}
-        >
-          {state.proposalStatus.replaceAll("_", " ")}
-        </span>
+      <div className="border-b border-studio-line pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-[16px] font-semibold">Design proposal</h3>
+          <span
+            className={cn(
+              "rounded-full px-2 py-1 font-mono text-[8px] tracking-[0.08em]",
+              blocking
+                ? "bg-[#f6dcd6] text-[#a23524]"
+                : ready
+                  ? "bg-[#e2efe4] text-[#2c6039]"
+                  : "bg-[#f6ead4] text-[#815416]"
+            )}
+          >
+            {blocking
+              ? "BLOCKED"
+              : ready
+                ? "READY TO DRAW"
+                : decisions.length > 0
+                  ? `${decisions.length} TO CONFIRM`
+                  : state.proposalStatus.replaceAll("_", " ")}
+          </span>
+        </div>
+        <p className="mt-2 text-[10.5px] leading-4 text-studio-muted">
+          Built from measurement v{state.measurementVersion} (locked to Sales).
+          Tap any cabinet on the drawing to adjust it.
+        </p>
+        {blocking && (
+          <p className="mt-2 text-[10.5px] font-semibold leading-4 text-[#a23524]">
+            A wall runs over its measured length. Fix the flagged cabinets or
+            request a remeasure — drawings stay locked until it closes.
+          </p>
+        )}
       </div>
 
       <section className="border-b border-studio-line py-4">
         <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
-          SELECTED OBJECT
+          CHECKLIST
         </p>
-        <div className="mt-2 rounded-studio-control border border-studio-line bg-white/70 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[12px] font-semibold">
-              {selectedSegment?.code ?? selectedSegment?.label ?? "No selection"}
-            </span>
-            <span className="font-mono text-[9px] text-studio-quiet">
-              {selectedWall ? `WALL ${selectedWall.label}` : "NO WALL"}
-            </span>
+        {decisions.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {decisions.map((decision) => (
+              <div
+                key={decision.id}
+                data-testid="checklist-item"
+                className="rounded-studio-control border border-[#d8bd84] bg-[#fbf4e4] p-3"
+              >
+                <button
+                  type="button"
+                  className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-studio-action"
+                  onClick={() =>
+                    dispatch({
+                      type: "SELECT_OBJECT",
+                      objectId: decision.objectId,
+                      wall: decision.wallId
+                    })
+                  }
+                >
+                  <p className="font-mono text-[8px] tracking-[0.12em] text-[#805617]">
+                    {decision.severity === "blocking" ? "BLOCKING" : "CONFIRM"} ·
+                    WALL {decision.wallId}
+                  </p>
+                  <p className="mt-1.5 text-[12px] font-semibold text-[#5f4318]">
+                    {decision.title}
+                  </p>
+                  <p className="mt-1 text-[10.5px] leading-4 text-[#755827]">
+                    {decision.body}
+                  </p>
+                </button>
+                {decision.id === "decision-height-chain-overflow" &&
+                  heightProfile && (
+                    <HeightQuickFix
+                      currentSixteenths={heightProfile.upperHeightSixteenths}
+                      disabled={!canEditGlobals}
+                      dispatch={dispatch}
+                    />
+                  )}
+              </div>
+            ))}
           </div>
-          <p className="mt-1 text-[10.5px] leading-4 text-studio-muted">
-            {selectedSegment
-              ? `${selectedSegment.kind.toUpperCase()} · ${formatSixteenths(selectedSegment.widthSixteenths)}`
-              : "Submit measurements to create a constrained proposal."}
-          </p>
-        </div>
-      </section>
-
-      <section className="border-b border-studio-line py-4">
-        <div className="flex items-center justify-between">
-          <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
-            SOURCE GEOMETRY
-          </p>
-          <span className="rounded-full bg-studio-ink px-2 py-1 font-mono text-[7px] tracking-[0.08em] text-white">
-            MEASUREMENTS LOCKED
-          </span>
-        </div>
-        <p className="mt-2 text-[11px] leading-4 text-studio-muted">
-          Measurement v{state.measurementVersion} belongs to Sales. Design review cannot overwrite it.
-        </p>
-      </section>
-
-      <section className="border-b border-studio-line py-4">
-        <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
-          CONSTRAINED ADJUSTMENT
-        </p>
-        <div className="mt-3 rounded-studio-control border border-studio-line bg-white/70 p-3">
-          {selectedSegment ? (
-            <>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[11px] font-semibold">
-                  {selectedSegment.label}
-                </span>
-                <span className="font-mono text-[9px] text-studio-muted">
-                  {formatSixteenths(selectedSegment.widthSixteenths)}
-                </span>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!canAdjust || selectedSegment.kind === "opening"}
-                  aria-label="Nudge selected group left"
-                  onClick={() =>
-                    dispatch({
-                      type: "NUDGE_GROUP",
-                      objectId: selectedSegment.id,
-                      direction: "left"
-                    })
-                  }
-                >
-                  ← 1/16″
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!canAdjust || selectedSegment.kind === "opening"}
-                  aria-label="Nudge selected group right"
-                  onClick={() =>
-                    dispatch({
-                      type: "NUDGE_GROUP",
-                      objectId: selectedSegment.id,
-                      direction: "right"
-                    })
-                  }
-                >
-                  1/16″ →
-                </Button>
-              </div>
-
-              <div className="mt-4">
-                <span className="text-[10px] font-semibold">Width</span>
-                <div className="mt-2 grid grid-cols-4 gap-1.5">
-                  {standardWidthOptionsSixteenths().map((width) => (
-                    <button
-                      key={width}
-                      type="button"
-                      disabled={!canResize}
-                      aria-pressed={selectedSegment.widthSixteenths === width}
-                      onClick={() =>
-                        dispatch({
-                          type: "STEP_CABINET_WIDTH",
-                          objectId: selectedSegment.id,
-                          widthSixteenths: width
-                        })
-                      }
-                      className="h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
-                    >
-                      {width / 16}″
-                    </button>
-                  ))}
-                </div>
-                {canResize && (
-                  <InchField
-                    value={selectedSegment.widthSixteenths}
-                    onChange={(value) => {
-                      if (value != null && value > 0) {
-                        dispatch({
-                          type: "STEP_CABINET_WIDTH",
-                          objectId: selectedSegment.id,
-                          widthSixteenths: value
-                        });
-                      }
-                    }}
-                    ariaLabel="Custom cabinet width"
-                    disabled={!canResize}
-                  />
-                )}
-              </div>
-
-              {selectedFront && (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold">Front</span>
-                    <span className="font-mono text-[8px] text-studio-muted">
-                      {describeFront(selectedFront)}
-                    </span>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-1.5">
-                    {FACE_OPTIONS.map((option) => (
-                      <button
-                        key={option.label}
-                        type="button"
-                        disabled={!canAdjust}
-                        aria-pressed={
-                          selectedFront.doorCount === option.doorCount &&
-                          selectedFront.drawerStack.length ===
-                            option.drawerStack.length
-                        }
-                        onClick={() =>
-                          dispatch({
-                            type: "SET_SEGMENT_FRONT",
-                            objectId: selectedSegment.id,
-                            front: {
-                              doorCount: option.doorCount,
-                              drawerStack: option.drawerStack
-                            }
-                          })
-                        }
-                        className="h-8 rounded-[8px] border border-studio-line bg-white text-[9px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-1.5">
-                    {(["handle", "fingerPull"] as const).map((hardware) => (
-                      <button
-                        key={hardware}
-                        type="button"
-                        disabled={!canAdjust}
-                        aria-pressed={selectedFront.hardware === hardware}
-                        onClick={() =>
-                          dispatch({
-                            type: "SET_SEGMENT_FRONT",
-                            objectId: selectedSegment.id,
-                            front: { hardware }
-                          })
-                        }
-                        className="h-8 rounded-[8px] border border-studio-line bg-white text-[9px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
-                      >
-                        {hardware === "handle" ? "Handle" : "Finger pull"}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-2 grid grid-cols-3 gap-1.5">
-                    {ACCESSORY_OPTIONS.map((accessory) => {
-                      const active =
-                        selectedFront.accessories.includes(accessory);
-                      return (
-                        <button
-                          key={accessory}
-                          type="button"
-                          disabled={!canAdjust}
-                          aria-pressed={active}
-                          onClick={() =>
-                            dispatch({
-                              type: "SET_SEGMENT_FRONT",
-                              objectId: selectedSegment.id,
-                              front: {
-                                accessories: active
-                                  ? selectedFront.accessories.filter(
-                                      (item) => item !== accessory
-                                    )
-                                  : [...selectedFront.accessories, accessory]
-                              }
-                            })
-                          }
-                          className="h-8 rounded-[8px] border border-studio-line bg-white text-[8px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
-                        >
-                          {ACCESSORY_LABELS[accessory]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {canResize && (
-                <div className="mt-4">
-                  <span className="text-[10px] font-semibold">Kind</span>
-                  <div className="mt-2 grid grid-cols-3 gap-1.5">
-                    {kindOptions(selectedSegment.tier).map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={
-                          selectedSegment.cabinetKind === option.value
-                        }
-                        onClick={() =>
-                          dispatch({
-                            type: "SET_SEGMENT_KIND",
-                            objectId: selectedSegment.id,
-                            cabinetKind: option.value
-                          })
-                        }
-                        className="h-8 rounded-[8px] border border-studio-line bg-white text-[9px] font-semibold text-studio-muted outline-none transition-colors hover:border-studio-ink aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {canMoveFiller && (
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      dispatch({
-                        type: "MOVE_FILLER_END",
-                        objectId: selectedSegment.id,
-                        end: "start"
-                      })
-                    }
-                  >
-                    Move start
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      dispatch({
-                        type: "MOVE_FILLER_END",
-                        objectId: selectedSegment.id,
-                        end: "end"
-                      })
-                    }
-                  >
-                    Move end
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="text-[10.5px] leading-4 text-studio-muted">
-              Select a cabinet or filler after submitting measurements.
+        ) : (
+          <div className="mt-3 rounded-studio-control border border-[#bcd8c2] bg-[#eef6ef] p-3">
+            <p className="font-mono text-[8px] tracking-[0.12em] text-[#2c6039]">
+              ✓ ALL CHECKS PASSED
             </p>
-          )}
-        </div>
+            <p className="mt-1.5 text-[10.5px] leading-4 text-[#3d6547]">
+              Every wall closes to the submitted dimensions. Continue to
+              Drawings &amp; Review.
+            </p>
+          </div>
+        )}
       </section>
 
       {heightProfile && (
         <section className="border-b border-studio-line py-4">
           <div className="flex items-center justify-between">
             <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
-              HEIGHT CHAIN · ALL WALLS
+              HEIGHTS · ALL WALLS
             </p>
             <span className="font-mono text-[8px] text-studio-muted">
               Σ {formatSixteenths(heightProfileTotal(heightProfile))} /{" "}
@@ -379,7 +154,7 @@ export function DecisionRail({
                         profile: { upperHeightSixteenths: height }
                       })
                     }
-                    className="h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                    className={RAIL_CHIP_CLASS}
                   >
                     {height / 16}″
                   </button>
@@ -404,7 +179,7 @@ export function DecisionRail({
                       profile: { mouldingSixteenths: option.value }
                     })
                   }
-                  className="h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                  className={RAIL_CHIP_CLASS}
                 >
                   {option.label}
                 </button>
@@ -419,73 +194,15 @@ export function DecisionRail({
         </section>
       )}
 
-      <section className="border-b border-studio-line py-4">
-        <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
-          WALL BALANCE
-        </p>
-        <div className="mt-3 space-y-2">
-          {(state.model?.walls ?? []).map((wall) => {
-            const baseTotal = wall.segments
-              .filter((segment) => segment.tier === "base")
-              .reduce((sum, segment) => sum + segment.widthSixteenths, 0);
-            return (
-              <div
-                key={wall.id}
-                className="flex items-center justify-between rounded-[9px] border border-studio-line bg-white/65 px-2.5 py-2"
-              >
-                <span className="text-[10px] font-semibold">
-                  Wall {wall.label}
-                </span>
-                <span className="font-mono text-[9px] text-studio-muted">
-                  {formatSixteenths(baseTotal)} / {formatSixteenths(wall.lengthSixteenths)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
       <section className="py-4">
-        {decisions.length > 0 ? (
-          <div className="space-y-2">
-            {decisions.map((decision) => (
-              <div
-                key={decision.id}
-                className="rounded-studio-control border border-[#d8bd84] bg-[#fbf4e4] p-3"
-              >
-                <p className="font-mono text-[8px] tracking-[0.12em] text-[#805617]">
-                  SYSTEM CHECK
-                </p>
-                <p className="mt-1.5 text-[12px] font-semibold text-[#5f4318]">
-                  {decision.title}
-                </p>
-                <p className="mt-1 text-[10.5px] leading-4 text-[#755827]">
-                  {decision.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-studio-control border border-studio-line bg-white/70 p-3">
-            <p className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
-              SYSTEM CHECK
-            </p>
-            <p className="mt-1.5 text-[12px] font-semibold text-studio-ink">
-              No filler decisions
-            </p>
-            <p className="mt-1 text-[10.5px] leading-4 text-studio-muted">
-              Autofill segments close to the submitted wall dimensions.
-            </p>
-          </div>
-        )}
-
         {remeasureRequested ? (
-          <div className="mt-3 rounded-studio-control border border-[#d8bd84] bg-white/70 p-3">
+          <div className="rounded-studio-control border border-[#d8bd84] bg-white/70 p-3">
             <p className="text-[11px] font-semibold">
               Remeasure requested for {state.issueObjectId}
             </p>
             <p className="mt-1 text-[10px] leading-4 text-studio-muted">
-              Switch to the Sales view to submit measurement v{state.measurementVersion + 1}.
+              Switch to the Sales view to submit measurement v
+              {state.measurementVersion + 1}.
             </p>
             {state.role === "SALES" && (
               <Button
@@ -499,11 +216,16 @@ export function DecisionRail({
             )}
           </div>
         ) : (
-          <div className="mt-3 grid gap-2">
+          <div className="grid gap-2">
             <Button
               type="button"
               size="sm"
-              disabled={decisions.length === 0}
+              disabled={decisions.length === 0 || blocking}
+              title={
+                blocking
+                  ? "Blocking issues can't be acknowledged — fix or remeasure"
+                  : undefined
+              }
               onClick={() => dispatch({ type: "RESOLVE_DESIGN_DECISION" })}
             >
               Resolve decision
@@ -531,36 +253,45 @@ export function DecisionRail({
   );
 }
 
-const FACE_OPTIONS: {
-  label: string;
-  doorCount: 0 | 1 | 2;
-  drawerStack: number[];
-}[] = [
-  { label: "1 door", doorCount: 1, drawerStack: [] },
-  { label: "2 doors", doorCount: 2, drawerStack: [] },
-  { label: "2 drawers", doorCount: 0, drawerStack: [1, 1] },
-  { label: "3 drawers", doorCount: 0, drawerStack: [1, 1, 1] }
-];
+/** One-click fix for the ceiling overflow: step the uppers down one tier. */
+function HeightQuickFix({
+  currentSixteenths,
+  disabled,
+  dispatch
+}: {
+  currentSixteenths: number;
+  disabled: boolean;
+  dispatch: Dispatch<Round2PrototypeAction>;
+}) {
+  const lower = [...CABINET_STANDARDS.upper.standardHeightsSixteenths]
+    .filter((height) => height < currentSixteenths)
+    .sort((a, b) => b - a)[0];
+  if (lower == null) return null;
 
-const ACCESSORY_OPTIONS: FrontAccessory[] = [
-  "trashPullout",
-  "spicePullout",
-  "lazySusan"
-];
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={disabled}
+      className="mt-2 w-full"
+      onClick={() =>
+        dispatch({
+          type: "SET_HEIGHT_PROFILE",
+          profile: { upperHeightSixteenths: lower }
+        })
+      }
+    >
+      Step uppers down to {lower / 16}″
+    </Button>
+  );
+}
+
+const RAIL_CHIP_CLASS =
+  "h-8 rounded-[8px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white";
 
 const MOULDING_OPTIONS = [
   { label: "None", value: 0 },
   { label: "2″ flat", value: 2 * 16 },
   { label: "3″ flat", value: 3 * 16 }
 ];
-
-function kindOptions(
-  tier: "upper" | "base" | "full"
-): { value: CabinetKind; label: string }[] {
-  if (tier === "upper") return [{ value: "upper", label: "Upper" }];
-  return [
-    { value: "base", label: "Base" },
-    { value: "sink", label: "Sink" },
-    { value: "tall", label: "Tall" }
-  ];
-}

@@ -9,6 +9,7 @@ import { DrawingReview } from "./drawings/drawing-review";
 import { Round1Handoff } from "./handoff/round1-handoff";
 import { MeasurementWorkspace } from "./measurement/measurement-workspace";
 import { ProposalWorkspace } from "./proposal/proposal-workspace";
+import { hasBlockingDecisions } from "./model/round2-model";
 import {
   createRound2PrototypeState,
   proposalUnlocked,
@@ -176,6 +177,7 @@ export function Round2VisualPrototype({
             task={state.task}
             onTaskChange={(task) => dispatch({ type: "SET_TASK", task })}
             proposalUnlocked={proposalUnlocked(state)}
+            drawingsBlocked={hasBlockingDecisions(state.model)}
           />
         ) : (
           <div className="flex min-h-[58px] items-center justify-between gap-4 px-5">

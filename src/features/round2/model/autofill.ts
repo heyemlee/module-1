@@ -22,8 +22,8 @@ const BASE_WIDTHS_DESCENDING = [...BASE_WIDTHS_ASCENDING].sort(
   (a, b) => b - a
 );
 const MIN_CABINET_WIDTH_SIXTEENTHS = BASE_WIDTHS_ASCENDING[0];
-const FILLER_PREFERRED_SIXTEENTHS =
-  CABINET_STANDARDS.filler.preferredSixteenths;
+const FILLER_MIN_SIXTEENTHS = CABINET_STANDARDS.filler.minSixteenths;
+const FILLER_MAX_SIXTEENTHS = CABINET_STANDARDS.filler.maxSixteenths;
 
 type FillTier = Extract<SegmentTier, "upper" | "base">;
 type FillerSide = "start" | "end";
@@ -80,7 +80,7 @@ export function autofillRound2Model(
 
     const insets = insetsByWall.get(wall.id) ?? { start: [], end: [] };
     const base = fillBaseTier(wall, insets, intent, decisionItems);
-    const upper = deriveUpperTier(wall, base, intent);
+    const upper = deriveUpperTier(wall, base, intent, decisionItems);
     const numbered = [...upper, ...base].map((segment) => {
       if (
         segment.kind === "cabinet" ||
@@ -92,7 +92,7 @@ export function autofillRound2Model(
         const code = `F${fillerNumber++}`;
         if (
           segment.widthSixteenths > 0 &&
-          segment.widthSixteenths < FILLER_PREFERRED_SIXTEENTHS
+          segment.widthSixteenths < FILLER_MIN_SIXTEENTHS
         ) {
           decisionItems.push({
             id: `decision-${segment.id}`,
@@ -100,7 +100,7 @@ export function autofillRound2Model(
             wallId: wall.id,
             severity: "warning",
             title: `Wall ${wall.label} filler below minimum`,
-            body: `${code} is ${formatSixteenths(segment.widthSixteenths)}, narrower than the ${formatSixteenths(FILLER_PREFERRED_SIXTEENTHS)} preferred filler. Step a neighbor width or approve the scribe.`
+            body: `${code} is ${formatSixteenths(segment.widthSixteenths)}, narrower than the ${formatSixteenths(FILLER_MIN_SIXTEENTHS)} minimum filler. Step a neighbor width or remeasure.`
           });
         }
         return { ...segment, code };
@@ -306,7 +306,17 @@ function fillBaseTier(
       hasEndCorner,
       length
     );
-    segments.push(...fillSpan(wall, "base", spanStart, spanEnd, sequence, side));
+    segments.push(
+      ...fillSpan(
+        wall,
+        "base",
+        spanStart,
+        spanEnd,
+        sequence,
+        side,
+        decisionItems
+      )
+    );
     sequence += 1;
   };
 
@@ -468,7 +478,7 @@ function packReservations(
 
 // Rule 3 + 4 — zones between anchors are packed with the fewest wide
 // cabinets; the remainder becomes a filler pushed to the corner side or the
-// wall end. A sub-preferred remainder first tries to grow by stepping one
+// wall end. A sub-minimum remainder first tries to grow by stepping one
 // cabinet down a width tier.
 function fillSpan(
   wall: Round2Wall,
@@ -476,7 +486,8 @@ function fillSpan(
   spanStart: number,
   spanEnd: number,
   sequence: number,
-  fillerSide: FillerSide
+  fillerSide: FillerSide,
+  decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   const span = spanEnd - spanStart;
   if (span <= 0) return [];
@@ -492,7 +503,7 @@ function fillSpan(
     remaining -= width;
   }
 
-  if (remaining > 0 && remaining < FILLER_PREFERRED_SIXTEENTHS) {
+  if (remaining > 0 && remaining < FILLER_MIN_SIXTEENTHS) {
     const index = widths.findIndex(
       (width) => previousWidthTier(width) != null
     );
@@ -515,21 +526,85 @@ function fillSpan(
     standardWidthSixteenths: width
   }));
 
-  const filler: WallSegment[] =
-    remaining > 0
-      ? [
-          {
-            id: `${wall.id.toLowerCase()}-${tier}-${sequence}-filler`,
-            wallId: wall.id,
-            tier,
-            kind: "filler",
-            widthSixteenths: remaining,
-            label: `F${Math.round(remaining / 16)}`
-          }
-        ]
-      : [];
+  const filler = residualSegments(
+    wall,
+    tier,
+    sequence,
+    remaining,
+    decisionItems
+  );
 
   return fillerSide === "start" ? [...filler, ...cabinets] : [...cabinets, ...filler];
+}
+
+function residualSegments(
+  wall: Round2Wall,
+  tier: FillTier,
+  sequence: number,
+  width: number,
+  decisionItems: Round2DecisionItem[],
+  source?: Pick<WallSegment, "sourceCornerId" | "sourceFixedPointId">
+): WallSegment[] {
+  if (width <= 0) return [];
+
+  const fillerWidths = splitFillerWidths(width);
+  if (fillerWidths) {
+    return fillerWidths.map((fillerWidth, index) => ({
+      id: `${wall.id.toLowerCase()}-${tier}-${sequence}-filler-${index + 1}`,
+      wallId: wall.id,
+      tier,
+      kind: "filler" as const,
+      widthSixteenths: fillerWidth,
+      label: `F${Math.round(fillerWidth / 16)}`,
+      ...source
+    }));
+  }
+
+  const id = `${wall.id.toLowerCase()}-${tier}-${sequence}-gap`;
+  decisionItems.push({
+    id: `decision-${id}-below-filler-minimum`,
+    objectId: id,
+    wallId: wall.id,
+    severity: "blocking",
+    title: `Wall ${wall.label} gap below filler minimum`,
+    body: `${formatSixteenths(width)} cannot be filled with the approved ${formatSixteenths(FILLER_MIN_SIXTEENTHS)}-${formatSixteenths(FILLER_MAX_SIXTEENTHS)} filler range. Step a neighbor width or remeasure.`
+  });
+  return [
+    {
+      id,
+      wallId: wall.id,
+      tier,
+      kind: "gap",
+      widthSixteenths: width,
+      label: "Unresolved gap",
+      ...source
+    }
+  ];
+}
+
+function splitFillerWidths(width: number): number[] | null {
+  if (width < FILLER_MIN_SIXTEENTHS) return null;
+  if (width <= FILLER_MAX_SIXTEENTHS) return [width];
+
+  const widths: number[] = [];
+  let remaining = width;
+  while (remaining > FILLER_MAX_SIXTEENTHS) {
+    if (remaining - FILLER_MIN_SIXTEENTHS <= FILLER_MAX_SIXTEENTHS) {
+      widths.push(FILLER_MIN_SIXTEENTHS);
+      remaining -= FILLER_MIN_SIXTEENTHS;
+      break;
+    }
+
+    const next =
+      remaining - FILLER_MAX_SIXTEENTHS >= FILLER_MIN_SIXTEENTHS
+        ? FILLER_MAX_SIXTEENTHS
+        : remaining - FILLER_MIN_SIXTEENTHS;
+    widths.push(next);
+    remaining -= next;
+  }
+
+  widths.push(remaining);
+  return widths;
 }
 
 function fillerSideForSpan(
@@ -617,7 +692,8 @@ function tagFunctionalNeighbors(
 function deriveUpperTier(
   wall: Round2Wall,
   baseSegments: WallSegment[],
-  intent?: Round2DesignIntent
+  intent: Round2DesignIntent | undefined,
+  decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   const length = wall.lengthSixteenths ?? 0;
   if (length === 0) return [];
@@ -719,7 +795,7 @@ function deriveUpperTier(
     }
   }
 
-  return pieces.map((piece, index) => {
+  return pieces.flatMap((piece, index) => {
     const id = `${wall.id.toLowerCase()}-upper-${index + 1}-${piece.type}`;
     if (piece.type === "opening") {
       return {
@@ -745,15 +821,17 @@ function deriveUpperTier(
       };
     }
     if (piece.type === "filler") {
-      return {
-        id,
-        wallId: wall.id,
-        tier: "upper" as const,
-        kind: "filler" as const,
-        widthSixteenths: piece.width,
-        label: `F${Math.round(piece.width / 16)}`,
-        sourceCornerId: piece.sourceCornerId
-      };
+      return residualSegments(
+        wall,
+        "upper",
+        index + 1,
+        piece.width,
+        decisionItems,
+        {
+          sourceCornerId: piece.sourceCornerId,
+          sourceFixedPointId: piece.sourceFixedPointId
+        }
+      );
     }
     const label =
       piece.type === "hood"

@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import {
   findWall,
   formatSixteenths,
+  type CabinetKind,
+  type FrontAccessory,
   type Round2FixedPoint,
   type Round2HeightProfile,
   type Round2Model,
@@ -19,9 +21,17 @@ import { ApplianceGlyph, WindowGlyph } from "../appliance-glyphs";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
 import { standardWidthOptionsSixteenths } from "../model/adjustments";
 import { assignDimensionLanes } from "../model/dimension-lanes";
-import { resolveSegmentFront, type ResolvedFront } from "../model/front";
+import {
+  ACCESSORY_LABELS,
+  describeFront,
+  resolveSegmentFront,
+  type ResolvedFront
+} from "../model/front";
 import type { Round2DesignIntent } from "../model/design-intent";
-import type { Round2PrototypeAction } from "../round2-types";
+import type {
+  Round2AbsorbedChange,
+  Round2PrototypeAction
+} from "../round2-types";
 import { InchField } from "../measurement/inch-field";
 
 // Elevation canvas: the floor line and the ceiling span are fixed in pixels;
@@ -97,6 +107,7 @@ export function WallElevation({
   model,
   designIntent,
   selectedObjectId,
+  lastAbsorbed = null,
   canEdit = false,
   onSelect,
   onSelectWall,
@@ -106,6 +117,7 @@ export function WallElevation({
   model: Round2Model | null;
   designIntent?: Round2DesignIntent;
   selectedObjectId: string | null;
+  lastAbsorbed?: Round2AbsorbedChange | null;
   canEdit?: boolean;
   onSelect: (id: string, wall: WallId) => void;
   onSelectWall?: (wall: WallId) => void;
@@ -214,6 +226,7 @@ export function WallElevation({
               designIntent={designIntent}
               labelSide="above"
               selectedObjectId={selectedObjectId}
+              lastAbsorbed={lastAbsorbed}
               onActivate={openEditor}
             />
             <ElevationRun
@@ -224,6 +237,7 @@ export function WallElevation({
               designIntent={designIntent}
               labelSide="below"
               selectedObjectId={selectedObjectId}
+              lastAbsorbed={lastAbsorbed}
               onActivate={openEditor}
             />
             <g stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
@@ -245,8 +259,9 @@ export function WallElevation({
       </svg>
 
       {canEdit && dispatch && wall && editingSegment && (
-        <WidthChainEditor
+        <SegmentEditorCard
           segment={editingSegment}
+          designIntent={designIntent}
           dispatch={dispatch}
           onClose={() => setEditingId(null)}
         />
@@ -383,6 +398,7 @@ function ElevationRun({
   designIntent,
   labelSide,
   selectedObjectId,
+  lastAbsorbed,
   onActivate
 }: {
   fixedPoints: Round2FixedPoint[];
@@ -392,6 +408,7 @@ function ElevationRun({
   designIntent?: Round2DesignIntent;
   labelSide: "above" | "below";
   selectedObjectId: string | null;
+  lastAbsorbed?: Round2AbsorbedChange | null;
   onActivate: (segment: WallSegment) => void;
 }) {
   const widthsPx = segments.map(
@@ -565,6 +582,51 @@ function ElevationRun({
                 </text>
               </g>
             )}
+            {lastAbsorbed?.segmentId === segment.id && (
+              <g
+                key={`absorb-${lastAbsorbed.token}`}
+                data-elevation-layer="absorb-pulse"
+                className="pointer-events-none"
+              >
+                <rect
+                  x={x}
+                  y={y}
+                  width={Math.max(8, width)}
+                  height={height}
+                  fill="#e8b93b"
+                  opacity="0"
+                >
+                  <animate
+                    attributeName="opacity"
+                    values="0;0.4;0;0.35;0"
+                    dur="1.5s"
+                    repeatCount="1"
+                    fill="freeze"
+                  />
+                </rect>
+                <text
+                  data-absorb-delta={lastAbsorbed.deltaSixteenths}
+                  x={x + width / 2}
+                  y={y - 6}
+                  textAnchor="middle"
+                  fontFamily="var(--studio-mono)"
+                  fontSize="11"
+                  fontWeight="bold"
+                  fill="#9a6b00"
+                >
+                  {`${lastAbsorbed.deltaSixteenths > 0 ? "+" : "−"}${formatSixteenths(
+                    Math.abs(lastAbsorbed.deltaSixteenths)
+                  )}`}
+                  <animate
+                    attributeName="opacity"
+                    values="1;1;0"
+                    dur="2.2s"
+                    repeatCount="1"
+                    fill="freeze"
+                  />
+                </text>
+              </g>
+            )}
           </g>
         );
       })}
@@ -732,45 +794,95 @@ function AccessoryTag({
   );
 }
 
+const CARD_CHIP_CLASS =
+  "h-7 rounded-[7px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white";
+
+const FACE_OPTIONS: {
+  label: string;
+  doorCount: 0 | 1 | 2;
+  drawerStack: number[];
+}[] = [
+  { label: "1 door", doorCount: 1, drawerStack: [] },
+  { label: "2 doors", doorCount: 2, drawerStack: [] },
+  { label: "2 drawers", doorCount: 0, drawerStack: [1, 1] },
+  { label: "3 drawers", doorCount: 0, drawerStack: [1, 1, 1] }
+];
+
+const ACCESSORY_OPTIONS: FrontAccessory[] = [
+  "trashPullout",
+  "spicePullout",
+  "lazySusan"
+];
+
+export const KIND_OPTIONS: { value: CabinetKind; label: string }[] = [
+  { value: "base", label: "Base" },
+  { value: "tall", label: "Tall" }
+];
+
+export function canEditSegmentKind(segment: WallSegment): boolean {
+  return segment.kind === "cabinet" && segment.tier !== "upper";
+}
+
+function CardSectionLabel({ children }: { children: string }) {
+  return (
+    <span className="mt-2.5 block font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
+      {children}
+    </span>
+  );
+}
+
 /**
- * The width chain is the input: clicking a chain label opens this editor.
- * Everything maps onto the existing constrained actions — width steps and
- * custom widths via STEP_CABINET_WIDTH, 1/16″ nudges via NUDGE_GROUP and
- * filler repositioning via MOVE_FILLER_END.
+ * The single editing entry point: clicking a cabinet or its chain label opens
+ * this card. Cabinets take width steps / custom widths (STEP_CABINET_WIDTH,
+ * absorbed by a same-zone filler), fronts and kinds; fillers are remainder
+ * space, so they expose placement only (SET_FILLER_PLACEMENT) — never a width.
  */
-function WidthChainEditor({
+function SegmentEditorCard({
   segment,
+  designIntent,
   dispatch,
   onClose
 }: {
   segment: WallSegment;
+  designIntent?: Round2DesignIntent;
   dispatch: Dispatch<Round2PrototypeAction>;
   onClose: () => void;
 }) {
   const resizable = segment.kind === "cabinet" || segment.kind === "appliance";
+  const isFiller = segment.kind === "filler";
+  const front = resolveSegmentFront(segment, designIntent);
 
   return (
     <div
-      data-testid="width-chain-editor"
-      className="absolute bottom-3 left-1/2 z-20 w-[300px] -translate-x-1/2 rounded-[12px] border border-studio-line bg-white p-3 shadow-[0_18px_42px_-18px_rgba(20,20,26,0.4)]"
+      data-testid="segment-editor-card"
+      className="absolute bottom-3 left-1/2 z-20 max-h-[calc(100%-84px)] w-[320px] -translate-x-1/2 overflow-y-auto rounded-[12px] border border-studio-line bg-white p-3 shadow-[0_18px_42px_-18px_rgba(20,20,26,0.4)]"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-[10px] font-semibold">
-          {segment.code ?? segment.label} · {formatSixteenths(segment.widthSixteenths)}
+          {segment.code ?? segment.label} ·{" "}
+          {formatSixteenths(segment.widthSixteenths)}
         </span>
-        <button
-          type="button"
-          aria-label="Close width editor"
-          onClick={onClose}
-          className="rounded px-1.5 font-mono text-[11px] text-studio-muted hover:bg-black/5"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1.5">
+          {isFiller && (
+            <span className="rounded-full bg-[#f6ead4] px-2 py-0.5 font-mono text-[7px] tracking-[0.08em] text-[#815416]">
+              REMAINDER · AUTO
+            </span>
+          )}
+          <button
+            type="button"
+            aria-label="Close segment editor"
+            onClick={onClose}
+            className="rounded px-1.5 font-mono text-[11px] text-studio-muted hover:bg-black/5"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {resizable && (
         <>
-          <div className="mt-2 grid grid-cols-5 gap-1">
+          <CardSectionLabel>WIDTH</CardSectionLabel>
+          <div className="mt-1.5 grid grid-cols-5 gap-1">
             {standardWidthOptionsSixteenths().map((width) => (
               <button
                 key={width}
@@ -783,7 +895,7 @@ function WidthChainEditor({
                     widthSixteenths: width
                   })
                 }
-                className="h-7 rounded-[7px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted outline-none transition-colors hover:border-studio-ink aria-pressed:border-studio-ink aria-pressed:bg-studio-ink aria-pressed:text-white"
+                className={CARD_CHIP_CLASS}
               >
                 {width / 16}″
               </button>
@@ -805,64 +917,182 @@ function WidthChainEditor({
         </>
       )}
 
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
-        <button
-          type="button"
-          onClick={() =>
-            dispatch({
-              type: "NUDGE_GROUP",
-              objectId: segment.id,
-              direction: "left"
-            })
-          }
-          className="h-7 rounded-[7px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted hover:border-studio-ink"
-        >
-          ← 1/16″
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            dispatch({
-              type: "NUDGE_GROUP",
-              objectId: segment.id,
-              direction: "right"
-            })
-          }
-          className="h-7 rounded-[7px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted hover:border-studio-ink"
-        >
-          1/16″ →
-        </button>
-      </div>
+      {front && (
+        <>
+          <div className="mt-2.5 flex items-center justify-between">
+            <span className="font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
+              FRONT
+            </span>
+            <span className="font-mono text-[8px] text-studio-muted">
+              {describeFront(front)}
+            </span>
+          </div>
+          <div className="mt-1.5 grid grid-cols-4 gap-1">
+            {FACE_OPTIONS.map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                aria-pressed={
+                  front.doorCount === option.doorCount &&
+                  front.drawerStack.length === option.drawerStack.length
+                }
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SEGMENT_FRONT",
+                    objectId: segment.id,
+                    front: {
+                      doorCount: option.doorCount,
+                      drawerStack: option.drawerStack
+                    }
+                  })
+                }
+                className={CARD_CHIP_CLASS}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            {(["handle", "fingerPull"] as const).map((hardware) => (
+              <button
+                key={hardware}
+                type="button"
+                aria-pressed={front.hardware === hardware}
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SEGMENT_FRONT",
+                    objectId: segment.id,
+                    front: { hardware }
+                  })
+                }
+                className={CARD_CHIP_CLASS}
+              >
+                {hardware === "handle" ? "Handle" : "Finger pull"}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-3 gap-1">
+            {ACCESSORY_OPTIONS.map((accessory) => {
+              const active = front.accessories.includes(accessory);
+              return (
+                <button
+                  key={accessory}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_SEGMENT_FRONT",
+                      objectId: segment.id,
+                      front: {
+                        accessories: active
+                          ? front.accessories.filter(
+                              (item) => item !== accessory
+                            )
+                          : [...front.accessories, accessory]
+                      }
+                    })
+                  }
+                  className={CARD_CHIP_CLASS}
+                >
+                  {ACCESSORY_LABELS[accessory]}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-      {segment.kind === "filler" && (
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({
-                type: "MOVE_FILLER_END",
-                objectId: segment.id,
-                end: "start"
-              })
-            }
-            className="h-7 rounded-[7px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted hover:border-studio-ink"
-          >
-            Move start
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({
-                type: "MOVE_FILLER_END",
-                objectId: segment.id,
-                end: "end"
-              })
-            }
-            className="h-7 rounded-[7px] border border-studio-line bg-white font-mono text-[9px] text-studio-muted hover:border-studio-ink"
-          >
-            Move end
-          </button>
-        </div>
+      {canEditSegmentKind(segment) && (
+        <>
+          <CardSectionLabel>KIND</CardSectionLabel>
+          <div className="mt-1.5 grid grid-cols-3 gap-1">
+            {KIND_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={segment.cabinetKind === option.value}
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SEGMENT_KIND",
+                    objectId: segment.id,
+                    cabinetKind: option.value
+                  })
+                }
+                className={CARD_CHIP_CLASS}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {resizable && (
+        <>
+          <CardSectionLabel>SLIDE GROUP</CardSectionLabel>
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                dispatch({
+                  type: "NUDGE_GROUP",
+                  objectId: segment.id,
+                  direction: "left"
+                })
+              }
+              className={CARD_CHIP_CLASS}
+            >
+              ← 1/16″
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                dispatch({
+                  type: "NUDGE_GROUP",
+                  objectId: segment.id,
+                  direction: "right"
+                })
+              }
+              className={CARD_CHIP_CLASS}
+            >
+              1/16″ →
+            </button>
+          </div>
+        </>
+      )}
+
+      {isFiller && (
+        <>
+          <p className="mt-2 text-[9.5px] leading-4 text-studio-muted">
+            Remainder space: its width is wall length minus the cabinets and
+            settles automatically. Choose where it sits instead.
+          </p>
+          <CardSectionLabel>PLACEMENT</CardSectionLabel>
+          <div className="mt-1.5 grid grid-cols-3 gap-1">
+            {(
+              [
+                { placement: "start", label: "◀ Left end" },
+                { placement: "split", label: "Split ends" },
+                { placement: "end", label: "Right end ▶" }
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.placement}
+                type="button"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_FILLER_PLACEMENT",
+                    objectId: segment.id,
+                    placement: option.placement
+                  })
+                }
+                className={CARD_CHIP_CLASS}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import {
   reduceRound2Prototype
 } from "./round2-state";
 import { ROUND1_REFERENCE_FIXTURE } from "./round2-fixtures";
+import { hasBlockingDecisions } from "./model/round2-model";
 import type {
   Round1ReferenceSource,
   Round2PrototypeState
@@ -334,6 +335,82 @@ describe("Round 2 prototype state", () => {
     expect(tierTotal).toBe(wall.lengthSixteenths);
     expect(adjusted.proposalVersion).toBe(initial.proposalVersion + 1);
     expect(adjusted.selectedObjectId).toBe(selected.id);
+  });
+
+  test("records which filler absorbed a width step and clears it on selection", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const shrunk = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: selected.widthSixteenths - 16
+    });
+
+    expect(shrunk.lastAbsorbed).not.toBeNull();
+    expect(shrunk.lastAbsorbed?.segmentId).not.toBe(selected.id);
+    expect(shrunk.lastAbsorbed?.deltaSixteenths).toBe(16);
+    const absorber = segmentById(shrunk, shrunk.lastAbsorbed!.segmentId);
+    expect(absorber?.kind).toBe("filler");
+
+    const reselected = reduceRound2Prototype(shrunk, {
+      type: "SELECT_WALL",
+      wall: selected.wallId
+    });
+    expect(reselected.lastAbsorbed).toBeNull();
+  });
+
+  test("repositions remainder space with SET_FILLER_PLACEMENT and keeps runs closed", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const shrunk = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: selected.widthSixteenths - 16
+    });
+    const fillerId = shrunk.lastAbsorbed!.segmentId;
+
+    const placed = reduceRound2Prototype(shrunk, {
+      type: "SET_FILLER_PLACEMENT",
+      objectId: fillerId,
+      placement: "split"
+    });
+    const wall = placed.model!.walls.find(
+      (item) => item.id === selected.wallId
+    )!;
+    const tierTotal = wall.segments
+      .filter((item) => item.tier === selected.tier)
+      .reduce((sum, item) => sum + item.widthSixteenths, 0);
+
+    expect(tierTotal).toBe(wall.lengthSixteenths);
+    expect(placed.proposalVersion).toBe(shrunk.proposalVersion + 1);
+    expect(placed.lastAbsorbed).toBeNull();
+  });
+
+  test("hard-gates a blocking overflow: cannot resolve or reach drawings", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const overflowed = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: 400 * 16 // far beyond the wall length
+    });
+
+    expect(hasBlockingDecisions(overflowed.model)).toBe(true);
+    expect(overflowed.proposalStatus).toBe("NEEDS_DECISION");
+
+    // "Resolve decision" cannot acknowledge a blocking geometry error.
+    const resolved = reduceRound2Prototype(overflowed, {
+      type: "RESOLVE_DESIGN_DECISION"
+    });
+    expect(resolved.proposalStatus).toBe("NEEDS_DECISION");
+
+    // The drawings tab stays locked while the overflow is unresolved.
+    const nav = reduceRound2Prototype(overflowed, {
+      type: "SET_TASK",
+      task: "DRAWINGS"
+    });
+    expect(nav.task).toBe(overflowed.task);
+    expect(nav.task).not.toBe("DRAWINGS");
   });
 });
 

@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 import type { Round2Model, Round2Wall } from "./round2-model";
 import {
   heightProfileTotal,
-  moveFillerEnd,
   nudgeGroup,
+  setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
   setSegmentKind,
@@ -61,31 +61,92 @@ describe("Round 2 constrained adjustments", () => {
     expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
   });
 
-  test("moves selected filler to the requested end of its tier", () => {
-    const adjusted = moveFillerEnd(
+  test("rejects nudging a filler: remainder space repositions via placement", () => {
+    const model = modelWithWall(wallWithSegments());
+    expect(nudgeGroup(model, "a-base-filler", "left")).toBe(model);
+  });
+
+  test("placement start merges every zone filler into one at the zone start", () => {
+    const adjusted = setFillerPlacement(
       modelWithWall(wallWithSegments()),
       "a-base-filler",
       "start"
+    );
+    const fillers = adjusted.walls[0].segments.filter(
+      (segment) => segment.kind === "filler"
     );
     const baseIds = adjusted.walls[0].segments
       .filter((segment) => segment.tier === "base")
       .map((segment) => segment.id);
 
+    expect(fillers).toHaveLength(1);
+    expect(fillers[0].widthSixteenths).toBe(6 * 16);
     expect(baseIds[0]).toBe("a-base-filler");
+    expect(wallTierTotal(adjusted.walls[0], "base")).toBe(
+      adjusted.walls[0].lengthSixteenths
+    );
   });
 
-  test("sets a base cabinet kind to sink without changing width", () => {
-    const adjusted = setSegmentKind(
+  test("placement end merges the remainder at the zone end", () => {
+    const adjusted = setFillerPlacement(
       modelWithWall(wallWithSegments()),
-      "a-base-cabinet",
-      "sink"
+      "a-base-filler",
+      "end"
     );
-    const segment = adjusted.walls[0].segments.find(
-      (item) => item.id === "a-base-cabinet"
+    const baseIds = adjusted.walls[0].segments
+      .filter((segment) => segment.tier === "base")
+      .map((segment) => segment.id);
+
+    expect(baseIds.at(-1)).toBe("a-base-filler");
+    expect(
+      adjusted.walls[0].segments.filter(
+        (segment) => segment.kind === "filler"
+      )
+    ).toHaveLength(1);
+  });
+
+  test("placement split halves the remainder across both zone ends", () => {
+    const adjusted = setFillerPlacement(
+      modelWithWall(wallWithSegments()),
+      "a-base-filler",
+      "split"
+    );
+    const base = adjusted.walls[0].segments.filter(
+      (segment) => segment.tier === "base"
     );
 
-    expect(segment?.cabinetKind).toBe("sink");
-    expect(segment?.label).toBe("SB30");
+    expect(base[0].kind).toBe("filler");
+    expect(base.at(-1)?.kind).toBe("filler");
+    expect(base[0].widthSixteenths).toBe(3 * 16);
+    expect(base.at(-1)?.widthSixteenths).toBe(3 * 16);
+    expect(wallTierTotal(adjusted.walls[0], "base")).toBe(
+      adjusted.walls[0].lengthSixteenths
+    );
+  });
+
+  test("does not convert ordinary base cabinets into sink cabinets", () => {
+    const model = modelWithWall(wallWithSegments());
+
+    const adjusted = setSegmentKind(model, "a-base-cabinet", "sink");
+
+    expect(adjusted).toBe(model);
+  });
+
+  test("does not convert layout-sourced appliance reservations into cabinet kinds", () => {
+    const wall = wallWithSegments();
+    wall.segments[1] = {
+      ...wall.segments[1],
+      id: "a-dishwasher",
+      kind: "appliance",
+      label: "DW24",
+      cabinetKind: undefined,
+      sourceFixedPointId: "top-appliance-dishwasher"
+    };
+    const model = modelWithWall(wall);
+
+    const adjusted = setSegmentKind(model, "a-dishwasher", "base");
+
+    expect(adjusted).toBe(model);
   });
 
   test("accepts a custom width from the width-chain input", () => {
@@ -170,7 +231,7 @@ describe("Round 2 constrained adjustments", () => {
     ).toHaveLength(0);
   });
 
-  test("describes the configured 3/4-inch filler minimum", () => {
+  test("describes the configured three-inch filler minimum", () => {
     const wall = wallWithSegments();
     wall.segments = wall.segments.map((segment) =>
       segment.id === "a-base-filler"
@@ -181,7 +242,7 @@ describe("Round 2 constrained adjustments", () => {
 
     const updated = updateModelDecisions(modelWithWall(wall));
 
-    expect(updated.decisionItems[0].body).toContain("3/4");
+    expect(updated.decisionItems[0].body).toContain("3");
   });
 });
 

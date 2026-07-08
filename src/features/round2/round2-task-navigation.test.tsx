@@ -14,4 +14,19 @@ describe("Round2TaskNavigation", () => {
     expect(html).toContain("Drawings &amp; Review");
     expect(html).toContain("DESIGNER");
   });
+
+  test("locks Drawings with a blocking reason when the proposal is blocked", () => {
+    const html = renderToStaticMarkup(
+      <Round2TaskNavigation
+        task="PROPOSAL"
+        onTaskChange={() => {}}
+        drawingsBlocked
+      />
+    );
+
+    expect(html).toContain('title="Resolve blocking issues to unlock"');
+    expect(html).toContain("BLOCKED");
+    // Only Drawings is blocked; Field Measurement and Proposal stay open.
+    expect(html).not.toContain('title="Submit field measurement to unlock"');
+  });
 });

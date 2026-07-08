@@ -13,7 +13,7 @@ import {
 } from "./round2-model";
 
 export type NudgeDirection = "left" | "right";
-export type FillerEnd = "start" | "end";
+export type FillerPlacement = "start" | "end" | "split";
 
 export function standardWidthOptionsSixteenths(): number[] {
   return [...CABINET_STANDARDS.base.widthsSixteenths];
@@ -68,7 +68,9 @@ export function nudgeGroup(
   amountSixteenths = 1
 ): Round2Model {
   const context = findSegmentContext(model, segmentId);
-  if (!context || context.segment.kind === "opening") return model;
+  // Fillers are computed remainder space: they reposition via
+  // setFillerPlacement, never nudge. Only cabinet/appliance groups slide.
+  if (!context || !canResizeSegment(context.segment)) return model;
 
   const segments = [...context.wall.segments];
   let targetIndex = segments.findIndex((segment) => segment.id === segmentId);
@@ -89,52 +91,74 @@ export function nudgeGroup(
   return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
 }
 
-export function moveFillerEnd(
+/**
+ * Fillers are remainder space, so their width is never set directly. This
+ * repositions the remainder within its zone instead: all fillers of the zone
+ * merge into one at the zone start or end, or split evenly across both ends.
+ */
+export function setFillerPlacement(
   model: Round2Model,
   segmentId: string,
-  end: FillerEnd
+  placement: FillerPlacement
 ): Round2Model {
   const context = findSegmentContext(model, segmentId);
   if (!context || context.segment.kind !== "filler") return model;
 
-  const segments = [...context.wall.segments];
-  const currentIndex = segments.findIndex((segment) => segment.id === segmentId);
-  
-  let leftBound = -1;
-  let rightBound = segments.length;
-  
-  for (let i = currentIndex - 1; i >= 0; i--) {
-    if (segments[i].tier === context.segment.tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
-      leftBound = i;
-      break;
-    }
-  }
-  for (let i = currentIndex + 1; i < segments.length; i++) {
-    if (segments[i].tier === context.segment.tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
-      rightBound = i;
-      break;
-    }
+  const tier = context.segment.tier;
+  const source = context.wall.segments;
+  const currentIndex = source.findIndex((segment) => segment.id === segmentId);
+  const bounds = zoneBounds(source, currentIndex, tier);
+  const isZoneFiller = (segment: WallSegment, index: number) =>
+    segment.kind === "filler" &&
+    segment.tier === tier &&
+    index > bounds.left &&
+    index < bounds.right;
+
+  const zoneFillers = source.filter(isZoneFiller);
+  const totalWidth = zoneFillers.reduce(
+    (sum, segment) => sum + segment.widthSixteenths,
+    0
+  );
+  if (totalWidth <= 0) return model;
+
+  // Rebuild the run without the zone fillers, remembering where the zone's
+  // same-tier run starts and ends so the remainder can be reinserted there.
+  const remaining: WallSegment[] = [];
+  let insertStart = -1;
+  let insertEnd = -1;
+  source.forEach((segment, index) => {
+    if (isZoneFiller(segment, index)) return;
+    const inZoneSameTier =
+      segment.tier === tier && index > bounds.left && index < bounds.right;
+    if (inZoneSameTier && insertStart === -1) insertStart = remaining.length;
+    remaining.push(segment);
+    if (inZoneSameTier) insertEnd = remaining.length;
+  });
+  if (insertStart === -1) {
+    // Zone holds nothing but the fillers themselves: placement is moot.
+    insertStart = Math.min(currentIndex, remaining.length);
+    insertEnd = insertStart;
   }
 
-  const [segment] = segments.splice(currentIndex, 1);
-  rightBound--; // Adjust for the removed element
-  
-  const zoneIndices = segments
-    .map((item, index) => ({ item, index }))
-    .filter(
-      ({ item, index }) => 
-        item.tier === segment.tier && 
-        index > leftBound && 
-        index < rightBound
-    )
-    .map(({ index }) => index);
+  const template =
+    zoneFillers.find((segment) => segment.id === segmentId) ?? zoneFillers[0];
+  const makeFiller = (id: string, widthSixteenths: number): WallSegment =>
+    withLabel({ ...template, id, widthSixteenths });
 
-  if (zoneIndices.length === 0) {
-    segments.splice(currentIndex, 0, segment);
-  } else if (end === "start") {
-    segments.splice(zoneIndices[0], 0, segment);
+  const segments = [...remaining];
+  if (placement === "start") {
+    segments.splice(insertStart, 0, makeFiller(template.id, totalWidth));
+  } else if (placement === "end") {
+    segments.splice(insertEnd, 0, makeFiller(template.id, totalWidth));
   } else {
-    segments.splice(zoneIndices[zoneIndices.length - 1] + 1, 0, segment);
+    const startWidth = Math.ceil(totalWidth / 2);
+    // Insert at the end first so the start index stays valid.
+    segments.splice(
+      insertEnd,
+      0,
+      makeFiller(`${template.id}-split`, totalWidth - startWidth)
+    );
+    segments.splice(insertStart, 0, makeFiller(template.id, startWidth));
   }
 
   return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
@@ -147,6 +171,8 @@ export function setSegmentKind(
 ): Round2Model {
   const context = findSegmentContext(model, segmentId);
   if (!context || !canResizeSegment(context.segment)) return model;
+  if (context.segment.kind === "appliance") return model;
+  if (cabinetKind === "sink") return model;
   if (context.segment.tier === "upper" && cabinetKind !== "upper") return model;
   if (context.segment.tier === "base" && cabinetKind === "upper") return model;
 
@@ -363,36 +389,52 @@ function ensureAbsorberFiller(
   return targetIndex + 1;
 }
 
+/**
+ * A zone is the stretch of a tier between blocking segments (openings and
+ * corner gaps): width redistribution never crosses those boundaries.
+ */
+function zoneBounds(
+  segments: WallSegment[],
+  index: number,
+  tier: SegmentTier
+): { left: number; right: number } {
+  const blocks = (segment: WallSegment) =>
+    segment.tier === tier &&
+    (segment.kind === "opening" || segment.kind === "gap");
+
+  let left = -1;
+  let right = segments.length;
+  for (let i = index - 1; i >= 0; i--) {
+    if (blocks(segments[i])) {
+      left = i;
+      break;
+    }
+  }
+  for (let i = index + 1; i < segments.length; i++) {
+    if (blocks(segments[i])) {
+      right = i;
+      break;
+    }
+  }
+  return { left, right };
+}
+
 function nearestFillerIndex(
   segments: WallSegment[],
   tier: SegmentTier,
   targetIndex: number,
   delta: number
 ): number {
-  let leftBound = -1;
-  let rightBound = segments.length;
-  
-  for (let i = targetIndex - 1; i >= 0; i--) {
-    if (segments[i].tier === tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
-      leftBound = i;
-      break;
-    }
-  }
-  for (let i = targetIndex + 1; i < segments.length; i++) {
-    if (segments[i].tier === tier && (segments[i].kind === "opening" || segments[i].kind === "gap")) {
-      rightBound = i;
-      break;
-    }
-  }
+  const bounds = zoneBounds(segments, targetIndex, tier);
 
   const candidates = segments
     .map((segment, index) => ({ segment, index }))
     .filter(
-      ({ segment, index }) => 
-        segment.tier === tier && 
+      ({ segment, index }) =>
+        segment.tier === tier &&
         segment.kind === "filler" &&
-        index > leftBound &&
-        index < rightBound
+        index > bounds.left &&
+        index < bounds.right
     );
     
   const withCapacity =
