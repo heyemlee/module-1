@@ -551,6 +551,46 @@ describe("WallElevation", () => {
     }
   });
 
+  test("keeps codes out of the selected appliance editor while preserving width controls", () => {
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          {
+            ...cabinet("range", 30 * 16, "appliance"),
+            code: "RNG30",
+            label: "RNG30"
+          },
+          {
+            ...cabinet("dishwasher", 24 * 16, "appliance"),
+            code: "DW24",
+            label: "DW24"
+          },
+          {
+            ...cabinet("corner-return", 12 * 16, "gap"),
+            code: "#1",
+            label: "#1",
+            sourceCornerId: "TL"
+          }
+        ])}
+        selectedObjectId="range"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const editorCard = html.slice(
+      html.indexOf('<div data-testid="segment-editor-card"')
+    );
+
+    expect(editorCard).toContain('data-testid="segment-editor-card"');
+    expect(editorCard).toContain("WIDTH");
+    expect(editorCard).toContain('aria-label="Custom width"');
+    for (const code of ["#1", "RNG30", "DW24"]) {
+      expect(editorCard).not.toContain(code);
+    }
+  });
+
   test("only exposes cabinet kind editing for non-appliance base segments", () => {
     expect(KIND_OPTIONS.map((option) => option.value)).toEqual([
       "base",

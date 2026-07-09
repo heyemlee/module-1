@@ -145,7 +145,7 @@ export function WallElevation({
   dispatch?: Dispatch<Round2PrototypeAction>;
 }) {
   const wall = findWall(model, wallId);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(selectedObjectId);
   const total =
     wall?.lengthSixteenths ??
     wall?.segments.reduce((sum, segment) => sum + segment.widthSixteenths, 0) ??
@@ -345,7 +345,11 @@ export function WallElevation({
         )}
       </svg>
 
-      {canEdit && dispatch && wall && editingSegment && (
+      {canEdit &&
+        dispatch &&
+        wall &&
+        editingSegment &&
+        canOpenSegmentEditor(editingSegment) && (
         <SegmentEditorCard
           segment={editingSegment}
           designIntent={designIntent}
@@ -1450,7 +1454,7 @@ function SegmentEditorCard({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-[10px] font-semibold">
-          {segment.code ?? segment.label} ·{" "}
+          SELECTED UNIT ·{" "}
           {formatSixteenths(segment.widthSixteenths)}
         </span>
         <div className="flex items-center gap-1.5">
@@ -1512,7 +1516,7 @@ function SegmentEditorCard({
                 });
               }
             }}
-            ariaLabel={`Custom width for ${segment.code ?? segment.label}`}
+            ariaLabel="Custom width"
           />
         </>
       )}
