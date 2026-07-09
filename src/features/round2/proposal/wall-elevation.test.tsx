@@ -78,12 +78,13 @@ describe("WallElevation", () => {
       { ...cabinet("upper-right", 57 * 16), tier: "upper" }
     ]);
     const html = render(model);
+    const ceiling = ceilingLineY(html);
 
     // CEILING_Y is 62: every dimension drawn above the run must clear it.
     expect(overallLabelY(html)).toBeLessThan(30);
     expect(overallGuideY(html)).toBeLessThan(40);
     expect(chainLabelY(html, "upper-center")).toBeLessThan(50);
-    expect(chainGuideY(html, "upper-center")).toBeLessThan(55);
+    expect(chainGuideTick(html, "upper-center").endY).toBeLessThan(ceiling);
   });
 
   test("keeps all three upper corner dimension rows above the ceiling line", () => {
@@ -146,6 +147,15 @@ describe("WallElevation", () => {
     for (const segmentId of ["upper-left", "upper-right", "base-left", "base-right"]) {
       expect(html).toContain(`data-chain-guide="${segmentId}"`);
     }
+  });
+
+  test("extends every horizontal dimension guide endpoint by eight SVG units", () => {
+    const html = renderCornerModel("A", { includeUpperCorner: true });
+
+    expect(tagFor(html, "path", 'data-chain-guide="overall"')).toContain("V 37");
+    expect(tagFor(html, "path", 'data-chain-guide="a-upper-corner-ls"')).toMatch(/V 55/);
+    expect(tagFor(html, "path", 'data-chain-guide="a-corner-ls"')).toMatch(/V 350/);
+    expect(tagFor(html, "path", 'data-corner-breakdown-guide="a-upper-corner-ls"')).toMatch(/V 77/);
   });
 
   test("mirrors left-wall elevations so the upper corner reads on the right", () => {

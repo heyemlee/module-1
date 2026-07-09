@@ -51,6 +51,7 @@ const IN_BOX_LABEL_PADDING_PX = 2;
 const DIMENSION_COLOR = "#079ca5";
 const DIMENSION_FONT_SIZE = 11;
 const DIMENSION_STROKE_WIDTH = 2;
+const WIDTH_CHAIN_EXTENSION_LENGTH = 8;
 const OVERALL_DIMENSION_LABEL_Y = 19;
 const OVERALL_DIMENSION_GUIDE_Y = 29;
 // Three upper dimension rows occupy y=19, 42, and 64. Keeping this row
@@ -214,7 +215,7 @@ export function WallElevation({
         <g data-elevation-layer="dimensions" stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
           <path
             data-chain-guide="overall"
-            d={`M 70 ${OVERALL_DIMENSION_GUIDE_Y - 6} V ${OVERALL_DIMENSION_GUIDE_Y + 6} M 570 ${OVERALL_DIMENSION_GUIDE_Y - 6} V ${OVERALL_DIMENSION_GUIDE_Y + 6} M 70 ${OVERALL_DIMENSION_GUIDE_Y} H 570`}
+            d={`M 70 ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M 570 ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M 70 ${OVERALL_DIMENSION_GUIDE_Y} H 570`}
             strokeWidth={DIMENSION_STROKE_WIDTH}
           />
           <text
@@ -563,8 +564,8 @@ function ElevationRun({
                   data-chain-guide={segment.id}
                   d={
                     labelSide === "above"
-                      ? `M ${x} ${guideY} V ${guideY + 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + 4} V ${guideY}`
-                      : `M ${x} ${guideY} V ${guideY - 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - 4} V ${guideY}`
+                      ? `M ${x} ${guideY} V ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
+                      : `M ${x} ${guideY} V ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
                   }
                   stroke={DIMENSION_COLOR}
                   strokeWidth={DIMENSION_STROKE_WIDTH}
@@ -775,8 +776,8 @@ function ElevationRun({
                   data-chain-guide={segment.id}
                   d={
                     labelSide === "above"
-                      ? `M ${x} ${guideY} V ${guideY + 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + 4} V ${guideY}`
-                      : `M ${x} ${guideY} V ${guideY - 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - 4} V ${guideY}`
+                      ? `M ${x} ${guideY} V ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
+                      : `M ${x} ${guideY} V ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
                   }
                   stroke={DIMENSION_COLOR}
                   strokeWidth={DIMENSION_STROKE_WIDTH}
@@ -966,7 +967,7 @@ function CornerHostBreakdownDimensions({
   const guideY =
     labelSide === "above" ? UPPER_CHAIN_LABEL_Y + 27 : FLOOR_Y + 34;
   const labelY = labelSide === "above" ? guideY - 5 : guideY + 10;
-  const tickEndY = guideY + (labelSide === "above" ? 4 : -4);
+  const tickEndY = guideY + (labelSide === "above" ? WIDTH_CHAIN_EXTENSION_LENGTH : -WIDTH_CHAIN_EXTENSION_LENGTH);
 
   return (
     <g
