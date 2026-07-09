@@ -544,7 +544,7 @@ function ElevationRun({
               onClick={() => onActivate(segment)}
               className="cursor-pointer"
             >
-              <title>{segment.code ?? segment.label}</title>
+              <title>Corner return</title>
               <CornerReturnSection
                 x={x}
                 y={y}
@@ -660,7 +660,7 @@ function ElevationRun({
             <clipPath id={clipId}>
               <rect x={x} y={y} width={Math.max(8, width)} height={height} />
             </clipPath>
-            <title>{segment.code ?? segment.label}</title>
+            <title>Wall segment</title>
             <rect
               x={x}
               y={y}

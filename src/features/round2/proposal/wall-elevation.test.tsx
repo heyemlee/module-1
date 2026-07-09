@@ -287,7 +287,7 @@ describe("WallElevation", () => {
     expect(cornerHtml).toContain('data-face="corner-return"');
     expect(cornerHtml).toContain('data-corner-return-profile="true"');
     expect(cornerHtml).toContain('data-corner-return-counter="true"');
-    expect(html).toContain("<title>Corner clearance</title>");
+    expect(html).toContain("<title>Corner return</title>");
     expect(cornerHtml).not.toContain("data-display-label=");
     // Without the paired wall in the model there is no jump target.
     expect(cornerHtml).not.toContain("data-corner-return-tag=");
@@ -534,16 +534,21 @@ describe("WallElevation", () => {
   test("hides cabinet and appliance codes in the proposal elevation", () => {
     const html = render(
       elevationModel([
-        { ...cabinet("cabinet-one", 36 * 16), code: "#1", label: "#1" },
+        {
+          ...cabinet("corner-return", 12 * 16, "gap"),
+          code: "#1",
+          label: "#1",
+          sourceCornerId: "TL"
+        },
         { ...cabinet("range", 30 * 16, "appliance"), code: "RNG30", label: "RNG30" },
         { ...cabinet("dishwasher", 24 * 16, "appliance"), code: "DW24", label: "DW24" }
       ])
     );
 
     expect(html).not.toContain("data-display-label=");
-    expect(html).not.toContain(">#1</text>");
-    expect(html).not.toContain(">RNG30</text>");
-    expect(html).not.toContain(">DW24</text>");
+    for (const code of ["#1", "RNG30", "DW24"]) {
+      expect(html).not.toContain(code);
+    }
   });
 
   test("only exposes cabinet kind editing for non-appliance base segments", () => {
