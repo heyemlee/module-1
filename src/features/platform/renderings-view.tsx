@@ -9,6 +9,7 @@ import {
   StudioSection
 } from "./studio-page";
 import { RenderingsGallery, type RenderingCard } from "./renderings-gallery";
+import { renderingImageUrl } from "./rendering-image-url";
 
 const STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -17,6 +18,8 @@ const STYLE_LABELS: Record<string, string> = {
 
 type RenderingHistoryItem = {
   id: string;
+  /** Snapshot the image was generated from — the layout a basis lock pins. */
+  round1SnapshotId: string;
   size: string;
   createdAt: string;
   confirmationCount: number;
@@ -65,8 +68,8 @@ export function RenderingsView({
         data-testid="design-basis-bar"
         className="mt-6 flex flex-col gap-3 rounded-studio-panel border border-studio-line bg-white/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-studio-ink text-white">
+        <div className="flex items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-studio-ink text-white">
             <LockClosedIcon aria-hidden />
           </span>
           {basis ? (
@@ -90,11 +93,6 @@ export function RenderingsView({
             <div>
               <p className="text-[13px] font-semibold text-studio-ink">
                 No design basis yet
-              </p>
-              <p className="mt-0.5 text-[12px] text-studio-muted">
-                Lock the rendering the customer confirmed. That packages its
-                layout snapshot, style and color as the basis technical design
-                starts from.
               </p>
             </div>
           )}
@@ -140,20 +138,16 @@ export function RenderingsView({
             const colorName = prefs
               ? colorNameById.get(prefs.doorColorId) ?? "Unknown color"
               : "Finish not recorded";
-            const style = prefs
-              ? STYLE_LABELS[prefs.cabinetStyle] ?? prefs.cabinetStyle
-              : null;
             const dateObj = new Date(rendering.createdAt);
 
             return {
               id: rendering.id,
-              imageUrl: `/api/projects/${project.id}/round1/renderings/${rendering.id}/image`,
+              layoutId: rendering.round1SnapshotId,
+              imageUrl: renderingImageUrl(project.id, rendering.id),
               colorName,
-              style,
               createdAt: rendering.createdAt,
               dateLabel: dateObj.toLocaleString(),
               downloadName: `rendering_${project.projectName.replace(/\s+/g, "_")}_${dateObj.getTime()}.png`,
-              confirmationCount: rendering.confirmationCount,
               lockable: prefs !== null
             };
           })}

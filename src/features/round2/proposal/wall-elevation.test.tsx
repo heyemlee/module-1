@@ -86,6 +86,21 @@ describe("WallElevation", () => {
     expect(chainGuideY(html, "upper-center")).toBeLessThan(55);
   });
 
+  test("keeps all three upper corner dimension rows above the ceiling line", () => {
+    const html = renderCornerModel("A", { includeUpperCorner: true });
+    const cornerHtml = segmentMarkup(html, "a-upper-corner-ls");
+    const ceiling = ceilingLineY(html);
+
+    expect(overallLabelY(html)).toBeLessThan(ceiling);
+    expect(chainLabelY(html, "a-upper-corner-ls")).toBeLessThan(ceiling);
+    expect(cornerBreakdownLabelYs(cornerHtml)).toEqual(
+      expect.arrayContaining([expect.any(Number)])
+    );
+    expect(cornerBreakdownLabelYs(cornerHtml).every((y) => y < ceiling)).toBe(
+      true
+    );
+  });
+
   test("points upper chain guide ticks toward the cabinets opposite the base guide", () => {
     const model = elevationModel([
       { ...cabinet("upper-wide", 60 * 16), tier: "upper" },
@@ -229,40 +244,203 @@ describe("WallElevation", () => {
 
     expect(faceHtml).not.toContain('stroke="#e12821"');
     expect(faceHtml).toContain('stroke="#a7aaa5"');
-    expect(faceHtml).toContain("M 318 230 L 73 276.5 L 318 323");
-    expect(faceHtml).toContain("M 322 230 L 567 276.5 L 322 323");
-    expect(faceHtml).not.toContain("M 73 230 L 318 276.5 L 73 323");
+    expect(faceHtml).toContain("M 318 250 L 73 296.5 L 318 343");
+    expect(faceHtml).toContain("M 322 250 L 567 296.5 L 322 343");
+    expect(faceHtml).not.toContain("M 73 250 L 318 296.5 L 73 343");
   });
 
-  test("uses compact in-box labels for narrow corner clearance segments", () => {
+  test("does not render door swing lines on a corner cabinet", () => {
+    const html = render(
+      elevationModel([
+        {
+          ...cabinet("lazy-susan", 36 * 16),
+          cabinetKind: "corner"
+        }
+      ])
+    );
+
+    expect(segmentMarkup(html, "lazy-susan")).not.toContain('data-face="');
+  });
+
+  test("renders corner reservations as sectioned returns, not empty boxes", () => {
     const model = elevationModel([
       {
-        ...cabinet("corner-clearance", 12 * 16, "gap"),
+        ...cabinet("corner-clearance", 24 * 16, "gap"),
         label: "Corner clearance",
-        sourceCornerId: "TL"
-      },
-      {
-        ...cabinet("blind-corner", 12 * 16, "gap"),
-        label: "Blind corner",
         sourceCornerId: "TL"
       },
       cabinet("wide-1", 102 * 16)
     ]);
     const html = render(model);
+    const cornerHtml = segmentMarkup(html, "corner-clearance");
 
-    expect(html).toContain('data-display-label="CLEAR"');
-    expect(html).toContain('data-display-label="BLIND"');
+    expect(cornerHtml).toContain('data-face="corner-return"');
+    expect(cornerHtml).toContain('data-corner-return-profile="true"');
+    expect(cornerHtml).toContain('data-corner-return-counter="true"');
     expect(html).toContain("<title>Corner clearance</title>");
-    expect(html).toContain("<title>Blind corner</title>");
-    for (const label of ["CLEAR", "BLIND"]) {
-      expect(html).toMatch(
-        new RegExp(
-          `data-display-label="${label}"[^>]*font-size="8"[^>]*letter-spacing="0.08em"[^>]*fill="#5d6b64"`
-        )
-      );
-    }
-    expect(html).not.toMatch(/<text[^>]*>Corner clearance<\/text>/);
-    expect(html).not.toMatch(/<text[^>]*>Blind corner<\/text>/);
+    expect(cornerHtml).not.toContain("data-display-label=");
+    // Without the paired wall in the model there is no jump target.
+    expect(cornerHtml).not.toContain("data-corner-return-tag=");
+  });
+
+  test("renders a full base cabinet chain for a corner return", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("ls-return", 36 * 16, "gap"),
+        label: "LS36 return",
+        sourceCornerId: "TL"
+      },
+      cabinet("wide-1", 84 * 16)
+    ]);
+    const html = render(model);
+
+    const total = tagFor(html, "text", 'data-chain-label="ls-return"');
+    const returnHtml = segmentMarkup(html, "ls-return");
+
+    expect(total).toContain('fill="#079ca5"');
+    expect(returnHtml).toContain(">36″</text>");
+    expect(returnHtml).toContain('data-corner-breakdown="ls-return"');
+    expect(returnHtml).toContain(">24″</text>");
+    expect(returnHtml).toContain(">12″</text>");
+  });
+
+  test("renders a full upper cabinet chain for a corner return", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("upper-return", 36 * 16, "gap"),
+        tier: "upper",
+        label: "LS36 return",
+        sourceCornerId: "TL"
+      },
+      { ...cabinet("upper-wide", 84 * 16), tier: "upper" }
+    ]);
+
+    const html = render(model);
+    const total = tagFor(html, "text", 'data-chain-label="upper-return"');
+    const returnHtml = segmentMarkup(html, "upper-return");
+
+    expect(returnHtml).toContain(">36″</text>");
+    expect(returnHtml).toContain('data-corner-breakdown="upper-return"');
+    expect(returnHtml).toContain(">12″</text>");
+    expect(returnHtml).toContain(">24″</text>");
+  });
+
+  test("splits the upper return chain at its 12 inch depth", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("upper-return", 36 * 16, "gap"),
+        tier: "upper",
+        label: "LS36 return",
+        sourceCornerId: "TL"
+      },
+      { ...cabinet("upper-wide", 84 * 16), tier: "upper" }
+    ]);
+    const guide = tagFor(
+      render(model),
+      "path",
+      'data-corner-breakdown-guide="upper-return"'
+    );
+
+    expect(referenceGuideSpan(guide)).toBe(50);
+  });
+
+  test("splits the mirrored base return chain before its 24 inch depth", () => {
+    const guide = tagFor(
+      renderCornerModel("B"),
+      "path",
+      'data-corner-breakdown-guide="b-ls-return"'
+    );
+
+    expect(referenceGuideSpan(guide)).toBe(100);
+  });
+
+  test("draws the corner return without a cross-wall text tag", () => {
+    const html = renderCornerModel("B");
+
+    expect(html).toContain('data-elevation-layer="inside-corner"');
+    const tag = segmentMarkup(html, "b-ls-return");
+    expect(tag).not.toContain("data-corner-return-tag=");
+    expect(tag).not.toContain("SEE WALL");
+    expect(tag).not.toMatch(/<text[^>]*>LS36<\/text>/);
+  });
+
+  test("renders the corner return remainder as a visible cabinet face", () => {
+    const html = renderCornerModel("B");
+    const cornerHtml = segmentMarkup(html, "b-ls-return");
+
+    expect(cornerHtml).toContain('data-corner-return-visible-face="true"');
+    expect(cornerHtml).not.toContain('data-face="double-door"');
+    expect(cornerHtml).not.toContain('data-face="single-door"');
+  });
+
+  test("hugs the sectioned profile against the mirrored corner side", () => {
+    const html = renderCornerModel("B");
+    const cornerHtml = segmentMarkup(html, "b-ls-return");
+
+    // Wall B is a LEFT wall: the run mirrors, so its start-of-run corner
+    // reads on the right and the 24″ section profile must hug that edge.
+    const rect = cornerHtml.match(/<rect x="([^"]+)" y="[^"]+" width="([^"]+)"/);
+    expect(rect).not.toBeNull();
+    const right = Number(rect?.[1]) + Number(rect?.[2]);
+    const profile = tagFor(
+      cornerHtml,
+      "path",
+      'data-corner-return-profile="true"'
+    );
+    const start = profile.match(/d="M ([\d.]+) /);
+    expect(start).not.toBeNull();
+    expect(Math.abs(Number(start?.[1]) - right)).toBeLessThan(1);
+  });
+
+  test("sections the adjacent run over the hosting wall's corner cabinet", () => {
+    const html = renderCornerModel("A");
+
+    // Wall A hosts the LS36: the Wall B run crosses its picture plane at the
+    // corner, so a base (24″) and upper (12″) side profile overlay the run.
+    expect(html).toContain('data-elevation-layer="corner-side-profile"');
+    expect(html).toContain('data-corner-side-profile="base"');
+    expect(html).toContain('data-corner-side-profile="upper"');
+    expect(html).toContain('data-corner-side-profile="counter"');
+    // The secondary wall draws its section inside the gap, not as an overlay.
+    expect(renderCornerModel("B")).not.toContain(
+      'data-corner-side-profile="base"'
+    );
+  });
+
+  test("keeps the host wall corner cabinet free of door swing linework", () => {
+    const html = renderCornerModel("A");
+    const cornerHtml = segmentMarkup(html, "a-corner-ls");
+
+    expect(cornerHtml).not.toContain('data-face="corner-front"');
+    expect(cornerHtml).not.toContain('data-face="double-door"');
+    expect(cornerHtml).not.toContain('data-face="single-door"');
+    // Wall A: 66″ run → LS36 spans x 70–342.7 with a 181.8px overlap; the
+    // label must sit in the visible remainder (center ≈ 297), not box center.
+    const label = tagFor(cornerHtml, "text", 'data-display-label="LS36"');
+    const labelX = Number(label.match(/\sx="([^"]+)"/)?.[1]);
+    expect(labelX).toBeGreaterThan(250);
+  });
+
+  test("splits the hosted base corner dimension into 24 inch depth and 12 inch remainder", () => {
+    const cornerHtml = segmentMarkup(renderCornerModel("A"), "a-corner-ls");
+
+    expect(cornerHtml).toContain('data-corner-breakdown="a-corner-ls"');
+    expect(cornerHtml).toContain(">24″</text>");
+    expect(cornerHtml).toContain(">12″</text>");
+  });
+
+  test("splits the upper cabinet beside a hosted corner into 12 inch depth and 24 inch remainder", () => {
+    const cornerHtml = segmentMarkup(
+      renderCornerModel("A", { includeUpperCorner: true }),
+      "a-upper-corner-ls"
+    );
+
+    expect(cornerHtml).toContain(
+      'data-corner-breakdown="a-upper-corner-ls"'
+    );
+    expect(cornerHtml).not.toContain('data-face="');
+    expect(cornerHtml).toContain(">12″</text>");
+    expect(cornerHtml).toContain(">24″</text>");
   });
 
   test("does not offer dead corner as a corner setup strategy", () => {
@@ -475,6 +653,71 @@ function render(model: Round2Model): string {
   );
 }
 
+/** L-shape: Wall A (TOP) hosts the lazy Susan, Wall B (LEFT) its return. */
+function renderCornerModel(
+  wallId: string,
+  { includeUpperCorner = false }: { includeUpperCorner?: boolean } = {}
+): string {
+  const primaryBase = [
+    {
+      ...cabinet("a-corner-ls", 36 * 16),
+      cabinetKind: "corner" as const,
+      label: "LS36",
+      sourceCornerId: "TL"
+    },
+    cabinet("a-b30", 30 * 16)
+  ];
+  const primary = includeUpperCorner
+    ? [
+        {
+          ...cabinet("a-upper-corner-ls", 36 * 16),
+          tier: "upper" as const,
+          cabinetKind: "upper" as const,
+          label: "W36"
+        },
+        ...primaryBase
+      ]
+    : primaryBase;
+  const secondary = [
+    {
+      ...cabinet("b-ls-return", 36 * 16, "gap"),
+      wallId: "B",
+      label: "LS36 return",
+      sourceCornerId: "TL"
+    },
+    { ...cabinet("b-b24", 24 * 16), wallId: "B" }
+  ];
+  const model: Round2Model = {
+    ...elevationModel(primary),
+    walls: [
+      {
+        ...elevationModel(primary).walls[0],
+        lengthSixteenths: 66 * 16
+      },
+      {
+        id: "B",
+        label: "B",
+        sourceWall: "LEFT",
+        lengthSixteenths: secondary.reduce(
+          (sum, segment) => sum + segment.widthSixteenths,
+          0
+        ),
+        fixedPoints: [],
+        notes: [],
+        segments: secondary
+      }
+    ]
+  };
+  return renderToStaticMarkup(
+    <WallElevation
+      wallId={wallId}
+      model={model}
+      selectedObjectId={null}
+      onSelect={() => {}}
+    />
+  );
+}
+
 function cabinet(
   id: string,
   widthSixteenths: number,
@@ -540,6 +783,20 @@ function overallGuideY(html: string): number {
   return Number(y?.[1]);
 }
 
+function ceilingLineY(html: string): number {
+  const match = html.match(
+    /<line x1="70" y1="([\d.]+)" x2="570" y2="\1"[^>]*stroke-dasharray="7 5"/
+  );
+  expect(match).not.toBeNull();
+  return Number(match?.[1]);
+}
+
+function cornerBreakdownLabelYs(markup: string): number[] {
+  return [...markup.matchAll(/<text(?=[^>]*data-corner-breakdown-label)[^>]*\sy="([\d.]+)"[^>]*>/g)].map(
+    (match) => Number(match[1])
+  );
+}
+
 function chainGuideTick(
   html: string,
   segmentId: string
@@ -551,6 +808,12 @@ function chainGuideTick(
     startY: Number(match?.[1]),
     endY: Number(match?.[2])
   };
+}
+
+function referenceGuideSpan(tag: string): number {
+  const match = tag.match(/M ([\d.]+) [\d.]+ V [\d.]+ M \1 [\d.]+ H ([\d.]+)/);
+  expect(match).not.toBeNull();
+  return Number(match?.[2]) - Number(match?.[1]);
 }
 
 function tagFor(

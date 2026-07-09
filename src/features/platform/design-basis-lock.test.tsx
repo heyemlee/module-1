@@ -11,24 +11,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("design basis lock", () => {
-  test("requires acknowledging open confirmation items before locking", () => {
-    expect(
-      canConfirmLock({ confirmationCount: 0, acknowledged: false, submitting: false })
-    ).toBe(true);
-    expect(
-      canConfirmLock({ confirmationCount: 2, acknowledged: false, submitting: false })
-    ).toBe(false);
-    expect(
-      canConfirmLock({ confirmationCount: 2, acknowledged: true, submitting: false })
-    ).toBe(true);
-    expect(
-      canConfirmLock({ confirmationCount: 0, acknowledged: true, submitting: true })
-    ).toBe(false);
+  test("keeps locking available unless a request is in flight", () => {
+    expect(canConfirmLock({ submitting: false })).toBe(true);
+    expect(canConfirmLock({ submitting: true })).toBe(false);
   });
 
   test("labels the first lock and subsequent relocks by basis version", () => {
-    expect(lockActionLabel(1)).toBe("Lock as design basis");
-    expect(lockActionLabel(3)).toBe("Relock as basis v3");
+    expect(lockActionLabel(1)).toBe("Lock basis");
+    expect(lockActionLabel(3)).toBe("Relock basis");
   });
 
   test("renders a lock trigger for the first basis and a relock afterwards", () => {
@@ -36,21 +26,17 @@ describe("design basis lock", () => {
       <LockBasisButton
         projectId="p1"
         renderingId="r1"
-        colorName="Natural Oak"
-        styleLabel="European Frameless"
-        confirmationCount={0}
         currentBasis={null}
       />
     );
     expect(first).toContain("Lock basis");
+    expect(first).not.toContain("European Frameless");
+    expect(first).not.toContain("confirmation");
 
     const relock = renderToStaticMarkup(
       <LockBasisButton
         projectId="p1"
         renderingId="r2"
-        colorName="Natural Oak"
-        styleLabel="European Frameless"
-        confirmationCount={0}
         currentBasis={{
           version: 1,
           renderingId: "r1",

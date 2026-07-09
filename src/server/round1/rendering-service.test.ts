@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { describe, expect, test, vi } from "vitest";
 import {
   generatePreliminaryCabinetList,
@@ -20,6 +21,10 @@ import {
   DEFAULT_RENDERING_SIZE,
   generateRound1Rendering
 } from "./rendering-service";
+import {
+  TARGET_RENDERING_HEIGHT,
+  TARGET_RENDERING_WIDTH
+} from "./rendering-image-normalization";
 
 function buildSnapshot(): Round1Snapshot {
   const form = createDefaultShowroomForm();
@@ -56,13 +61,25 @@ const europeanOak: CabinetColor = {
 describe("generateRound1Rendering", () => {
   test("builds the prompt, forwards the reference image, and stamps non-authoritative flags", async () => {
     const calls: GenerateConceptRenderingInput[] = [];
+    const sourceImageBase64 = (
+      await sharp({
+        create: {
+          width: 320,
+          height: 320,
+          channels: 3,
+          background: "#c8a47a"
+        }
+      })
+        .png()
+        .toBuffer()
+    ).toString("base64");
     const adapter: OpenAIImageAdapter = {
       async generateLayoutBackground() {
         throw new Error("not used in this test");
       },
       async generateConceptRendering(input) {
         calls.push(input);
-        return { model: "gpt-image-test", imageBase64: "rendered" };
+        return { model: "gpt-image-test", imageBase64: sourceImageBase64 };
       }
     };
 
@@ -78,7 +95,9 @@ describe("generateRound1Rendering", () => {
     });
 
     expect(result.model).toBe("gpt-image-test");
-    expect(result.imageBase64).toBe("rendered");
+    const metadata = await sharp(Buffer.from(result.imageBase64, "base64")).metadata();
+    expect(metadata.width).toBe(TARGET_RENDERING_WIDTH);
+    expect(metadata.height).toBe(TARGET_RENDERING_HEIGHT);
     expect(result.size).toBe(DEFAULT_RENDERING_SIZE);
     expect(result.salesEstimateOnly).toBe(true);
     expect(result.notForProduction).toBe(true);

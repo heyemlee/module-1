@@ -9,6 +9,7 @@ import {
   projectNextAction,
   projectStatusPresentation
 } from "./project-presentation";
+import { renderingImageUrl } from "./rendering-image-url";
 
 type NodeState = "done" | "active" | "todo";
 
@@ -306,7 +307,7 @@ export function ProjectDetail({
             {progress.latestRendering ? (
               <>
                 <img
-                  src={`/api/projects/${project.id}/round1/renderings/${progress.latestRendering.id}/image`}
+                  src={renderingImageUrl(project.id, progress.latestRendering.id)}
                   alt="Latest concept rendering"
                   className="h-full w-full object-cover"
                 />

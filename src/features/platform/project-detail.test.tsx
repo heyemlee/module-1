@@ -68,7 +68,7 @@ describe("ProjectDetail", () => {
     );
 
     expect(html).toContain(
-      "/api/projects/p1/round1/renderings/r1/image"
+      "/api/projects/p1/round1/renderings/r1/image?px=1536x1024"
     );
     expect(html).toContain("Confirm proposal");
   });

@@ -31,6 +31,7 @@ import type {
   CornerStrategy,
   Round2DesignIntent
 } from "../model/design-intent";
+import { deriveCorners, type CornerEnd } from "../model/corners";
 import type {
   Round2AbsorbedChange,
   Round2PrototypeAction
@@ -41,8 +42,8 @@ import { InchField } from "../measurement/inch-field";
 // everything vertical in between scales from the model height profile.
 const RUN_LEFT = 70;
 const RUN_WIDTH = 500;
-const FLOOR_Y = 326;
-const CEILING_Y = 62;
+const FLOOR_Y = 346;
+const CEILING_Y = 82;
 const MIN_LABEL_PX = 34;
 const LANE_STEP = 11;
 const IN_BOX_LABEL_CHAR_PX = 6;
@@ -52,10 +53,28 @@ const DIMENSION_FONT_SIZE = 11;
 const DIMENSION_STROKE_WIDTH = 2;
 const OVERALL_DIMENSION_LABEL_Y = 19;
 const OVERALL_DIMENSION_GUIDE_Y = 29;
-const UPPER_CHAIN_LABEL_Y = CEILING_Y - 20;
+// Three upper dimension rows occupy y=19, 42, and 64. Keeping this row
+// independent of the ceiling lets the full elevation sit lower without
+// pushing a dimension chain through the ceiling datum.
+const UPPER_CHAIN_LABEL_Y = 42;
 const CABINET_FACE_STROKE = "#a7aaa5";
 const TALL_HEIGHT_CHAIN_X = 32;
 const TALL_HEIGHT_LABEL_X = 20;
+// Corner returns follow NKBA section conventions: sectioned side profile in
+// amber hatch, hidden carcass in dashed gray, counter cut in dark poché, and
+// a parenthesized depth reference kept out of the teal cabinet chain.
+const CORNER_SECTION_COLOR = "#8a6a1c";
+const CORNER_RETURN_FILL = "transparent";
+const HIDDEN_LINE_COLOR = "#8a8d83";
+const COUNTER_SECTION_FILL = "#44443e";
+const COUNTER_THICKNESS_SIXTEENTHS = 24; // 1.5″
+const TOE_KICK_HEIGHT_SIXTEENTHS = 72; // 4.5″
+const TOE_KICK_DEPTH_SIXTEENTHS = 48; // 3″
+
+/** Where a secondary-wall corner return jumps to: the hosting cabinet. */
+type CornerReturnTarget = {
+  side: CornerEnd;
+};
 
 type VerticalLayout = {
   scale: number;
@@ -138,7 +157,10 @@ export function WallElevation({
   const mirrored = isMirroredElevationWall(wall);
   const editingSegment =
     wall?.segments.find((segment) => segment.id === editingId) ?? null;
-
+  const cornerReturns = buildCornerReturnTargets(model, wall);
+  const cornerEnds = insideCornerEnds(model, wall);
+  const cornerHostSides = buildCornerHostSides(model, wall);
+  const hatchPatternId = `${useId().replaceAll(":", "")}-corner-hatch`;
   const openEditor = (segment: WallSegment) => {
     onSelect(segment.id, wall?.id ?? "");
     if (!canEdit || !dispatch) return;
@@ -183,7 +205,7 @@ export function WallElevation({
       </div>
 
       <svg
-        viewBox="0 0 640 380"
+        viewBox="0 0 640 400"
         preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label={wall ? `Wall ${wall.label} cabinet elevation` : "Cabinet elevation"}
@@ -210,6 +232,26 @@ export function WallElevation({
           <HeightChain model={model} layout={layout} />
         </g>
 
+        <defs>
+          <pattern
+            id={hatchPatternId}
+            width="7"
+            height="7"
+            patternTransform="rotate(45)"
+            patternUnits="userSpaceOnUse"
+          >
+            <rect width="7" height="7" fill={CORNER_RETURN_FILL} />
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="7"
+              stroke={CORNER_SECTION_COLOR}
+              strokeWidth="1.1"
+              strokeOpacity="0.65"
+            />
+          </pattern>
+        </defs>
         <line x1="70" y1={FLOOR_Y} x2="570" y2={FLOOR_Y} stroke="#292929" strokeWidth="2" />
         <line
           x1="70"
@@ -220,6 +262,23 @@ export function WallElevation({
           strokeWidth="1"
           strokeDasharray="7 5"
         />
+        {wall &&
+          cornerEnds.map((end) => {
+            const atLeft = mirrored ? end === "end" : end === "start";
+            const x = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH;
+            return (
+              <line
+                key={end}
+                data-elevation-layer="inside-corner"
+                x1={x}
+                y1={CEILING_Y - 6}
+                x2={x}
+                y2={FLOOR_Y + 6}
+                stroke="#292929"
+                strokeWidth="4"
+              />
+            );
+          })}
         {wall ? (
           <>
             <ElevationRun
@@ -232,6 +291,9 @@ export function WallElevation({
               selectedObjectId={selectedObjectId}
               lastAbsorbed={lastAbsorbed}
               mirrored={mirrored}
+              cornerReturns={cornerReturns}
+              cornerHostSides={cornerHostSides}
+              hatchPatternId={hatchPatternId}
               onActivate={openEditor}
             />
             <ElevationRun
@@ -244,8 +306,28 @@ export function WallElevation({
               selectedObjectId={selectedObjectId}
               lastAbsorbed={lastAbsorbed}
               mirrored={mirrored}
+              cornerReturns={cornerReturns}
+              cornerHostSides={cornerHostSides}
+              hatchPatternId={hatchPatternId}
               onActivate={openEditor}
             />
+            {[...cornerHostSides.entries()].map(([cornerId, end]) => {
+              const hostsCorner = wall.segments.some(
+                (segment) =>
+                  segment.sourceCornerId === cornerId &&
+                  segment.kind === "cabinet"
+              );
+              if (!hostsCorner) return null;
+              return (
+                <CornerSideProfile
+                  key={cornerId}
+                  atLeft={mirrored ? end === "end" : end === "start"}
+                  layout={layout}
+                  pxPerSixteenth={RUN_WIDTH / total}
+                  hatchPatternId={hatchPatternId}
+                />
+              );
+            })}
             <g stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
               <TallUnitHeights base={base} total={total} layout={layout} />
             </g>
@@ -406,6 +488,9 @@ function ElevationRun({
   selectedObjectId,
   lastAbsorbed,
   mirrored,
+  cornerReturns,
+  cornerHostSides,
+  hatchPatternId,
   onActivate
 }: {
   fixedPoints: Round2FixedPoint[];
@@ -417,6 +502,9 @@ function ElevationRun({
   selectedObjectId: string | null;
   lastAbsorbed?: Round2AbsorbedChange | null;
   mirrored: boolean;
+  cornerReturns?: Map<string, CornerReturnTarget>;
+  cornerHostSides?: Map<string, CornerEnd>;
+  hatchPatternId?: string;
   onActivate: (segment: WallSegment) => void;
 }) {
   const widthsPx = segments.map(
@@ -436,8 +524,107 @@ function ElevationRun({
         cursor += width;
         const { y, height } = segmentBox(segment, layout);
         const selected = selectedObjectId === segment.id;
+        const cornerReturn =
+          segment.kind === "gap" && segment.sourceCornerId
+            ? cornerReturns?.get(segment.sourceCornerId) ??
+              fallbackCornerReturn(index, segments.length)
+            : null;
+        if (cornerReturn) {
+          const cornerAtLeft = mirrored
+            ? cornerReturn.side === "end"
+            : cornerReturn.side === "start";
+          const labelY =
+            labelSide === "below" ? FLOOR_Y + 22 : UPPER_CHAIN_LABEL_Y;
+          const guideY = labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
+          return (
+            <g
+              key={segment.id}
+              data-segment-id={segment.id}
+              data-cabinet-id={segment.id}
+              data-selected={selected}
+              onClick={() => onActivate(segment)}
+              className="cursor-pointer"
+            >
+              <title>{segment.code ?? segment.label}</title>
+              <CornerReturnSection
+                x={x}
+                y={y}
+                width={Math.max(8, width)}
+                height={height}
+                tier={segment.tier}
+                layout={layout}
+                pxPerSixteenth={RUN_WIDTH / total}
+                cornerAtLeft={cornerAtLeft}
+                selected={selected}
+                hatchPatternId={hatchPatternId}
+              />
+              <g data-elevation-layer="width-chain">
+                <path
+                  data-chain-guide={segment.id}
+                  d={
+                    labelSide === "above"
+                      ? `M ${x} ${guideY} V ${guideY + 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + 4} V ${guideY}`
+                      : `M ${x} ${guideY} V ${guideY - 4} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - 4} V ${guideY}`
+                  }
+                  stroke={DIMENSION_COLOR}
+                  strokeWidth={DIMENSION_STROKE_WIDTH}
+                  fill="none"
+                />
+                <text
+                  data-chain-label={segment.id}
+                  x={x + width / 2}
+                  y={labelY}
+                  textAnchor="middle"
+                  fontFamily="var(--studio-mono)"
+                  fontSize={DIMENSION_FONT_SIZE}
+                  fontWeight="bold"
+                  stroke="none"
+                  fill={DIMENSION_COLOR}
+                >
+                  {formatSixteenths(segment.widthSixteenths)}
+                </text>
+              </g>
+              <CornerHostBreakdownDimensions
+                segmentId={segment.id}
+                x={x}
+                width={width}
+                tier={segment.tier}
+                total={total}
+                atLeft={cornerAtLeft}
+                labelSide={labelSide}
+              />
+            </g>
+          );
+        }
+        // A hosted corner cabinet is partly covered by the adjacent run's
+        // side profile; its face and label live in the remaining visible zone.
+        const hostedCornerEnd =
+          segment.kind === "cabinet" &&
+          segment.cabinetKind === "corner" &&
+          segment.sourceCornerId
+            ? cornerHostSides?.get(segment.sourceCornerId) ?? null
+            : null;
+        const upperCornerEnd =
+          segment.tier === "upper" && segment.kind === "cabinet"
+            ? [...(cornerHostSides?.values() ?? [])].find(
+                (end) =>
+                  (end === "start" && index === 0) ||
+                  (end === "end" && index === segments.length - 1)
+              ) ?? null
+            : null;
+        const breakdownCornerEnd = hostedCornerEnd ?? upperCornerEnd;
+        const breakdownAtLeft =
+          breakdownCornerEnd != null &&
+          (mirrored
+            ? breakdownCornerEnd === "end"
+            : breakdownCornerEnd === "start");
         const fillerLike = isFillerLikeSegment(segment);
-        const front = fillerLike ? null : resolveSegmentFront(segment, designIntent);
+        const front =
+          fillerLike ||
+          segment.cabinetKind === "corner" ||
+          breakdownCornerEnd != null
+            ? null
+            : resolveSegmentFront(segment, designIntent);
         const role = resolveSegmentRole(segment, { fixedPoints });
         const roleTag = role ? SEGMENT_ROLE_TAGS[role] : null;
         const isWindow =
@@ -447,6 +634,23 @@ function ElevationRun({
         const lane = 0;
         const displayLabel = isWindow ? null : segmentDisplayLabel(segment, width);
         const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
+        const hostedAtLeft =
+          hostedCornerEnd != null &&
+          (mirrored ? hostedCornerEnd === "end" : hostedCornerEnd === "start");
+        const hostedOverlap =
+          hostedCornerEnd != null
+            ? Math.min(
+                width,
+                CABINET_STANDARDS.depths.baseSixteenths * (RUN_WIDTH / total)
+              )
+            : 0;
+        const visibleWidth = Math.max(0, width - hostedOverlap);
+        const labelCenterX =
+          hostedCornerEnd != null && visibleWidth >= 24
+            ? hostedAtLeft
+              ? x + hostedOverlap + visibleWidth / 2
+              : x + visibleWidth / 2
+            : x + width / 2;
         const labelY =
           labelSide === "below"
             ? FLOOR_Y + 22 + lane * LANE_STEP
@@ -477,7 +681,7 @@ function ElevationRun({
               stroke={selected ? "#079ca5" : "#2c2c2c"}
               strokeWidth={selected ? 3 : 1.5}
             />
-            {front && (
+            {front && hostedCornerEnd == null && (
               <SegmentFace
                 x={x}
                 y={y}
@@ -486,6 +690,18 @@ function ElevationRun({
                 front={front}
                 accent={CABINET_FACE_STROKE}
                 role={role}
+              />
+            )}
+            {front && hostedCornerEnd != null && (
+              <CornerFrontFace
+                x={x}
+                y={y}
+                width={Math.max(8, width)}
+                height={height}
+                overlap={hostedOverlap}
+                atLeft={hostedAtLeft}
+                front={front}
+                accent={CABINET_FACE_STROKE}
               />
             )}
             {role ? (
@@ -520,7 +736,7 @@ function ElevationRun({
             {displayLabel && (
               <text
                 data-display-label={displayLabel}
-                x={x + width / 2}
+                x={labelCenterX}
                 y={y + height / 2 + (isGapLabel ? 3 : 5)}
                 textAnchor="middle"
                 fontFamily="var(--studio-mono)"
@@ -592,6 +808,17 @@ function ElevationRun({
                 </text>
               </g>
             )}
+            {breakdownCornerEnd != null && (
+              <CornerHostBreakdownDimensions
+                segmentId={segment.id}
+                x={x}
+                width={width}
+                tier={segment.tier}
+                total={total}
+                atLeft={breakdownAtLeft}
+                labelSide={labelSide}
+              />
+            )}
             {lastAbsorbed?.segmentId === segment.id && (
               <g
                 key={`absorb-${lastAbsorbed.token}`}
@@ -650,6 +877,383 @@ function isMirroredElevationWall(
   // LEFT walls are measured top-to-bottom in plan. From inside the room, that
   // top/back corner appears on the right side of the wall elevation.
   return wall?.sourceWall === "LEFT";
+}
+
+function buildCornerReturnTargets(
+  model: Round2Model | null,
+  wall: ReturnType<typeof findWall>
+): Map<string, CornerReturnTarget> {
+  const targets = new Map<string, CornerReturnTarget>();
+  if (!model || !wall) return targets;
+  for (const corner of deriveCorners(model)) {
+    if (corner.secondary.id !== wall.id) continue;
+    targets.set(corner.id, {
+      side: corner.secondaryEnd
+    });
+  }
+  return targets;
+}
+
+function insideCornerEnds(
+  model: Round2Model | null,
+  wall: ReturnType<typeof findWall>
+): CornerEnd[] {
+  if (!model || !wall) return [];
+  const ends = new Set<CornerEnd>();
+  for (const corner of deriveCorners(model)) {
+    if (corner.primary.id === wall.id) ends.add(corner.primaryEnd);
+    if (corner.secondary.id === wall.id) ends.add(corner.secondaryEnd);
+  }
+  return [...ends];
+}
+
+// Corner reservations whose corner is not derivable (e.g. the paired wall is
+// missing from the model) still draw the section treatment; they just lose
+// the cross-wall jump tag. The corner side falls back to the run end the gap
+// actually sits on.
+function fallbackCornerReturn(
+  index: number,
+  segmentCount: number
+): CornerReturnTarget {
+  return {
+    side: index > 0 && index === segmentCount - 1 ? "end" : "start"
+  };
+}
+
+function cornerReferenceDepthSixteenths(tier: WallSegment["tier"]): number {
+  return tier === "upper"
+    ? CABINET_STANDARDS.depths.upperSixteenths
+    : CABINET_STANDARDS.depths.baseSixteenths;
+}
+
+/**
+ * A hosted corner cabinet keeps its overall width chain and adds a second,
+ * sectional chain for the part crossed by the adjacent wall: upper depth 12″
+ * plus its remainder, or base depth 24″ plus its remainder.
+ */
+function CornerHostBreakdownDimensions({
+  segmentId,
+  x,
+  width,
+  tier,
+  total,
+  atLeft,
+  labelSide
+}: {
+  segmentId: string;
+  x: number;
+  width: number;
+  tier: WallSegment["tier"];
+  total: number;
+  atLeft: boolean;
+  labelSide: "above" | "below";
+}) {
+  const depthSixteenths = cornerReferenceDepthSixteenths(tier);
+  const depthWidth = Math.min(
+    width,
+    (depthSixteenths / total) * RUN_WIDTH
+  );
+  const remainderWidth = Math.max(0, width - depthWidth);
+  const splitX = atLeft ? x + depthWidth : x + remainderWidth;
+  const firstWidth = splitX - x;
+  const secondWidth = x + width - splitX;
+  const firstDimension = atLeft
+    ? depthSixteenths
+    : Math.max(0, Math.round((remainderWidth / RUN_WIDTH) * total));
+  const secondDimension = atLeft
+    ? Math.max(0, Math.round((remainderWidth / RUN_WIDTH) * total))
+    : depthSixteenths;
+  const guideY =
+    labelSide === "above" ? UPPER_CHAIN_LABEL_Y + 27 : FLOOR_Y + 34;
+  const labelY = labelSide === "above" ? guideY - 5 : guideY + 10;
+  const tickEndY = guideY + (labelSide === "above" ? 4 : -4);
+
+  return (
+    <g
+      data-elevation-layer="corner-breakdown"
+      data-corner-breakdown={segmentId}
+      stroke={DIMENSION_COLOR}
+      fill={DIMENSION_COLOR}
+      fontFamily="var(--studio-mono)"
+    >
+      <path
+        data-corner-breakdown-guide={segmentId}
+        d={`M ${x} ${guideY} V ${tickEndY} M ${x} ${guideY} H ${splitX} M ${splitX} ${guideY} V ${tickEndY} M ${splitX} ${guideY} H ${x + width} M ${x + width} ${guideY} V ${tickEndY}`}
+        strokeWidth={DIMENSION_STROKE_WIDTH}
+        fill="none"
+      />
+      {firstWidth > 0 && (
+        <text
+          data-corner-breakdown-label="first"
+          x={x + firstWidth / 2}
+          y={labelY}
+          textAnchor="middle"
+          fontSize={DIMENSION_FONT_SIZE}
+          fontWeight="bold"
+          stroke="none"
+        >
+          {formatSixteenths(firstDimension)}
+        </text>
+      )}
+      {secondWidth > 0 && (
+        <text
+          data-corner-breakdown-label="second"
+          x={splitX + secondWidth / 2}
+          y={labelY}
+          textAnchor="middle"
+          fontSize={DIMENSION_FONT_SIZE}
+          fontWeight="bold"
+          stroke="none"
+        >
+          {formatSixteenths(secondDimension)}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/** Corners hosted by this wall (it carries the corner cabinet itself). */
+function buildCornerHostSides(
+  model: Round2Model | null,
+  wall: ReturnType<typeof findWall>
+): Map<string, CornerEnd> {
+  const sides = new Map<string, CornerEnd>();
+  if (!model || !wall) return sides;
+  for (const corner of deriveCorners(model)) {
+    if (corner.primary.id === wall.id) sides.set(corner.id, corner.primaryEnd);
+  }
+  return sides;
+}
+
+/**
+ * On the hosting wall the adjacent run also crosses the picture plane at the
+ * corner: its side elevation overlaps the first base-depth (24″) / upper-depth
+ * (12″) of the corner cabinet. Drawn wall-level, translucent and inert, so the
+ * cabinet underneath stays selectable.
+ */
+function CornerSideProfile({
+  atLeft,
+  layout,
+  pxPerSixteenth,
+  hatchPatternId
+}: {
+  atLeft: boolean;
+  layout: VerticalLayout;
+  pxPerSixteenth: number;
+  hatchPatternId?: string;
+}) {
+  const depths = CABINET_STANDARDS.depths;
+  const baseWidth = depths.baseSixteenths * pxPerSixteenth;
+  const upperWidth = depths.upperSixteenths * pxPerSixteenth;
+  const baseX = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH - baseWidth;
+  const upperX = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH - upperWidth;
+  const counterThickness = Math.max(
+    3,
+    COUNTER_THICKNESS_SIXTEENTHS * layout.scale
+  );
+  const counterOverhang = COUNTER_THICKNESS_SIXTEENTHS * pxPerSixteenth;
+  const counterX = atLeft ? baseX : baseX - counterOverhang;
+  const toeHeight = Math.max(6, TOE_KICK_HEIGHT_SIXTEENTHS * layout.scale);
+  const toeDepth = Math.min(
+    baseWidth / 3,
+    TOE_KICK_DEPTH_SIXTEENTHS * pxPerSixteenth
+  );
+  const faceTop = layout.baseTop + counterThickness;
+  const profileFill = hatchPatternId ? `url(#${hatchPatternId})` : "none";
+  const basePath = atLeft
+    ? `M ${baseX} ${faceTop} H ${baseX + baseWidth} V ${FLOOR_Y - toeHeight} H ${baseX + baseWidth - toeDepth} V ${FLOOR_Y} H ${baseX} Z`
+    : `M ${baseX + baseWidth} ${faceTop} H ${baseX} V ${FLOOR_Y - toeHeight} H ${baseX + toeDepth} V ${FLOOR_Y} H ${baseX + baseWidth} Z`;
+  return (
+    <g
+      data-elevation-layer="corner-side-profile"
+      className="pointer-events-none"
+    >
+      <rect
+        data-corner-side-profile="counter"
+        x={counterX}
+        y={layout.baseTop}
+        width={baseWidth + counterOverhang}
+        height={counterThickness}
+        fill={COUNTER_SECTION_FILL}
+        stroke="#2c2c2c"
+        strokeWidth="1"
+      />
+      <path
+        data-corner-side-profile="base"
+        d={basePath}
+        fill={profileFill}
+        stroke={CORNER_SECTION_COLOR}
+        strokeWidth="1.5"
+      />
+      <rect
+        data-corner-side-profile="upper"
+        x={upperX}
+        y={layout.upperTop}
+        width={upperWidth}
+        height={layout.upperBottom - layout.upperTop}
+        fill={profileFill}
+        stroke={CORNER_SECTION_COLOR}
+        strokeWidth="1.5"
+      />
+    </g>
+  );
+}
+
+/**
+ * Corner cabinet front on its hosting wall: a bi-fold door glyph hinged at
+ * the adjacent run's side profile, folding into the visible remainder.
+ */
+function CornerFrontFace({
+  x,
+  y,
+  width,
+  height,
+  overlap,
+  atLeft,
+  front,
+  accent
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  overlap: number;
+  atLeft: boolean;
+  front: ResolvedFront;
+  accent: string;
+}) {
+  const hingeX = atLeft ? x + overlap : x + width - overlap;
+  const farX = atLeft ? x + width - 4 : x + 4;
+  const foldX = (hingeX + farX) / 2;
+  const visible = Math.max(0, width - overlap);
+  return (
+    <g data-face="corner-front" stroke={accent} strokeWidth="1" fill="none">
+      {visible > 12 && (
+        <>
+          <path
+            d={`M ${hingeX + (atLeft ? 2 : -2)} ${y + 4} L ${farX} ${y + height / 2} L ${hingeX + (atLeft ? 2 : -2)} ${y + height - 4}`}
+          />
+          <line x1={foldX} y1={y + 6} x2={foldX} y2={y + height - 6} />
+        </>
+      )}
+      <AccessoryTag x={atLeft ? hingeX : x} y={y} front={front} />
+    </g>
+  );
+}
+
+/**
+ * A corner cabinet's footprint on the adjacent wall, drawn to section
+ * conventions instead of an empty reservation box: the run's side profile is
+ * cut by the picture plane (hatch + toe-kick notch), the counter reads as a
+ * poché slab, and the carcass hidden behind the section is dashed.
+ */
+function CornerReturnSection({
+  x,
+  y,
+  width,
+  height,
+  tier,
+  layout,
+  pxPerSixteenth,
+  cornerAtLeft,
+  selected,
+  hatchPatternId
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  tier: WallSegment["tier"];
+  layout: VerticalLayout;
+  pxPerSixteenth: number;
+  cornerAtLeft: boolean;
+  selected: boolean;
+  hatchPatternId?: string;
+}) {
+  const depths = CABINET_STANDARDS.depths;
+  const isBase = tier !== "upper";
+  const depthSixteenths = isBase ? depths.baseSixteenths : depths.upperSixteenths;
+  const profileWidth = Math.min(width, depthSixteenths * pxPerSixteenth);
+  const profileX = cornerAtLeft ? x : x + width - profileWidth;
+  const counterThickness = isBase
+    ? Math.max(3, COUNTER_THICKNESS_SIXTEENTHS * layout.scale)
+    : 0;
+  const toeHeight = Math.max(6, TOE_KICK_HEIGHT_SIXTEENTHS * layout.scale);
+  const toeDepth = Math.min(
+    profileWidth / 3,
+    TOE_KICK_DEPTH_SIXTEENTHS * pxPerSixteenth
+  );
+  const faceTop = y + counterThickness;
+  const floor = y + height;
+  const profileFill = hatchPatternId
+    ? `url(#${hatchPatternId})`
+    : CORNER_RETURN_FILL;
+  const visibleFaceX = cornerAtLeft ? x + profileWidth : x;
+  const visibleFaceWidth = Math.max(0, width - profileWidth);
+  // The toe-kick notch sits at the run's front edge — the side away from the
+  // corner — so the section profile reads with the cabinet facing the room.
+  const profilePath = cornerAtLeft
+    ? `M ${profileX} ${faceTop} H ${profileX + profileWidth} V ${floor - toeHeight} H ${profileX + profileWidth - toeDepth} V ${floor} H ${profileX} Z`
+    : `M ${profileX + profileWidth} ${faceTop} H ${profileX} V ${floor - toeHeight} H ${profileX + toeDepth} V ${floor} H ${profileX + profileWidth} Z`;
+  return (
+    <g data-face="corner-return">
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={CORNER_RETURN_FILL}
+        fillOpacity={1}
+        stroke={selected ? "#079ca5" : HIDDEN_LINE_COLOR}
+        strokeWidth={selected ? 3 : 1.2}
+        strokeDasharray={selected ? undefined : "5 4"}
+      />
+      {visibleFaceWidth > 0 && (
+        <rect
+          data-corner-return-visible-face="true"
+          x={visibleFaceX}
+          y={faceTop}
+          width={visibleFaceWidth}
+          height={floor - faceTop}
+          fill="#fbfbf8"
+          stroke="#2c2c2c"
+          strokeWidth="1.5"
+        />
+      )}
+      {isBase ? (
+        <>
+          <rect
+            data-corner-return-counter="true"
+            x={x}
+            y={y}
+            width={width}
+            height={counterThickness}
+            fill={COUNTER_SECTION_FILL}
+            stroke="#2c2c2c"
+            strokeWidth="1"
+          />
+          <path
+            data-corner-return-profile="true"
+            d={profilePath}
+            fill={profileFill}
+            stroke={CORNER_SECTION_COLOR}
+            strokeWidth="1.5"
+          />
+        </>
+      ) : (
+        <rect
+          data-corner-return-profile="true"
+          x={profileX}
+          y={y}
+          width={profileWidth}
+          height={height}
+          fill={profileFill}
+          stroke={CORNER_SECTION_COLOR}
+          strokeWidth="1.5"
+        />
+      )}
+    </g>
+  );
 }
 
 function segmentDisplayLabel(
