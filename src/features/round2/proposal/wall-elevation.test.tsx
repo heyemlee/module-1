@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import type { Round2Model, WallSegment } from "../model/round2-model";
 import {
+  accessoryOptionsForSegment,
+  canOpenSegmentEditor,
   canEditSegmentKind,
+  CORNER_STRATEGY_OPTIONS,
   KIND_OPTIONS,
   WallElevation
 } from "./wall-elevation";
@@ -130,6 +133,24 @@ describe("WallElevation", () => {
     }
   });
 
+  test("mirrors left-wall elevations so the upper corner reads on the right", () => {
+    const top = elevationModel([
+      cabinet("near-start", 30 * 16),
+      cabinet("near-end", 30 * 16)
+    ]);
+    const left = {
+      ...top,
+      walls: [{ ...top.walls[0], sourceWall: "LEFT" as const }]
+    };
+
+    expect(rectForSegment(render(top), "near-start").x).toBeLessThan(
+      rectForSegment(render(top), "near-end").x
+    );
+    expect(rectForSegment(render(left), "near-start").x).toBeGreaterThan(
+      rectForSegment(render(left), "near-end").x
+    );
+  });
+
   test("uses the overall dimension style for segment and height dimensions", () => {
     const html = render(elevationModel());
 
@@ -221,11 +242,6 @@ describe("WallElevation", () => {
         sourceCornerId: "TL"
       },
       {
-        ...cabinet("dead-corner", 12 * 16, "gap"),
-        label: "Dead corner",
-        sourceCornerId: "TL"
-      },
-      {
         ...cabinet("blind-corner", 12 * 16, "gap"),
         label: "Blind corner",
         sourceCornerId: "TL"
@@ -235,12 +251,10 @@ describe("WallElevation", () => {
     const html = render(model);
 
     expect(html).toContain('data-display-label="CLEAR"');
-    expect(html).toContain('data-display-label="DEAD"');
     expect(html).toContain('data-display-label="BLIND"');
     expect(html).toContain("<title>Corner clearance</title>");
-    expect(html).toContain("<title>Dead corner</title>");
     expect(html).toContain("<title>Blind corner</title>");
-    for (const label of ["CLEAR", "DEAD", "BLIND"]) {
+    for (const label of ["CLEAR", "BLIND"]) {
       expect(html).toMatch(
         new RegExp(
           `data-display-label="${label}"[^>]*font-size="8"[^>]*letter-spacing="0.08em"[^>]*fill="#5d6b64"`
@@ -248,8 +262,40 @@ describe("WallElevation", () => {
       );
     }
     expect(html).not.toMatch(/<text[^>]*>Corner clearance<\/text>/);
-    expect(html).not.toMatch(/<text[^>]*>Dead corner<\/text>/);
     expect(html).not.toMatch(/<text[^>]*>Blind corner<\/text>/);
+  });
+
+  test("does not offer dead corner as a corner setup strategy", () => {
+    expect(CORNER_STRATEGY_OPTIONS.map((option) => option.value)).toEqual([
+      "lazySusan",
+      "blindBase",
+      "magicCorner",
+      "blindCornerPullOut",
+      "cornerPullOutShelves"
+    ]);
+  });
+
+  test("allows corner reservation segments to open the editor", () => {
+    expect(
+      canOpenSegmentEditor({
+        ...cabinet("blind-corner", 24 * 16, "gap"),
+        label: "Blind corner",
+        sourceCornerId: "TL"
+      })
+    ).toBe(true);
+    expect(
+      canOpenSegmentEditor({
+        ...cabinet("corner-cabinet", 36 * 16),
+        cabinetKind: "corner",
+        sourceCornerId: "TL"
+      })
+    ).toBe(true);
+    expect(canOpenSegmentEditor(cabinet("regular-gap", 24 * 16, "gap"))).toBe(
+      false
+    );
+    expect(
+      canOpenSegmentEditor(cabinet("window-opening", 30 * 16, "opening"))
+    ).toBe(false);
   });
 
   test("identifies appliance cabinets with glyphs and role tags", () => {
@@ -320,6 +366,25 @@ describe("WallElevation", () => {
         tier: "upper"
       })
     ).toBe(false);
+  });
+
+  test("keeps corner hardware out of ordinary cabinet accessory editing", () => {
+    expect(
+      accessoryOptionsForSegment(cabinet("base-cabinet", 30 * 16)).map(
+        (option) => option
+      )
+    ).toEqual(["trashPullout", "spicePullout"]);
+    expect(
+      accessoryOptionsForSegment({
+        ...cabinet("corner-cabinet", 36 * 16),
+        cabinetKind: "corner"
+      })
+    ).toEqual([
+      "lazySusan",
+      "magicCorner",
+      "blindCornerPullOut",
+      "cornerPullOutShelves"
+    ]);
   });
 
   test("places tall-unit height dimensions to the far left of the regular height chain", () => {

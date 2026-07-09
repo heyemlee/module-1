@@ -27,7 +27,10 @@ import {
   resolveSegmentFront,
   type ResolvedFront
 } from "../model/front";
-import type { Round2DesignIntent } from "../model/design-intent";
+import type {
+  CornerStrategy,
+  Round2DesignIntent
+} from "../model/design-intent";
 import type {
   Round2AbsorbedChange,
   Round2PrototypeAction
@@ -132,13 +135,14 @@ export function WallElevation({
   const layout = verticalLayout(model);
   const upper = wall?.segments.filter((segment) => segment.tier === "upper") ?? [];
   const base = wall?.segments.filter((segment) => segment.tier !== "upper") ?? [];
+  const mirrored = isMirroredElevationWall(wall);
   const editingSegment =
     wall?.segments.find((segment) => segment.id === editingId) ?? null;
 
   const openEditor = (segment: WallSegment) => {
     onSelect(segment.id, wall?.id ?? "");
     if (!canEdit || !dispatch) return;
-    if (segment.kind === "opening" || segment.kind === "gap") return;
+    if (!canOpenSegmentEditor(segment)) return;
     setEditingId(segment.id === editingId ? null : segment.id);
   };
 
@@ -227,6 +231,7 @@ export function WallElevation({
               labelSide="above"
               selectedObjectId={selectedObjectId}
               lastAbsorbed={lastAbsorbed}
+              mirrored={mirrored}
               onActivate={openEditor}
             />
             <ElevationRun
@@ -238,6 +243,7 @@ export function WallElevation({
               labelSide="below"
               selectedObjectId={selectedObjectId}
               lastAbsorbed={lastAbsorbed}
+              mirrored={mirrored}
               onActivate={openEditor}
             />
             <g stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
@@ -399,6 +405,7 @@ function ElevationRun({
   labelSide,
   selectedObjectId,
   lastAbsorbed,
+  mirrored,
   onActivate
 }: {
   fixedPoints: Round2FixedPoint[];
@@ -409,6 +416,7 @@ function ElevationRun({
   labelSide: "above" | "below";
   selectedObjectId: string | null;
   lastAbsorbed?: Round2AbsorbedChange | null;
+  mirrored: boolean;
   onActivate: (segment: WallSegment) => void;
 }) {
   const widthsPx = segments.map(
@@ -422,7 +430,9 @@ function ElevationRun({
     <g>
       {segments.map((segment, index) => {
         const width = widthsPx[index];
-        const x = RUN_LEFT + cursor;
+        const x = mirrored
+          ? RUN_LEFT + RUN_WIDTH - cursor - width
+          : RUN_LEFT + cursor;
         cursor += width;
         const { y, height } = segmentBox(segment, layout);
         const selected = selectedObjectId === segment.id;
@@ -634,6 +644,14 @@ function ElevationRun({
   );
 }
 
+function isMirroredElevationWall(
+  wall: ReturnType<typeof findWall>
+): boolean {
+  // LEFT walls are measured top-to-bottom in plan. From inside the room, that
+  // top/back corner appears on the right side of the wall elevation.
+  return wall?.sourceWall === "LEFT";
+}
+
 function segmentDisplayLabel(
   segment: WallSegment,
   widthPx: number
@@ -653,7 +671,7 @@ function segmentDisplayLabel(
 function compactLabelCandidates(label: string): string[] {
   const normalized = label.trim().toLowerCase();
   if (normalized === "corner clearance") return ["CLEAR", "CLR"];
-  if (normalized === "dead corner") return ["DEAD", "DC"];
+  if (normalized === "dead corner") return ["CLEAR", "CLR"];
   if (normalized === "blind corner") return ["BLIND", "BC"];
   return [label];
 }
@@ -767,7 +785,10 @@ function SegmentFace({
 const ACCESSORY_TAGS: Record<string, string> = {
   trashPullout: "TP",
   spicePullout: "SP",
-  lazySusan: "LS"
+  lazySusan: "LS",
+  magicCorner: "MC",
+  blindCornerPullOut: "BCP",
+  cornerPullOutShelves: "CPS"
 };
 
 function AccessoryTag({
@@ -808,10 +829,16 @@ const FACE_OPTIONS: {
   { label: "3 drawers", doorCount: 0, drawerStack: [1, 1, 1] }
 ];
 
-const ACCESSORY_OPTIONS: FrontAccessory[] = [
+const STANDARD_ACCESSORY_OPTIONS: FrontAccessory[] = [
   "trashPullout",
-  "spicePullout",
-  "lazySusan"
+  "spicePullout"
+];
+
+const CORNER_ACCESSORY_OPTIONS: FrontAccessory[] = [
+  "lazySusan",
+  "magicCorner",
+  "blindCornerPullOut",
+  "cornerPullOutShelves"
 ];
 
 export const KIND_OPTIONS: { value: CabinetKind; label: string }[] = [
@@ -821,6 +848,20 @@ export const KIND_OPTIONS: { value: CabinetKind; label: string }[] = [
 
 export function canEditSegmentKind(segment: WallSegment): boolean {
   return segment.kind === "cabinet" && segment.tier !== "upper";
+}
+
+export function canOpenSegmentEditor(segment: WallSegment): boolean {
+  if (segment.kind === "opening") return false;
+  if (segment.kind === "gap") return Boolean(segment.sourceCornerId);
+  return true;
+}
+
+export function accessoryOptionsForSegment(
+  segment: WallSegment
+): FrontAccessory[] {
+  return segment.cabinetKind === "corner"
+    ? [...CORNER_ACCESSORY_OPTIONS]
+    : [...STANDARD_ACCESSORY_OPTIONS];
 }
 
 function CardSectionLabel({ children }: { children: string }) {
@@ -851,6 +892,7 @@ function SegmentEditorCard({
   const resizable = segment.kind === "cabinet" || segment.kind === "appliance";
   const isFiller = segment.kind === "filler";
   const front = resolveSegmentFront(segment, designIntent);
+  const cornerIntentKey = cornerIntentKeyForSegment(segment);
 
   return (
     <div
@@ -878,6 +920,15 @@ function SegmentEditorCard({
           </button>
         </div>
       </div>
+
+      {cornerIntentKey && (
+        <CornerSetupControls
+          intentKey={cornerIntentKey}
+          segment={segment}
+          designIntent={designIntent}
+          dispatch={dispatch}
+        />
+      )}
 
       {resizable && (
         <>
@@ -972,7 +1023,7 @@ function SegmentEditorCard({
             ))}
           </div>
           <div className="mt-1 grid grid-cols-3 gap-1">
-            {ACCESSORY_OPTIONS.map((accessory) => {
+            {accessoryOptionsForSegment(segment).map((accessory) => {
               const active = front.accessories.includes(accessory);
               return (
                 <button
@@ -1096,4 +1147,65 @@ function SegmentEditorCard({
       )}
     </div>
   );
+}
+
+export const CORNER_STRATEGY_OPTIONS: { value: CornerStrategy; label: string }[] = [
+  { value: "lazySusan", label: "Lazy Susan" },
+  { value: "blindBase", label: "Blind base" },
+  { value: "magicCorner", label: "Magic Corner" },
+  { value: "blindCornerPullOut", label: "Blind pull-out" },
+  { value: "cornerPullOutShelves", label: "Pull-out shelves" }
+];
+
+function CornerSetupControls({
+  intentKey,
+  segment,
+  designIntent,
+  dispatch
+}: {
+  intentKey: string;
+  segment: WallSegment;
+  designIntent?: Round2DesignIntent;
+  dispatch: Dispatch<Round2PrototypeAction>;
+}) {
+  const selected =
+    designIntent?.answers[intentKey] ?? inferCornerStrategy(segment);
+  return (
+    <>
+      <CardSectionLabel>CORNER SETUP</CardSectionLabel>
+      <div className="mt-1.5 grid grid-cols-2 gap-1">
+        {CORNER_STRATEGY_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected === option.value}
+            onClick={() =>
+              dispatch({
+                type: "SET_DESIGN_INTENT",
+                key: intentKey,
+                value: option.value
+              })
+            }
+            className={CARD_CHIP_CLASS}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function cornerIntentKeyForSegment(segment: WallSegment): string | null {
+  return segment.sourceCornerId ? `corner.${segment.sourceCornerId}.strategy` : null;
+}
+
+function inferCornerStrategy(segment: WallSegment): CornerStrategy {
+  const accessories = segment.front?.accessories ?? [];
+  if (accessories.includes("magicCorner")) return "magicCorner";
+  if (accessories.includes("blindCornerPullOut")) return "blindCornerPullOut";
+  if (accessories.includes("cornerPullOutShelves")) return "cornerPullOutShelves";
+  if ((segment.code ?? segment.label).startsWith("LS")) return "lazySusan";
+  if ((segment.code ?? segment.label).startsWith("BB")) return "blindBase";
+  return "lazySusan";
 }

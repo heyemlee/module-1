@@ -4,31 +4,44 @@ import type { Round2Model, WallSegment } from "../model/round2-model";
 import { DesignPlan } from "./design-plan";
 
 describe("DesignPlan", () => {
-  test("renders blind-corner gap footprints at the adjacent wall corner", () => {
+  test("renders lazy Susan reservations as a connected right-angle footprint", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [segment("top-lazy-susan", 36, "cabinet", "LS36")]),
+        wall("B", "LEFT", [
+          segment("left-lazy-return", 36, "gap", "LS36 return")
+        ])
+      ])
+    );
+
+    const path = tagFor(html, "path", 'data-plan-corner-footprint="TL"');
+
+    expect(path).toContain('data-plan-corner-walls="TOP,LEFT"');
+    expect(path).toContain("M 162 132");
+    expect(path).toContain("L 298.8 132");
+    expect(path).toContain("L 214 231.3");
+    expect(html).toContain('data-display-label="LS36"');
+    expect(html).toContain('data-segment-id="top-lazy-susan"');
+    expect(html).not.toContain('data-segment-id="left-lazy-return"');
+  });
+
+  test("renders blind-base corner strategy as straight wall segments", () => {
     const html = render(
       modelWithSegments([
         wall("A", "TOP", [segment("top-blind-base", 45, "cabinet", "BB45")]),
         wall("B", "LEFT", [
-          segment("left-clearance", 12, "gap", "Corner clearance"),
-          segment("left-dead", 12, "gap", "Dead corner"),
           segment("left-blind-body", 24, "gap", "Blind corner"),
           segment("left-blind-pull", 3, "filler", "F3")
         ])
       ])
     );
 
-    const rect = rectForSegment(html, "left-blind-body");
-
-    expect(html).toContain('data-plan-corner-gap="true"');
-    for (const label of ["CLR", "DEAD", "BLIND"]) {
-      expect(html).toMatch(
-        new RegExp(
-          `data-display-label="${label}"[^>]*font-size="8"[^>]*letter-spacing="0.08em"[^>]*fill="#5d6b64"`
-        )
-      );
-    }
-    expect(rect.x).toBe(162);
-    expect(rect.y).toBe(198.2);
+    expect(html).not.toContain('data-plan-corner-footprint="TL"');
+    expect(html).toContain('data-segment-id="top-blind-base"');
+    expect(html).toContain('data-segment-id="left-blind-body"');
+    expect(html).toContain('data-segment-id="left-blind-pull"');
+    expect(html).toContain('data-display-label="BB45"');
+    expect(html).toContain('data-display-label="BLIND"');
   });
 
   test("draws bottom wall runs from left to right like the measured model", () => {
@@ -63,6 +76,22 @@ function rectForSegment(
     x: Number(match?.[1]),
     y: Number(match?.[2])
   };
+}
+
+function tagFor(
+  html: string,
+  tagName: string,
+  attribute: string
+): string {
+  const match = html.match(
+    new RegExp(`<${tagName}(?=[^>]*${escapeRegExp(attribute)})[^>]*>`)
+  );
+  expect(match).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function modelWithSegments(walls: Round2Model["walls"]): Round2Model {
@@ -104,7 +133,10 @@ function segment(
     label,
     cabinetKind: kind === "cabinet" ? "corner" : undefined,
     sourceCornerId:
-      id.includes("blind") || id.includes("clearance") || id.includes("dead")
+      id.includes("lazy") ||
+      id.includes("blind") ||
+      id.includes("clearance") ||
+      id.includes("dead")
         ? "TL"
         : undefined
   };

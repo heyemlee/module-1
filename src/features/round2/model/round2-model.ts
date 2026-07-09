@@ -33,7 +33,13 @@ export type Round2FixedPoint = {
   offsetSixteenths?: number | null;
 };
 
-export type FrontAccessory = "trashPullout" | "spicePullout" | "lazySusan";
+export type FrontAccessory =
+  | "trashPullout"
+  | "spicePullout"
+  | "lazySusan"
+  | "magicCorner"
+  | "blindCornerPullOut"
+  | "cornerPullOutShelves";
 
 /**
  * Cabinet front configuration. Only exceptions a designer made are stored;

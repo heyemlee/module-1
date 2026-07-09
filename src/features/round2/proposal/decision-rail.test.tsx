@@ -22,7 +22,7 @@ describe("DecisionRail", () => {
     expect(html).toContain("Resolve decision");
     expect(html).toContain("CHECKLIST");
     expect(html).toContain("Confirmation required");
-    expect(html).toContain("Default “Dead corner” was applied");
+    expect(html).toContain("Default “Lazy Susan” was applied");
     expect(html).toContain("TO CONFIRM");
   });
 

@@ -184,6 +184,36 @@ describe("Round 2 constrained adjustments", () => {
     );
   });
 
+  test("keeps corner-only accessories off ordinary cabinet fronts", () => {
+    const model = modelWithWall(wallWithSegments());
+    const adjusted = setSegmentFront(model, "a-base-cabinet", {
+      accessories: ["trashPullout", "lazySusan", "magicCorner"]
+    });
+    const segment = adjusted.walls[0].segments.find(
+      (item) => item.id === "a-base-cabinet"
+    );
+
+    expect(segment?.front?.accessories).toEqual(["trashPullout"]);
+  });
+
+  test("allows corner hardware accessories on corner cabinet fronts", () => {
+    const wall = wallWithSegments();
+    wall.segments[1] = {
+      ...wall.segments[1],
+      cabinetKind: "corner",
+      label: "BB45"
+    };
+
+    const adjusted = setSegmentFront(modelWithWall(wall), "a-base-cabinet", {
+      accessories: ["magicCorner"]
+    });
+    const segment = adjusted.walls[0].segments.find(
+      (item) => item.id === "a-base-cabinet"
+    );
+
+    expect(segment?.front?.accessories).toEqual(["magicCorner"]);
+  });
+
   test("merges later front exceptions onto earlier ones", () => {
     const model = setSegmentFront(
       modelWithWall(wallWithSegments()),

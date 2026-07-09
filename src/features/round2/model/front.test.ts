@@ -41,6 +41,21 @@ describe("Round 2 cabinet fronts", () => {
     ).toMatchObject({ accessories: ["lazySusan"] });
   });
 
+  test("describes corner hardware accessories", () => {
+    expect(
+      describeFront(
+        resolveSegmentFront(
+          cabinet({
+            label: "BB45",
+            cabinetKind: "corner",
+            widthSixteenths: 45 * 16,
+            front: { accessories: ["magicCorner"] }
+          })
+        )
+      )
+    ).toBe("2 doors + Magic Corner");
+  });
+
   test("consumes the hardware and drawer-forward intent defaults", () => {
     const intent: Round2DesignIntent = {
       answers: {

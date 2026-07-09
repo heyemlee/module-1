@@ -93,24 +93,55 @@ describe("Round 2 autofill", () => {
     });
   });
 
-  test("defaults to dead-corner gaps on both walls", () => {
+  test.each([
+    ["magicCorner", "magicCorner"],
+    ["blindCornerPullOut", "blindCornerPullOut"],
+    ["cornerPullOutShelves", "cornerPullOutShelves"]
+  ] as const)(
+    "%s intent uses blind-base geometry with the selected corner hardware",
+    (strategy, accessory) => {
+      const filled = autofillRound2Model(
+        uShapeModel(),
+        {},
+        intentWith({ "corner.TL.strategy": strategy })
+      );
+      const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+      const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
+
+      expect(baseTier(top)[0]).toMatchObject({
+        cabinetKind: "corner",
+        label: "BB45",
+        front: { accessories: [accessory] },
+        widthSixteenths: 45 * 16
+      });
+      expect(baseTier(left)[0]).toMatchObject({
+        kind: "gap",
+        widthSixteenths: CABINET_STANDARDS.depths.baseSixteenths
+      });
+    }
+  );
+
+  test("defaults to a lazy Susan corner instead of a dead corner", () => {
     const filled = autofillRound2Model(uShapeModel());
-    const depth = CABINET_STANDARDS.depths.baseSixteenths;
+    const width = 36 * 16;
     const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
     const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
 
     expect(baseTier(top)[0]).toMatchObject({
-      kind: "gap",
-      widthSixteenths: depth,
-      label: "Dead corner",
+      kind: "cabinet",
+      cabinetKind: "corner",
+      widthSixteenths: width,
+      label: "LS36",
       sourceCornerId: "TL"
     });
     expect(baseTier(left)[0]).toMatchObject({
       kind: "gap",
-      widthSixteenths: depth,
-      label: "Dead corner",
+      widthSixteenths: width,
+      label: "LS36 return",
       sourceCornerId: "TL"
     });
+    expect(filled.walls.flatMap((wall) => wall.segments).map((segment) => segment.label))
+      .not.toContain("Dead corner");
   });
 
   test("centers the sink cabinet under the measured window", () => {

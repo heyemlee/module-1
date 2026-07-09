@@ -300,6 +300,7 @@ function ElevationSheet({
   const base = segments.filter((segment) => segment.tier !== "upper");
   const total = wall?.lengthSixteenths ?? 1;
   const layout = sheetVerticalLayout(model);
+  const mirrored = isMirroredElevationWall(wall);
 
   return (
     <g>
@@ -335,12 +336,26 @@ function ElevationSheet({
       </g>
 
       <g data-drawing-layer="cabinet-boundaries" stroke={COLORS.cabinet} fill="none" strokeWidth="2">
-        <ElevationRun segments={upper} total={total} layout={layout} intent={intent} wall={wall} />
-        <ElevationRun segments={base} total={total} layout={layout} intent={intent} wall={wall} />
+        <ElevationRun
+          segments={upper}
+          total={total}
+          layout={layout}
+          intent={intent}
+          wall={wall}
+          mirrored={mirrored}
+        />
+        <ElevationRun
+          segments={base}
+          total={total}
+          layout={layout}
+          intent={intent}
+          wall={wall}
+          mirrored={mirrored}
+        />
       </g>
 
       <g data-drawing-layer="cabinet-numbers" fill={COLORS.number} fontFamily="var(--studio-mono)" fontSize="18" textAnchor="middle">
-        {[...elevationPlacements(upper, total), ...elevationPlacements(base, total)].map(({ segment, x, width }) => {
+        {[...elevationPlacements(upper, total, mirrored), ...elevationPlacements(base, total, mirrored)].map(({ segment, x, width }) => {
           // Gaps (corner clearance, tall-unit space above a full-height unit)
           // are not cabinets — they carry no number or label.
           if (segment.kind === "gap") return null;
@@ -390,6 +405,7 @@ function ElevationSheet({
           <SegmentChainDimensions
             segments={upper}
             total={total}
+            mirrored={mirrored}
             baselineY={106}
             direction={-1}
           />
@@ -398,6 +414,7 @@ function ElevationSheet({
           <SegmentChainDimensions
             segments={base}
             total={total}
+            mirrored={mirrored}
             baselineY={ELEVATION.floor + 26}
             direction={1}
           />
@@ -424,7 +441,7 @@ function ElevationSheet({
             and have no counter/upper split, so they get their own overall
             height dimension inside the column. */}
         <g data-drawing-layer="tall-height">
-          {elevationPlacements(base, total)
+          {elevationPlacements(base, total, mirrored)
             .filter(({ segment }) => segment.cabinetKind === "tall")
             .map(({ segment, x, width }) => (
               <DimensionVertical
@@ -454,15 +471,17 @@ function ElevationSheet({
 function SegmentChainDimensions({
   segments,
   total,
+  mirrored,
   baselineY,
   direction
 }: {
   segments: WallSegment[];
   total: number;
+  mirrored: boolean;
   baselineY: number;
   direction: 1 | -1;
 }) {
-  const placements = elevationPlacements(segments, total);
+  const placements = elevationPlacements(segments, total, mirrored);
   const lanes = assignDimensionLanes(
     placements.map(({ width }) => width),
     52
@@ -506,17 +525,19 @@ function ElevationRun({
   total,
   layout,
   intent,
-  wall
+  wall,
+  mirrored
 }: {
   segments: WallSegment[];
   total: number;
   layout: SheetVerticalLayout;
   intent?: Round2DesignIntent;
   wall: Round2Wall | null;
+  mirrored: boolean;
 }) {
   return (
     <g>
-      {elevationPlacements(segments, total).map(({ segment, x, width }) => {
+      {elevationPlacements(segments, total, mirrored).map(({ segment, x, width }) => {
         const { y, height } = elevationBox(segment, layout);
         if (segment.kind === "gap") return null;
         const front = resolveSegmentFront(segment, intent);
@@ -838,14 +859,28 @@ function elevationBox(
   return { y: layout.baseTop, height: ELEVATION.floor - layout.baseTop };
 }
 
-function elevationPlacements(segments: WallSegment[], total: number) {
+function elevationPlacements(
+  segments: WallSegment[],
+  total: number,
+  mirrored = false
+) {
   let cursor = 0;
   return segments.map((segment) => {
     const width = (Math.max(0, segment.widthSixteenths) / total) * 780;
-    const placement = { segment, x: 110 + cursor, width };
+    const placement = {
+      segment,
+      x: mirrored ? 110 + 780 - cursor - width : 110 + cursor,
+      width
+    };
     cursor += width;
     return placement;
   });
+}
+
+function isMirroredElevationWall(wall: Round2Wall | null): boolean {
+  // LEFT walls are measured top-to-bottom in plan. From inside the room, that
+  // top/back corner appears on the right side of the wall elevation.
+  return wall?.sourceWall === "LEFT";
 }
 
 function clamp01(value: number): number {

@@ -6,6 +6,7 @@ import {
   type Round2Model,
   type Round2Wall,
   type SegmentTier,
+  type FrontAccessory,
   type WallId,
   type WallSegment,
   formatSixteenths
@@ -30,6 +31,12 @@ type FillerSide = "start" | "end";
 
 /** Corner segments for one wall, ordered outward from the corner. */
 type TierInsets = { start: WallSegment[]; end: WallSegment[] };
+
+type BlindBaseCornerStrategy =
+  | "blindBase"
+  | "magicCorner"
+  | "blindCornerPullOut"
+  | "cornerPullOutShelves";
 
 type PlacedReservation = {
   fixedPoint: Round2FixedPoint;
@@ -152,7 +159,7 @@ function buildCornerInsets(
   };
 
   for (const corner of deriveCorners(model)) {
-    const strategy = intent?.answers[corner.intentKey] ?? "deadCorner";
+    const strategy = resolveCornerStrategy(intent?.answers[corner.intentKey]);
     const cornerId = corner.id.toLowerCase();
     const primaryId = corner.primary.id.toLowerCase();
     const secondaryId = corner.secondary.id.toLowerCase();
@@ -183,11 +190,12 @@ function buildCornerInsets(
         label: `LS${width / 16} return`,
         sourceCornerId: corner.id
       });
-    } else if (strategy === "blindBase") {
+    } else {
       const width = pickCornerWidth(
         CABINET_STANDARDS.corner.blindBase.widthOptionsSixteenths,
         [corner.primary]
       );
+      const accessory = cornerAccessoryForStrategy(strategy);
       tierFor(corner.primary.id)[corner.primaryEnd].push({
         id: `${primaryId}-base-corner-${cornerId}`,
         wallId: corner.primary.id,
@@ -197,6 +205,7 @@ function buildCornerInsets(
         widthSixteenths: width,
         standardWidthSixteenths: width,
         label: `BB${width / 16}`,
+        front: accessory ? { accessories: [accessory] } : undefined,
         sourceCornerId: corner.id
       });
       tierFor(corner.secondary.id)[corner.secondaryEnd].push(
@@ -220,25 +229,38 @@ function buildCornerInsets(
           sourceCornerId: corner.id
         }
       );
-    } else {
-      for (const [wall, end, suffix] of [
-        [corner.primary, corner.primaryEnd, ""],
-        [corner.secondary, corner.secondaryEnd, "-return"]
-      ] as const) {
-        tierFor(wall.id)[end].push({
-          id: `${wall.id.toLowerCase()}-base-corner-${cornerId}-dead${suffix}`,
-          wallId: wall.id,
-          tier: "base",
-          kind: "gap",
-          widthSixteenths: baseDepth,
-          label: "Dead corner",
-          sourceCornerId: corner.id
-        });
-      }
     }
   }
 
   return insets;
+}
+
+function resolveCornerStrategy(
+  strategy: unknown
+): "lazySusan" | BlindBaseCornerStrategy {
+  if (strategy === "lazySusan") return "lazySusan";
+  if (isBlindBaseCornerStrategy(strategy)) return strategy;
+  return "lazySusan";
+}
+
+function isBlindBaseCornerStrategy(
+  strategy: unknown
+): strategy is BlindBaseCornerStrategy {
+  return (
+    strategy === "blindBase" ||
+    strategy === "magicCorner" ||
+    strategy === "blindCornerPullOut" ||
+    strategy === "cornerPullOutShelves"
+  );
+}
+
+function cornerAccessoryForStrategy(
+  strategy: BlindBaseCornerStrategy
+): FrontAccessory | null {
+  if (strategy === "magicCorner") return "magicCorner";
+  if (strategy === "blindCornerPullOut") return "blindCornerPullOut";
+  if (strategy === "cornerPullOutShelves") return "cornerPullOutShelves";
+  return null;
 }
 
 // The intent question only picks the strategy; the width tier is derived as

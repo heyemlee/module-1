@@ -4,6 +4,7 @@ import type {
   FloorPlan,
   Wall
 } from "@/features/round1/floorplan/plan-geometry";
+import type { Round2Model, WallSegment } from "../model/round2-model";
 import { ROUND1_REFERENCE_FIXTURE } from "../round2-fixtures";
 import { autofillRound2Model } from "../model/autofill";
 import { deriveWallsFromRound1 } from "../model/derive-walls";
@@ -60,6 +61,38 @@ describe("Round 2 drawing sheets", () => {
     expect(html).toContain('data-drawing-layer="cabinet-boundaries"');
     expect(html).not.toContain("A2 · WALL A ELEVATION");
     expect(html).not.toContain("ROUND 2 VISUAL PROTOTYPE");
+  });
+
+  test("mirrors left-wall elevation sheets so the upper corner reads on the right", () => {
+    const top = simpleWallModel("TOP");
+    const left = simpleWallModel("LEFT");
+    const topHtml = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={{ id: "A2", label: "Wall A elevation", wallId: "A" }}
+        model={top}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+    const leftHtml = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={{ id: "A2", label: "Wall A elevation", wallId: "A" }}
+        model={left}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+
+    expect(textX(topHtml, "near-start")).toBeLessThan(
+      textX(topHtml, "near-end")
+    );
+    expect(textX(leftHtml, "near-start")).toBeGreaterThan(
+      textX(leftHtml, "near-end")
+    );
   });
 
   test("keeps elevation labels compact for openings, tall placeholders, and fillers", () => {
@@ -122,14 +155,14 @@ describe("Round 2 drawing sheets", () => {
 
   test("draws appliance identities on the wall elevation", () => {
     const model = submittedModel({
-      ...ROUND1_REFERENCE_FIXTURE.floorPlan,
+      ...planFor("ONE_WALL", ["TOP"]),
       appliances: [
         appliance("fridge", 110),
         appliance("sink", 340),
         appliance("dishwasher", 430),
         appliance("range", 520)
       ]
-    });
+    }, 220 * 16);
     const sheet = drawingSheetsForModel(model).find((item) => item.id === "A2")!;
     const html = renderToStaticMarkup(
       <DrawingSheet
@@ -222,6 +255,62 @@ function appliance(
     symbol,
     wall: "TOP" as const
   };
+}
+
+function simpleWallModel(sourceWall: Wall): Round2Model {
+  const segments: WallSegment[] = [
+    {
+      id: "near-start",
+      wallId: "A",
+      tier: "base",
+      kind: "cabinet",
+      widthSixteenths: 30 * 16,
+      label: "START",
+      cabinetKind: "base",
+      code: "#1"
+    },
+    {
+      id: "near-end",
+      wallId: "A",
+      tier: "base",
+      kind: "cabinet",
+      widthSixteenths: 30 * 16,
+      label: "END",
+      cabinetKind: "base",
+      code: "#2"
+    }
+  ];
+  return {
+    ceilingHeightSixteenths: 96 * 16,
+    heightProfile: {
+      counterSixteenths: 36 * 16,
+      backsplashSixteenths: 18 * 16,
+      upperHeightSixteenths: 36 * 16,
+      mouldingSixteenths: 3 * 16
+    },
+    decisionItems: [],
+    walls: [
+      {
+        id: "A",
+        label: "A",
+        sourceWall,
+        lengthSixteenths: 60 * 16,
+        fixedPoints: [],
+        notes: [],
+        segments
+      }
+    ]
+  };
+}
+
+function textX(html: string, segmentId: string): number {
+  const tag = html.match(
+    new RegExp(`<text(?=[^>]*data-segment-id="${segmentId}")[^>]*>`)
+  );
+  expect(tag).not.toBeNull();
+  const x = tag?.[0].match(/\sx="([^"]+)"/);
+  expect(x).not.toBeNull();
+  return Number(x?.[1]);
 }
 
 function planFor(layoutPreference: string, walls: Wall[]): FloorPlan {

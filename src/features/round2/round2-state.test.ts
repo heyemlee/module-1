@@ -290,6 +290,53 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
   });
 
+  test("regenerates proposal geometry when a submitted corner strategy changes", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    expect(
+      submitted.model?.walls
+        .flatMap((wall) => wall.segments)
+        .some(
+          (segment) =>
+            segment.sourceCornerId === "TL" &&
+            segment.cabinetKind === "corner" &&
+            segment.label.startsWith("LS")
+        )
+    ).toBe(true);
+
+    const adjusted = reduceRound2Prototype(submitted, {
+      type: "SET_DESIGN_INTENT",
+      key: "corner.TL.strategy",
+      value: "blindBase"
+    });
+
+    expect(adjusted.measurementStatus).toBe("SUBMITTED");
+    expect(adjusted.designIntent.answers["corner.TL.strategy"]).toBe(
+      "blindBase"
+    );
+    expect(
+      adjusted.model?.walls
+        .flatMap((wall) => wall.segments)
+        .some(
+          (segment) =>
+            segment.sourceCornerId === "TL" &&
+            segment.cabinetKind === "corner" &&
+            segment.label.startsWith("BB")
+        )
+    ).toBe(true);
+    expect(
+      adjusted.model?.walls
+        .flatMap((wall) => wall.segments)
+        .some(
+          (segment) =>
+            segment.sourceCornerId === "TL" &&
+            segment.kind === "gap" &&
+            segment.label === "Blind corner"
+        )
+    ).toBe(true);
+    expect(adjusted.drawingStatus).toBe("STALE");
+    expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
+  });
+
   test("steps the global height profile and keeps the selection", () => {
     const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
     expect(submitted.model?.heightProfile).not.toBeNull();

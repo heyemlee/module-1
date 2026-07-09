@@ -66,7 +66,10 @@ export function reduceRound2Prototype(
   switch (action.type) {
     case "RESTORE_DRAFT":
       // Drafts saved before the absorb-feedback field existed lack it.
-      return { ...action.state, lastAbsorbed: action.state.lastAbsorbed ?? null };
+      return normalizeRestoredState({
+        ...action.state,
+        lastAbsorbed: action.state.lastAbsorbed ?? null
+      });
     case "ADOPT_BASIS":
       return lockReference(state, action.reference, action.version);
     case "SET_ROLE":
@@ -100,23 +103,36 @@ export function reduceRound2Prototype(
       return { ...state, activeMeasurementKey: action.field };
     case "SET_DESIGN_INTENT":
       if (!state.model) return state;
-      return {
-        ...state,
-        designIntent: setDesignIntentAnswer(
+      {
+        const designIntent = setDesignIntentAnswer(
           state.designIntent,
           action.key,
           action.value
-        ),
-        measurementStatus: "DRAFT",
-        proposalStatus:
-          state.measurementStatus === "SUBMITTED"
-            ? "STALE"
-            : state.proposalStatus,
-        drawingStatus:
-          state.measurementStatus === "SUBMITTED"
-            ? "STALE"
-            : state.drawingStatus
-      };
+        );
+        if (
+          state.measurementStatus === "SUBMITTED" &&
+          action.key.startsWith("corner.")
+        ) {
+          return regenerateSubmittedProposalFromIntent(
+            state,
+            designIntent,
+            action.key
+          );
+        }
+        return {
+          ...state,
+          designIntent,
+          measurementStatus: "DRAFT",
+          proposalStatus:
+            state.measurementStatus === "SUBMITTED"
+              ? "STALE"
+              : state.proposalStatus,
+          drawingStatus:
+            state.measurementStatus === "SUBMITTED"
+              ? "STALE"
+              : state.drawingStatus
+        };
+      }
     case "SUBMIT_MEASUREMENT":
       return submitMeasurement(state, false);
     case "REQUEST_REMEASURE":
@@ -209,6 +225,64 @@ export function reduceRound2Prototype(
       return exhaustive;
     }
   }
+}
+
+function normalizeRestoredState(
+  state: Round2PrototypeState
+): Round2PrototypeState {
+  const designIntent = migrateCornerIntentDefaults(state.designIntent);
+  const intentChanged = designIntent !== state.designIntent;
+  const hasDeadCornerSegments = modelHasDeadCornerSegments(state.model);
+  if (!intentChanged && !hasDeadCornerSegments) return state;
+
+  if (!state.model || !state.model.walls.some((wall) => wall.segments.length > 0)) {
+    return { ...state, designIntent };
+  }
+
+  const model = autofillRound2Model(state.model, state.measurements, designIntent);
+  const selected =
+    (state.selectedObjectId
+      ? firstSegmentById(model, state.selectedObjectId)
+      : null) ?? firstSelectableSegment(model);
+
+  return {
+    ...state,
+    designIntent,
+    model,
+    proposalStatus: model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY",
+    drawingStatus:
+      state.drawingStatus === "REVIEWED" ? "REVIEW_READY" : state.drawingStatus,
+    selectedWall: selected?.wallId ?? state.selectedWall,
+    selectedObjectId: selected?.id ?? state.selectedObjectId,
+    issueObjectId: model.decisionItems[0]?.objectId ?? null
+  };
+}
+
+function migrateCornerIntentDefaults(
+  designIntent: Round2PrototypeState["designIntent"]
+): Round2PrototypeState["designIntent"] {
+  let changed = false;
+  const answers = Object.fromEntries(
+    Object.entries(designIntent.answers).map(([key, value]) => {
+      if (key.startsWith("corner.") && String(value) === "deadCorner") {
+        changed = true;
+        return [key, "lazySusan"];
+      }
+      return [key, value];
+    })
+  ) as Round2PrototypeState["designIntent"]["answers"];
+
+  return changed ? { ...designIntent, answers } : designIntent;
+}
+
+function modelHasDeadCornerSegments(model: Round2Model | null): boolean {
+  return Boolean(
+    model?.walls.some((wall) =>
+      wall.segments.some(
+        (segment) => segment.label.trim().toLowerCase() === "dead corner"
+      )
+    )
+  );
 }
 
 /**
@@ -310,12 +384,56 @@ function submitMeasurement(
   };
 }
 
+function regenerateSubmittedProposalFromIntent(
+  state: Round2PrototypeState,
+  designIntent: Round2PrototypeState["designIntent"],
+  changedKey: string
+): Round2PrototypeState {
+  if (!state.model) return state;
+
+  const model = autofillRound2Model(state.model, state.measurements, designIntent);
+  const selectedSegment =
+    firstSegmentForCornerIntent(model, changedKey) ?? firstSelectableSegment(model);
+  const proposalStatus =
+    model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY";
+
+  return {
+    ...state,
+    designIntent,
+    model,
+    measurementStatus: "SUBMITTED",
+    proposalVersion: state.proposalVersion + 1,
+    proposalStatus,
+    drawingStatus: "STALE",
+    selectedWall: selectedSegment?.wallId ?? state.selectedWall,
+    selectedObjectId: selectedSegment?.id ?? state.selectedObjectId,
+    lastAbsorbed: null,
+    issueObjectId: model.decisionItems[0]?.objectId ?? null
+  };
+}
+
 function firstSelectableSegment(
   model: Round2Model
 ): { id: string; wallId: WallId } | null {
   for (const wall of model.walls) {
     const segment = wall.segments.find(
       (item) => item.kind !== "gap" && item.kind !== "opening"
+    );
+    if (segment) return { id: segment.id, wallId: wall.id };
+  }
+  return null;
+}
+
+function firstSegmentForCornerIntent(
+  model: Round2Model,
+  intentKey: string
+): { id: string; wallId: WallId } | null {
+  const match = /^corner\.([^.]+)\.strategy$/.exec(intentKey);
+  const cornerId = match?.[1];
+  if (!cornerId) return null;
+  for (const wall of model.walls) {
+    const segment = wall.segments.find(
+      (item) => item.sourceCornerId === cornerId
     );
     if (segment) return { id: segment.id, wallId: wall.id };
   }

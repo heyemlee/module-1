@@ -1,6 +1,7 @@
 import { CABINET_STANDARDS } from "./cabinet-standards";
 import {
   type CabinetKind,
+  type FrontAccessory,
   type Round2DecisionItem,
   type Round2HeightProfile,
   type Round2Model,
@@ -203,10 +204,38 @@ export function setSegmentFront(
 
   const segments = context.wall.segments.map((segment) =>
     segment.id === segmentId
-      ? { ...segment, front: { ...segment.front, ...front } }
+      ? {
+          ...segment,
+          front: sanitizeSegmentFront(segment, { ...segment.front, ...front })
+        }
       : segment
   );
   return replaceWallSegments(model, context.wall.id, segments);
+}
+
+function sanitizeSegmentFront(
+  segment: WallSegment,
+  front: WallSegmentFront
+): WallSegmentFront {
+  if (!front.accessories) return front;
+  return {
+    ...front,
+    accessories: front.accessories.filter((accessory) =>
+      allowedAccessoriesForSegment(segment).includes(accessory)
+    )
+  };
+}
+
+function allowedAccessoriesForSegment(segment: WallSegment): FrontAccessory[] {
+  if (segment.cabinetKind === "corner") {
+    return [
+      "lazySusan",
+      "magicCorner",
+      "blindCornerPullOut",
+      "cornerPullOutShelves"
+    ];
+  }
+  return ["trashPullout", "spicePullout"];
 }
 
 /**

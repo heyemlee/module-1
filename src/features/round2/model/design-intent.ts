@@ -7,7 +7,12 @@ import {
 } from "./round2-model";
 import { deriveCorners } from "./corners";
 
-export type CornerStrategy = "lazySusan" | "blindBase" | "deadCorner";
+export type CornerStrategy =
+  | "lazySusan"
+  | "blindBase"
+  | "magicCorner"
+  | "blindCornerPullOut"
+  | "cornerPullOutShelves";
 export type UpperTermination = "standard" | "ceiling";
 export type FlatMouldingStyle = "none" | "flat2" | "flat3";
 export type TallCabinetLocation = "auto" | `wall:${WallId}`;
@@ -79,12 +84,20 @@ export function buildDesignIntentQuestions(
       key: corner.intentKey,
       kind: "corner-strategy",
       label: `Corner ${corner.primary.label}–${corner.secondary.label} strategy`,
-      helper: "Default reserves dead-corner clearance on both walls until the corner is confirmed.",
-      defaultValue: "deadCorner",
+      helper: "Default uses a true corner cabinet; blind-base options stay straight on their main wall.",
+      defaultValue: "lazySusan",
       options: [
         { value: "lazySusan", label: "Lazy Susan" },
         { value: "blindBase", label: "Blind base" },
-        { value: "deadCorner", label: "Dead corner" }
+        { value: "magicCorner", label: "Blind base + Magic Corner" },
+        {
+          value: "blindCornerPullOut",
+          label: "Blind base + Blind Corner Pull-Out"
+        },
+        {
+          value: "cornerPullOutShelves",
+          label: "Blind base + Corner Pull-Out Shelves"
+        }
       ],
       wallId: corner.primary.id,
       objectId: corner.objectId

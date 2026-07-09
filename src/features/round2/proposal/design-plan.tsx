@@ -70,6 +70,12 @@ export function DesignPlan({
           );
         })}
 
+        <CornerFootprints
+          walls={walls}
+          selectedObjectId={selectedObjectId}
+          onSelect={onSelect}
+        />
+
         {walls.map((wall) => (
           <SegmentRun
             key={wall.id}
@@ -104,6 +110,277 @@ export function DesignPlan({
       </svg>
     </div>
   );
+}
+
+type CornerSide = "start" | "end";
+type PlanCorner = "TL" | "TR" | "BL" | "BR";
+
+type CornerFootprint = {
+  id: string;
+  wallsLabel: string;
+  segmentId: string;
+  wallId: WallId;
+  selected: boolean;
+  path: string;
+  fill: string;
+  label: string;
+  labelX: number;
+  labelY: number;
+};
+
+function CornerFootprints({
+  walls,
+  selectedObjectId,
+  onSelect
+}: {
+  walls: Round2Wall[];
+  selectedObjectId: string | null;
+  onSelect: (id: string, wall: WallId) => void;
+}) {
+  const footprints = buildCornerFootprints(walls, selectedObjectId);
+  if (footprints.length === 0) return null;
+
+  return (
+    <g data-plan-layer="corner-footprints">
+      {footprints.map((footprint) => (
+        <g
+          key={footprint.id}
+          data-segment-id={footprint.segmentId}
+          data-cabinet-id={footprint.segmentId}
+          data-selected={footprint.selected}
+          onClick={() => onSelect(footprint.segmentId, footprint.wallId)}
+          className="cursor-pointer"
+        >
+          <path
+            data-plan-corner-footprint={footprint.id}
+            data-plan-corner-walls={footprint.wallsLabel}
+            d={footprint.path}
+            fill={footprint.fill}
+            stroke={footprint.selected ? "#079ca5" : "#a98e54"}
+            strokeWidth={footprint.selected ? 3 : 1.4}
+            strokeLinejoin="round"
+          />
+          <text
+            data-display-label={footprint.label}
+            x={footprint.labelX}
+            y={footprint.labelY}
+            textAnchor="middle"
+            fontFamily="var(--studio-mono)"
+            fontSize="8"
+            letterSpacing="0.08em"
+            fill="#5d4f2e"
+          >
+            {footprint.label}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function buildCornerFootprints(
+  walls: Round2Wall[],
+  selectedObjectId: string | null
+): CornerFootprint[] {
+  const cornerIds = new Set<string>();
+  for (const wall of walls) {
+    for (const segment of wall.segments) {
+      if (isLazySusanFootprintSegment(segment)) {
+        cornerIds.add(segment.sourceCornerId);
+      }
+    }
+  }
+
+  return [...cornerIds].flatMap((cornerId) => {
+    const entries = walls
+      .map((wall) => cornerWallEntry(wall, cornerId))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    if (entries.length === 0) return [];
+
+    const corner = resolvePlanCorner(entries);
+    if (!corner) return [];
+    const horizontal = entries.find(
+      (entry) =>
+        entry.wall.sourceWall === "TOP" || entry.wall.sourceWall === "BOTTOM"
+    );
+    const vertical = entries.find(
+      (entry) =>
+        entry.wall.sourceWall === "LEFT" || entry.wall.sourceWall === "RIGHT"
+    );
+    const horizontalLength = horizontal?.lengthPx ?? BASE_DEPTH_PX;
+    const verticalLength = vertical?.lengthPx ?? BASE_DEPTH_PX;
+    const representative =
+      entries
+        .flatMap((entry) => entry.segments)
+        .find((segment) => segment.cabinetKind === "corner") ??
+      entries.flatMap((entry) => entry.segments)[0];
+    const anchor = cornerAnchor(corner);
+
+    return [
+      {
+        id: cornerId,
+        wallsLabel: entries.map((entry) => entry.wall.sourceWall).join(","),
+        segmentId: representative.id,
+        wallId: representative.wallId,
+        selected: entries.some((entry) =>
+          entry.segments.some((segment) => segment.id === selectedObjectId)
+        ),
+        path: cornerPath(corner, anchor, horizontalLength, verticalLength),
+        fill: fillForSegment(representative),
+        label: cornerDisplayLabel(representative),
+        labelX: cornerLabelPoint(corner, anchor).x,
+        labelY: cornerLabelPoint(corner, anchor).y
+      }
+    ];
+  });
+}
+
+function cornerWallEntry(wall: Round2Wall, cornerId: string) {
+  const segments = wall.segments.filter(
+    (segment) =>
+      segment.tier !== "upper" &&
+      segment.sourceCornerId === cornerId &&
+      isLazySusanFootprintSegment(segment)
+  );
+  if (segments.length === 0) return null;
+  const side = cornerSide(wall, cornerId);
+  const measuredTotal =
+    wall.lengthSixteenths ??
+    wall.segments
+      .filter((segment) => segment.tier !== "upper")
+      .reduce((sum, segment) => sum + segment.widthSixteenths, 0);
+  const total = measuredTotal || 1;
+  const width = segments.reduce(
+    (sum, segment) => sum + Math.max(0, segment.widthSixteenths),
+    0
+  );
+  return {
+    wall,
+    side,
+    segments,
+    lengthPx: (width / total) * wallRunLength(wall)
+  };
+}
+
+function cornerSide(wall: Round2Wall, cornerId: string): CornerSide {
+  const base = wall.segments.filter((segment) => segment.tier !== "upper");
+  const firstIndex = base.findIndex(
+    (segment) => segment.sourceCornerId === cornerId
+  );
+  let lastIndex = -1;
+  for (let index = base.length - 1; index >= 0; index--) {
+    if (base[index].sourceCornerId === cornerId) {
+      lastIndex = index;
+      break;
+    }
+  }
+  const before = base
+    .slice(0, Math.max(0, firstIndex))
+    .reduce((sum, segment) => sum + Math.max(0, segment.widthSixteenths), 0);
+  const after = base
+    .slice(lastIndex + 1)
+    .reduce((sum, segment) => sum + Math.max(0, segment.widthSixteenths), 0);
+  return before <= after ? "start" : "end";
+}
+
+function resolvePlanCorner(
+  entries: { wall: Round2Wall; side: CornerSide }[]
+): PlanCorner | null {
+  for (const entry of entries) {
+    const corner = cornerForWallSide(entry.wall.sourceWall, entry.side);
+    if (corner) return corner;
+  }
+  return null;
+}
+
+function cornerForWallSide(
+  sourceWall: Round2Wall["sourceWall"],
+  side: CornerSide
+): PlanCorner | null {
+  if (sourceWall === "TOP") return side === "start" ? "TL" : "TR";
+  if (sourceWall === "LEFT") return side === "start" ? "TL" : "BL";
+  if (sourceWall === "RIGHT") return side === "start" ? "TR" : "BR";
+  if (sourceWall === "BOTTOM") return side === "start" ? "BL" : "BR";
+  return null;
+}
+
+function cornerAnchor(corner: PlanCorner): { x: number; y: number } {
+  if (corner === "TL") return { x: VIEW.left + 7, y: VIEW.top + 7 };
+  if (corner === "TR") return { x: VIEW.right - 7, y: VIEW.top + 7 };
+  if (corner === "BL") return { x: VIEW.left + 7, y: VIEW.bottom - 7 };
+  return { x: VIEW.right - 7, y: VIEW.bottom - 7 };
+}
+
+function cornerPath(
+  corner: PlanCorner,
+  anchor: { x: number; y: number },
+  horizontalLength: number,
+  verticalLength: number
+): string {
+  const d = BASE_DEPTH_PX;
+  const { x, y } = anchor;
+  if (corner === "TL") {
+    return pathFromPoints([
+      [x, y],
+      [x + horizontalLength, y],
+      [x + horizontalLength, y + d],
+      [x + d, y + d],
+      [x + d, y + verticalLength],
+      [x, y + verticalLength]
+    ]);
+  }
+  if (corner === "TR") {
+    return pathFromPoints([
+      [x, y],
+      [x - horizontalLength, y],
+      [x - horizontalLength, y + d],
+      [x - d, y + d],
+      [x - d, y + verticalLength],
+      [x, y + verticalLength]
+    ]);
+  }
+  if (corner === "BL") {
+    return pathFromPoints([
+      [x, y],
+      [x + horizontalLength, y],
+      [x + horizontalLength, y - d],
+      [x + d, y - d],
+      [x + d, y - verticalLength],
+      [x, y - verticalLength]
+    ]);
+  }
+  return pathFromPoints([
+    [x, y],
+    [x - horizontalLength, y],
+    [x - horizontalLength, y - d],
+    [x - d, y - d],
+    [x - d, y - verticalLength],
+    [x, y - verticalLength]
+  ]);
+}
+
+function pathFromPoints(points: [number, number][]): string {
+  return `${points
+    .map(([x, y], index) => `${index === 0 ? "M" : "L"} ${planNumber(x)} ${planNumber(y)}`)
+    .join(" ")} Z`;
+}
+
+function cornerLabelPoint(
+  corner: PlanCorner,
+  anchor: { x: number; y: number }
+): { x: number; y: number } {
+  const offset = BASE_DEPTH_PX / 2;
+  if (corner === "TL") return { x: anchor.x + offset, y: anchor.y + offset + 3 };
+  if (corner === "TR") return { x: anchor.x - offset, y: anchor.y + offset + 3 };
+  if (corner === "BL") return { x: anchor.x + offset, y: anchor.y - offset + 3 };
+  return { x: anchor.x - offset, y: anchor.y - offset + 3 };
+}
+
+function cornerDisplayLabel(segment: WallSegment): string {
+  const normalized = segment.label.trim().toLowerCase();
+  if (normalized === "blind corner") return "BLIND";
+  if (normalized === "corner clearance") return "CLR";
+  return segment.label;
 }
 
 function SegmentRun({
@@ -283,6 +560,7 @@ function depthPx(segment: WallSegment): number {
 }
 
 function shouldRenderPlanSegment(segment: WallSegment): boolean {
+  if (isLazySusanFootprintSegment(segment)) return false;
   if (segment.kind === "opening") return false;
   if (segment.kind === "gap") return isCornerGap(segment);
   return true;
@@ -292,11 +570,17 @@ function isCornerGap(segment: WallSegment): boolean {
   return segment.kind === "gap" && Boolean(segment.sourceCornerId);
 }
 
+function isLazySusanFootprintSegment(segment: WallSegment): segment is WallSegment & {
+  sourceCornerId: string;
+} {
+  if (segment.tier === "upper" || !segment.sourceCornerId) return false;
+  return /^LS\d+/i.test(segment.label.trim());
+}
+
 function planDisplayLabel(segment: WallSegment): string {
   const label = segment.code ?? segment.label;
   const normalized = label.trim().toLowerCase();
   if (normalized === "blind corner") return "BLIND";
-  if (normalized === "dead corner") return "DEAD";
   if (normalized === "corner clearance") return "CLR";
   if (normalized.endsWith(" return")) {
     return label.replace(/\s+return$/i, "");
@@ -383,4 +667,8 @@ function segmentRect(
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+function planNumber(value: number): string {
+  return Number(value.toFixed(3)).toString();
 }
