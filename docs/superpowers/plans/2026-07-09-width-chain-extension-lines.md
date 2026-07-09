@@ -99,7 +99,7 @@ Run: `git commit -m "fix: extend width dimension chain endpoints"`
 - Consumes: `WallElevation`'s existing segment rendering, semantic appliance glyphs, and the shared Round 2 project context.
 - Produces: the 02 Design Proposal elevation hides cabinet numbers/codes and appliance codes such as `RNG30` and `DW24`; appliance glyphs and semantic role tags remain visible. The 03 drawing-sheet output remains unchanged.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace the two `data-display-label` assertions in the F-coded filler and narrow filler tests with `not.toContain("data-display-label=")`. Add this focused test after `identifies appliance cabinets with glyphs and role tags`:
 
@@ -120,25 +120,25 @@ test("hides cabinet and appliance codes in the proposal elevation", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run: `npm test -- src/features/round2/proposal/wall-elevation.test.tsx`
 
 Expected: FAIL because the proposal elevation still emits `data-display-label` text for cabinet and appliance codes.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 In `src/features/round2/proposal/wall-elevation.tsx`, remove the proposal-only in-box label calculation and its `data-display-label` text block. Remove the now-unused `IN_BOX_LABEL_CHAR_PX`, `IN_BOX_LABEL_PADDING_PX`, `segmentDisplayLabel`, and `compactLabelCandidates` helpers. Keep the `ApplianceGlyph` and the existing `data-role-tag` semantic role text. Do not change `src/features/round2/drawings/drawing-sheet.tsx`.
 
 In `ai_ctx.md`, retain the Round 2 appliance identity context and state explicitly that the 02 Design Proposal workspace hides cabinet numbers/codes (including `RNG30` and `DW24`) while 03 Drawings & Review is the stage that exposes them.
 
-- [ ] **Step 4: Run the focused test to verify it passes**
+- [x] **Step 4: Run the focused test to verify it passes**
 
 Run: `npm test -- src/features/round2/proposal/wall-elevation.test.tsx`
 
 Expected: PASS with all `WallElevation` tests green.
 
-- [ ] **Step 5: Run static checks and build**
+- [x] **Step 5: Run static checks and build**
 
 Run: `npx tsc --noEmit && npm run build`
 
@@ -148,7 +148,7 @@ Expected: both commands exit with status 0.
 
 Open `http://localhost:3000/projects/c2efc764-016d-4d61-b81f-6a3f86f2ed8a/round2`. Verify that the 02 elevation shows cabinet faces, appliance glyphs, dimensions, and role tags but no cabinet numbers, `RNG30`, or `DW24`; confirm that entering the 03 Drawings & Review output still shows the cabinet codes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run: `git add src/features/round2/proposal/wall-elevation.tsx src/features/round2/proposal/wall-elevation.test.tsx ai_ctx.md docs/superpowers/plans/2026-07-09-width-chain-extension-lines.md`
 

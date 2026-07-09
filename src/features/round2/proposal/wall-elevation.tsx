@@ -46,8 +46,6 @@ const FLOOR_Y = 346;
 const CEILING_Y = 82;
 const MIN_LABEL_PX = 34;
 const LANE_STEP = 11;
-const IN_BOX_LABEL_CHAR_PX = 6;
-const IN_BOX_LABEL_PADDING_PX = 2;
 const DIMENSION_COLOR = "#079ca5";
 const DIMENSION_FONT_SIZE = 11;
 const DIMENSION_STROKE_WIDTH = 2;
@@ -598,7 +596,7 @@ function ElevationRun({
           );
         }
         // A hosted corner cabinet is partly covered by the adjacent run's
-        // side profile; its face and label live in the remaining visible zone.
+        // side profile; its face lives in the remaining visible zone.
         const hostedCornerEnd =
           segment.kind === "cabinet" &&
           segment.cabinetKind === "corner" &&
@@ -633,7 +631,6 @@ function ElevationRun({
           fixedPoints.find((point) => point.id === segment.sourceFixedPointId)
             ?.type === "window";
         const lane = 0;
-        const displayLabel = isWindow ? null : segmentDisplayLabel(segment, width);
         const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
         const hostedAtLeft =
           hostedCornerEnd != null &&
@@ -645,20 +642,12 @@ function ElevationRun({
                 CABINET_STANDARDS.depths.baseSixteenths * (RUN_WIDTH / total)
               )
             : 0;
-        const visibleWidth = Math.max(0, width - hostedOverlap);
-        const labelCenterX =
-          hostedCornerEnd != null && visibleWidth >= 24
-            ? hostedAtLeft
-              ? x + hostedOverlap + visibleWidth / 2
-              : x + visibleWidth / 2
-            : x + width / 2;
         const labelY =
           labelSide === "below"
             ? FLOOR_Y + 22 + lane * LANE_STEP
             : UPPER_CHAIN_LABEL_Y - lane * LANE_STEP;
         const guideY =
           labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
-        const isGapLabel = segment.kind === "gap";
         return (
           <g
             key={segment.id}
@@ -733,27 +722,6 @@ function ElevationRun({
                 height={height}
                 stroke="#5a8fb8"
               />
-            )}
-            {displayLabel && (
-              <text
-                data-display-label={displayLabel}
-                x={labelCenterX}
-                y={y + height / 2 + (isGapLabel ? 3 : 5)}
-                textAnchor="middle"
-                fontFamily="var(--studio-mono)"
-                fontSize={isGapLabel ? "8" : "13"}
-                letterSpacing={isGapLabel ? "0.08em" : undefined}
-                fill={
-                  isGapLabel
-                    ? "#5d6b64"
-                    : fillerLike
-                      ? "#7a5b00"
-                      : "#e12821"
-                }
-                clipPath={`url(#${clipId})`}
-              >
-                {displayLabel}
-              </text>
             )}
             {roleTag && width >= 26 && (
               <text
@@ -1255,30 +1223,6 @@ function CornerReturnSection({
       )}
     </g>
   );
-}
-
-function segmentDisplayLabel(
-  segment: WallSegment,
-  widthPx: number
-): string | null {
-  const label = segment.code ?? segment.label;
-  const candidates = compactLabelCandidates(label);
-  const usableWidth = Math.max(0, widthPx - IN_BOX_LABEL_PADDING_PX * 2);
-  const fitting = candidates.find(
-    (candidate) => candidate.length * IN_BOX_LABEL_CHAR_PX <= usableWidth
-  );
-
-  if (fitting) return fitting;
-  const fallback = candidates.at(-1) ?? label;
-  return fallback.length <= 3 && widthPx >= 18 ? fallback : null;
-}
-
-function compactLabelCandidates(label: string): string[] {
-  const normalized = label.trim().toLowerCase();
-  if (normalized === "corner clearance") return ["CLEAR", "CLR"];
-  if (normalized === "dead corner") return ["CLEAR", "CLR"];
-  if (normalized === "blind corner") return ["BLIND", "BC"];
-  return [label];
 }
 
 function isFillerLikeSegment(segment: WallSegment): boolean {

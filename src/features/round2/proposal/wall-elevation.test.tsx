@@ -218,7 +218,7 @@ describe("WallElevation", () => {
     const fillerHtml = segmentMarkup(html, "f-coded-filler");
 
     expect(fillerHtml).not.toContain('data-face="');
-    expect(fillerHtml).toContain('data-display-label="F13"');
+    expect(fillerHtml).not.toContain("data-display-label=");
   });
 
   test("renders segment fills opaque and keeps filler panels light", () => {
@@ -244,7 +244,7 @@ describe("WallElevation", () => {
     const sliverHtml = segmentMarkup(html, "narrow-sliver");
 
     expect(sliverHtml).not.toContain('data-face="');
-    expect(sliverHtml).toContain('data-display-label="W3"');
+    expect(sliverHtml).not.toContain("data-display-label=");
   });
 
   test("renders cabinet face swing lines in neutral gray with reversed direction", () => {
@@ -424,11 +424,7 @@ describe("WallElevation", () => {
     expect(cornerHtml).not.toContain('data-face="corner-front"');
     expect(cornerHtml).not.toContain('data-face="double-door"');
     expect(cornerHtml).not.toContain('data-face="single-door"');
-    // Wall A: 66″ run → LS36 spans x 70–342.7 with a 181.8px overlap; the
-    // label must sit in the visible remainder (center ≈ 297), not box center.
-    const label = tagFor(cornerHtml, "text", 'data-display-label="LS36"');
-    const labelX = Number(label.match(/\sx="([^"]+)"/)?.[1]);
-    expect(labelX).toBeGreaterThan(250);
+    expect(cornerHtml).not.toContain("data-display-label=");
   });
 
   test("splits the hosted base corner dimension into 24 inch depth and 12 inch remainder", () => {
@@ -533,6 +529,21 @@ describe("WallElevation", () => {
     expect(html).toContain('data-face="double-door"');
     // The fridge is a tall unit, so it carries its own overall height dimension.
     expect(html).toContain('data-elevation-layer="tall-height"');
+  });
+
+  test("hides cabinet and appliance codes in the proposal elevation", () => {
+    const html = render(
+      elevationModel([
+        { ...cabinet("cabinet-one", 36 * 16), code: "#1", label: "#1" },
+        { ...cabinet("range", 30 * 16, "appliance"), code: "RNG30", label: "RNG30" },
+        { ...cabinet("dishwasher", 24 * 16, "appliance"), code: "DW24", label: "DW24" }
+      ])
+    );
+
+    expect(html).not.toContain("data-display-label=");
+    expect(html).not.toContain(">#1</text>");
+    expect(html).not.toContain(">RNG30</text>");
+    expect(html).not.toContain(">DW24</text>");
   });
 
   test("only exposes cabinet kind editing for non-appliance base segments", () => {
