@@ -1058,9 +1058,9 @@ export function ShowroomIntakeApp({
         ←
       </Link>
       <div className="min-w-0">
-        <p className="studio-eyebrow !text-[#a4a49e]">ROUND 1 · STORE INTAKE</p>
+        <p className="studio-eyebrow !text-[#a4a49e]">CONCEPT · STORE INTAKE</p>
         <p className="truncate text-[15px] font-semibold text-[#16161a]">
-          {projectName ?? "Round 1"}
+          {projectName ?? "Concept"}
         </p>
       </div>
       <div className="ml-auto flex items-center gap-3">

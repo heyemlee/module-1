@@ -10,8 +10,9 @@ import { MeasurementWorkspace } from "./measurement-workspace";
 describe("MeasurementWorkspace design intent", () => {
   test("renders topology-derived questions after the measurement fields", () => {
     const locked = reduceRound2Prototype(createRound2PrototypeState("SALES"), {
-      type: "LOCK_REFERENCE",
-      reference: ROUND1_REFERENCE_FIXTURE
+      type: "ADOPT_BASIS",
+      reference: ROUND1_REFERENCE_FIXTURE,
+      version: 1
     });
     const state = {
       ...locked,

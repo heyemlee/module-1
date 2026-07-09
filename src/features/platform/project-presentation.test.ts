@@ -23,7 +23,7 @@ describe("project presentation", () => {
 
   test("maps every project status to one Studio tone", () => {
     expect(projectStatusPresentation("INTAKE")).toEqual({
-      label: "Intake",
+      label: "Concept",
       tone: "muted"
     });
     expect(projectStatusPresentation("RENDERING_READY").tone).toBe("success");
@@ -36,15 +36,17 @@ describe("project presentation", () => {
       projectNextAction({
         hasRound1State: false,
         hasSnapshot: false,
-        hasRendering: false
+        hasRendering: false,
+        hasBasis: false
       })
-    ).toEqual({ label: "Start Round 1", destination: "round1" });
+    ).toEqual({ label: "Start concept", destination: "round1" });
 
     expect(
       projectNextAction({
         hasRound1State: true,
         hasSnapshot: true,
-        hasRendering: false
+        hasRendering: false,
+        hasBasis: false
       })
     ).toEqual({ label: "Generate rendering", destination: "round1" });
 
@@ -52,8 +54,20 @@ describe("project presentation", () => {
       projectNextAction({
         hasRound1State: true,
         hasSnapshot: true,
-        hasRendering: true
+        hasRendering: true,
+        hasBasis: false
       })
-    ).toEqual({ label: "Review renderings", destination: "renderings" });
+    ).toEqual({ label: "Confirm proposal", destination: "renderings" });
+
+    // A locked basis outranks everything: the work continues in technical
+    // design even while newer renderings exist.
+    expect(
+      projectNextAction({
+        hasRound1State: true,
+        hasSnapshot: true,
+        hasRendering: true,
+        hasBasis: true
+      })
+    ).toEqual({ label: "Open technical design", destination: "round2" });
   });
 });

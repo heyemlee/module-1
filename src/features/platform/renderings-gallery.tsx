@@ -8,6 +8,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { DownloadButton } from "./download-button";
+import { LockBasisButton, type DesignBasisRef } from "./design-basis-lock";
 
 const MAX_LOAD_ATTEMPTS = 3;
 
@@ -104,14 +105,22 @@ export type RenderingCard = {
   createdAt: string;
   dateLabel: string;
   downloadName: string;
+  /** Open Confirmation Required items on the snapshot this image renders. */
+  confirmationCount: number;
+  /** False for legacy rows without a style/color stamp — nothing to lock. */
+  lockable: boolean;
 };
 
 export function RenderingsGallery({
   cards,
-  customerName
+  customerName,
+  projectId,
+  currentBasis
 }: {
   cards: RenderingCard[];
   customerName: string;
+  projectId: string;
+  currentBasis: DesignBasisRef | null;
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const active = openIndex === null ? null : cards[openIndex] ?? null;
@@ -168,6 +177,32 @@ export function RenderingsGallery({
               </div>
               <DownloadButton href={card.imageUrl} fileName={card.downloadName} />
             </figcaption>
+            <div className="flex min-h-[52px] items-center justify-between gap-3 border-t border-studio-line px-4 py-2.5">
+              {currentBasis?.renderingId === card.id ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-studio-ink px-3 py-1.5 font-mono text-[9px] tracking-[0.1em] text-white">
+                  DESIGN BASIS v{currentBasis.version}
+                </span>
+              ) : card.lockable ? (
+                <LockBasisButton
+                  projectId={projectId}
+                  renderingId={card.id}
+                  colorName={card.colorName}
+                  styleLabel={card.style}
+                  confirmationCount={card.confirmationCount}
+                  currentBasis={currentBasis}
+                />
+              ) : (
+                <span className="text-[11px] text-studio-quiet">
+                  No style/color recorded — cannot anchor a basis
+                </span>
+              )}
+              {card.confirmationCount > 0 && (
+                <span className="shrink-0 font-mono text-[9px] tracking-[0.08em] text-[#805617]">
+                  {card.confirmationCount} OPEN{" "}
+                  {card.confirmationCount === 1 ? "CONFIRMATION" : "CONFIRMATIONS"}
+                </span>
+              )}
+            </div>
           </figure>
         ))}
       </div>

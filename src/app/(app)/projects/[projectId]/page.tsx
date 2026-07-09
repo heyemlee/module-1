@@ -8,6 +8,7 @@ import {
   getRound1State,
   listRenderings
 } from "@/server/platform/round1-postgres-repository";
+import { getCurrentDesignBasis } from "@/server/platform/design-basis-repository";
 
 const CABINET_STYLE_LABELS: Record<string, string> = {
   EUROPEAN_FRAMELESS: "European Frameless",
@@ -25,11 +26,12 @@ export default async function ProjectPage({
   const project = await getProjectForUser(projectId, user);
   if (!project) notFound();
 
-  const [round1State, snapshot, renderings, colors] = await Promise.all([
+  const [round1State, snapshot, renderings, colors, basis] = await Promise.all([
     getRound1State(projectId),
     getLatestRound1Snapshot(projectId),
     listRenderings(projectId),
-    listCabinetColorNames(user.companyId)
+    listCabinetColorNames(user.companyId),
+    getCurrentDesignBasis(projectId)
   ]);
 
   const latest = renderings[0];
@@ -41,6 +43,9 @@ export default async function ProjectPage({
       progress={{
         hasRound1State: Boolean(round1State),
         hasSnapshot: Boolean(snapshot),
+        basis: basis
+          ? { version: basis.version, lockedAt: basis.lockedAt }
+          : null,
         latestRendering: latest
           ? {
               id: latest.id,

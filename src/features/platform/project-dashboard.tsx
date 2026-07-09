@@ -59,7 +59,7 @@ export function ProjectDashboard({
   const stats = [
     { label: "ACTIVE", value: counts.active, unit: "in progress" },
     { label: "INTAKE", value: counts.intake, unit: "in queue" },
-    { label: "RENDER READY", value: counts.renderingReady, unit: "concepts" },
+    { label: "CONCEPT READY", value: counts.renderingReady, unit: "concepts" },
     { label: "TOTAL", value: projects.length, unit: "projects" }
   ];
 

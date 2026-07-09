@@ -67,12 +67,8 @@ export function reduceRound2Prototype(
     case "RESTORE_DRAFT":
       // Drafts saved before the absorb-feedback field existed lack it.
       return { ...action.state, lastAbsorbed: action.state.lastAbsorbed ?? null };
-    case "LOCK_REFERENCE":
-      return lockReference(state, action.reference, 1);
-    case "REPLACE_REFERENCE":
-      return lockReference(state, action.reference, state.referenceVersion + 1);
-    case "OPEN_REFERENCE_HANDOFF":
-      return { ...state, referenceLocked: false };
+    case "ADOPT_BASIS":
+      return lockReference(state, action.reference, action.version);
     case "SET_ROLE":
       // Switching the demo "view as" role must not jump the user into a stage,
       // and never into a stage that is still gated (proposal before submit).

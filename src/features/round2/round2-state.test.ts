@@ -110,7 +110,7 @@ describe("Round 2 prototype state", () => {
     expect(updated.designIntent.confirmedKeys).toEqual(["hardware.style"]);
   });
 
-  test("replacing the reference resets design intent to fresh defaults", () => {
+  test("adopting a relocked basis resets design intent to fresh defaults", () => {
     const locked = reduceRound2Prototype(
       lock(createRound2PrototypeState("SALES")),
       {
@@ -120,8 +120,9 @@ describe("Round 2 prototype state", () => {
       }
     );
     const replaced = reduceRound2Prototype(locked, {
-      type: "REPLACE_REFERENCE",
-      reference: referenceWithId("fresh-layout")
+      type: "ADOPT_BASIS",
+      reference: referenceWithId("fresh-layout"),
+      version: 2
     });
 
     expect(replaced.designIntent.answers["hardware.style"]).toBe("handle");
@@ -225,7 +226,7 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
   });
 
-  test("blocks Round 2 tasks until a Round 1 reference is locked", () => {
+  test("blocks Round 2 tasks until a design basis is adopted", () => {
     const initial = createRound2PrototypeState("SALES");
     expect(initial.referenceLocked).toBe(false);
 
@@ -254,12 +255,13 @@ describe("Round 2 prototype state", () => {
     expect(locked.task).toBe("MEASUREMENT");
   });
 
-  test("replacing the Round 1 reference invalidates downstream output", () => {
+  test("adopting a relocked basis invalidates downstream output", () => {
     const locked = lock(createRound2PrototypeState("DESIGNER"));
     const nextReference = referenceWithId("snapshot-2");
     const replaced = reduceRound2Prototype(locked, {
-      type: "REPLACE_REFERENCE",
-      reference: nextReference
+      type: "ADOPT_BASIS",
+      reference: nextReference,
+      version: 2
     });
 
     expect(replaced.referenceVersion).toBe(2);
@@ -270,17 +272,6 @@ describe("Round 2 prototype state", () => {
     expect(Object.values(replaced.measurements).every((value) => value == null)).toBe(
       true
     );
-  });
-
-  test("can reopen the Round 1 handoff before relocking another snapshot", () => {
-    const locked = lock(createRound2PrototypeState("DESIGNER"));
-    const reopened = reduceRound2Prototype(locked, {
-      type: "OPEN_REFERENCE_HANDOFF"
-    });
-
-    expect(reopened.referenceLocked).toBe(false);
-    expect(reopened.referenceVersion).toBe(1);
-    expect(reopened.referenceSnapshotId).toBe(ROUND1_REFERENCE_FIXTURE.id);
   });
 
   test("stores a front exception and marks the drawings stale", () => {
@@ -416,8 +407,9 @@ describe("Round 2 prototype state", () => {
 
 function lock(state: Round2PrototypeState): Round2PrototypeState {
   return reduceRound2Prototype(state, {
-    type: "LOCK_REFERENCE",
-    reference: ROUND1_REFERENCE_FIXTURE
+    type: "ADOPT_BASIS",
+    reference: ROUND1_REFERENCE_FIXTURE,
+    version: 1
   });
 }
 

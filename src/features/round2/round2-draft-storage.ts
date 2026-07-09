@@ -38,6 +38,60 @@ export function round2DraftStorageKey(projectId: string): string {
   return `abcabinet.round2.draft.${encodeURIComponent(projectId)}.v1`;
 }
 
+export function round2DraftArchiveKey(
+  projectId: string,
+  basisVersion: number
+): string {
+  return `${round2DraftStorageKey(projectId)}.archived.basis-v${basisVersion}`;
+}
+
+/**
+ * What to do with a locally saved draft when the workspace opens against the
+ * server-locked design basis:
+ * - RESUME: the draft was built on exactly this basis — restore it.
+ * - ARCHIVE_AND_ADOPT: the basis was relocked since the draft was saved — park
+ *   the draft under a versioned key (never silently discard field work) and
+ *   start fresh from the new basis.
+ * - ADOPT: no draft worth keeping (none, or never locked) — start fresh.
+ */
+export type DraftReconcileDecision = "RESUME" | "ARCHIVE_AND_ADOPT" | "ADOPT";
+
+export function reconcileDraftWithBasis(
+  draft: Round2PrototypeState | null,
+  basis: { version: number; snapshotId: string }
+): DraftReconcileDecision {
+  if (!draft || !draft.referenceLocked) return "ADOPT";
+  if (
+    draft.referenceVersion === basis.version &&
+    draft.referenceSnapshotId === basis.snapshotId
+  ) {
+    return "RESUME";
+  }
+  return "ARCHIVE_AND_ADOPT";
+}
+
+export function archiveRound2Draft(
+  storage: Storage,
+  projectId: string,
+  state: Round2PrototypeState
+): boolean {
+  const payload: Round2DraftEnvelope = {
+    version: ROUND2_DRAFT_VERSION,
+    savedAt: new Date().toISOString(),
+    state
+  };
+
+  try {
+    storage.setItem(
+      round2DraftArchiveKey(projectId, state.referenceVersion),
+      JSON.stringify(payload)
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function browserRound2DraftStorage(): Storage | null {
   if (typeof window === "undefined") return null;
 

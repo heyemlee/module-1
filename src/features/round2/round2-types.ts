@@ -75,9 +75,16 @@ export type Round2PrototypeState = {
 
 export type Round2PrototypeAction =
   | { type: "RESTORE_DRAFT"; state: Round2PrototypeState }
-  | { type: "LOCK_REFERENCE"; reference: Round1ReferenceSource }
-  | { type: "REPLACE_REFERENCE"; reference: Round1ReferenceSource }
-  | { type: "OPEN_REFERENCE_HANDOFF" }
+  | {
+      /**
+       * Adopts the server-locked design basis as the working reference. The
+       * version comes from the basis row (not a client counter), so drafts can
+       * be reconciled against the basis they were built on.
+       */
+      type: "ADOPT_BASIS";
+      reference: Round1ReferenceSource;
+      version: number;
+    }
   | { type: "SET_ROLE"; role: Round2DemoRole }
   | { type: "SET_TASK"; task: Round2Task }
   | {

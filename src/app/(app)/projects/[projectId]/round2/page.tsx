@@ -2,13 +2,15 @@ import { notFound, redirect } from "next/navigation";
 import { Round2VisualPrototype } from "@/features/round2/round2-visual-prototype";
 import { getCurrentUser } from "@/server/platform/auth-service";
 import { getProjectForUser } from "@/server/platform/project-repository";
-import { getLatestRound1Snapshot } from "@/server/platform/round1-postgres-repository";
+import {
+  getRound1SnapshotById,
+  listRenderings
+} from "@/server/platform/round1-postgres-repository";
+import { getCurrentDesignBasis } from "@/server/platform/design-basis-repository";
 import { listCabinetColorNames } from "@/server/platform/cabinet-color-repository";
 import type { Round1ReferenceSource } from "@/features/round2/round2-types";
-import {
-  CABINET_STYLE_LABELS,
-  renderingPreferencesForForm
-} from "@/features/round1/rendering-preferences";
+import type { Round1Snapshot } from "@/features/round1/snapshot";
+import { CABINET_STYLE_LABELS } from "@/features/round1/rendering-preferences";
 
 const LAYOUT_LABELS: Record<string, string> = {
   ONE_WALL: "One-wall",
@@ -24,9 +26,8 @@ const LAYOUT_LABELS: Record<string, string> = {
   NO_PREFERENCE: "Layout pending"
 };
 
-function applianceLabels(snapshot: Awaited<ReturnType<typeof getLatestRound1Snapshot>>) {
-  if (!snapshot) return [];
-  const form = snapshot.snapshot.showroomForm;
+function applianceLabels(snapshot: Round1Snapshot) {
+  const form = snapshot.showroomForm;
   return [
     form.fixtures.sink.status !== "NO" ? "Sink" : null,
     form.fixtures.fridge.status !== "NO" ? "Fridge" : null,
@@ -44,36 +45,41 @@ export default async function ProjectRound2Page({
   if (!user) redirect("/login");
 
   const { projectId } = await params;
-  const [project, latestSnapshot, colorNames] = await Promise.all([
+  const [project, basis, renderings, colorNames] = await Promise.all([
     getProjectForUser(projectId, user),
-    getLatestRound1Snapshot(projectId),
+    getCurrentDesignBasis(projectId),
+    listRenderings(projectId),
     listCabinetColorNames(user.companyId)
   ]);
   if (!project) notFound();
 
+  // The reference is resolved from the locked design basis — the exact snapshot
+  // the customer-confirmed rendering was generated from — never from "the
+  // latest snapshot", which may have drifted after confirmation.
   let reference: Round1ReferenceSource | null = null;
-  if (latestSnapshot) {
-    const preferences = renderingPreferencesForForm(
-      latestSnapshot.snapshot.showroomForm
+  if (basis) {
+    const snapshotRecord = await getRound1SnapshotById(
+      projectId,
+      basis.round1SnapshotId
     );
-    const color = colorNames.find(
-      (item) => item.id === preferences.doorColorId
-    );
-    reference = {
-      id: latestSnapshot.id,
-      generatedAt: latestSnapshot.snapshot.generatedAt,
-      complete:
-        latestSnapshot.snapshot.fixedPositionsConfirmed &&
-        latestSnapshot.snapshot.cabinetFillGenerated,
-      layoutLabel:
-        LAYOUT_LABELS[latestSnapshot.snapshot.floorPlan.layoutPreference] ??
-        latestSnapshot.snapshot.floorPlan.layoutPreference,
-      styleLabel: CABINET_STYLE_LABELS[preferences.cabinetStyle],
-      colorLabel: color?.name ?? "Color not selected",
-      appliances: applianceLabels(latestSnapshot),
-      confirmationCount: latestSnapshot.snapshot.confirmationItems.length,
-      floorPlan: latestSnapshot.snapshot.floorPlan
-    };
+    if (snapshotRecord) {
+      const { snapshot } = snapshotRecord;
+      const color = colorNames.find((item) => item.id === basis.doorColorId);
+      reference = {
+        id: snapshotRecord.id,
+        generatedAt: snapshot.generatedAt,
+        complete:
+          snapshot.fixedPositionsConfirmed && snapshot.cabinetFillGenerated,
+        layoutLabel:
+          LAYOUT_LABELS[snapshot.floorPlan.layoutPreference] ??
+          snapshot.floorPlan.layoutPreference,
+        styleLabel: CABINET_STYLE_LABELS[basis.cabinetStyle],
+        colorLabel: color?.name ?? "Color not selected",
+        appliances: applianceLabels(snapshot),
+        confirmationCount: snapshot.confirmationItems.length,
+        floorPlan: snapshot.floorPlan
+      };
+    }
   }
 
   return (
@@ -83,6 +89,12 @@ export default async function ProjectRound2Page({
       customerName={project.customerName}
       actualRole={user.role}
       reference={reference}
+      basis={
+        basis && reference
+          ? { version: basis.version, lockedAt: basis.lockedAt }
+          : null
+      }
+      hasRenderings={renderings.length > 0}
     />
   );
 }

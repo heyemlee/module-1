@@ -31,8 +31,9 @@ describe("ProposalWorkspace", () => {
 
 function submittedState(): Round2PrototypeState {
   const locked = reduceRound2Prototype(createRound2PrototypeState("DESIGNER"), {
-    type: "LOCK_REFERENCE",
-    reference: ROUND1_REFERENCE_FIXTURE
+    type: "ADOPT_BASIS",
+    reference: ROUND1_REFERENCE_FIXTURE,
+    version: 1
   });
   const completed = {
     ...locked,

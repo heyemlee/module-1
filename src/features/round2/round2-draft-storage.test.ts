@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { createRound2PrototypeState } from "./round2-state";
 import {
+  archiveRound2Draft,
   loadRound2Draft,
+  reconcileDraftWithBasis,
+  round2DraftArchiveKey,
   round2DraftStorageKey,
   saveRound2Draft
 } from "./round2-draft-storage";
@@ -59,6 +62,58 @@ describe("Round 2 draft storage", () => {
       })
     );
     expect(loadRound2Draft(storage, "project-1")).toBeNull();
+  });
+
+  test("resumes a draft only when it was built on the current basis", () => {
+    const draft: Round2PrototypeState = {
+      ...createRound2PrototypeState("SALES"),
+      referenceLocked: true,
+      referenceVersion: 2,
+      referenceSnapshotId: "snapshot-2"
+    };
+
+    expect(
+      reconcileDraftWithBasis(draft, { version: 2, snapshotId: "snapshot-2" })
+    ).toBe("RESUME");
+    // Relocked basis (newer version) — draft must be archived, not resumed.
+    expect(
+      reconcileDraftWithBasis(draft, { version: 3, snapshotId: "snapshot-3" })
+    ).toBe("ARCHIVE_AND_ADOPT");
+    // Same client-side version but different snapshot (old client-lock flow).
+    expect(
+      reconcileDraftWithBasis(draft, { version: 2, snapshotId: "snapshot-9" })
+    ).toBe("ARCHIVE_AND_ADOPT");
+    // No draft, or a draft that never locked anything, has nothing to keep.
+    expect(
+      reconcileDraftWithBasis(null, { version: 1, snapshotId: "snapshot-1" })
+    ).toBe("ADOPT");
+    expect(
+      reconcileDraftWithBasis(createRound2PrototypeState("SALES"), {
+        version: 1,
+        snapshotId: "snapshot-1"
+      })
+    ).toBe("ADOPT");
+  });
+
+  test("archives a draft under its basis version without touching the live key", () => {
+    const storage = new MemoryStorage();
+    const draft: Round2PrototypeState = {
+      ...createRound2PrototypeState("SALES"),
+      referenceLocked: true,
+      referenceVersion: 1,
+      referenceSnapshotId: "snapshot-1",
+      measurements: { "wall.wall-a.length": 2400 }
+    };
+    saveRound2Draft(storage, "project-1", draft);
+
+    expect(archiveRound2Draft(storage, "project-1", draft)).toBe(true);
+
+    const archived = storage.getItem(round2DraftArchiveKey("project-1", 1));
+    expect(archived).toContain('"snapshot-1"');
+    // The live draft is untouched so a matching basis can still resume it.
+    expect(loadRound2Draft(storage, "project-1")).toMatchObject({
+      referenceSnapshotId: "snapshot-1"
+    });
   });
 });
 
