@@ -43,6 +43,10 @@ import { InchField } from "../measurement/inch-field";
 const RUN_LEFT = 70;
 const RUN_WIDTH = 500;
 const FLOOR_Y = 346;
+// Keep the dimension chains inside the viewport with clear breathing room at
+// both edges; the lower corner breakdown row otherwise sits too close to crop.
+const ELEVATION_VIEWBOX_TOP = -12;
+const ELEVATION_VIEWBOX_HEIGHT = 436;
 const CEILING_Y = 82;
 const MIN_LABEL_PX = 34;
 const LANE_STEP = 11;
@@ -204,7 +208,7 @@ export function WallElevation({
       </div>
 
       <svg
-        viewBox="0 0 640 400"
+        viewBox={`0 ${ELEVATION_VIEWBOX_TOP} 640 ${ELEVATION_VIEWBOX_HEIGHT}`}
         preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label={wall ? `Wall ${wall.label} cabinet elevation` : "Cabinet elevation"}

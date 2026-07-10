@@ -87,6 +87,13 @@ describe("WallElevation", () => {
     expect(chainGuideTick(html, "upper-center").endY).toBeLessThan(ceiling);
   });
 
+  test("reserves vertical canvas padding around the dimension chains", () => {
+    const html = renderCornerModel("A", { includeUpperCorner: true });
+    const elevation = tagFor(html, "svg", 'role="img"');
+
+    expect(elevation).toContain('viewBox="0 -12 640 436"');
+  });
+
   test("keeps all three upper corner dimension rows above the ceiling line", () => {
     const html = renderCornerModel("A", { includeUpperCorner: true });
     const cornerHtml = segmentMarkup(html, "a-upper-corner-ls");
