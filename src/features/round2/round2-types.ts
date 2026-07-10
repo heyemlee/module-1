@@ -105,6 +105,7 @@ export type Round2PrototypeAction =
   | { type: "SELECT_OBJECT"; objectId: string; wall: WallId }
   | { type: "STEP_CABINET_WIDTH"; objectId: string; widthSixteenths: number }
   | { type: "NUDGE_GROUP"; objectId: string; direction: NudgeDirection }
+  | { type: "RECENTER_SINK"; objectId: string }
   | { type: "SET_FILLER_PLACEMENT"; objectId: string; placement: FillerPlacement }
   | { type: "SET_SEGMENT_KIND"; objectId: string; cabinetKind: CabinetKind }
   | { type: "SET_SEGMENT_FRONT"; objectId: string; front: WallSegmentFront }

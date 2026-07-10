@@ -1,8 +1,13 @@
 import { describe, expect, test } from "vitest";
-import type { Round2Model, Round2Wall } from "./round2-model";
+import {
+  sinkCenteringOffsetSixteenths,
+  type Round2Model,
+  type Round2Wall
+} from "./round2-model";
 import {
   heightProfileTotal,
   nudgeGroup,
+  recenterSink,
   setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
@@ -261,6 +266,95 @@ describe("Round 2 constrained adjustments", () => {
     ).toHaveLength(0);
   });
 
+  test("keeps an anchored sink centered when a neighboring cabinet is resized", () => {
+    const model = modelWithWall(wallWithAnchoredSink());
+    const sinkBefore = sinkCenteringOffsetSixteenths(
+      model.walls[0],
+      findSeg(model.walls[0], "a-sink")!
+    );
+    expect(sinkBefore).toBe(0);
+
+    const adjusted = stepCabinetWidth(model, "a-left-cabinet", 33 * 16);
+    const wall = adjusted.walls[0];
+
+    // The +3″ delta is absorbed by the filler on the sink's own side, so the
+    // sink does not slide off the window center.
+    expect(segmentWidth(wall, "a-left-cabinet")).toBe(33 * 16);
+    expect(segmentWidth(wall, "a-left-filler")).toBe(12 * 16);
+    expect(segmentWidth(wall, "a-right-filler")).toBe(15 * 16);
+    expect(
+      sinkCenteringOffsetSixteenths(wall, findSeg(wall, "a-sink")!)
+    ).toBe(0);
+    expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+    expect(
+      adjusted.decisionItems.filter((item) => item.id.includes("off-center"))
+    ).toHaveLength(0);
+  });
+
+  test("flags an anchored sink that has drifted off the window center", () => {
+    const wall = wallWithAnchoredSink();
+    // Push remainder onto the left so the sink starts 5″ right of center.
+    wall.segments = wall.segments.map((segment) => {
+      if (segment.id === "a-left-filler") {
+        return { ...segment, widthSixteenths: 20 * 16 };
+      }
+      if (segment.id === "a-right-filler") {
+        return { ...segment, widthSixteenths: 10 * 16 };
+      }
+      return segment;
+    });
+
+    const decided = updateModelDecisions(modelWithWall(wall));
+    const offCenter = decided.decisionItems.find((item) =>
+      item.id.includes("off-center")
+    );
+
+    expect(offCenter?.severity).toBe("warning");
+    expect(offCenter?.body).toContain("window center");
+  });
+
+  test("re-centers a drifted anchored sink and keeps its anchor", () => {
+    const wall = wallWithAnchoredSink();
+    wall.segments = wall.segments.map((segment) => {
+      if (segment.id === "a-left-filler") {
+        return { ...segment, widthSixteenths: 20 * 16 };
+      }
+      if (segment.id === "a-right-filler") {
+        return { ...segment, widthSixteenths: 10 * 16 };
+      }
+      return segment;
+    });
+    const model = modelWithWall(wall);
+    expect(
+      sinkCenteringOffsetSixteenths(model.walls[0], findSeg(model.walls[0], "a-sink")!)
+    ).not.toBe(0);
+
+    const recentered = recenterSink(model, "a-sink");
+    const centeredWall = recentered.walls[0];
+    const sink = findSeg(centeredWall, "a-sink")!;
+
+    expect(sink.anchored).toBe(true);
+    expect(sinkCenteringOffsetSixteenths(centeredWall, sink)).toBe(0);
+    expect(wallTierTotal(centeredWall, "base")).toBe(
+      centeredWall.lengthSixteenths
+    );
+    expect(
+      recentered.decisionItems.filter((item) => item.id.includes("off-center"))
+    ).toHaveLength(0);
+  });
+
+  test("releases the anchor when the sink itself is nudged", () => {
+    const model = modelWithWall(wallWithAnchoredSink());
+    const nudged = nudgeGroup(model, "a-sink", "left");
+    const sink = findSeg(nudged.walls[0], "a-sink")!;
+
+    expect(sink.anchored).toBe(false);
+    // With the anchor released, an off-center sink no longer nags.
+    expect(
+      nudged.decisionItems.filter((item) => item.id.includes("off-center"))
+    ).toHaveLength(0);
+  });
+
   test("describes the configured three-inch filler minimum", () => {
     const wall = wallWithSegments();
     wall.segments = wall.segments.map((segment) =>
@@ -323,6 +417,84 @@ function wallWithSegments(): Round2Wall {
       }
     ]
   };
+}
+
+// 120″ wall with a 40″ window centered at 60″, and a 30″ sink anchored under
+// it. Fillers flank the sink on both sides so each side can absorb edits.
+function wallWithAnchoredSink(): Round2Wall {
+  return {
+    id: "A",
+    label: "A",
+    sourceWall: "TOP",
+    lengthSixteenths: 120 * 16,
+    fixedPoints: [
+      {
+        id: "a-window",
+        type: "window",
+        label: "Window",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.5,
+        widthSixteenths: 40 * 16,
+        offsetSixteenths: 40 * 16
+      }
+    ],
+    notes: [],
+    segments: [
+      {
+        id: "a-left-cabinet",
+        wallId: "A",
+        tier: "base",
+        kind: "cabinet",
+        widthSixteenths: 30 * 16,
+        label: "B30",
+        cabinetKind: "base",
+        standardWidthSixteenths: 30 * 16
+      },
+      {
+        id: "a-left-filler",
+        wallId: "A",
+        tier: "base",
+        kind: "filler",
+        widthSixteenths: 15 * 16,
+        label: "F15"
+      },
+      {
+        id: "a-sink",
+        wallId: "A",
+        tier: "base",
+        kind: "appliance",
+        widthSixteenths: 30 * 16,
+        label: "SB30",
+        cabinetKind: "sink",
+        standardWidthSixteenths: 30 * 16,
+        sourceFixedPointId: "a-sink-point",
+        anchored: true
+      },
+      {
+        id: "a-right-filler",
+        wallId: "A",
+        tier: "base",
+        kind: "filler",
+        widthSixteenths: 15 * 16,
+        label: "F15"
+      },
+      {
+        id: "a-right-cabinet",
+        wallId: "A",
+        tier: "base",
+        kind: "cabinet",
+        widthSixteenths: 30 * 16,
+        label: "B30",
+        cabinetKind: "base",
+        standardWidthSixteenths: 30 * 16
+      }
+    ]
+  };
+}
+
+function findSeg(wall: Round2Wall, id: string) {
+  return wall.segments.find((segment) => segment.id === id);
 }
 
 function modelWithWall(wall: Round2Wall): Round2Model {

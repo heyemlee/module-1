@@ -294,7 +294,7 @@ describe("WallElevation", () => {
     expect(cornerHtml).toContain('data-face="corner-return"');
     expect(cornerHtml).toContain('data-corner-return-profile="true"');
     expect(cornerHtml).toContain('data-corner-return-counter="true"');
-    expect(html).toContain("<title>Corner return</title>");
+    expect(html).not.toContain("<title>Corner return</title>");
     expect(cornerHtml).not.toContain("data-display-label=");
     // Without the paired wall in the model there is no jump target.
     expect(cornerHtml).not.toContain("data-corner-return-tag=");
@@ -596,6 +596,47 @@ describe("WallElevation", () => {
     for (const code of ["#1", "RNG30", "DW24"]) {
       expect(editorCard).not.toContain(code);
     }
+  });
+
+  test("offers a re-center control on an anchored sink that has drifted off the window", () => {
+    const model = elevationModel([
+      cabinet("a-left", 30 * 16),
+      {
+        ...cabinet("a-sink", 30 * 16, "appliance"),
+        label: "SB30",
+        cabinetKind: "sink",
+        anchored: true
+      },
+      cabinet("a-right-filler", 30 * 16, "filler")
+    ]);
+    model.walls[0].fixedPoints = [
+      {
+        id: "a-window",
+        type: "window",
+        label: "Window",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.5,
+        widthSixteenths: 30 * 16,
+        offsetSixteenths: 20 * 16
+      }
+    ];
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={model}
+        selectedObjectId="a-sink"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const editorCard = html.slice(
+      html.indexOf('<div data-testid="segment-editor-card"')
+    );
+
+    expect(editorCard).toContain("WINDOW ALIGNMENT");
+    expect(editorCard).toContain("Re-center under window");
   });
 
   test("only exposes cabinet kind editing for non-appliance base segments", () => {

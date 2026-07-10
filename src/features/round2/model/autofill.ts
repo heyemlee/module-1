@@ -23,6 +23,8 @@ const BASE_WIDTHS_DESCENDING = [...BASE_WIDTHS_ASCENDING].sort(
   (a, b) => b - a
 );
 const MIN_CABINET_WIDTH_SIXTEENTHS = BASE_WIDTHS_ASCENDING[0];
+const PREFERRED_CABINET_WIDTH_SIXTEENTHS =
+  BASE_WIDTHS_ASCENDING[Math.min(2, BASE_WIDTHS_ASCENDING.length - 1)];
 const FILLER_MIN_SIXTEENTHS = CABINET_STANDARDS.filler.minSixteenths;
 const FILLER_MAX_SIXTEENTHS = CABINET_STANDARDS.filler.maxSixteenths;
 
@@ -45,6 +47,7 @@ type PlacedReservation = {
   kind: "appliance" | "opening";
   label: string;
   cabinetKind?: "sink" | "tall";
+  anchored?: boolean;
 };
 
 type Reservation = Omit<PlacedReservation, "start"> & {
@@ -353,7 +356,8 @@ function fillBaseTier(
       label: item.label,
       cabinetKind: item.cabinetKind,
       standardWidthSixteenths: item.width,
-      sourceFixedPointId: item.fixedPoint.id
+      sourceFixedPointId: item.fixedPoint.id,
+      anchored: item.anchored
     });
     sequence += 1;
     cursor = item.start + item.width;
@@ -410,17 +414,20 @@ function baseReservations(
         window.widthSixteenths != null
           ? window.offsetSixteenths + Math.round(window.widthSixteenths / 2)
           : null;
-      sinkStart =
-        alignment === "align" && windowCenter != null
-          ? windowCenter - Math.round(sinkWidth / 2)
-          : Math.round(sinkPoint.positionRatio * Math.max(0, length - sinkWidth));
+      const aligned = alignment === "align" && windowCenter != null;
+      sinkStart = aligned
+        ? (windowCenter as number) - Math.round(sinkWidth / 2)
+        : Math.round(sinkPoint.positionRatio * Math.max(0, length - sinkWidth));
       items.push({
         fixedPoint: sinkPoint,
         desiredStart: sinkStart,
         width: sinkWidth,
         kind: "appliance",
         label: standard.label,
-        cabinetKind: "sink"
+        cabinetKind: "sink",
+        // A sink centered under the window is anchored: later cabinet edits must
+        // redistribute width around it, never through it.
+        anchored: aligned
       });
     }
   }
@@ -498,10 +505,9 @@ function packReservations(
   return placed;
 }
 
-// Rule 3 + 4 — zones between anchors are packed with the fewest wide
-// cabinets; the remainder becomes a filler pushed to the corner side or the
-// wall end. A sub-minimum remainder first tries to grow by stepping one
-// cabinet down a width tier.
+// Rule 3 + 4 — zones between anchors are packed as an exact partition of
+// standard cabinet widths. A filler is allowed only when the partition leaves
+// one approved 3–6″ remainder; otherwise the span stays visibly unresolved.
 function fillSpan(
   wall: Round2Wall,
   tier: FillTier,
@@ -514,30 +520,13 @@ function fillSpan(
   const span = spanEnd - spanStart;
   if (span <= 0) return [];
 
-  const widths: number[] = [];
-  let remaining = span;
-  while (remaining >= MIN_CABINET_WIDTH_SIXTEENTHS) {
-    const width = BASE_WIDTHS_DESCENDING.find(
-      (candidate) => candidate <= remaining
-    );
-    if (!width) break;
-    widths.push(width);
-    remaining -= width;
-  }
-
-  if (remaining > 0 && remaining < FILLER_MIN_SIXTEENTHS) {
-    const index = widths.findIndex(
-      (width) => previousWidthTier(width) != null
-    );
-    if (index !== -1) {
-      const stepped = previousWidthTier(widths[index]) as number;
-      remaining += widths[index] - stepped;
-      widths[index] = stepped;
-    }
+  const partition = partitionBaseSpan(span);
+  if (!partition) {
+    return blockingGapSegments(wall, tier, sequence, span, decisionItems);
   }
 
   const prefix = tier === "upper" ? "W" : "B";
-  const cabinets = widths.map((width, local) => ({
+  const cabinets = partition.widths.map((width, local) => ({
     id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local + 1}-cabinet`,
     wallId: wall.id,
     tier,
@@ -552,11 +541,116 @@ function fillSpan(
     wall,
     tier,
     sequence,
-    remaining,
+    partition.fillerWidth,
     decisionItems
   );
 
   return fillerSide === "start" ? [...filler, ...cabinets] : [...cabinets, ...filler];
+}
+
+type BaseSpanPartition = {
+  widths: number[];
+  fillerWidth: number;
+};
+
+/**
+ * Finds the standard-width cabinet total that leaves no filler or one approved
+ * filler. The filler order is intentional: 0 closes a span exactly, then the
+ * preferred 3″ filler wins before the wider approved options.
+ */
+function partitionBaseSpan(span: number): BaseSpanPartition | null {
+  const preferredFillers = [
+    0,
+    ...[...CABINET_STANDARDS.filler.commonWidthsSixteenths].sort(
+      (a, b) =>
+        Math.abs(a - CABINET_STANDARDS.filler.preferredSixteenths) -
+          Math.abs(b - CABINET_STANDARDS.filler.preferredSixteenths) ||
+        a - b
+    )
+  ];
+  const customFillers = Array.from(
+    {
+      length: FILLER_MAX_SIXTEENTHS - FILLER_MIN_SIXTEENTHS + 1
+    },
+    (_, index) => FILLER_MIN_SIXTEENTHS + index
+  )
+    .filter((width) => !preferredFillers.includes(width))
+    .sort(
+      (a, b) =>
+        Math.abs(a - CABINET_STANDARDS.filler.preferredSixteenths) -
+          Math.abs(b - CABINET_STANDARDS.filler.preferredSixteenths) ||
+        a - b
+    );
+
+  for (const fillerWidth of [...preferredFillers, ...customFillers]) {
+    const widths = exactBaseCabinetPartition(span - fillerWidth);
+    if (widths) return { widths, fillerWidth };
+  }
+
+  return null;
+}
+
+/**
+ * Finds one exact standard-width partition. It first minimizes cabinet count,
+ * then avoids short cabinets when a wider alternative fits, and finally
+ * prefers the wider leading cabinet widths. This keeps the choice deterministic
+ * while still allowing 9″ cabinets when they are necessary.
+ */
+function exactBaseCabinetPartition(total: number): number[] | null {
+  if (total < 0) return null;
+
+  const memo = new Map<string, number[] | null>();
+  const solve = (remaining: number, firstWidthIndex: number): number[] | null => {
+    if (remaining === 0) return [];
+    if (remaining < MIN_CABINET_WIDTH_SIXTEENTHS) return null;
+
+    const key = `${remaining}:${firstWidthIndex}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+
+    let best: number[] | null = null;
+    for (
+      let index = firstWidthIndex;
+      index < BASE_WIDTHS_DESCENDING.length;
+      index += 1
+    ) {
+      const width = BASE_WIDTHS_DESCENDING[index];
+      if (width > remaining) continue;
+      const suffix = solve(remaining - width, index);
+      if (!suffix) continue;
+
+      const candidate = [width, ...suffix];
+      if (!best || prefersCabinetPartition(candidate, best)) best = candidate;
+    }
+
+    memo.set(key, best);
+    return best;
+  };
+
+  return solve(total, 0);
+}
+
+function prefersCabinetPartition(candidate: number[], current: number[]): boolean {
+  if (candidate.length !== current.length) {
+    return candidate.length < current.length;
+  }
+
+  const candidateShorts = candidate.filter(
+    (width) => width < PREFERRED_CABINET_WIDTH_SIXTEENTHS
+  ).length;
+  const currentShorts = current.filter(
+    (width) => width < PREFERRED_CABINET_WIDTH_SIXTEENTHS
+  ).length;
+  if (candidateShorts !== currentShorts) {
+    return candidateShorts < currentShorts;
+  }
+
+  for (let index = 0; index < candidate.length; index += 1) {
+    if (candidate[index] !== current[index]) {
+      return candidate[index] > current[index];
+    }
+  }
+  return false;
 }
 
 function residualSegments(
@@ -582,6 +676,24 @@ function residualSegments(
     }));
   }
 
+  return blockingGapSegments(
+    wall,
+    tier,
+    sequence,
+    width,
+    decisionItems,
+    source
+  );
+}
+
+function blockingGapSegments(
+  wall: Round2Wall,
+  tier: FillTier,
+  sequence: number,
+  width: number,
+  decisionItems: Round2DecisionItem[],
+  source?: Pick<WallSegment, "sourceCornerId" | "sourceFixedPointId">
+): WallSegment[] {
   const id = `${wall.id.toLowerCase()}-${tier}-${sequence}-gap`;
   decisionItems.push({
     id: `decision-${id}-below-filler-minimum`,
@@ -646,11 +758,6 @@ function fillerSideForSpan(
   if (first) return "start";
   if (last) return "end";
   return (spanStart + spanEnd) / 2 <= length / 2 ? "start" : "end";
-}
-
-function previousWidthTier(width: number): number | null {
-  const index = BASE_WIDTHS_ASCENDING.indexOf(width);
-  return index > 0 ? BASE_WIDTHS_ASCENDING[index - 1] : null;
 }
 
 // Rule 3 (functional adjacency) — the cabinets flanking the range become

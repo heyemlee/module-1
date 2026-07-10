@@ -1,6 +1,7 @@
 import { autofillRound2Model } from "./model/autofill";
 import {
   nudgeGroup,
+  recenterSink,
   setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
@@ -174,6 +175,12 @@ export function reduceRound2Prototype(
       return applyProposalAdjustment(
         state,
         (model) => nudgeGroup(model, action.objectId, action.direction),
+        action.objectId
+      );
+    case "RECENTER_SINK":
+      return applyProposalAdjustment(
+        state,
+        (model) => recenterSink(model, action.objectId),
         action.objectId
       );
     case "SET_FILLER_PLACEMENT":

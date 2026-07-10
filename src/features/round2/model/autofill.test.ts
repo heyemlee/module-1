@@ -163,6 +163,9 @@ describe("Round 2 autofill", () => {
     const windowCenter = 60 * 16 + 15 * 16;
     expect(sink.segment.widthSixteenths).toBe(36 * 16);
     expect(sink.start + 18 * 16).toBe(windowCenter);
+    // A sink centered under the window is anchored so later cabinet edits
+    // redistribute width around it rather than sliding it off center.
+    expect(sink.segment.anchored).toBe(true);
   });
 
   test("docks the dishwasher against the sink", () => {
@@ -216,33 +219,47 @@ describe("Round 2 autofill", () => {
     ).toHaveLength(0);
   });
 
-  test("splits a seven-inch remainder into approved filler widths", () => {
-    const filled = autofillRound2Model(modelWithWall(wallWithLength(43 * 16)));
-    const fillers = baseTier(filled.walls[0]).filter(
-      (segment) => segment.kind === "filler"
-    );
+  test("partitions a 42-inch ordinary base span without a filler", () => {
+    const filled = autofillRound2Model(modelWithWall(wallWithLength(42 * 16)));
+    const base = baseTier(filled.walls[0]);
 
-    expect(fillers.map((segment) => segment.widthSixteenths)).toEqual([
-      3 * 16,
-      4 * 16
-    ]);
-    expect(fillers.every((segment) => segment.widthSixteenths >= 3 * 16)).toBe(
-      true
-    );
-    expect(fillers.every((segment) => segment.widthSixteenths <= 6 * 16)).toBe(
-      true
-    );
+    const cabinetWidths = base
+      .filter((segment) => segment.kind === "cabinet")
+      .map((segment) => segment.widthSixteenths);
+
+    expect(cabinetWidths).toHaveLength(2);
+    expect(cabinetWidths.every((width) =>
+      CABINET_STANDARDS.base.widthsSixteenths.includes(width)
+    )).toBe(true);
+    expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
+    expect(base.filter((segment) => segment.kind === "gap")).toHaveLength(0);
     expectTiersClosed(filled);
   });
 
-  test("emits a decision item when no neighbor can absorb a below-minimum gap", () => {
-    // 9 1/16″ fits only the smallest cabinet, which has no lower tier.
+  test("repartitions a seven-inch residual into one valid filler", () => {
+    const filled = autofillRound2Model(modelWithWall(wallWithLength(43 * 16)));
+    const base = baseTier(filled.walls[0]);
+
+    expect(base.filter((segment) => segment.kind === "filler")).toEqual([
+      expect.objectContaining({ widthSixteenths: 4 * 16 })
+    ]);
+    expect(
+      base
+        .filter((segment) => segment.kind === "cabinet")
+        .map((segment) => segment.widthSixteenths)
+    ).toEqual([24 * 16, 15 * 16]);
+    expectTiersClosed(filled);
+  });
+
+  test("emits a blocking gap when no valid cabinet-plus-filler partition exists", () => {
+    // 9 1/16″ cannot leave an exact cabinet total or an approved 3–6″ filler.
     const filled = autofillRound2Model(modelWithWall(wallWithLength(9 * 16 + 1)));
     const base = baseTier(filled.walls[0]);
 
+    expect(base.filter((segment) => segment.kind === "cabinet")).toHaveLength(0);
     expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
     expect(base).toContainEqual(
-      expect.objectContaining({ kind: "gap", widthSixteenths: 1 })
+      expect.objectContaining({ kind: "gap", widthSixteenths: 9 * 16 + 1 })
     );
     expect(filled.decisionItems).toContainEqual(
       expect.objectContaining({

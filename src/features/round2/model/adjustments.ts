@@ -10,7 +10,8 @@ import {
   type WallId,
   type WallSegment,
   type WallSegmentFront,
-  formatSixteenths
+  formatSixteenths,
+  sinkCenteringOffsetSixteenths
 } from "./round2-model";
 
 export type NudgeDirection = "left" | "right";
@@ -68,9 +69,44 @@ export function nudgeGroup(
   direction: NudgeDirection,
   amountSixteenths = 1
 ): Round2Model {
+  const sign = direction === "left" ? -1 : 1;
+  // Deliberately nudging the sink itself is a choice to break window centering,
+  // so its anchor is released — it stops constraining its neighbors and no
+  // longer reports an off-center decision.
+  return slideGroup(model, segmentId, sign * amountSixteenths, true);
+}
+
+/**
+ * Re-aligns an anchored sink back under its wall's window after an edit (or a
+ * remeasure) nudged it off center, sliding it as one group and keeping the
+ * anchor intact. No-op unless the segment is an anchored sink that has drifted.
+ */
+export function recenterSink(
+  model: Round2Model,
+  segmentId: string
+): Round2Model {
+  const context = findSegmentContext(model, segmentId);
+  if (!context || !context.segment.anchored) return model;
+  const offset = sinkCenteringOffsetSixteenths(context.wall, context.segment);
+  if (!offset) return model;
+  return slideGroup(model, segmentId, offset, false);
+}
+
+/**
+ * Moves a cabinet/appliance group by transferring width between its flanking
+ * fillers. A positive delta slides the group toward the wall end. `releaseAnchor`
+ * clears an anchored segment's alignment intent when the move is user-driven.
+ */
+function slideGroup(
+  model: Round2Model,
+  segmentId: string,
+  deltaSixteenths: number,
+  releaseAnchor: boolean
+): Round2Model {
+  if (deltaSixteenths === 0) return model;
   const context = findSegmentContext(model, segmentId);
   // Fillers are computed remainder space: they reposition via
-  // setFillerPlacement, never nudge. Only cabinet/appliance groups slide.
+  // setFillerPlacement, never slide. Only cabinet/appliance groups slide.
   if (!context || !canResizeSegment(context.segment)) return model;
 
   const segments = [...context.wall.segments];
@@ -78,16 +114,20 @@ export function nudgeGroup(
   const left = ensureSideFiller(segments, targetIndex, context.segment.tier, "left");
   targetIndex = segments.findIndex((segment) => segment.id === segmentId);
   const right = ensureSideFiller(segments, targetIndex, context.segment.tier, "right");
-  const sign = direction === "left" ? -1 : 1;
 
   segments[left] = withWidth(
     segments[left],
-    segments[left].widthSixteenths + sign * amountSixteenths
+    segments[left].widthSixteenths + deltaSixteenths
   );
   segments[right] = withWidth(
     segments[right],
-    segments[right].widthSixteenths - sign * amountSixteenths
+    segments[right].widthSixteenths - deltaSixteenths
   );
+
+  if (releaseAnchor && context.segment.anchored) {
+    const anchorIndex = segments.findIndex((segment) => segment.id === segmentId);
+    segments[anchorIndex] = { ...segments[anchorIndex], anchored: false };
+  }
 
   return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
 }
@@ -283,6 +323,20 @@ export function updateModelDecisions(model: Round2Model): Round2Model {
 
   for (const wall of model.walls) {
     for (const segment of wall.segments) {
+      if (!segment.anchored) continue;
+      const offset = sinkCenteringOffsetSixteenths(wall, segment);
+      if (offset == null || offset === 0) continue;
+      decisionItems.push({
+        id: `decision-${segment.id}-off-center`,
+        objectId: segment.id,
+        wallId: wall.id,
+        severity: "warning",
+        title: `Wall ${wall.label} sink off window center`,
+        body: `${segment.code ?? segment.label} sits ${formatSixteenths(Math.abs(offset))} ${offset > 0 ? "left of" : "right of"} the window center. Re-center it or accept the offset.`
+      });
+    }
+
+    for (const segment of wall.segments) {
       if (segment.kind !== "filler") continue;
       if (segment.widthSixteenths < 0) {
         decisionItems.push({
@@ -419,8 +473,23 @@ function ensureAbsorberFiller(
 }
 
 /**
- * A zone is the stretch of a tier between blocking segments (openings and
- * corner gaps): width redistribution never crosses those boundaries.
+ * True where width redistribution must stop: openings, corner gaps, and
+ * anchored segments (a sink centered under its window). Keeping the anchored
+ * sink a boundary means resizing a cabinet on one side is absorbed by a filler
+ * on that same side, so the sink never slides off the window center.
+ */
+function isZoneBoundary(segment: WallSegment): boolean {
+  return (
+    segment.kind === "opening" ||
+    segment.kind === "gap" ||
+    segment.anchored === true
+  );
+}
+
+/**
+ * A zone is the stretch of a tier between blocking segments (openings, corner
+ * gaps, and anchored sinks): width redistribution never crosses those
+ * boundaries.
  */
 function zoneBounds(
   segments: WallSegment[],
@@ -428,8 +497,7 @@ function zoneBounds(
   tier: SegmentTier
 ): { left: number; right: number } {
   const blocks = (segment: WallSegment) =>
-    segment.tier === tier &&
-    (segment.kind === "opening" || segment.kind === "gap");
+    segment.tier === tier && isZoneBoundary(segment);
 
   let left = -1;
   let right = segments.length;
@@ -494,7 +562,7 @@ function ensureSideFiller(
   if (side === "left") {
     for (let index = targetIndex - 1; index >= 0; index -= 1) {
       if (segments[index].tier === tier) {
-        if (segments[index].kind === "opening" || segments[index].kind === "gap") break;
+        if (isZoneBoundary(segments[index])) break;
         if (segments[index].kind === "filler") return index;
       }
     }
@@ -513,7 +581,7 @@ function ensureSideFiller(
 
   for (let index = targetIndex + 1; index < segments.length; index += 1) {
     if (segments[index].tier === tier) {
-      if (segments[index].kind === "opening" || segments[index].kind === "gap") break;
+      if (isZoneBoundary(segments[index])) break;
       if (segments[index].kind === "filler") return index;
     }
   }

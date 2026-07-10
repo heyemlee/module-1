@@ -5,11 +5,13 @@ import { cn } from "@/lib/utils";
 import {
   findWall,
   formatSixteenths,
+  sinkCenteringOffsetSixteenths,
   type CabinetKind,
   type FrontAccessory,
   type Round2FixedPoint,
   type Round2HeightProfile,
   type Round2Model,
+  type Round2Wall,
   type WallId,
   type WallSegment
 } from "../model/round2-model";
@@ -356,6 +358,7 @@ export function WallElevation({
         canOpenSegmentEditor(editingSegment) && (
         <SegmentEditorCard
           segment={editingSegment}
+          wall={wall}
           designIntent={designIntent}
           dispatch={dispatch}
           onClose={() => setEditingId(null)}
@@ -552,7 +555,6 @@ function ElevationRun({
               onClick={() => onActivate(segment)}
               className="cursor-pointer"
             >
-              <title>Corner return</title>
               <CornerReturnSection
                 x={x}
                 y={y}
@@ -668,7 +670,6 @@ function ElevationRun({
             <clipPath id={clipId}>
               <rect x={x} y={y} width={Math.max(8, width)} height={height} />
             </clipPath>
-            <title>Wall segment</title>
             <rect
               x={x}
               y={y}
@@ -1438,11 +1439,13 @@ function CardSectionLabel({ children }: { children: string }) {
  */
 function SegmentEditorCard({
   segment,
+  wall,
   designIntent,
   dispatch,
   onClose
 }: {
   segment: WallSegment;
+  wall: Round2Wall;
   designIntent?: Round2DesignIntent;
   dispatch: Dispatch<Round2PrototypeAction>;
   onClose: () => void;
@@ -1451,6 +1454,9 @@ function SegmentEditorCard({
   const isFiller = segment.kind === "filler";
   const front = resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
+  const sinkOffset = segment.anchored
+    ? sinkCenteringOffsetSixteenths(wall, segment)
+    : null;
 
   return (
     <div
@@ -1667,6 +1673,35 @@ function SegmentEditorCard({
               1/16″ →
             </button>
           </div>
+        </>
+      )}
+
+      {segment.anchored && (
+        <>
+          <CardSectionLabel>WINDOW ALIGNMENT</CardSectionLabel>
+          {sinkOffset ? (
+            <>
+              <p className="mt-1.5 text-[9.5px] leading-4 text-[#815416]">
+                Off the window center by {formatSixteenths(Math.abs(sinkOffset))}.
+                Editing the cabinets beside it keeps it put; re-center to snap it
+                back.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  dispatch({ type: "RECENTER_SINK", objectId: segment.id })
+                }
+                className="mt-1.5 w-full rounded-[8px] border border-studio-line bg-white px-2 py-1.5 font-mono text-[9px] text-studio-ink outline-none transition-colors hover:border-studio-ink"
+              >
+                Re-center under window
+              </button>
+            </>
+          ) : (
+            <p className="mt-1.5 text-[9.5px] leading-4 text-studio-muted">
+              Centered under the window. Cabinet edits on either side are
+              absorbed by that side&apos;s filler, so it stays put.
+            </p>
+          )}
         </>
       )}
 

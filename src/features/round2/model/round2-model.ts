@@ -66,6 +66,13 @@ export type WallSegment = {
   sourceFixedPointId?: string;
   sourceCornerId?: string;
   front?: WallSegmentFront;
+  /**
+   * A fixed alignment intent baked into the segment at autofill time — set on a
+   * sink that is centered under its wall's window. Anchored segments act as a
+   * boundary for width redistribution (see model/adjustments.ts) so editing the
+   * cabinets on either side never slides the sink off the window center.
+   */
+  anchored?: boolean;
 };
 
 export type Round2Wall = {
@@ -313,6 +320,38 @@ export function findWall(
 ): Round2Wall | null {
   if (!model || !wallId) return null;
   return model.walls.find((wall) => wall.id === wallId) ?? null;
+}
+
+/**
+ * How far (in sixteenths) an anchored sink must slide to sit centered under its
+ * wall's window: window center minus current sink center, rounded to the nearest
+ * sixteenth. A positive result means the sink is left of center and must move
+ * toward the wall end; negative means the reverse. Returns null when the wall
+ * has no measured window to center under.
+ */
+export function sinkCenteringOffsetSixteenths(
+  wall: Round2Wall,
+  segment: WallSegment
+): number | null {
+  const window = wall.fixedPoints.find((point) => point.type === "window");
+  if (
+    !window ||
+    window.offsetSixteenths == null ||
+    window.widthSixteenths == null
+  ) {
+    return null;
+  }
+
+  let start = 0;
+  for (const item of wall.segments) {
+    if (item.tier !== "base") continue;
+    if (item.id === segment.id) break;
+    start += item.widthSixteenths;
+  }
+
+  const sinkCenter = start + segment.widthSixteenths / 2;
+  const windowCenter = window.offsetSixteenths + window.widthSixteenths / 2;
+  return Math.round(windowCenter - sinkCenter);
 }
 
 export function findSegment(
