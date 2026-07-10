@@ -1029,6 +1029,11 @@ function mapBaseToUpperPiece(
       };
     }
     // Sink and dishwasher runs carry ordinary uppers aligned to their seams.
+    // Window cuts can leave a sliver, which must become a filler (or blocking
+    // gap through residualSegments) instead of an undersized upper cabinet.
+    if (width < MIN_CABINET_WIDTH_SIXTEENTHS) {
+      return { type: "filler", ref: base.id, label: "", width };
+    }
     return { type: "cabinet", ref: base.id, label: "", width };
   }
 

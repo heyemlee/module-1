@@ -329,6 +329,35 @@ describe("Round 2 autofill", () => {
     expectTiersClosed(filled);
   });
 
+  test("turns a six-inch upper fragment cut from a sink projection into a filler", () => {
+    const wall = wallWithLength(200 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-window",
+        type: "window",
+        positionRatio: 0.36,
+        widthSixteenths: 24 * 16,
+        offsetSixteenths: 60 * 16
+      }),
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.36 })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const uppers = filled.walls[0].segments.filter(
+      (segment) => segment.tier === "upper"
+    );
+
+    expect(uppers).toContainEqual(
+      expect.objectContaining({ kind: "filler", widthSixteenths: 6 * 16 })
+    );
+    expect(
+      uppers.some(
+        (segment) =>
+          segment.kind === "cabinet" && segment.widthSixteenths < 9 * 16
+      )
+    ).toBe(false);
+  });
+
   test("hugs the fridge to the wall end as one full-height unit with a gap above", () => {
     const wall = wallWithLength(200 * 16);
     wall.fixedPoints = [
