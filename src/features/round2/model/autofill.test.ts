@@ -412,6 +412,70 @@ describe("Round 2 autofill", () => {
     ).toBe(true);
   });
 
+  test("preserves appliance widths and a window-centered sink across rebalanced spans", () => {
+    const wall = wallWithLength(242 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-window",
+        type: "window",
+        positionRatio: 0.4,
+        widthSixteenths: 30 * 16,
+        offsetSixteenths: 80 * 16
+      }),
+      fixedPoint({
+        id: "top-appliance-dishwasher",
+        symbol: "dishwasher",
+        positionRatio: 0.25
+      }),
+      fixedPoint({
+        id: "top-appliance-sink",
+        symbol: "sink",
+        positionRatio: 0.4
+      }),
+      fixedPoint({
+        id: "top-appliance-range",
+        symbol: "range",
+        positionRatio: 0.75
+      })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const base = baseTier(filled.walls[0]);
+    const dishwasher = segmentWithStart(
+      base,
+      (segment) =>
+        segment.sourceFixedPointId === "top-appliance-dishwasher"
+    );
+    const sink = segmentWithStart(
+      base,
+      (segment) => segment.sourceFixedPointId === "top-appliance-sink"
+    );
+    const range = segmentWithStart(
+      base,
+      (segment) => segment.sourceFixedPointId === "top-appliance-range"
+    );
+
+    expect(dishwasher.segment.widthSixteenths).toBe(
+      CABINET_STANDARDS.appliances.dishwasher.defaultWidthSixteenths
+    );
+    expect(sink.segment.widthSixteenths).toBe(
+      CABINET_STANDARDS.appliances.sinkBase.defaultWidthSixteenths
+    );
+    expect(range.segment.widthSixteenths).toBe(
+      CABINET_STANDARDS.appliances.range.defaultWidthSixteenths
+    );
+    expect(sink.segment.anchored).toBe(true);
+    expect(sink.start + sink.segment.widthSixteenths / 2).toBe(
+      80 * 16 + (30 * 16) / 2
+    );
+    expect(
+      base.filter((segment) => segment.kind === "filler").map(
+        (segment) => segment.widthSixteenths
+      )
+    ).toEqual([5 * 16, 4 * 16, 5 * 16]);
+    expectTiersClosed(filled);
+  });
+
   test.each([
     {
       symbol: "dishwasher",
