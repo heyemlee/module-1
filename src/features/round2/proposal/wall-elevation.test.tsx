@@ -558,8 +558,8 @@ describe("WallElevation", () => {
     }
   });
 
-  test("keeps codes out of the selected appliance editor while preserving width controls", () => {
-    const html = renderToStaticMarkup(
+  test("keeps appliance reservations out of the width editor while retaining cabinet width controls", () => {
+    const applianceHtml = renderToStaticMarkup(
       <WallElevation
         wallId="A"
         model={elevationModel([
@@ -578,7 +578,8 @@ describe("WallElevation", () => {
             code: "#1",
             label: "#1",
             sourceCornerId: "TL"
-          }
+          },
+          cabinet("base-cabinet", 30 * 16)
         ])}
         selectedObjectId="range"
         canEdit={true}
@@ -586,16 +587,31 @@ describe("WallElevation", () => {
         onSelect={() => {}}
       />
     );
-    const editorCard = html.slice(
-      html.indexOf('<div data-testid="segment-editor-card"')
+    const applianceEditor = applianceHtml.slice(
+      applianceHtml.indexOf('<div data-testid="segment-editor-card"')
+    );
+    const cabinetHtml = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([cabinet("base-cabinet", 30 * 16)])}
+        selectedObjectId="base-cabinet"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const cabinetEditor = cabinetHtml.slice(
+      cabinetHtml.indexOf('<div data-testid="segment-editor-card"')
     );
 
-    expect(editorCard).toContain('data-testid="segment-editor-card"');
-    expect(editorCard).toContain("WIDTH");
-    expect(editorCard).toContain('aria-label="Custom width"');
+    expect(applianceEditor).toContain('data-testid="segment-editor-card"');
+    expect(applianceEditor).not.toContain("WIDTH");
+    expect(applianceEditor).not.toContain('aria-label="Custom width"');
     for (const code of ["#1", "RNG30", "DW24"]) {
-      expect(editorCard).not.toContain(code);
+      expect(applianceEditor).not.toContain(code);
     }
+    expect(cabinetEditor).toContain("WIDTH");
+    expect(cabinetEditor).toContain('aria-label="Custom width"');
   });
 
   test("offers a re-center control on an anchored sink that has drifted off the window", () => {

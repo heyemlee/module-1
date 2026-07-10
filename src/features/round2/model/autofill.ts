@@ -45,10 +45,12 @@ type PlacedReservation = {
   kind: "appliance" | "opening";
   label: string;
   cabinetKind?: "sink" | "tall";
+  /** Measured window center requested by an aligned sink before packing. */
+  requestedWindowCenter?: number;
   anchored?: boolean;
 };
 
-type Reservation = Omit<PlacedReservation, "start"> & {
+type Reservation = Omit<PlacedReservation, "start" | "anchored"> & {
   desiredStart: number;
 };
 
@@ -312,6 +314,24 @@ function fillBaseTier(
     fillEnd
   );
 
+  for (const item of reservations) {
+    if (
+      item.cabinetKind !== "sink" ||
+      item.requestedWindowCenter == null ||
+      item.anchored
+    ) {
+      continue;
+    }
+    decisionItems.push({
+      id: `decision-${item.fixedPoint.id}-window-placement`,
+      objectId: item.fixedPoint.id,
+      wallId: wall.id,
+      severity: "blocking",
+      title: "Sink placement conflicts with window alignment",
+      body: `${item.label} cannot stay centered under its measured window after fixed reservations were placed. Adjust the fixed-point layout or request a remeasure.`
+    });
+  }
+
   const segments: WallSegment[] = [...startInsets];
   let cursor = fillStart;
   let sequence = 1;
@@ -423,9 +443,9 @@ function baseReservations(
         kind: "appliance",
         label: standard.label,
         cabinetKind: "sink",
-        // A sink centered under the window is anchored: later cabinet edits must
-        // redistribute width around it, never through it.
-        anchored: aligned
+        // This records the requested measured center. Anchoring is decided only
+        // after packing confirms that the final sink placement still matches it.
+        requestedWindowCenter: aligned ? windowCenter ?? undefined : undefined
       });
     }
   }
@@ -496,7 +516,11 @@ function packReservations(
     );
     const width = Math.min(item.width, Math.max(0, fillEnd - start));
     if (width <= 0) continue;
-    placed.push({ ...item, start, width });
+    const anchored =
+      item.requestedWindowCenter == null
+        ? undefined
+        : start + width / 2 === item.requestedWindowCenter;
+    placed.push({ ...item, start, width, anchored });
     cursor = start + width;
   }
 

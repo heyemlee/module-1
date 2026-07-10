@@ -1450,7 +1450,8 @@ function SegmentEditorCard({
   dispatch: Dispatch<Round2PrototypeAction>;
   onClose: () => void;
 }) {
-  const resizable = segment.kind === "cabinet" || segment.kind === "appliance";
+  const canAdjustWidth = segment.kind === "cabinet";
+  const canSlide = segment.kind === "cabinet" || segment.kind === "appliance";
   const isFiller = segment.kind === "filler";
   const front = resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
@@ -1494,7 +1495,7 @@ function SegmentEditorCard({
         />
       )}
 
-      {resizable && (
+      {canAdjustWidth && (
         <>
           <CardSectionLabel>WIDTH</CardSectionLabel>
           <div className="mt-1.5 grid grid-cols-5 gap-1">
@@ -1642,7 +1643,7 @@ function SegmentEditorCard({
         </>
       )}
 
-      {resizable && (
+      {canSlide && (
         <>
           <CardSectionLabel>SLIDE GROUP</CardSectionLabel>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5">

@@ -67,10 +67,11 @@ export type WallSegment = {
   sourceCornerId?: string;
   front?: WallSegmentFront;
   /**
-   * A fixed alignment intent baked into the segment at autofill time — set on a
-   * sink that is centered under its wall's window. Anchored segments act as a
-   * boundary for width redistribution (see model/adjustments.ts) so editing the
-   * cabinets on either side never slides the sink off the window center.
+   * A verified window alignment baked into the segment at autofill time — set
+   * only when the final packed sink center equals its wall's measured window
+   * center. Anchored segments act as a boundary for width redistribution (see
+   * model/adjustments.ts) so editing cabinets on either side never slides the
+   * sink off the window center.
    */
   anchored?: boolean;
 };

@@ -170,6 +170,40 @@ describe("Round 2 autofill", () => {
     expect(sink.segment.anchored).toBe(true);
   });
 
+  test("blocks an aligned sink displaced by a corner reservation", () => {
+    const model = uShapeModel();
+    const top = model.walls.find((wall) => wall.id === "A")!;
+    top.fixedPoints = [
+      fixedPoint({
+        id: "top-window",
+        type: "window",
+        positionRatio: 0.3,
+        widthSixteenths: 30 * 16,
+        offsetSixteenths: 20 * 16
+      }),
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.3 })
+    ];
+
+    const filled = autofillRound2Model(model);
+    const wall = filled.walls.find((item) => item.id === "A")!;
+    const sink = segmentWithStart(
+      baseTier(wall),
+      (segment) => segment.sourceFixedPointId === "top-appliance-sink"
+    );
+    const windowCenter = 20 * 16 + 15 * 16;
+
+    expect(sink.start + sink.segment.widthSixteenths / 2).not.toBe(windowCenter);
+    expect(sink.segment.anchored).toBe(false);
+    expect(filled.decisionItems).toContainEqual(
+      expect.objectContaining({
+        id: "decision-top-appliance-sink-window-placement",
+        objectId: "top-appliance-sink",
+        severity: "blocking",
+        title: "Sink placement conflicts with window alignment"
+      })
+    );
+  });
+
   test("docks the dishwasher against the sink", () => {
     const wall = wallWithLength(200 * 16);
     wall.fixedPoints = [

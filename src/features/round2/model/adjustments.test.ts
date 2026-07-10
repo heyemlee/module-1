@@ -154,6 +154,57 @@ describe("Round 2 constrained adjustments", () => {
     expect(adjusted).toBe(model);
   });
 
+  test.each([
+    ["dishwasher", "DW24"],
+    ["range", "RNG30"],
+    ["sink", "SB30"]
+  ])("does not resize the immutable %s reservation", (_symbol, label) => {
+    const wall = wallWithSegments();
+    wall.segments[1] = {
+      ...wall.segments[1],
+      id: `a-${label.toLowerCase()}`,
+      kind: "appliance",
+      label,
+      cabinetKind: label === "SB30" ? "sink" : undefined,
+      sourceFixedPointId: `top-appliance-${label.toLowerCase()}`
+    };
+    const model = modelWithWall(wall);
+    const applianceId = `a-${label.toLowerCase()}`;
+
+    expect(
+      stepCabinetWidth(
+        model,
+        applianceId,
+        wall.segments[1].widthSixteenths + 16
+      )
+    ).toBe(model);
+  });
+
+  test.each([
+    ["dishwasher", "DW24", 24 * 16],
+    ["range", "RNG30", 30 * 16],
+    ["sink", "SB36", 36 * 16]
+  ])(
+    "keeps the %s reservation fixed when its neighboring cabinet changes",
+    (_symbol, label, applianceWidth) => {
+      const model = modelWithWall(
+        wallWithCabinetBesideAppliance(label, applianceWidth)
+      );
+      const beforeWall = model.walls[0];
+      const applianceId = `a-${label.toLowerCase()}`;
+      const applianceBefore = findSeg(beforeWall, applianceId)!;
+      const applianceStart = segmentStart(beforeWall, applianceId);
+
+      const adjusted = stepCabinetWidth(model, "a-left-cabinet", 29 * 16);
+      const wall = adjusted.walls[0];
+      const appliance = findSeg(wall, applianceId)!;
+
+      expect(appliance.widthSixteenths).toBe(applianceBefore.widthSixteenths);
+      expect(segmentStart(wall, applianceId)).toBe(applianceStart);
+      expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+    }
+  );
+
   test("accepts a custom width from the width-chain input", () => {
     const model = modelWithWall(wallWithSegments());
     const adjusted = stepCabinetWidth(model, "a-base-cabinet", 31 * 16 + 8);
@@ -493,6 +544,58 @@ function wallWithAnchoredSink(): Round2Wall {
   };
 }
 
+function wallWithCabinetBesideAppliance(
+  label: string,
+  applianceWidth: number
+): Round2Wall {
+  return {
+    id: "A",
+    label: "A",
+    sourceWall: "TOP",
+    lengthSixteenths: 60 * 16 + applianceWidth,
+    fixedPoints: [],
+    notes: [],
+    segments: [
+      {
+        id: "a-left-cabinet",
+        wallId: "A",
+        tier: "base",
+        kind: "cabinet",
+        widthSixteenths: 30 * 16,
+        label: "B30",
+        cabinetKind: "base"
+      },
+      {
+        id: `a-${label.toLowerCase()}`,
+        wallId: "A",
+        tier: "base",
+        kind: "appliance",
+        widthSixteenths: applianceWidth,
+        label,
+        cabinetKind: label.startsWith("SB") ? "sink" : undefined,
+        sourceFixedPointId: `top-appliance-${label.toLowerCase()}`
+      },
+      {
+        id: "a-right-filler",
+        wallId: "A",
+        tier: "base",
+        kind: "filler",
+        widthSixteenths: 0,
+        label: "F0"
+      },
+      {
+        id: "a-right-cabinet",
+        wallId: "A",
+        tier: "base",
+        kind: "cabinet",
+        widthSixteenths: 30 * 16,
+        label: "B30",
+        cabinetKind: "base"
+      }
+    ]
+  };
+}
+
 function findSeg(wall: Round2Wall, id: string) {
   return wall.segments.find((segment) => segment.id === id);
 }
@@ -507,4 +610,14 @@ function modelWithWall(wall: Round2Wall): Round2Model {
 
 function segmentWidth(wall: Round2Wall, id: string): number | undefined {
   return wall.segments.find((segment) => segment.id === id)?.widthSixteenths;
+}
+
+function segmentStart(wall: Round2Wall, id: string): number {
+  let start = 0;
+  for (const segment of wall.segments) {
+    if (segment.tier !== "base") continue;
+    if (segment.id === id) return start;
+    start += segment.widthSixteenths;
+  }
+  throw new Error(`Segment ${id} not found`);
 }

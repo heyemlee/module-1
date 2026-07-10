@@ -37,7 +37,7 @@ export function stepCabinetWidth(
   }
 
   const context = findSegmentContext(model, segmentId);
-  if (!context || !canResizeSegment(context.segment)) return model;
+  if (!context || !canAdjustCabinetWidth(context.segment)) return model;
 
   const delta = targetWidthSixteenths - context.segment.widthSixteenths;
   if (delta === 0) return model;
@@ -107,7 +107,7 @@ function slideGroup(
   const context = findSegmentContext(model, segmentId);
   // Fillers are computed remainder space: they reposition via
   // setFillerPlacement, never slide. Only cabinet/appliance groups slide.
-  if (!context || !canResizeSegment(context.segment)) return model;
+  if (!context || !canSlideGroup(context.segment)) return model;
 
   const segments = [...context.wall.segments];
   let targetIndex = segments.findIndex((segment) => segment.id === segmentId);
@@ -211,7 +211,7 @@ export function setSegmentKind(
   cabinetKind: CabinetKind
 ): Round2Model {
   const context = findSegmentContext(model, segmentId);
-  if (!context || !canResizeSegment(context.segment)) return model;
+  if (!context || !canAdjustCabinetWidth(context.segment)) return model;
   if (context.segment.kind === "appliance") return model;
   if (cabinetKind === "sink") return model;
   if (context.segment.tier === "upper" && cabinetKind !== "upper") return model;
@@ -439,7 +439,11 @@ function replaceWallSegments(
   };
 }
 
-function canResizeSegment(segment: WallSegment): boolean {
+function canAdjustCabinetWidth(segment: WallSegment): boolean {
+  return segment.kind === "cabinet";
+}
+
+function canSlideGroup(segment: WallSegment): boolean {
   return segment.kind === "cabinet" || segment.kind === "appliance";
 }
 
@@ -473,13 +477,13 @@ function ensureAbsorberFiller(
 }
 
 /**
- * True where width redistribution must stop: openings, corner gaps, and
- * anchored segments (a sink centered under its window). Keeping the anchored
- * sink a boundary means resizing a cabinet on one side is absorbed by a filler
- * on that same side, so the sink never slides off the window center.
+ * True where width redistribution must stop: fixed appliances, openings,
+ * corner gaps, and anchored segments. Appliances are reservation geometry, so
+ * a cabinet edit cannot transfer filler through an appliance and move it.
  */
 function isZoneBoundary(segment: WallSegment): boolean {
   return (
+    segment.kind === "appliance" ||
     segment.kind === "opening" ||
     segment.kind === "gap" ||
     segment.anchored === true
@@ -487,9 +491,9 @@ function isZoneBoundary(segment: WallSegment): boolean {
 }
 
 /**
- * A zone is the stretch of a tier between blocking segments (openings, corner
- * gaps, and anchored sinks): width redistribution never crosses those
- * boundaries.
+ * A zone is the stretch of a tier between blocking segments (appliances,
+ * openings, corner gaps, and anchored sinks): width redistribution never
+ * crosses those boundaries.
  */
 function zoneBounds(
   segments: WallSegment[],
