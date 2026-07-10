@@ -1,12 +1,14 @@
 import { describe, expect, test } from "vitest";
+import { stepCabinetWidth } from "./adjustments";
 import { autofillRound2Model } from "./autofill";
 import { CABINET_STANDARDS } from "./cabinet-standards";
 import type { Round2DesignIntent } from "./design-intent";
-import type {
-  Round2FixedPoint,
-  Round2Model,
-  Round2Wall,
-  WallSegment
+import {
+  sinkCenteringOffsetSixteenths,
+  type Round2FixedPoint,
+  type Round2Model,
+  type Round2Wall,
+  type WallSegment
 } from "./round2-model";
 
 describe("Round 2 autofill", () => {
@@ -474,6 +476,48 @@ describe("Round 2 autofill", () => {
       )
     ).toEqual([5 * 16, 4 * 16, 5 * 16]);
     expectTiersClosed(filled);
+
+    const adjacentCabinet = base[base.indexOf(sink.segment) + 1]!;
+    expect(adjacentCabinet).toMatchObject({
+      kind: "cabinet",
+      cabinetKind: "base"
+    });
+
+    const adjusted = stepCabinetWidth(
+      filled,
+      adjacentCabinet.id,
+      adjacentCabinet.widthSixteenths - 16
+    );
+    const adjustedWall = adjusted.walls[0];
+    const adjustedBase = baseTier(adjustedWall);
+    const adjustedDishwasher = adjustedBase.find(
+      (segment) =>
+        segment.sourceFixedPointId === "top-appliance-dishwasher"
+    )!;
+    const adjustedSink = adjustedBase.find(
+      (segment) => segment.sourceFixedPointId === "top-appliance-sink"
+    )!;
+    const adjustedRange = adjustedBase.find(
+      (segment) => segment.sourceFixedPointId === "top-appliance-range"
+    )!;
+    const adjustedCabinet = adjustedBase.find(
+      (segment) => segment.id === adjacentCabinet.id
+    )!;
+
+    expect(adjustedCabinet.widthSixteenths).toBe(
+      adjacentCabinet.widthSixteenths - 16
+    );
+    expect(adjustedDishwasher.widthSixteenths).toBe(
+      dishwasher.segment.widthSixteenths
+    );
+    expect(adjustedSink.widthSixteenths).toBe(sink.segment.widthSixteenths);
+    expect(adjustedRange.widthSixteenths).toBe(range.segment.widthSixteenths);
+    expect(adjustedSink.anchored).toBe(true);
+    expect(sinkCenteringOffsetSixteenths(adjustedWall, adjustedSink)).toBe(0);
+    expect(
+      adjusted.decisionItems.filter((item) => item.id.includes("off-center"))
+    ).toHaveLength(0);
+    expectTiersClosed(adjusted);
   });
 
   test.each([

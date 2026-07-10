@@ -56,3 +56,36 @@ production solver file has no diff.
 None known. The regression keeps the user-staged anchor/recentering behavior
 in scope without changing it; ordinary span partitioning remains confined to
 the space between fixed reservations.
+
+## Review follow-up — real adjacent-cabinet adjustment
+
+The initial integration regression verified only the autofill result. The
+review correctly identified that it did not execute the constrained adjustment
+path after autofill. The same mixed appliance/window scenario now selects the
+ordinary base cabinet immediately to the right of the generated anchored sink
+and calls:
+
+```ts
+stepCabinetWidth(filled, adjacentCabinet.id, adjacentCabinet.widthSixteenths - 16)
+```
+
+This real one-sixteenth width adjustment is absorbed within the anchored sink's
+right-side adjustment zone. The extended regression verifies after that call:
+
+- The selected ordinary cabinet was resized by one sixteenth.
+- Dishwasher, sink, and range widths are unchanged from their autofilled
+  values (which were already checked against their shared standards).
+- The sink remains anchored and `sinkCenteringOffsetSixteenths` remains zero.
+- No off-center decision appears, both tiers remain closed, and no
+  `recenterSink` action is needed or invoked.
+
+### Review-follow-up evidence
+
+| Command | Result |
+| --- | --- |
+| `npm test -- src/features/round2/model/autofill.test.ts src/features/round2/model/adjustments.test.ts` before the extension | 53 passed |
+| `npm test -- src/features/round2/model/autofill.test.ts -t "preserves appliance widths and a window-centered sink across rebalanced spans"` after the extension | 1 passed |
+| Same focused test with a temporary `stepCabinetWidth` mutation that clears an anchor | failed as expected at `expect(adjustedSink.anchored).toBe(true)` (received `false`) |
+| Same focused test after restoring `stepCabinetWidth` exactly | 1 passed |
+| `npm test -- src/features/round2/model/autofill.test.ts src/features/round2/model/adjustments.test.ts` | 53 passed |
+| `git diff --check` | passed |
