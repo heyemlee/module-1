@@ -223,14 +223,11 @@ describe("Round 2 autofill", () => {
     const filled = autofillRound2Model(modelWithWall(wallWithLength(42 * 16)));
     const base = baseTier(filled.walls[0]);
 
-    const cabinetWidths = base
-      .filter((segment) => segment.kind === "cabinet")
-      .map((segment) => segment.widthSixteenths);
-
-    expect(cabinetWidths).toHaveLength(2);
-    expect(cabinetWidths.every((width) =>
-      CABINET_STANDARDS.base.widthsSixteenths.includes(width)
-    )).toBe(true);
+    expect(
+      base
+        .filter((segment) => segment.kind === "cabinet")
+        .map((segment) => segment.widthSixteenths)
+    ).toEqual([33 * 16, 9 * 16]);
     expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
     expect(base.filter((segment) => segment.kind === "gap")).toHaveLength(0);
     expectTiersClosed(filled);
@@ -247,7 +244,7 @@ describe("Round 2 autofill", () => {
       base
         .filter((segment) => segment.kind === "cabinet")
         .map((segment) => segment.widthSixteenths)
-    ).toEqual([24 * 16, 15 * 16]);
+    ).toEqual([30 * 16, 9 * 16]);
     expectTiersClosed(filled);
   });
 

@@ -23,8 +23,6 @@ const BASE_WIDTHS_DESCENDING = [...BASE_WIDTHS_ASCENDING].sort(
   (a, b) => b - a
 );
 const MIN_CABINET_WIDTH_SIXTEENTHS = BASE_WIDTHS_ASCENDING[0];
-const PREFERRED_CABINET_WIDTH_SIXTEENTHS =
-  BASE_WIDTHS_ASCENDING[Math.min(2, BASE_WIDTHS_ASCENDING.length - 1)];
 const FILLER_MIN_SIXTEENTHS = CABINET_STANDARDS.filler.minSixteenths;
 const FILLER_MAX_SIXTEENTHS = CABINET_STANDARDS.filler.maxSixteenths;
 
@@ -592,9 +590,8 @@ function partitionBaseSpan(span: number): BaseSpanPartition | null {
 
 /**
  * Finds one exact standard-width partition. It first minimizes cabinet count,
- * then avoids short cabinets when a wider alternative fits, and finally
- * prefers the wider leading cabinet widths. This keeps the choice deterministic
- * while still allowing 9″ cabinets when they are necessary.
+ * then prefers the lexicographically wider descending width list. This keeps
+ * the choice deterministic while still allowing 9″ cabinets when necessary.
  */
 function exactBaseCabinetPartition(total: number): number[] | null {
   if (total < 0) return null;
@@ -633,16 +630,6 @@ function exactBaseCabinetPartition(total: number): number[] | null {
 function prefersCabinetPartition(candidate: number[], current: number[]): boolean {
   if (candidate.length !== current.length) {
     return candidate.length < current.length;
-  }
-
-  const candidateShorts = candidate.filter(
-    (width) => width < PREFERRED_CABINET_WIDTH_SIXTEENTHS
-  ).length;
-  const currentShorts = current.filter(
-    (width) => width < PREFERRED_CABINET_WIDTH_SIXTEENTHS
-  ).length;
-  if (candidateShorts !== currentShorts) {
-    return candidateShorts < currentShorts;
   }
 
   for (let index = 0; index < candidate.length; index += 1) {

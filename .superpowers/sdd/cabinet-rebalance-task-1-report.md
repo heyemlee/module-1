@@ -20,8 +20,8 @@ it with the already staged centered-sink anchor work in the single
 - Preserves fixed appliances, openings, corners, and staged anchored-sink
   behavior because only the independent ordinary spans between those anchors are
   partitioned.
-- Replaced the stale 43-inch expectation with `B24 + B15 + F4`; added coverage
-  for the 42-inch exact span and the unsolvable 9 1/16-inch span.
+- Added coverage for the 42-inch exact span, the 43-inch one-filler span, and
+  the unsolvable 9 1/16-inch span.
 - Aligned the elevation test with the staged removal of SVG title tooltips; the
   full suite had exposed that stale assertion.
 
@@ -68,3 +68,33 @@ passed all 29 tests.
 None known after the checks above. The solver performs a small memoized search
 over the configured standard width set; fixed-point spans can still use a
 single custom-width filler only inside the approved 3–6-inch range.
+
+## Review follow-up — deterministic cabinet tie-break
+
+The Task 1 review identified an unrequested tie-break that preferred fewer
+short cabinets. It was removed. The solver now ranks candidates strictly by:
+
+1. filler preference (no filler, then the configured 3/4/5/6-inch choices),
+2. fewer cabinets, and
+3. lexicographically wider descending cabinet widths.
+
+The exact regression expectations are therefore:
+
+- 42 inches: `B33 + B9` with no filler.
+- 43 inches: `B30 + B9 + F4`.
+
+The earlier `B24 + B15 + F4` example is superseded by this required
+deterministic tie-break.
+
+### Focused test evidence
+
+After updating the exact expectations but before removing the extra tie-break,
+the focused suite failed with the old `B27 + B15` and `B24 + B15` selections.
+After the fix:
+
+```text
+✓ src/features/round2/model/autofill.test.ts (29 tests) 10ms
+
+Test Files  1 passed (1)
+     Tests  29 passed (29)
+```
