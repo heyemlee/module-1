@@ -1310,18 +1310,19 @@ function SegmentFace({
       <g data-face="double-door" stroke={accent} strokeWidth="1" fill="none">
         {extraLines}
         <line x1={x + width / 2} y1={faceY + 3} x2={x + width / 2} y2={faceY + faceHeight - 3} />
-        <path d={`M ${x + width / 2 - 2} ${faceY + 3} L ${x + 3} ${faceY + faceHeight / 2} L ${x + width / 2 - 2} ${faceY + faceHeight - 3}`} />
-        <path d={`M ${x + width / 2 + 2} ${faceY + 3} L ${x + width - 3} ${faceY + faceHeight / 2} L ${x + width / 2 + 2} ${faceY + faceHeight - 3}`} />
+        <path strokeDasharray="6 4" d={`M ${x + width / 2 - 2} ${faceY + 3} L ${x + 3} ${faceY + faceHeight / 2} L ${x + width / 2 - 2} ${faceY + faceHeight - 3}`} />
+        <path strokeDasharray="6 4" d={`M ${x + width / 2 + 2} ${faceY + 3} L ${x + width - 3} ${faceY + faceHeight / 2} L ${x + width / 2 + 2} ${faceY + faceHeight - 3}`} />
         <AccessoryTag x={x} y={faceY} front={front} />
       </g>
     );
   }
 
   if (front.doorCount === 1) {
+    // Standard notation: hinge left (point to left)
     return (
       <g data-face="single-door" stroke={accent} strokeWidth="1" fill="none">
         {extraLines}
-        <path d={`M ${x + 4} ${faceY + faceHeight - 4} L ${x + width / 2} ${faceY + faceHeight / 2} L ${x + width - 4} ${faceY + faceHeight - 4}`} />
+        <path strokeDasharray="6 4" d={`M ${x + width - 4} ${faceY + 4} L ${x + 4} ${faceY + faceHeight / 2} L ${x + width - 4} ${faceY + faceHeight - 4}`} />
         <AccessoryTag x={x} y={faceY} front={front} />
       </g>
     );
