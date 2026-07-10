@@ -294,24 +294,27 @@ function fillBaseTier(
   let fillEnd = length - segmentTotal(endInsets);
 
   if (fillStart > fillEnd) {
+    const reservedCornerWidth = segmentTotal(startInsets) + segmentTotal(endInsets);
     decisionItems.push({
       id: `decision-${wall.id}-corner-overflow`,
       objectId: wall.id,
       wallId: wall.id,
       severity: "blocking",
       title: `Wall ${wall.label} too short for corner strategy`,
-      body: `Corner reservations need ${formatSixteenths(fillStart + (length - fillEnd))} but the wall measures ${formatSixteenths(length)}. Revise the corner intent or remeasure.`
+      body: `Corner reservations need ${formatSixteenths(reservedCornerWidth)} but the wall measures ${formatSixteenths(length)}. Revise the corner intent or remeasure.`
     });
-    startInsets = [];
-    endInsets = [];
-    fillStart = 0;
-    fillEnd = length;
+    // Keep the immutable corner geometry visible. There is no remaining
+    // ordinary-cabinet span, so fixed reservations pack after the start
+    // corner and report their own overflow if they cannot fit either.
+    fillEnd = fillStart;
   }
 
   const reservations = packReservations(
     baseReservations(wall, fillStart, fillEnd, intent),
     fillStart,
-    fillEnd
+    fillEnd,
+    wall,
+    decisionItems
   );
 
   for (const item of reservations) {
@@ -500,7 +503,9 @@ function baseReservations(
 function packReservations(
   reservations: Reservation[],
   fillStart: number,
-  fillEnd: number
+  fillEnd: number,
+  wall: Round2Wall,
+  decisionItems: Round2DecisionItem[]
 ): PlacedReservation[] {
   const placed: PlacedReservation[] = [];
   let cursor = fillStart;
@@ -514,8 +519,18 @@ function packReservations(
       cursor,
       Math.min(item.desiredStart, fillEnd - item.width)
     );
-    const width = Math.min(item.width, Math.max(0, fillEnd - start));
-    if (width <= 0) continue;
+    const width = item.width;
+    const overflow = start + width - fillEnd;
+    if (overflow > 0) {
+      decisionItems.push({
+        id: `decision-${item.fixedPoint.id}-reservation-overflow`,
+        objectId: item.fixedPoint.id,
+        wallId: wall.id,
+        severity: "blocking",
+        title: "Fixed reservation exceeds available wall space",
+        body: `${item.label} needs ${formatSixteenths(width)} but extends ${formatSixteenths(overflow)} beyond the available run. Keep the fixed geometry and revise the layout, corner strategy, or measurement.`
+      });
+    }
     const anchored =
       item.requestedWindowCenter == null
         ? undefined

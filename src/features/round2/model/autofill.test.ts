@@ -596,6 +596,122 @@ describe("Round 2 autofill", () => {
     });
   });
 
+  test.each([
+    {
+      label: "appliance",
+      point: fixedPoint({
+        id: "fixed-range",
+        symbol: "range",
+        positionRatio: 0.5
+      }),
+      fixedPointId: "fixed-range",
+      expectedKind: "appliance"
+    },
+    {
+      label: "door opening",
+      point: fixedPoint({
+        id: "fixed-door",
+        type: "door",
+        label: "Door",
+        positionRatio: 0,
+        offsetSixteenths: 0,
+        widthSixteenths: 30 * 16
+      }),
+      fixedPointId: "fixed-door",
+      expectedKind: "opening"
+    }
+  ])("preserves a fixed $label that exceeds its available wall span", ({
+    point,
+    fixedPointId,
+    expectedKind
+  }) => {
+    const wall = wallWithLength(24 * 16);
+    wall.fixedPoints = [point];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const reserved = filled.walls[0].segments.find(
+      (segment) =>
+        segment.tier === "base" && segment.sourceFixedPointId === fixedPointId
+    );
+
+    expect(reserved).toMatchObject({
+      kind: expectedKind,
+      widthSixteenths: 30 * 16
+    });
+    expect(filled.decisionItems).toContainEqual(
+      expect.objectContaining({
+        objectId: fixedPointId,
+        severity: "blocking",
+        title: "Fixed reservation exceeds available wall space"
+      })
+    );
+  });
+
+  test("reports an aligned sink conflict when fixed reservations displace it", () => {
+    const wall = wallWithLength(30 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-appliance-range",
+        symbol: "range",
+        positionRatio: 0
+      }),
+      fixedPoint({
+        id: "top-window",
+        type: "window",
+        positionRatio: 0.8,
+        offsetSixteenths: 24 * 16,
+        widthSixteenths: 30 * 16
+      }),
+      fixedPoint({
+        id: "top-appliance-sink",
+        symbol: "sink",
+        positionRatio: 0.8
+      })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+
+    expect(
+      filled.walls[0].segments.find(
+        (segment) => segment.sourceFixedPointId === "top-appliance-sink"
+      )
+    ).toMatchObject({ widthSixteenths: 36 * 16, anchored: false });
+    expect(filled.decisionItems).toContainEqual(
+      expect.objectContaining({
+        id: "decision-top-appliance-sink-window-placement",
+        severity: "blocking"
+      })
+    );
+  });
+
+  test("keeps corner reservations visible when their combined width overflows the wall", () => {
+    const model = uShapeModel();
+    model.walls = model.walls.map((wall) => ({
+      ...wall,
+      lengthSixteenths: 20 * 16
+    }));
+
+    const filled = autofillRound2Model(model);
+    const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+    const topCorners = baseTier(top).filter(
+      (segment) => segment.sourceCornerId != null
+    );
+
+    expect(topCorners).toHaveLength(2);
+    expect(
+      topCorners.every((segment) => segment.widthSixteenths > 0)
+    ).toBe(true);
+    expect(
+      new Set(topCorners.map((segment) => segment.sourceCornerId)).size
+    ).toBe(2);
+    expect(filled.decisionItems).toContainEqual(
+      expect.objectContaining({
+        id: `decision-${top.id}-corner-overflow`,
+        severity: "blocking"
+      })
+    );
+  });
+
   test("does not reserve base width for a hood", () => {
     const filled = autofillRound2Model(modelWithWall(wallWithAppliance("hood")));
 

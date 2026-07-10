@@ -214,10 +214,44 @@ describe("Round 2 constrained adjustments", () => {
     expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
   });
 
+  test("rejects a custom cabinet width below the nine-inch minimum", () => {
+    const model = modelWithWall(wallWithSegments());
+
+    expect(stepCabinetWidth(model, "a-base-cabinet", 8 * 16)).toBe(model);
+  });
+
   test("rejects zero or fractional custom widths", () => {
     const model = modelWithWall(wallWithSegments());
     expect(stepCabinetWidth(model, "a-base-cabinet", 0)).toBe(model);
     expect(stepCabinetWidth(model, "a-base-cabinet", 30.5)).toBe(model);
+  });
+
+  test("does not resize or nudge an immutable corner cabinet", () => {
+    const wall = wallWithSegments();
+    wall.segments[1] = {
+      ...wall.segments[1],
+      cabinetKind: "corner",
+      label: "LS30",
+      sourceCornerId: "TL"
+    };
+    const model = modelWithWall(wall);
+
+    expect(stepCabinetWidth(model, "a-base-cabinet", 33 * 16)).toBe(model);
+    expect(nudgeGroup(model, "a-base-cabinet", "right")).toBe(model);
+  });
+
+  test("does not nudge an appliance reservation", () => {
+    const wall = wallWithSegments();
+    wall.segments[1] = {
+      ...wall.segments[1],
+      id: "a-range",
+      kind: "appliance",
+      label: "RNG30",
+      sourceFixedPointId: "top-appliance-range"
+    };
+    const model = modelWithWall(wall);
+
+    expect(nudgeGroup(model, "a-range", "right")).toBe(model);
   });
 
   test("stores a front exception without moving any widths", () => {
@@ -394,16 +428,13 @@ describe("Round 2 constrained adjustments", () => {
     ).toHaveLength(0);
   });
 
-  test("releases the anchor when the sink itself is nudged", () => {
+  test("rejects nudging an anchored sink; re-centering is the only sink move", () => {
     const model = modelWithWall(wallWithAnchoredSink());
     const nudged = nudgeGroup(model, "a-sink", "left");
     const sink = findSeg(nudged.walls[0], "a-sink")!;
 
-    expect(sink.anchored).toBe(false);
-    // With the anchor released, an off-center sink no longer nags.
-    expect(
-      nudged.decisionItems.filter((item) => item.id.includes("off-center"))
-    ).toHaveLength(0);
+    expect(nudged).toBe(model);
+    expect(sink.anchored).toBe(true);
   });
 
   test("describes the configured three-inch filler minimum", () => {

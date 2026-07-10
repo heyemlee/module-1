@@ -509,7 +509,9 @@ function firstResizableSegment(state: Round2PrototypeState) {
     .find(
       (item) =>
         item.tier === "base" &&
-        item.kind === "cabinet"
+        item.kind === "cabinet" &&
+        item.cabinetKind !== "corner" &&
+        item.sourceCornerId == null
     );
   if (!segment) throw new Error("Expected a resizable base segment");
   return segment;

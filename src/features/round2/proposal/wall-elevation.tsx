@@ -1406,7 +1406,12 @@ export const KIND_OPTIONS: { value: CabinetKind; label: string }[] = [
 ];
 
 export function canEditSegmentKind(segment: WallSegment): boolean {
-  return segment.kind === "cabinet" && segment.tier !== "upper";
+  return (
+    segment.kind === "cabinet" &&
+    segment.tier !== "upper" &&
+    segment.cabinetKind !== "corner" &&
+    segment.sourceCornerId == null
+  );
 }
 
 export function canOpenSegmentEditor(segment: WallSegment): boolean {
@@ -1450,8 +1455,12 @@ function SegmentEditorCard({
   dispatch: Dispatch<Round2PrototypeAction>;
   onClose: () => void;
 }) {
-  const canAdjustWidth = segment.kind === "cabinet";
-  const canSlide = segment.kind === "cabinet" || segment.kind === "appliance";
+  const isOrdinaryCabinet =
+    segment.kind === "cabinet" &&
+    segment.cabinetKind !== "corner" &&
+    segment.sourceCornerId == null;
+  const canAdjustWidth = isOrdinaryCabinet;
+  const canSlide = isOrdinaryCabinet;
   const isFiller = segment.kind === "filler";
   const front = resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
@@ -1520,7 +1529,10 @@ function SegmentEditorCard({
           <InchField
             value={segment.widthSixteenths}
             onChange={(value) => {
-              if (value != null && value > 0) {
+              if (
+                value != null &&
+                value >= CABINET_STANDARDS.base.widthsSixteenths[0]
+              ) {
                 dispatch({
                   type: "STEP_CABINET_WIDTH",
                   objectId: segment.id,

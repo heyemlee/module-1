@@ -614,6 +614,31 @@ describe("WallElevation", () => {
     expect(cabinetEditor).toContain('aria-label="Custom width"');
   });
 
+  test("keeps immutable corner cabinets out of width and nudge controls", () => {
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          {
+            ...cabinet("corner-cabinet", 36 * 16),
+            cabinetKind: "corner",
+            label: "LS36",
+            sourceCornerId: "TL"
+          }
+        ])}
+        selectedObjectId="corner-cabinet"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const editor = html.slice(html.indexOf('<div data-testid="segment-editor-card"'));
+
+    expect(editor).not.toContain("WIDTH");
+    expect(editor).not.toContain('aria-label="Custom width"');
+    expect(editor).not.toContain("NUDGE");
+  });
+
   test("offers a re-center control on an anchored sink that has drifted off the window", () => {
     const model = elevationModel([
       cabinet("a-left", 30 * 16),

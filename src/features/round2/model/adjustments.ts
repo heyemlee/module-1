@@ -21,9 +21,9 @@ export function standardWidthOptionsSixteenths(): number[] {
   return [...CABINET_STANDARDS.base.widthsSixteenths];
 }
 
-// Accepts any positive width: the chips offer the standard tiers, but the
-// width-chain input also takes custom values. The delta is still absorbed by
-// a same-tier filler, so the chain stays closed either way.
+// The chips offer standard tiers; the width-chain input also takes custom
+// values, but never below the 9″ ordinary-cabinet minimum. The delta is
+// absorbed by a same-tier filler, so the chain stays closed either way.
 export function stepCabinetWidth(
   model: Round2Model,
   segmentId: string,
@@ -31,7 +31,7 @@ export function stepCabinetWidth(
 ): Round2Model {
   if (
     !Number.isInteger(targetWidthSixteenths) ||
-    targetWidthSixteenths <= 0
+    targetWidthSixteenths < CABINET_STANDARDS.base.widthsSixteenths[0]
   ) {
     return model;
   }
@@ -89,7 +89,7 @@ export function recenterSink(
   if (!context || !context.segment.anchored) return model;
   const offset = sinkCenteringOffsetSixteenths(context.wall, context.segment);
   if (!offset) return model;
-  return slideGroup(model, segmentId, offset, false);
+  return slideGroup(model, segmentId, offset, false, true);
 }
 
 /**
@@ -101,13 +101,20 @@ function slideGroup(
   model: Round2Model,
   segmentId: string,
   deltaSixteenths: number,
-  releaseAnchor: boolean
+  releaseAnchor: boolean,
+  allowAnchoredSink = false
 ): Round2Model {
   if (deltaSixteenths === 0) return model;
   const context = findSegmentContext(model, segmentId);
   // Fillers are computed remainder space: they reposition via
   // setFillerPlacement, never slide. Only cabinet/appliance groups slide.
-  if (!context || !canSlideGroup(context.segment)) return model;
+  if (
+    !context ||
+    (!canSlideGroup(context.segment) &&
+      !(allowAnchoredSink && isAnchoredSink(context.segment)))
+  ) {
+    return model;
+  }
 
   const segments = [...context.wall.segments];
   let targetIndex = segments.findIndex((segment) => segment.id === segmentId);
@@ -440,11 +447,27 @@ function replaceWallSegments(
 }
 
 function canAdjustCabinetWidth(segment: WallSegment): boolean {
-  return segment.kind === "cabinet";
+  return isOrdinaryCabinet(segment);
 }
 
 function canSlideGroup(segment: WallSegment): boolean {
-  return segment.kind === "cabinet" || segment.kind === "appliance";
+  return isOrdinaryCabinet(segment);
+}
+
+function isAnchoredSink(segment: WallSegment): boolean {
+  return (
+    segment.kind === "appliance" &&
+    segment.cabinetKind === "sink" &&
+    segment.anchored === true
+  );
+}
+
+function isOrdinaryCabinet(segment: WallSegment): boolean {
+  return (
+    segment.kind === "cabinet" &&
+    segment.cabinetKind !== "corner" &&
+    segment.sourceCornerId == null
+  );
 }
 
 function ensureAbsorberFiller(
@@ -486,6 +509,7 @@ function isZoneBoundary(segment: WallSegment): boolean {
     segment.kind === "appliance" ||
     segment.kind === "opening" ||
     segment.kind === "gap" ||
+    segment.cabinetKind === "corner" ||
     segment.anchored === true
   );
 }
