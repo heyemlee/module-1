@@ -42,11 +42,24 @@ describe("cabinet color repository helpers", () => {
     });
   });
 
+  test("maps object-backed images to the private image proxy", () => {
+    expect(
+      mapCabinetColorRow({
+        ...row,
+        swatch_object_key: "cabinet-colors/color-1/swatch.webp",
+        hover_object_key: "cabinet-colors/color-1/hover.webp"
+      })
+    ).toMatchObject({
+      swatchImageUrl: "/api/cabinet-colors/11111111-1111-1111-1111-111111111111/image?variant=swatch",
+      hoverExampleImageUrl: "/api/cabinet-colors/11111111-1111-1111-1111-111111111111/image?variant=hover"
+    });
+  });
+
   test("can build a lightweight list query without hover example image payloads", () => {
     const query = buildCabinetColorListQuery(false);
 
-    expect(query).toContain("NULL::text AS hover_example_image_url");
-    expect(query).not.toContain("swatch_hex, hover_example_image_url,");
+    expect(query).toContain("NULL::text AS hover_object_key");
+    expect(query).not.toContain("swatch_hex, hover_object_key,");
   });
 
   test("validates cabinet color input", () => {

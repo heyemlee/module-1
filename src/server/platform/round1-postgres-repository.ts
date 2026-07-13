@@ -1,9 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { query } from "@/server/db/client";
 import { round1FormSchema, type Round1FormInput } from "@/domain/round1";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
 import type { Round1RenderingPreferenceStamp } from "@/server/round1/rendering-service";
 import type { AuthUser } from "./types";
+import {
+  buildObjectKey,
+  createBucketStorageFromEnv
+} from "@/server/storage/bucket";
 
 /**
  * Non-authoritative concept rendering stored alongside a project. Customer-facing
@@ -50,7 +55,7 @@ type Round1StateRow = {
 type RenderingHistoryRow = {
   id: string;
   model: string;
-  image_base64: string;
+  image_base64: string | null;
   prompt: string;
   size: string;
   based_on_snapshot_generated_at: Date;
@@ -123,7 +128,7 @@ export function mapRenderingHistoryRow(
   return {
     id: row.id,
     model: row.model,
-    imageBase64: row.image_base64,
+    imageBase64: row.image_base64 ?? "",
     prompt: row.prompt,
     size: row.size,
     basedOnSnapshotGeneratedAt: row.based_on_snapshot_generated_at.toISOString(),
@@ -247,20 +252,35 @@ export async function saveRenderingHistory(input: {
     throw new Error("Rendering preference metadata is required");
   }
 
+  const storage = createBucketStorageFromEnv(process.env);
+  const renderingId = randomUUID();
+  const imageBuffer = Buffer.from(input.rendering.imageBase64, "base64");
+  const imageObjectKey = storage
+    ? buildObjectKey("renderings", input.projectId, `${renderingId}.png`)
+    : null;
+
+  if (storage && imageObjectKey) {
+    await storage.uploadObject(imageObjectKey, imageBuffer, "image/png");
+  }
+
   const result = await query<{ id: string; created_at: Date }>(
     `INSERT INTO renderings (
-       project_id, round1_snapshot_id, model, image_base64, prompt, size,
+       id, project_id, round1_snapshot_id, model,
+       image_object_key, image_content_type, image_bytes, prompt, size,
        based_on_snapshot_generated_at, based_on_cabinet_style,
        based_on_door_color_id, based_on_color_updated_at, sales_estimate_only,
        not_for_production, dimension_confidence, created_by_user_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, true, 'ROUGH', $11)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, true, 'ROUGH', $14)
      RETURNING id, created_at`,
     [
+      renderingId,
       input.projectId,
       input.snapshotId,
       input.rendering.model,
-      input.rendering.imageBase64,
+      imageObjectKey,
+      storage ? "image/png" : null,
+      storage ? imageBuffer.length : null,
       input.rendering.prompt,
       input.rendering.size,
       input.rendering.basedOnSnapshotGeneratedAt,
@@ -319,12 +339,25 @@ export async function getRound1SnapshotById(projectId: string, snapshotId: strin
  * caller can answer 404 without leaking other projects' images.
  */
 export async function getRenderingImage(projectId: string, renderingId: string) {
-  const result = await query<{ image_base64: string }>(
-    `SELECT image_base64 FROM renderings WHERE id = $1 AND project_id = $2 LIMIT 1`,
+  const result = await query<{ image_object_key: string | null }>(
+    `SELECT image_object_key
+     FROM renderings WHERE id = $1 AND project_id = $2 LIMIT 1`,
     [renderingId, projectId]
   );
   const row = result.rows[0];
-  return row ? Buffer.from(row.image_base64, "base64") : null;
+  if (!row) return null;
+
+  if (row.image_object_key) {
+    const storage = createBucketStorageFromEnv(process.env);
+    if (storage) {
+      try {
+        return (await storage.getObject(row.image_object_key)).body;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export async function getRenderCountForCurrentMonth(userId: string): Promise<number> {

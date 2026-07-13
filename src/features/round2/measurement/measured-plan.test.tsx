@@ -34,7 +34,7 @@ describe("MeasuredPlan", () => {
     expect(html).toContain('data-wall="A"');
     expect(html).toContain('data-selected="true"');
     expect(html).toContain("Wall A");
-    expect(html).toContain("待量");
+    expect(html).toContain("TBD");
     expect(html).toContain("stroke-dasharray");
   });
 

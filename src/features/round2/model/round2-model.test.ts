@@ -19,7 +19,7 @@ describe("Round 2 model helpers", () => {
     expect(formatSixteenths(12)).toBe("3/4″");
     expect(formatSixteenths(2406)).toBe("150 3/8″");
     expect(formatSixteenths(-8)).toBe("-1/2″");
-    expect(formatSixteenths(null)).toBe("待量");
+    expect(formatSixteenths(null)).toBe("TBD");
   });
 
   test("builds dynamic measurement keys from derived walls and openings", () => {

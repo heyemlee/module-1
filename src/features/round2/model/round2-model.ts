@@ -149,7 +149,7 @@ const FRACTION_BY_NUMERATOR: Record<number, string> = {
 };
 
 export function formatSixteenths(value: number | null | undefined): string {
-  if (value == null) return "待量";
+  if (value == null) return "TBD";
 
   const sign = value < 0 ? "-" : "";
   const absolute = Math.abs(value);
