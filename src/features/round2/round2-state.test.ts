@@ -64,6 +64,35 @@ describe("Round 2 prototype state", () => {
     expect(advanced.task).toBe("PROPOSAL");
   });
 
+  test("clears a prior cabinet selection when opening the proposal", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = reduceRound2Prototype(submitted, {
+      type: "SELECT_OBJECT",
+      objectId: "demo-cabinet",
+      wall: "A"
+    });
+    const measurement = reduceRound2Prototype(selected, {
+      type: "SET_TASK",
+      task: "MEASUREMENT"
+    });
+    const reopened = reduceRound2Prototype(measurement, {
+      type: "SET_TASK",
+      task: "PROPOSAL"
+    });
+
+    expect(reopened.selectedObjectId).toBeNull();
+  });
+
+  test("does not restore a cabinet editor when reopening a saved proposal", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const restored = reduceRound2Prototype(submitted, {
+      type: "RESTORE_DRAFT",
+      state: { ...submitted, selectedObjectId: "previous-cabinet" }
+    });
+
+    expect(restored.selectedObjectId).toBeNull();
+  });
+
   test("requires complete dynamic measurements before submit autofills proposal model", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
     const blocked = reduceRound2Prototype(locked, {
@@ -82,7 +111,7 @@ describe("Round 2 prototype state", () => {
     expect(submitted.proposalStatus).toBe("NEEDS_DECISION");
     expect(submitted.drawingStatus).toBe("REVIEW_READY");
     expect(submitted.model?.walls[0].segments.length).toBeGreaterThan(0);
-    expect(submitted.selectedObjectId).toBeTruthy();
+    expect(submitted.selectedObjectId).toBeNull();
     expect(
       submitted.model?.decisionItems.some((item) =>
         item.title.includes("Confirmation required")

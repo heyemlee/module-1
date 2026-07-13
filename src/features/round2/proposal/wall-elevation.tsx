@@ -74,9 +74,21 @@ const OVERALL_DIMENSION_GUIDE_Y = 29;
 // independent of the ceiling lets the full elevation sit lower without
 // pushing a dimension chain through the ceiling datum.
 const UPPER_CHAIN_LABEL_Y = 42;
+const BASE_CHAIN_LABEL_Y = 64;
 const CABINET_FACE_STROKE = "#a7aaa5";
 const TALL_HEIGHT_CHAIN_X = 32;
 const TALL_HEIGHT_LABEL_X = 20;
+const ROOM_HEIGHT_CHAIN_X = 32;
+const ROOM_HEIGHT_LABEL_X = 20;
+
+function widthChainLabelY(
+  labelSide: "above" | "below",
+  tier: WallSegment["tier"]
+): number {
+  if (labelSide === "below") return FLOOR_Y + 22;
+  return tier === "upper" ? UPPER_CHAIN_LABEL_Y : BASE_CHAIN_LABEL_Y;
+}
+
 // Corner returns follow NKBA section conventions: sectioned side profile in
 // amber hatch, hidden carcass in dashed gray, counter cut in dark poché, and
 // a parenthesized depth reference kept out of the teal cabinet chain.
@@ -122,26 +134,15 @@ function verticalLayout(model: Round2Model | null): VerticalLayout {
   const ceiling = model?.ceilingHeightSixteenths ?? 96 * 16;
   const scale = (FLOOR_Y - CEILING_Y) / Math.max(1, ceiling);
   const baseTop = FLOOR_Y - profile.counterSixteenths * scale;
-  const baseBodyTop = baseTop + counterThicknessSixteenths(profile) * scale;
+  const baseBodyTop = baseTop;
   const upperBottom = baseTop - profile.backsplashSixteenths * scale;
   const upperTop = upperBottom - profile.upperHeightSixteenths * scale;
   return { scale, baseTop, baseBodyTop, upperTop, upperBottom, profile };
 }
 
-/**
- * Countertop thickness = finished counter height minus the base cabinet body
- * height, so a profile with a raised counter keeps a real 1.5″ slab.
- */
-function counterThicknessSixteenths(profile: Round2HeightProfile): number {
-  return Math.max(
-    0,
-    profile.counterSixteenths - CABINET_STANDARDS.base.heightSixteenths
-  );
-}
-
-/** Base cabinet body height = finished counter height minus the slab. */
+/** The elevation treats the configured counter height as the cabinet height. */
 function baseBodyHeightSixteenths(profile: Round2HeightProfile): number {
-  return profile.counterSixteenths - counterThicknessSixteenths(profile);
+  return profile.counterSixteenths;
 }
 
 /** A base run segment carries a counter unless it is tall or a freestanding range. */
@@ -287,7 +288,6 @@ export function WallElevation({
             ))}
           </div>
         </div>
-        <span className="font-mono text-[9px] text-black/45">1:30</span>
       </div>
 
       <svg
@@ -431,7 +431,6 @@ export function WallElevation({
                 fridgeAboveHeights={fridgeAboveHeights}
               />
             </g>
-            <DepthNote />
           </>
         ) : (
           <text
@@ -476,19 +475,19 @@ function HeightChain({
   return (
     <g data-elevation-layer="height-chain">
       <path
-        d={`M 586 ${CEILING_Y} H 598 M 586 ${FLOOR_Y} H 598 M 592 ${CEILING_Y} V ${FLOOR_Y}`}
+        d={`M ${ROOM_HEIGHT_CHAIN_X - 6} ${CEILING_Y} H ${ROOM_HEIGHT_CHAIN_X + 6} M ${ROOM_HEIGHT_CHAIN_X - 6} ${FLOOR_Y} H ${ROOM_HEIGHT_CHAIN_X + 6} M ${ROOM_HEIGHT_CHAIN_X} ${CEILING_Y} V ${FLOOR_Y}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       <text
         data-height-label="ceiling"
-        x="611"
+        x={ROOM_HEIGHT_LABEL_X}
         y={(CEILING_Y + FLOOR_Y) / 2}
         textAnchor="middle"
         fontSize={DIMENSION_FONT_SIZE}
         fontWeight="bold"
         fill={DIMENSION_COLOR}
         stroke="none"
-        transform={`rotate(90 611 ${(CEILING_Y + FLOOR_Y) / 2})`}
+        transform={`rotate(-90 ${ROOM_HEIGHT_LABEL_X} ${(CEILING_Y + FLOOR_Y) / 2})`}
       >
         {formatSixteenths(model?.ceilingHeightSixteenths)}
       </text>
@@ -531,36 +530,8 @@ function HeightChain({
 }
 
 /**
- * Depth is perpendicular to the elevation, so it can't sit on a width chain;
- * a teal reference note carries the base and upper cabinet depths in the same
- * dimension style, reading them from the standards.
- */
-function DepthNote() {
-  const base = CABINET_STANDARDS.depths.baseSixteenths;
-  const upper = CABINET_STANDARDS.depths.upperSixteenths;
-  return (
-    <text
-      data-elevation-layer="depth-note"
-      x={RUN_LEFT + RUN_WIDTH / 2}
-      y={FLOOR_Y + 50}
-      textAnchor="middle"
-      fontFamily="var(--studio-mono)"
-      fontSize="9"
-      letterSpacing="0.1em"
-      fontWeight="bold"
-      fill={DIMENSION_COLOR}
-      stroke="none"
-    >
-      {`BASE ${formatSixteenths(base)} DEEP · UPPER ${formatSixteenths(upper)} DEEP`}
-    </text>
-  );
-}
-
-/**
- * Countertop over the straight base run: one poché slab per contiguous run of
- * counter-topped base segments (tall units and freestanding ranges break it),
- * drawn on top of the cabinet boxes with a solid surface line and a small
- * overhang at exposed ends. The base cabinet body reads below the slab.
+ * Counter surface over the straight base run: one line per contiguous run of
+ * counter-topped base segments (tall units and freestanding ranges break it).
  */
 function CounterBand({
   fixedPoints,
@@ -575,9 +546,6 @@ function CounterBand({
   layout: VerticalLayout;
   mirrored: boolean;
 }) {
-  const thickness = layout.baseBodyTop - layout.baseTop;
-  if (thickness <= 0) return null;
-
   type Placed = { segment: WallSegment; start: number; end: number };
   const placed: Placed[] = [];
   let cursor = 0;
@@ -613,16 +581,8 @@ function CounterBand({
         );
         return (
           <g key={index} data-countertop-band={index}>
-            <rect
-              x={left}
-              y={layout.baseTop}
-              width={Math.max(1, right - left)}
-              height={thickness}
-              fill={COUNTER_SLAB_FILL}
-              stroke={COUNTER_SLAB_STROKE}
-              strokeWidth="1.2"
-            />
             <line
+              data-countertop-band={index}
               x1={left}
               y1={layout.baseTop}
               x2={right}
@@ -787,8 +747,7 @@ function ElevationRun({
           const cornerAtLeft = mirrored
             ? cornerReturn.side === "end"
             : cornerReturn.side === "start";
-          const labelY =
-            labelSide === "below" ? FLOOR_Y + 22 : UPPER_CHAIN_LABEL_Y;
+          const labelY = widthChainLabelY(labelSide, segment.tier);
           const guideY = labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
           return (
             <g
@@ -900,7 +859,7 @@ function ElevationRun({
         const labelY =
           labelSide === "below"
             ? FLOOR_Y + 22 + lane * LANE_STEP
-            : UPPER_CHAIN_LABEL_Y - lane * LANE_STEP;
+            : widthChainLabelY(labelSide, segment.tier) - lane * LANE_STEP;
         const guideY =
           labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
         return (
@@ -1279,18 +1238,12 @@ function CornerSideProfile({
   const upperWidth = depths.upperSixteenths * pxPerSixteenth;
   const baseX = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH - baseWidth;
   const upperX = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH - upperWidth;
-  const counterThickness = Math.max(
-    3,
-    COUNTER_THICKNESS_SIXTEENTHS * layout.scale
-  );
-  const counterOverhang = COUNTER_THICKNESS_SIXTEENTHS * pxPerSixteenth;
-  const counterX = atLeft ? baseX : baseX - counterOverhang;
   const toeHeight = Math.max(6, TOE_KICK_HEIGHT_SIXTEENTHS * layout.scale);
   const toeDepth = Math.min(
     baseWidth / 3,
     TOE_KICK_DEPTH_SIXTEENTHS * pxPerSixteenth
   );
-  const faceTop = layout.baseTop + counterThickness;
+  const faceTop = layout.baseTop;
   const profileFill = hatchPatternId ? `url(#${hatchPatternId})` : "none";
   const basePath = atLeft
     ? `M ${baseX} ${faceTop} H ${baseX + baseWidth} V ${FLOOR_Y - toeHeight} H ${baseX + baseWidth - toeDepth} V ${FLOOR_Y} H ${baseX} Z`
@@ -1300,15 +1253,14 @@ function CornerSideProfile({
       data-elevation-layer="corner-side-profile"
       className="pointer-events-none"
     >
-      <rect
+      <line
         data-corner-side-profile="counter"
-        x={counterX}
-        y={layout.baseTop}
-        width={baseWidth + counterOverhang}
-        height={counterThickness}
-        fill={COUNTER_SECTION_FILL}
+        x1={baseX}
+        y1={layout.baseTop}
+        x2={baseX + baseWidth}
+        y2={layout.baseTop}
         stroke="#2c2c2c"
-        strokeWidth="1"
+        strokeWidth="2"
       />
       <path
         data-corner-side-profile="base"
@@ -1407,15 +1359,12 @@ function CornerReturnSection({
   const depthSixteenths = isBase ? depths.baseSixteenths : depths.upperSixteenths;
   const profileWidth = Math.min(width, depthSixteenths * pxPerSixteenth);
   const profileX = cornerAtLeft ? x : x + width - profileWidth;
-  const counterThickness = isBase
-    ? Math.max(3, COUNTER_THICKNESS_SIXTEENTHS * layout.scale)
-    : 0;
   const toeHeight = Math.max(6, TOE_KICK_HEIGHT_SIXTEENTHS * layout.scale);
   const toeDepth = Math.min(
     profileWidth / 3,
     TOE_KICK_DEPTH_SIXTEENTHS * pxPerSixteenth
   );
-  const faceTop = y + counterThickness;
+  const faceTop = y;
   const floor = y + height;
   const profileFill = hatchPatternId
     ? `url(#${hatchPatternId})`
@@ -1454,15 +1403,14 @@ function CornerReturnSection({
       )}
       {isBase ? (
         <>
-          <rect
+          <line
             data-corner-return-counter="true"
-            x={x}
-            y={y}
-            width={width}
-            height={counterThickness}
-            fill={COUNTER_SECTION_FILL}
+            x1={x}
+            y1={y}
+            x2={x + width}
+            y2={y}
             stroke="#2c2c2c"
-            strokeWidth="1"
+            strokeWidth="2"
           />
           <path
             data-corner-return-profile="true"

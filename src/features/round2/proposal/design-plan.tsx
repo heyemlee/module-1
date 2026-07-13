@@ -17,13 +17,14 @@ import { resolveSegmentRole, type SegmentRole } from "../model/segment-role";
 // symbols instead of cabinet codes. The elevation owns every edit; this plan
 // only mirrors the model and navigates the selection on click.
 
-const VIEW = { left: 155, top: 125, right: 625, bottom: 470 };
+const VIEW = { left: 155, top: 150, right: 625, bottom: 495 };
 
 // Strip depth in px for a 24″ base cabinet; uppers scale from the standards.
 const BASE_DEPTH_PX = 52;
 const PX_PER_SIXTEENTH =
   BASE_DEPTH_PX / CABINET_STANDARDS.depths.baseSixteenths;
 const WALL_HALF = 6;
+const CABINET_INSET_PX = 7;
 
 const DIMENSION_COLOR = "#079ca5";
 const DIMENSION_STROKE_WIDTH = 1.8;
@@ -36,7 +37,6 @@ const LANE_STEP = 10;
 // segments step further out, and the wall total is the outermost line.
 const OPENING_LABEL_OFFSET = 16;
 const CHAIN_OFFSET = 30;
-const OVERALL_OFFSET = 60;
 
 const CARCASS_STROKE = "#2c2c2c";
 const OPENING_COLOR = "#5a8fb8";
@@ -69,25 +69,6 @@ export function DesignPlan({
   return (
     <div className="relative h-full min-h-[220px] overflow-hidden rounded-[18px] border border-studio-line bg-white shadow-[0_18px_42px_-30px_rgba(20,20,26,0.28)]">
       <div className="pointer-events-none absolute inset-0 opacity-100 [background-image:linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
-      <p className="absolute left-4 top-3 z-10 font-mono text-[8px] tracking-[0.16em] text-black/45">
-        TOP VIEW · READ-ONLY PROJECTION
-      </p>
-      {hasSegments && (
-        <div className="pointer-events-none absolute bottom-3 left-4 z-10 flex items-center gap-3 font-mono text-[8px] tracking-[0.1em] text-black/50">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-4 border border-[#2c2c2c] bg-[#fbfbf8]" />
-            BASE
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-4 border border-dashed border-[#41657a]" />
-            UPPER
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-[3px] w-4 bg-[#5a8fb8]" />
-            OPENING
-          </span>
-        </div>
-      )}
       <svg
         viewBox="60 46 660 504"
         preserveAspectRatio="xMidYMid meet"
@@ -95,6 +76,7 @@ export function DesignPlan({
         aria-label="Cabinet proposal top view"
         className="relative h-full w-full"
       >
+        <g data-plan-drawing="true" transform="translate(30 15)">
         {walls.map((wall) => {
           const line = wallLine(wall);
           return (
@@ -138,9 +120,7 @@ export function DesignPlan({
           <DimensionChains key={wall.id} wall={wall} />
         ))}
 
-        {walls.map((wall) => (
-          <DepthDimension key={wall.id} wall={wall} />
-        ))}
+        <UpperCornerDimensions walls={walls} />
 
         {!hasSegments && (
           <text
@@ -154,6 +134,7 @@ export function DesignPlan({
             SUBMIT MEASUREMENTS TO AUTOFILL
           </text>
         )}
+        </g>
       </svg>
     </div>
   );
@@ -164,6 +145,7 @@ type PlanCorner = "TL" | "TR" | "BL" | "BR";
 
 type CornerFootprint = {
   id: string;
+  corner: PlanCorner;
   wallsLabel: string;
   segmentId: string;
   wallId: WallId;
@@ -172,6 +154,10 @@ type CornerFootprint = {
   fill: string;
   glyphX: number;
   glyphY: number;
+  horizontalLength: number;
+  verticalLength: number;
+  horizontalSixteenths: number;
+  verticalSixteenths: number;
 };
 
 function CornerFootprints({
@@ -224,6 +210,174 @@ function CornerFootprints({
   );
 }
 
+/**
+ * Plan view calls out the two measured legs of a diagonal upper corner
+ * cabinet. Cabinet depth is already documented in the elevation, so it is
+ * deliberately not repeated here. Extension lines stop 10px from the
+ * footprint, matching the short leaders used by the other dimension chains.
+ */
+function UpperCornerDimensions({ walls }: { walls: Round2Wall[] }) {
+  const corners = buildUpperCornerDimensions(walls);
+  if (corners.length === 0) return null;
+
+  return (
+    <g
+      data-plan-layer="corner-dimensions"
+      stroke={DIMENSION_COLOR}
+      fill={DIMENSION_COLOR}
+      fontFamily="var(--studio-mono)"
+    >
+      {corners.map((corner) => {
+        const anchor = cornerAnchor(corner.corner);
+        const sx = corner.corner === "TL" || corner.corner === "BL" ? 1 : -1;
+        const sy = corner.corner === "TL" || corner.corner === "TR" ? 1 : -1;
+        const wallY = anchor.y - sy * CABINET_INSET_PX;
+        const wallX = anchor.x - sx * CABINET_INSET_PX;
+        // Continue the 20px cadence used by the nearby 36″ dimension chains.
+        const horizontalY = wallY - sy * 30;
+        const verticalX = wallX - sx * 40;
+        const horizontalEndX = anchor.x + sx * corner.horizontalLength;
+        const verticalEndY = anchor.y + sy * corner.verticalLength;
+        const horizontalLabelY = horizontalY - sy * 4;
+        const verticalLabelX = verticalX - sx * 4;
+        const horizontalLabelX = (anchor.x + horizontalEndX) / 2;
+        const verticalLabelY = (anchor.y + verticalEndY) / 2;
+
+        return (
+          <g key={corner.id} data-plan-corner-dimension={corner.id}>
+            <line
+              data-plan-corner-dimension-horizontal={corner.id}
+              x1={anchor.x}
+              y1={horizontalY}
+              x2={horizontalEndX}
+              y2={horizontalY}
+              strokeWidth={DIMENSION_STROKE_WIDTH}
+            />
+            <line
+              data-plan-corner-dimension-vertical={corner.id}
+              x1={verticalX}
+              y1={anchor.y}
+              x2={verticalX}
+              y2={verticalEndY}
+              strokeWidth={DIMENSION_STROKE_WIDTH}
+            />
+            <line
+              data-plan-corner-extension={`${corner.id}-horizontal-start`}
+              x1={anchor.x}
+              y1={horizontalY}
+              x2={anchor.x}
+              y2={horizontalY + sy * 10}
+              strokeWidth={DIMENSION_STROKE_WIDTH}
+            />
+            <line
+              data-plan-corner-extension={`${corner.id}-horizontal-end`}
+              x1={horizontalEndX}
+              y1={horizontalY}
+              x2={horizontalEndX}
+              y2={horizontalY + sy * 10}
+              strokeWidth={DIMENSION_STROKE_WIDTH}
+            />
+            <line
+              data-plan-corner-extension={`${corner.id}-vertical-start`}
+              x1={verticalX}
+              y1={anchor.y}
+              x2={verticalX + sx * 10}
+              y2={anchor.y}
+              strokeWidth={DIMENSION_STROKE_WIDTH}
+            />
+            <line
+              data-plan-corner-extension={`${corner.id}-vertical-end`}
+              x1={verticalX}
+              y1={verticalEndY}
+              x2={verticalX + sx * 10}
+              y2={verticalEndY}
+              strokeWidth={DIMENSION_STROKE_WIDTH}
+            />
+            <text
+              data-plan-corner-label-horizontal={corner.id}
+              x={horizontalLabelX}
+              y={horizontalLabelY}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="bold"
+              stroke="none"
+            >
+              {formatSixteenths(corner.horizontalSixteenths)}
+            </text>
+            <text
+              data-plan-corner-label-vertical={corner.id}
+              x={verticalLabelX}
+              y={verticalLabelY}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="bold"
+              stroke="none"
+              transform={`rotate(-90 ${verticalLabelX} ${verticalLabelY})`}
+            >
+              {formatSixteenths(corner.verticalSixteenths)}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+type UpperCornerDimension = {
+  id: string;
+  corner: PlanCorner;
+  horizontalLength: number;
+  verticalLength: number;
+  horizontalSixteenths: number;
+  verticalSixteenths: number;
+};
+
+function buildUpperCornerDimensions(walls: Round2Wall[]): UpperCornerDimension[] {
+  const corners = new Map<
+    string,
+    {
+      corner: PlanCorner;
+      runs: Partial<Record<"horizontal" | "vertical", number>>;
+      values: Partial<Record<"horizontal" | "vertical", number>>;
+    }
+  >();
+
+  for (const wall of walls) {
+    const upper = wall.segments.filter((segment) => segment.tier === "upper");
+    const total =
+      wall.lengthSixteenths ??
+      (upper.reduce((sum, segment) => sum + Math.max(0, segment.widthSixteenths), 0) ||
+        1);
+    for (const segment of upper) {
+      if (!segment.sourceCornerId || !/^WDC\d+/i.test(segment.label.trim())) {
+        continue;
+      }
+      const corner = planCornerFromId(segment.sourceCornerId);
+      if (!corner) continue;
+      const axis = isHorizontalWall(wall) ? "horizontal" : "vertical";
+      const entry = corners.get(segment.sourceCornerId) ?? {
+        corner,
+        runs: {},
+        values: {}
+      };
+      entry.runs[axis] =
+        (Math.max(0, segment.widthSixteenths) / total) * wallRunLength(wall);
+      entry.values[axis] = segment.widthSixteenths;
+      corners.set(segment.sourceCornerId, entry);
+    }
+  }
+
+  const fallback = CABINET_STANDARDS.depths.upperSixteenths;
+  return [...corners.entries()].map(([id, { corner, runs, values }]) => ({
+    id,
+    corner,
+    horizontalLength: runs.horizontal ?? runs.vertical ?? fallback * PX_PER_SIXTEENTH,
+    verticalLength: runs.vertical ?? runs.horizontal ?? fallback * PX_PER_SIXTEENTH,
+    horizontalSixteenths: values.horizontal ?? values.vertical ?? fallback,
+    verticalSixteenths: values.vertical ?? values.horizontal ?? fallback
+  }));
+}
+
 function buildCornerFootprints(
   walls: Round2Wall[],
   selectedObjectId: string | null
@@ -266,6 +420,7 @@ function buildCornerFootprints(
     return [
       {
         id: cornerId,
+        corner,
         wallsLabel: entries.map((entry) => entry.wall.sourceWall).join(","),
         segmentId: representative.id,
         wallId: representative.wallId,
@@ -275,7 +430,13 @@ function buildCornerFootprints(
         path: cornerPath(corner, anchor, horizontalLength, verticalLength),
         fill: fillForSegment(representative),
         glyphX: glyph.x,
-        glyphY: glyph.y
+        glyphY: glyph.y,
+        horizontalLength,
+        verticalLength,
+        horizontalSixteenths:
+          horizontal?.widthSixteenths ?? CABINET_STANDARDS.depths.baseSixteenths,
+        verticalSixteenths:
+          vertical?.widthSixteenths ?? CABINET_STANDARDS.depths.baseSixteenths
       }
     ];
   });
@@ -304,6 +465,7 @@ function cornerWallEntry(wall: Round2Wall, cornerId: string) {
     wall,
     side,
     segments,
+    widthSixteenths: width,
     lengthPx: (width / total) * wallRunLength(wall)
   };
 }
@@ -622,22 +784,33 @@ function UpperOverlay({ wall }: { wall: Round2Wall }) {
         const rect = segmentRect(wall, cursor, length, depthPx(segment));
         cursor += length;
         if (isDiagonalUpperFootprintSegment(segment)) return null;
-        if (segment.kind !== "cabinet" && segment.kind !== "filler") {
+        if (
+          segment.kind !== "cabinet" &&
+          segment.kind !== "filler" &&
+          segment.kind !== "panel"
+        ) {
           return null;
         }
         const filler = segment.kind === "filler";
+        const panel = segment.kind === "panel";
         return (
           <rect
             key={segment.id}
-            data-plan-upper={filler ? "filler" : "cabinet"}
+            data-plan-upper={filler ? "filler" : panel ? "panel" : "cabinet"}
             x={rect.x}
             y={rect.y}
             width={Math.max(filler ? 2 : 4, rect.width)}
             height={Math.max(4, rect.height)}
-            fill={filler ? "rgba(214,186,86,0.14)" : "rgba(65,101,122,0.08)"}
+            fill={
+              filler
+                ? "rgba(214,186,86,0.14)"
+                : panel
+                  ? "rgba(65,101,122,0.04)"
+                  : "rgba(65,101,122,0.08)"
+            }
             stroke={UPPER_COLOR}
-            strokeWidth={filler ? 1 : 1.3}
-            strokeDasharray={filler ? "3 2" : "5 3"}
+            strokeWidth={filler ? 1 : panel ? 1.1 : 1.3}
+            strokeDasharray={filler ? "3 2" : panel ? "4 3" : "5 3"}
           />
         );
       })}
@@ -657,7 +830,12 @@ function UpperCornerFootprints({ walls }: { walls: Round2Wall[] }) {
   >();
 
   for (const wall of walls) {
-    const total = wall.lengthSixteenths ?? 1;
+    const total =
+      wall.lengthSixteenths ??
+      (wall.segments
+        .filter((segment) => segment.tier === "upper")
+        .reduce((sum, segment) => sum + Math.max(0, segment.widthSixteenths), 0) ||
+        1);
     for (const segment of wall.segments) {
       if (
         segment.tier !== "upper" ||
@@ -858,6 +1036,11 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
   const runEnd = widths.reduce((sum, width) => sum + width, 0);
   const horizontal = isHorizontalWall(wall);
   const textPad = wall.sourceWall === "BOTTOM" ? 14 : horizontal ? 6 : 4;
+  // Reserve 20px lanes for the two depth callouts. This keeps the left-side
+  // columns (wall total, segment, base depth, upper depth, wall) even, while
+  // the top-side rows follow the same rhythm.
+  const chainOffset =
+    wall.sourceWall === "LEFT" ? 60 : wall.sourceWall === "TOP" ? 50 : CHAIN_OFFSET;
 
   const boundaries: number[] = [0];
   let cursor = 0;
@@ -866,15 +1049,8 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
     boundaries.push(cursor);
   }
 
-  const chainA = runPoint(wall, 0, CHAIN_OFFSET);
-  const chainB = runPoint(wall, runEnd, CHAIN_OFFSET);
-  const overallA = runPoint(wall, 0, OVERALL_OFFSET);
-  const overallB = runPoint(wall, available, OVERALL_OFFSET);
-  const overallLabelPos = runPoint(
-    wall,
-    available / 2,
-    OVERALL_OFFSET + textPad
-  );
+  const chainA = runPoint(wall, 0, chainOffset);
+  const chainB = runPoint(wall, runEnd, chainOffset);
 
   let mid = 0;
 
@@ -894,8 +1070,8 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       {boundaries.map((position, index) => {
-        const from = runPoint(wall, position, CHAIN_OFFSET - TICK);
-        const to = runPoint(wall, position, CHAIN_OFFSET + TICK);
+        const from = runPoint(wall, position, chainOffset - TICK);
+        const to = runPoint(wall, position, chainOffset + TICK);
         return (
           <line
             key={`tick-${index}`}
@@ -912,7 +1088,7 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
         mid = boundaries[index] + width / 2;
         if (width <= 2) return null;
         const lane = lanes[index];
-        const labelOffset = CHAIN_OFFSET + textPad + lane * LANE_STEP;
+        const labelOffset = chainOffset + textPad + lane * LANE_STEP;
         const pos = runPoint(wall, mid, labelOffset);
         const rotate = horizontal
           ? undefined
@@ -921,8 +1097,8 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
           <g key={segment.id}>
             {lane > 0 && (
               <line
-                x1={runPoint(wall, mid, CHAIN_OFFSET).x}
-                y1={runPoint(wall, mid, CHAIN_OFFSET).y}
+                x1={runPoint(wall, mid, chainOffset).x}
+                y1={runPoint(wall, mid, chainOffset).y}
                 x2={runPoint(wall, mid, labelOffset - 3).x}
                 y2={runPoint(wall, mid, labelOffset - 3).y}
                 strokeWidth="0.8"
@@ -943,52 +1119,14 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
           </g>
         );
       })}
-      <line
-        x1={overallA.x}
-        y1={overallA.y}
-        x2={overallB.x}
-        y2={overallB.y}
-        strokeWidth={DIMENSION_STROKE_WIDTH}
-      />
-      {[0, available].map((position, index) => {
-        const from = runPoint(wall, position, OVERALL_OFFSET - TICK);
-        const to = runPoint(wall, position, OVERALL_OFFSET + TICK);
-        return (
-          <line
-            key={`overall-tick-${index}`}
-            x1={from.x}
-            y1={from.y}
-            x2={to.x}
-            y2={to.y}
-            strokeWidth={DIMENSION_STROKE_WIDTH}
-          />
-        );
-      })}
-      <text
-        data-plan-overall-label={wall.id}
-        x={overallLabelPos.x}
-        y={overallLabelPos.y}
-        textAnchor="middle"
-        fontSize="11"
-        fontWeight="bold"
-        stroke="none"
-        transform={
-          horizontal
-            ? undefined
-            : `rotate(${wall.sourceWall === "RIGHT" ? 90 : -90} ${overallLabelPos.x} ${overallLabelPos.y})`
-        }
-      >
-        {wall.label} · {formatSixteenths(wall.lengthSixteenths)}
-      </text>
     </g>
   );
 }
 
 /**
- * A short teal depth chain per wall, drawn perpendicular into the room from the
- * cabinet face: an inner tick at the 12″ upper front and an overall to the 24″
- * base front, in the same dimension style as the width chains. Depth is a
- * standard, so one callout per wall reads for the whole run.
+ * Two independent depth dimensions per wall. Each starts at the cabinet back
+ * and reaches its own front edge, so the 12″ upper and 24″ base lengths stay
+ * visually proportional and their extension lines land on the cabinet edges.
  */
 function DepthDimension({ wall }: { wall: Round2Wall }) {
   const hasBase = wall.segments.some(
@@ -1003,23 +1141,143 @@ function DepthDimension({ wall }: { wall: Round2Wall }) {
   const upperDepth = CABINET_STANDARDS.depths.upperSixteenths;
   const baseDepthPx = baseDepth * PX_PER_SIXTEENTH;
   const upperDepthPx = upperDepth * PX_PER_SIXTEENTH;
-  const faceOffset = CABINET_INSET;
-  const upperOffset = CABINET_INSET + upperDepthPx;
-  const baseOffset = CABINET_INSET + baseDepthPx;
+  if (wall.sourceWall === "TOP") {
+    const backY = VIEW.top + CABINET_INSET;
+    const upperFrontY = backY + upperDepthPx;
+    const baseFrontY = backY + baseDepthPx;
+    const anchorX = VIEW.left + CABINET_INSET;
+    const dimensions = [
+      {
+        id: "upper",
+        value: upperDepth,
+        x: VIEW.left - 20,
+        endY: upperFrontY
+      },
+      {
+        id: "base",
+        value: baseDepth,
+        x: VIEW.left - 40,
+        endY: baseFrontY
+      }
+    ] as const;
 
-  const t = wallRunLength(wall) * 0.22;
-  const face = runPoint(wall, t, -faceOffset);
-  const back = runPoint(wall, t, -baseOffset);
-  const tick = (offset: number) => ({
-    from: runPoint(wall, t - TICK, -offset),
-    to: runPoint(wall, t + TICK, -offset)
-  });
-  const upperTick = tick(upperOffset);
-  const baseTick = tick(baseOffset);
-  const faceTick = tick(faceOffset);
-  const upperLabel = runPoint(wall, t + 12, -(faceOffset + upperOffset) / 2);
-  const baseLabel = runPoint(wall, t + 12, -(upperOffset + baseOffset) / 2);
+    return (
+      <DepthDimensionGroup wall={wall}>
+        {dimensions.map((dimension) => {
+          const labelY = (backY + dimension.endY) / 2;
+          return (
+            <g key={dimension.id} data-plan-depth-measure={dimension.id}>
+              <line
+                data-plan-depth-line={dimension.id}
+                x1={dimension.x}
+                y1={backY}
+                x2={dimension.x}
+                y2={dimension.endY}
+                strokeWidth={DIMENSION_STROKE_WIDTH}
+              />
+              {[backY, dimension.endY].map((y) => (
+                <line
+                  key={y}
+                  x1={dimension.x}
+                  y1={y}
+                  x2={anchorX}
+                  y2={y}
+                  strokeWidth="0.8"
+                />
+              ))}
+              <text
+                {...depthLabelAttributes(wall.id, dimension.id)}
+                x={dimension.x}
+                y={labelY}
+                textAnchor="middle"
+                fontSize="8"
+                fontWeight="bold"
+                stroke="none"
+                transform={`rotate(-90 ${dimension.x} ${labelY})`}
+              >
+                {formatSixteenths(dimension.value)}
+              </text>
+            </g>
+          );
+        })}
+      </DepthDimensionGroup>
+    );
+  }
 
+  if (wall.sourceWall === "LEFT") {
+    const backX = VIEW.left + CABINET_INSET;
+    const upperFrontX = backX + upperDepthPx;
+    const baseFrontX = backX + baseDepthPx;
+    const anchorY = VIEW.top + CABINET_INSET;
+    const dimensions = [
+      {
+        id: "upper",
+        value: upperDepth,
+        y: VIEW.top - 10,
+        endX: upperFrontX
+      },
+      {
+        id: "base",
+        value: baseDepth,
+        y: VIEW.top - 30,
+        endX: baseFrontX
+      }
+    ] as const;
+
+    return (
+      <DepthDimensionGroup wall={wall}>
+        {dimensions.map((dimension) => {
+          const labelX = (backX + dimension.endX) / 2;
+          return (
+            <g key={dimension.id} data-plan-depth-measure={dimension.id}>
+              <line
+                data-plan-depth-line={dimension.id}
+                x1={backX}
+                y1={dimension.y}
+                x2={dimension.endX}
+                y2={dimension.y}
+                strokeWidth={DIMENSION_STROKE_WIDTH}
+              />
+              {[backX, dimension.endX].map((x) => (
+                <line
+                  key={x}
+                  x1={x}
+                  y1={dimension.y}
+                  x2={x}
+                  y2={anchorY}
+                  strokeWidth="0.8"
+                />
+              ))}
+              <text
+                {...depthLabelAttributes(wall.id, dimension.id)}
+                x={labelX}
+                y={dimension.y - 4}
+                textAnchor="middle"
+                fontSize="8"
+                fontWeight="bold"
+                stroke="none"
+              >
+                {formatSixteenths(dimension.value)}
+              </text>
+            </g>
+          );
+        })}
+      </DepthDimensionGroup>
+    );
+  }
+
+  return (
+    null
+  );
+}
+
+function DepthDimensionGroup({
+  wall,
+  children
+}: {
+  wall: Round2Wall;
+  children: React.ReactNode;
+}) {
   return (
     <g
       data-plan-layer="depth-dimension"
@@ -1028,47 +1286,15 @@ function DepthDimension({ wall }: { wall: Round2Wall }) {
       fill={DIMENSION_COLOR}
       fontFamily="var(--studio-mono)"
     >
-      <line
-        x1={face.x}
-        y1={face.y}
-        x2={back.x}
-        y2={back.y}
-        strokeWidth={DIMENSION_STROKE_WIDTH}
-      />
-      {[faceTick, upperTick, baseTick].map((mark, index) => (
-        <line
-          key={index}
-          x1={mark.from.x}
-          y1={mark.from.y}
-          x2={mark.to.x}
-          y2={mark.to.y}
-          strokeWidth={DIMENSION_STROKE_WIDTH}
-        />
-      ))}
-      <text
-        data-plan-depth-upper={wall.id}
-        x={upperLabel.x}
-        y={upperLabel.y}
-        textAnchor="middle"
-        fontSize="8"
-        fontWeight="bold"
-        stroke="none"
-      >
-        {formatSixteenths(upperDepth)}
-      </text>
-      <text
-        data-plan-depth-base={wall.id}
-        x={baseLabel.x}
-        y={baseLabel.y}
-        textAnchor="middle"
-        fontSize="8"
-        fontWeight="bold"
-        stroke="none"
-      >
-        {formatSixteenths(baseDepth)}
-      </text>
+      {children}
     </g>
   );
+}
+
+function depthLabelAttributes(wallId: WallId, kind: "upper" | "base") {
+  return kind === "upper"
+    ? { "data-plan-depth-upper": wallId }
+    : { "data-plan-depth-base": wallId };
 }
 
 function depthPx(segment: WallSegment): number {

@@ -18,6 +18,7 @@ describe("WallElevation", () => {
     expect(html).toMatch(
       /data-elevation-layer="header"[^>]*bg-white/
     );
+    expect(html).not.toContain(">1:30<");
   });
 
   test("renders fronts from the resolved configuration", () => {
@@ -69,6 +70,20 @@ describe("WallElevation", () => {
     const labelY = chainLabelY(html, "upper-left");
 
     expect(labelY).toBeLessThanOrEqual(upperTop - 14);
+  });
+
+  test("puts upper dimensions above and base dimensions below the elevation", () => {
+    const html = render(
+      elevationModel([
+        { ...cabinet("upper-row", 36 * 16), tier: "upper" },
+        cabinet("base-row", 36 * 16),
+        { ...cabinet("full-row", 24 * 16), tier: "full" }
+      ])
+    );
+
+    expect(chainLabelY(html, "upper-row")).toBe(42);
+    expect(chainLabelY(html, "base-row")).toBe(368);
+    expect(chainLabelY(html, "full-row")).toBe(368);
   });
 
   test("keeps overall and upper dimensions above the ceiling line", () => {
@@ -885,15 +900,17 @@ describe("WallElevation", () => {
     );
   });
 
-  test("draws a countertop slab over the base run and dimensions the cabinet body", () => {
+  test("draws a counter surface line without thickness and dimensions the 36 inch cabinet", () => {
     const html = render(elevationModel());
 
     expect(html).toContain('data-elevation-layer="countertop"');
     expect(html).toContain('data-countertop-band="0"');
-    // The base height dimension now reads the cabinet body (34½″), not the
-    // finished counter height (36″).
+    expect(tagFor(html, "line", 'data-countertop-band="0"')).toContain(
+      'stroke-width="2"'
+    );
+    expect(html).not.toContain('data-countertop-band="0"><rect');
     const counter = tagFor(html, "text", 'data-height-label="counter"');
-    expect(html.slice(html.indexOf(counter))).toContain("34 1/2″");
+    expect(html.slice(html.indexOf(counter))).toContain("36″");
   });
 
   test("breaks the countertop at a freestanding range", () => {
@@ -925,12 +942,11 @@ describe("WallElevation", () => {
     expect(html).not.toContain('data-countertop-band="2"');
   });
 
-  test("carries a teal depth reference note", () => {
+  test("omits the redundant depth reference note", () => {
     const html = render(elevationModel());
-    const note = tagFor(html, "text", 'data-elevation-layer="depth-note"');
 
-    expect(note).toContain(`fill="${"#079ca5"}"`);
-    expect(html.slice(html.indexOf(note))).toContain("BASE 24″ DEEP · UPPER 12″ DEEP");
+    expect(html).not.toContain('data-elevation-layer="depth-note"');
+    expect(html).not.toContain("BASE 24″ DEEP · UPPER 12″ DEEP");
   });
 });
 

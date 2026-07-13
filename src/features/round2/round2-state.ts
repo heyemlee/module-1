@@ -67,10 +67,17 @@ export function reduceRound2Prototype(
   switch (action.type) {
     case "RESTORE_DRAFT":
       // Drafts saved before the absorb-feedback field existed lack it.
-      return normalizeRestoredState({
+      {
+        const restored = normalizeRestoredState({
         ...action.state,
         lastAbsorbed: action.state.lastAbsorbed ?? null
-      });
+        });
+        // A restored proposal should be a clean drawing, not reopen the last
+        // cabinet editor from a prior browser session.
+        return restored.task === "PROPOSAL"
+          ? { ...restored, selectedObjectId: null, lastAbsorbed: null }
+          : restored;
+      }
     case "ADOPT_BASIS":
       return lockReference(state, action.reference, action.version);
     case "SET_ROLE":
@@ -90,7 +97,15 @@ export function reduceRound2Prototype(
       if (action.task === "DRAWINGS" && hasBlockingDecisions(state.model)) {
         return state;
       }
-      return { ...state, task: action.task };
+      return {
+        ...state,
+        task: action.task,
+        // Opening the proposal starts in inspection mode. The unit editor
+        // appears only after the user explicitly selects a cabinet.
+        selectedObjectId:
+          action.task === "PROPOSAL" ? null : state.selectedObjectId,
+        lastAbsorbed: action.task === "PROPOSAL" ? null : state.lastAbsorbed
+      };
     case "EDIT_MEASUREMENT":
       // Field measurement stays editable for whoever is on the step, including
       // after a submit: editing reverts the stage to DRAFT and marks the
@@ -385,7 +400,7 @@ function submitMeasurement(
     proposalStatus: newVersion ? "STALE" : proposalStatus,
     drawingStatus: newVersion ? "STALE" : "REVIEW_READY",
     selectedWall: firstSelectable?.wallId ?? state.selectedWall,
-    selectedObjectId: firstSelectable?.id ?? state.selectedObjectId,
+    selectedObjectId: null,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
   };
 }
