@@ -131,7 +131,7 @@ export async function POST(
   if (!latest) return NextResponse.json({ error: "Round 1 snapshot required" }, { status: 409 });
   const adapter = createOpenAIImageAdapterFromEnv(process.env);
   if (!adapter) {
-    return NextResponse.json({ error: "OpenAI image generation is not configured", reason: "OPENAI_API_KEY_NOT_CONFIGURED" }, { status: 503 });
+    return NextResponse.json({ error: "OpenAI image generation is not configured", reason: "OPENAI_IMAGE_API_KEYS_NOT_CONFIGURED" }, { status: 503 });
   }
 
   const currentMonthRenders = await getRenderCountForCurrentMonth(user.id);

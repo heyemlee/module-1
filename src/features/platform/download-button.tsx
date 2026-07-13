@@ -27,9 +27,9 @@ export function DownloadButton({
       onClick={handleDownload}
       aria-label="Download rendering"
       title="Download rendering"
+      className="size-8 px-0"
     >
       <DownloadIcon aria-hidden />
-      <span>Download</span>
     </Button>
   );
 }

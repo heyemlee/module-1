@@ -1,4 +1,5 @@
 import type { VisionClient } from "@/server/round1/rendering-verification";
+import { getPreferredOpenAIApiKey } from "@/infrastructure/openai-api-keys";
 
 type FetchImpl = typeof fetch;
 
@@ -64,11 +65,11 @@ export function createVisionClientFromEnv(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): VisionClient | null {
-  const apiKey = env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return null;
+  const keyConfig = getPreferredOpenAIApiKey(env);
+  if (!keyConfig) return null;
   return createOpenAIVisionClient({
-    apiKey,
-    baseUrl: env.OPENAI_BASE_URL?.trim() || undefined,
+    apiKey: keyConfig.apiKey,
+    baseUrl: keyConfig.baseUrl,
     model: env.ROUND1_VERIFY_MODEL?.trim() || "gpt-4o",
     fetchImpl: deps.fetchImpl
   });

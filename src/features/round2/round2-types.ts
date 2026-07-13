@@ -7,7 +7,7 @@ import type {
   WallId,
   WallSegmentFront
 } from "./model/round2-model";
-import type { FillerEnd, NudgeDirection } from "./model/adjustments";
+import type { FillerPlacement, NudgeDirection } from "./model/adjustments";
 import type {
   DesignIntentKey,
   DesignIntentValue,
@@ -37,6 +37,17 @@ export type {
 
 export type Round2Measurements = Record<MeasurementKey, number | null>;
 
+/**
+ * Feedback for the elevation: which filler absorbed the last cabinet width
+ * change, so the UI can pulse it instead of moving remainder space silently.
+ */
+export type Round2AbsorbedChange = {
+  segmentId: string;
+  deltaSixteenths: number;
+  /** Monotonic counter so repeat absorptions retrigger the pulse animation. */
+  token: number;
+};
+
 export type Round2PrototypeState = {
   referenceLocked: boolean;
   referenceVersion: number;
@@ -55,6 +66,7 @@ export type Round2PrototypeState = {
   drawingStatus: DrawingStatus;
   selectedWall: WallId | null;
   selectedObjectId: string | null;
+  lastAbsorbed: Round2AbsorbedChange | null;
   issueObjectId: string | null;
   activeMeasurementKey: MeasurementKey | null;
   activeSheet: DrawingSheetId;
@@ -62,9 +74,17 @@ export type Round2PrototypeState = {
 };
 
 export type Round2PrototypeAction =
-  | { type: "LOCK_REFERENCE"; reference: Round1ReferenceSource }
-  | { type: "REPLACE_REFERENCE"; reference: Round1ReferenceSource }
-  | { type: "OPEN_REFERENCE_HANDOFF" }
+  | { type: "RESTORE_DRAFT"; state: Round2PrototypeState }
+  | {
+      /**
+       * Adopts the server-locked design basis as the working reference. The
+       * version comes from the basis row (not a client counter), so drafts can
+       * be reconciled against the basis they were built on.
+       */
+      type: "ADOPT_BASIS";
+      reference: Round1ReferenceSource;
+      version: number;
+    }
   | { type: "SET_ROLE"; role: Round2DemoRole }
   | { type: "SET_TASK"; task: Round2Task }
   | {
@@ -85,7 +105,8 @@ export type Round2PrototypeAction =
   | { type: "SELECT_OBJECT"; objectId: string; wall: WallId }
   | { type: "STEP_CABINET_WIDTH"; objectId: string; widthSixteenths: number }
   | { type: "NUDGE_GROUP"; objectId: string; direction: NudgeDirection }
-  | { type: "MOVE_FILLER_END"; objectId: string; end: FillerEnd }
+  | { type: "RECENTER_SINK"; objectId: string }
+  | { type: "SET_FILLER_PLACEMENT"; objectId: string; placement: FillerPlacement }
   | { type: "SET_SEGMENT_KIND"; objectId: string; cabinetKind: CabinetKind }
   | { type: "SET_SEGMENT_FRONT"; objectId: string; front: WallSegmentFront }
   | { type: "SET_HEIGHT_PROFILE"; profile: Partial<Round2HeightProfile> }

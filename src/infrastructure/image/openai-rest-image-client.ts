@@ -3,6 +3,11 @@ import {
   type ImageClient,
   type OpenAIImageAdapter
 } from "./openai-image-adapter";
+import {
+  getConfiguredOpenAIApiKeys,
+  type OpenAIApiKeySlot
+} from "@/infrastructure/openai-api-keys";
+import { createCrsResponsesImageClient } from "./crs-responses-image-client";
 
 type FetchImpl = typeof fetch;
 
@@ -169,23 +174,96 @@ async function safeReadError(response: Response): Promise<string> {
 
 /**
  * Builds a live OpenAI image adapter from environment configuration. Returns
- * `null` when `OPENAI_API_KEY` is absent so callers can fall back to the
- * deterministic mock background instead of failing.
+ * `null` when no prioritized OpenAI API keys are configured.
  */
 export function createOpenAIImageAdapterFromEnv(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): OpenAIImageAdapter | null {
-  const apiKey = env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
+  const apiKeys = getConfiguredOpenAIApiKeys(env);
+  if (apiKeys.length === 0) {
     return null;
   }
 
-  const client = createOpenAIRestImageClient({
-    apiKey,
-    baseUrl: env.OPENAI_BASE_URL?.trim() || undefined,
-    fetchImpl: deps.fetchImpl
-  });
+  // OPENAI_IMAGE_WIRE_API=responses routes image generation through the CRS
+  // relay's Responses API + image_generation tool (streamed; the relay has no
+  // standalone /images endpoints). Otherwise use the standard REST images
+  // client. The wire is a global switch; each prioritized key + baseUrl feeds
+  // whichever client is selected, so multi-key failover still applies. The relay
+  // also speaks chat/completions, so image + text can share the same key slot.
+  const useResponsesWire = env.OPENAI_IMAGE_WIRE_API?.trim() === "responses";
+  const imageModel = env.OPENAI_IMAGE_MODEL?.trim();
 
-  return createOpenAIImageAdapter({ env, client });
+  const adapters = apiKeys.map(({ slot, apiKey, baseUrl }) => ({
+    slot,
+    adapter: createOpenAIImageAdapter({
+      env,
+      client: useResponsesWire
+        ? createCrsResponsesImageClient({
+            apiKey,
+            baseUrl: baseUrl || "https://claude-relay.liziqiao.com/openai/v1",
+            model: imageModel,
+            fetchImpl: deps.fetchImpl
+          })
+        : createOpenAIRestImageClient({
+            apiKey,
+            baseUrl,
+            fetchImpl: deps.fetchImpl
+          })
+    })
+  }));
+
+  if (adapters.length === 1) {
+    return adapters[0].adapter;
+  }
+
+  return createFailoverOpenAIImageAdapter(adapters);
+}
+
+export function hasOpenAIImageApiKey(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  return getConfiguredOpenAIApiKeys(env).length > 0;
+}
+
+function createFailoverOpenAIImageAdapter(
+  adapters: Array<{ slot: OpenAIApiKeySlot; adapter: OpenAIImageAdapter }>
+): OpenAIImageAdapter {
+  return {
+    generateLayoutBackground(input) {
+      return runWithApiKeyFallback(adapters, (adapter) =>
+        adapter.generateLayoutBackground(input)
+      );
+    },
+
+    generateConceptRendering(input) {
+      return runWithApiKeyFallback(adapters, (adapter) =>
+        adapter.generateConceptRendering(input)
+      );
+    }
+  };
+}
+
+async function runWithApiKeyFallback<T>(
+  adapters: Array<{ slot: OpenAIApiKeySlot; adapter: OpenAIImageAdapter }>,
+  operation: (adapter: OpenAIImageAdapter) => Promise<T>
+): Promise<T> {
+  let lastError: unknown;
+
+  for (const { adapter } of adapters) {
+    try {
+      return await operation(adapter);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    `OpenAI image generation failed for all configured API keys; last error: ${formatFallbackError(lastError)}`
+  );
+}
+
+function formatFallbackError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "UNKNOWN_ERROR";
 }

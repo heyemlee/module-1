@@ -76,6 +76,7 @@ import {
 import type {
   RenderingTaskResult
 } from "@/features/platform/rendering-task-manager";
+import { renderingImageUrl } from "@/features/platform/rendering-image-url";
 
 // The AI assistant drawer is opened on demand, so its bundle (chat UI + speech
 // recognition + motion) is code-split out of the initial Round 1 load.
@@ -292,7 +293,7 @@ export function conceptRenderingFromTaskResult(
       typeof result.imageBase64 === "string"
         ? `data:image/png;base64,${result.imageBase64}`
         : projectId
-          ? `/api/projects/${projectId}/round1/renderings/${result.id}/image`
+          ? renderingImageUrl(projectId, result.id)
           : "",
     doorColorId: preferences?.doorColorId ?? null,
     basedOnSnapshotGeneratedAt:
@@ -318,7 +319,10 @@ export function Round1RenderingFlow({
       data-rendering-flow="scroll"
       className="relative z-[1] min-h-0 flex-1 overflow-y-auto"
     >
-      <div className="flex h-full min-h-[420px] items-center justify-center p-[14px_18px] md:min-h-0">
+      <div
+        className="flex h-full min-h-[420px] items-center justify-center p-[14px_18px] md:min-h-0"
+        style={{ containerType: "size" }}
+      >
         {rendering}
       </div>
       <div className="h-[60vh] min-h-[420px] shrink-0 px-[2px] pb-[18px]">
@@ -945,7 +949,7 @@ export function ShowroomIntakeApp({
               id: r.id,
               url: r.imageBase64
                 ? `data:image/png;base64,${r.imageBase64}`
-                : `/api/projects/${projectId}/round1/renderings/${r.id}/image`,
+                : renderingImageUrl(projectId, r.id),
               doorColorId: r.basedOnRenderingPreferences?.doorColorId || null,
               basedOnSnapshotGeneratedAt: r.basedOnSnapshotGeneratedAt ?? null,
               basedOnRenderingPreferences: r.basedOnRenderingPreferences ?? null
@@ -1058,9 +1062,9 @@ export function ShowroomIntakeApp({
         ←
       </Link>
       <div className="min-w-0">
-        <p className="studio-eyebrow !text-[#a4a49e]">ROUND 1 · STORE INTAKE</p>
+        <p className="studio-eyebrow !text-[#a4a49e]">CONCEPT · STORE INTAKE</p>
         <p className="truncate text-[15px] font-semibold text-[#16161a]">
-          {projectName ?? "Round 1"}
+          {projectName ?? "Concept"}
         </p>
       </div>
       <div className="ml-auto flex items-center gap-3">

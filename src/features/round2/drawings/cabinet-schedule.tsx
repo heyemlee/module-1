@@ -123,8 +123,7 @@ function heightForSegment(segment: WallSegment): string {
 
 function depthForSegment(segment: WallSegment): string {
   if (segment.tier !== "upper") return "24″";
-  // Refrigerator uppers are the one deep cabinet in the upper run.
-  return segment.label.startsWith("WR") ? "24″" : "12″";
+  return "12″";
 }
 
 function noteForSegment(segment: WallSegment): string {
@@ -137,6 +136,5 @@ function noteForSegment(segment: WallSegment): string {
   if (segment.label.startsWith("WB")) return "Trash pullout base";
   if (segment.label.startsWith("DB")) return "Drawer base";
   if (segment.label.startsWith("HD")) return "Hood cabinet";
-  if (segment.label.startsWith("WR")) return "Refrigerator upper";
   return "Model-driven proposal";
 }

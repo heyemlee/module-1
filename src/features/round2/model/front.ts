@@ -59,7 +59,10 @@ export function describeFront(front: ResolvedFront | null): string {
 export const ACCESSORY_LABELS: Record<FrontAccessory, string> = {
   trashPullout: "trash pullout",
   spicePullout: "spice pullout",
-  lazySusan: "lazy Susan"
+  lazySusan: "Lazy Susan",
+  magicCorner: "Magic Corner",
+  blindCornerPullOut: "Blind Corner Pull-Out",
+  cornerPullOutShelves: "Corner Pull-Out Shelves"
 };
 
 function defaultFront(
@@ -74,7 +77,9 @@ function defaultFront(
 
   if (segment.cabinetKind === "corner") {
     return {
-      doorCount: 1,
+      doorCount: segment.label.startsWith("LS")
+        ? 1
+        : doorCountForWidth(segment.widthSixteenths),
       drawerStack: [],
       hardware,
       accessories: segment.label.startsWith("LS") ? ["lazySusan"] : []

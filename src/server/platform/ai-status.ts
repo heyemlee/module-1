@@ -1,10 +1,12 @@
+import { hasConfiguredOpenAIApiKey } from "@/infrastructure/openai-api-keys";
+
 export function getAIStatus(env: Record<string, string | undefined> = process.env) {
   const provider = env.LLM_PROVIDER?.trim() || null;
   return {
-    renderingEnabled: Boolean(env.OPENAI_API_KEY?.trim()),
+    renderingEnabled: hasConfiguredOpenAIApiKey(env),
     agentEnabled:
       provider === "openai"
-        ? Boolean(env.OPENAI_API_KEY?.trim())
+        ? hasConfiguredOpenAIApiKey(env)
         : provider === "deepseek"
           ? Boolean(env.DEEPSEEK_API_KEY?.trim())
           : provider === "anthropic"

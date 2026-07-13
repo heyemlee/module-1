@@ -5,6 +5,7 @@ import {
   reduceRound2Prototype
 } from "./round2-state";
 import { ROUND1_REFERENCE_FIXTURE } from "./round2-fixtures";
+import { hasBlockingDecisions } from "./model/round2-model";
 import type {
   Round1ReferenceSource,
   Round2PrototypeState
@@ -109,7 +110,7 @@ describe("Round 2 prototype state", () => {
     expect(updated.designIntent.confirmedKeys).toEqual(["hardware.style"]);
   });
 
-  test("replacing the reference resets design intent to fresh defaults", () => {
+  test("adopting a relocked basis resets design intent to fresh defaults", () => {
     const locked = reduceRound2Prototype(
       lock(createRound2PrototypeState("SALES")),
       {
@@ -119,8 +120,9 @@ describe("Round 2 prototype state", () => {
       }
     );
     const replaced = reduceRound2Prototype(locked, {
-      type: "REPLACE_REFERENCE",
-      reference: referenceWithId("fresh-layout")
+      type: "ADOPT_BASIS",
+      reference: referenceWithId("fresh-layout"),
+      version: 2
     });
 
     expect(replaced.designIntent.answers["hardware.style"]).toBe("handle");
@@ -224,7 +226,7 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
   });
 
-  test("blocks Round 2 tasks until a Round 1 reference is locked", () => {
+  test("blocks Round 2 tasks until a design basis is adopted", () => {
     const initial = createRound2PrototypeState("SALES");
     expect(initial.referenceLocked).toBe(false);
 
@@ -253,12 +255,13 @@ describe("Round 2 prototype state", () => {
     expect(locked.task).toBe("MEASUREMENT");
   });
 
-  test("replacing the Round 1 reference invalidates downstream output", () => {
+  test("adopting a relocked basis invalidates downstream output", () => {
     const locked = lock(createRound2PrototypeState("DESIGNER"));
     const nextReference = referenceWithId("snapshot-2");
     const replaced = reduceRound2Prototype(locked, {
-      type: "REPLACE_REFERENCE",
-      reference: nextReference
+      type: "ADOPT_BASIS",
+      reference: nextReference,
+      version: 2
     });
 
     expect(replaced.referenceVersion).toBe(2);
@@ -269,17 +272,6 @@ describe("Round 2 prototype state", () => {
     expect(Object.values(replaced.measurements).every((value) => value == null)).toBe(
       true
     );
-  });
-
-  test("can reopen the Round 1 handoff before relocking another snapshot", () => {
-    const locked = lock(createRound2PrototypeState("DESIGNER"));
-    const reopened = reduceRound2Prototype(locked, {
-      type: "OPEN_REFERENCE_HANDOFF"
-    });
-
-    expect(reopened.referenceLocked).toBe(false);
-    expect(reopened.referenceVersion).toBe(1);
-    expect(reopened.referenceSnapshotId).toBe(ROUND1_REFERENCE_FIXTURE.id);
   });
 
   test("stores a front exception and marks the drawings stale", () => {
@@ -296,6 +288,107 @@ describe("Round 2 prototype state", () => {
     expect(segment?.widthSixteenths).toBe(selected.widthSixteenths);
     expect(adjusted.drawingStatus).toBe("STALE");
     expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
+  });
+
+  test("regenerates proposal geometry when a submitted corner strategy changes", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    expect(
+      submitted.model?.walls
+        .flatMap((wall) => wall.segments)
+        .some(
+          (segment) =>
+            segment.sourceCornerId === "TL" &&
+            segment.cabinetKind === "corner" &&
+            segment.label.startsWith("LS")
+        )
+    ).toBe(true);
+
+    const adjusted = reduceRound2Prototype(submitted, {
+      type: "SET_DESIGN_INTENT",
+      key: "corner.TL.strategy",
+      value: "blindBase"
+    });
+
+    expect(adjusted.measurementStatus).toBe("SUBMITTED");
+    expect(adjusted.designIntent.answers["corner.TL.strategy"]).toBe(
+      "blindBase"
+    );
+    expect(
+      adjusted.model?.walls
+        .flatMap((wall) => wall.segments)
+        .some(
+          (segment) =>
+            segment.sourceCornerId === "TL" &&
+            segment.cabinetKind === "corner" &&
+            segment.label.startsWith("BB")
+        )
+    ).toBe(true);
+    expect(
+      adjusted.model?.walls
+        .flatMap((wall) => wall.segments)
+        .some(
+          (segment) =>
+            segment.sourceCornerId === "TL" &&
+            segment.kind === "gap" &&
+            segment.label === "Blind corner"
+        )
+    ).toBe(true);
+    expect(adjusted.drawingStatus).toBe("STALE");
+    expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
+  });
+
+  test("regenerates the fridge surround live and keeps the fridge selected", () => {
+    const withFridge = withFridgeFixedPoint(
+      submitComplete(createRound2PrototypeState("DESIGNER"))
+    );
+    const key = `fridge.${FRIDGE_FIXED_POINT_ID}.above`;
+
+    const adjusted = reduceRound2Prototype(withFridge, {
+      type: "SET_DESIGN_INTENT",
+      key,
+      value: "wallCabinet"
+    });
+
+    const fridgeSegment = adjusted.model?.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      );
+
+    expect(adjusted.measurementStatus).toBe("SUBMITTED");
+    expect(adjusted.designIntent.answers[key]).toBe("wallCabinet");
+    expect(fridgeSegment).toBeDefined();
+    // A wall cabinet now sits directly above the fridge tall unit.
+    expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
+    // Selection stays on the fridge rather than jumping to the first cabinet.
+    expect(adjusted.selectedObjectId).toBe(fridgeSegment?.id);
+    expect(adjusted.proposalVersion).toBe(withFridge.proposalVersion + 1);
+  });
+
+  test("still regenerates the fridge surround after another intent change marked measurements draft", () => {
+    const withFridge = withFridgeFixedPoint(
+      submitComplete(createRound2PrototypeState("DESIGNER"))
+    );
+    // Any non-live intent edit (hardware, hood style, …) drops the measurement
+    // status back to DRAFT while the proposal segments persist.
+    const drafted = reduceRound2Prototype(withFridge, {
+      type: "SET_DESIGN_INTENT",
+      key: "hardware.style",
+      value: "fingerPull"
+    });
+    expect(drafted.measurementStatus).toBe("DRAFT");
+
+    const adjusted = reduceRound2Prototype(drafted, {
+      type: "SET_DESIGN_INTENT",
+      key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
+      value: "wallCabinet"
+    });
+
+    expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
+    // The live regen must not fake a submit: the draft status stays.
+    expect(adjusted.measurementStatus).toBe("DRAFT");
   });
 
   test("steps the global height profile and keeps the selection", () => {
@@ -335,12 +428,89 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.proposalVersion).toBe(initial.proposalVersion + 1);
     expect(adjusted.selectedObjectId).toBe(selected.id);
   });
+
+  test("records which filler absorbed a width step and clears it on selection", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const shrunk = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: selected.widthSixteenths - 16
+    });
+
+    expect(shrunk.lastAbsorbed).not.toBeNull();
+    expect(shrunk.lastAbsorbed?.segmentId).not.toBe(selected.id);
+    expect(shrunk.lastAbsorbed?.deltaSixteenths).toBe(16);
+    const absorber = segmentById(shrunk, shrunk.lastAbsorbed!.segmentId);
+    expect(absorber?.kind).toBe("filler");
+
+    const reselected = reduceRound2Prototype(shrunk, {
+      type: "SELECT_WALL",
+      wall: selected.wallId
+    });
+    expect(reselected.lastAbsorbed).toBeNull();
+  });
+
+  test("repositions remainder space with SET_FILLER_PLACEMENT and keeps runs closed", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const shrunk = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: selected.widthSixteenths - 16
+    });
+    const fillerId = shrunk.lastAbsorbed!.segmentId;
+
+    const placed = reduceRound2Prototype(shrunk, {
+      type: "SET_FILLER_PLACEMENT",
+      objectId: fillerId,
+      placement: "split"
+    });
+    const wall = placed.model!.walls.find(
+      (item) => item.id === selected.wallId
+    )!;
+    const tierTotal = wall.segments
+      .filter((item) => item.tier === selected.tier)
+      .reduce((sum, item) => sum + item.widthSixteenths, 0);
+
+    expect(tierTotal).toBe(wall.lengthSixteenths);
+    expect(placed.proposalVersion).toBe(shrunk.proposalVersion + 1);
+    expect(placed.lastAbsorbed).toBeNull();
+  });
+
+  test("hard-gates a blocking overflow: cannot resolve or reach drawings", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const selected = firstResizableSegment(submitted);
+    const overflowed = reduceRound2Prototype(submitted, {
+      type: "STEP_CABINET_WIDTH",
+      objectId: selected.id,
+      widthSixteenths: 400 * 16 // far beyond the wall length
+    });
+
+    expect(hasBlockingDecisions(overflowed.model)).toBe(true);
+    expect(overflowed.proposalStatus).toBe("NEEDS_DECISION");
+
+    // "Resolve decision" cannot acknowledge a blocking geometry error.
+    const resolved = reduceRound2Prototype(overflowed, {
+      type: "RESOLVE_DESIGN_DECISION"
+    });
+    expect(resolved.proposalStatus).toBe("NEEDS_DECISION");
+
+    // The drawings tab stays locked while the overflow is unresolved.
+    const nav = reduceRound2Prototype(overflowed, {
+      type: "SET_TASK",
+      task: "DRAWINGS"
+    });
+    expect(nav.task).toBe(overflowed.task);
+    expect(nav.task).not.toBe("DRAWINGS");
+  });
 });
 
 function lock(state: Round2PrototypeState): Round2PrototypeState {
   return reduceRound2Prototype(state, {
-    type: "LOCK_REFERENCE",
-    reference: ROUND1_REFERENCE_FIXTURE
+    type: "ADOPT_BASIS",
+    reference: ROUND1_REFERENCE_FIXTURE,
+    version: 1
   });
 }
 
@@ -387,13 +557,66 @@ function referenceWithId(id: string): Round1ReferenceSource {
   return { ...ROUND1_REFERENCE_FIXTURE, id };
 }
 
+const FRIDGE_FIXED_POINT_ID = "state-test-fridge";
+
+/**
+ * The reference fixture carries no fridge, so add one to the first wall; the
+ * next autofill run (triggered by the intent edit under test) places the tall
+ * unit for it.
+ */
+function withFridgeFixedPoint(
+  state: Round2PrototypeState
+): Round2PrototypeState {
+  return {
+    ...state,
+    model: state.model && {
+      ...state.model,
+      walls: state.model.walls.map((wall, index) =>
+        index === 0
+          ? {
+              ...wall,
+              fixedPoints: [
+                ...wall.fixedPoints,
+                {
+                  id: FRIDGE_FIXED_POINT_ID,
+                  type: "appliance",
+                  label: "Fridge",
+                  sourceWall: wall.sourceWall,
+                  order: 99,
+                  positionRatio: 0.05,
+                  symbol: "fridge",
+                  widthSixteenths: 36 * 16
+                }
+              ]
+            }
+          : wall
+      )
+    }
+  };
+}
+
+function hasUpperCabinetAboveFridge(state: Round2PrototypeState): boolean {
+  return Boolean(
+    state.model?.walls
+      .flatMap((wall) => wall.segments)
+      .some(
+        (segment) =>
+          segment.tier === "upper" &&
+          segment.kind === "cabinet" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )
+  );
+}
+
 function firstResizableSegment(state: Round2PrototypeState) {
   const segment = state.model?.walls
     .flatMap((wall) => wall.segments)
     .find(
       (item) =>
         item.tier === "base" &&
-        item.kind === "cabinet"
+        item.kind === "cabinet" &&
+        item.cabinetKind !== "corner" &&
+        item.sourceCornerId == null
     );
   if (!segment) throw new Error("Expected a resizable base segment");
   return segment;

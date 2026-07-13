@@ -16,7 +16,8 @@ import {
 } from "../model/round2-model";
 import {
   buildDesignIntentQuestions,
-  type DesignIntentQuestion
+  type DesignIntentQuestion,
+  type DesignIntentValue
 } from "../model/design-intent";
 import { MeasuredPlan } from "./measured-plan";
 import { InchField } from "./inch-field";
@@ -256,7 +257,7 @@ function DesignIntentQuestionCard({
   dispatch
 }: {
   question: DesignIntentQuestion;
-  selectedValue: string;
+  selectedValue: DesignIntentValue;
   confirmed: boolean;
   dispatch: Dispatch<Round2PrototypeAction>;
 }) {

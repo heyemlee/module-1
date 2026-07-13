@@ -13,6 +13,7 @@ export type Round2Corner = {
   primaryEnd: CornerEnd;
   secondaryEnd: CornerEnd;
   intentKey: string;
+  upperIntentKey: string;
   objectId: string;
 };
 
@@ -53,6 +54,7 @@ export function deriveCorners(model: Round2Model | null): Round2Corner[] {
         primaryEnd: cornerEnd(definition.walls[0], definition.walls[1]),
         secondaryEnd: cornerEnd(definition.walls[1], definition.walls[0]),
         intentKey: `corner.${definition.id}.strategy`,
+        upperIntentKey: `corner.${definition.id}.upper`,
         objectId: `corner-${definition.id.toLowerCase()}`
       }
     ];

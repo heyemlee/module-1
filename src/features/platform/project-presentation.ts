@@ -6,9 +6,9 @@ const STATUS_PRESENTATION: Record<
   ProjectStatus,
   { label: string; tone: ProjectStatusTone }
 > = {
-  INTAKE: { label: "Intake", tone: "muted" },
-  RENDERING_READY: { label: "Render Ready", tone: "success" },
-  ROUND2_MEASURING: { label: "Round 2", tone: "action" },
+  INTAKE: { label: "Concept", tone: "muted" },
+  RENDERING_READY: { label: "Concept Ready", tone: "success" },
+  ROUND2_MEASURING: { label: "Technical Design", tone: "action" },
   ARCHIVED: { label: "Archived", tone: "muted" }
 };
 
@@ -32,18 +32,22 @@ export function projectNextAction(input: {
   hasRound1State: boolean;
   hasSnapshot: boolean;
   hasRendering: boolean;
+  hasBasis: boolean;
 }): {
   label: string;
-  destination: "round1" | "renderings";
+  destination: "round1" | "renderings" | "round2";
 } {
+  if (input.hasBasis) {
+    return { label: "Open technical design", destination: "round2" };
+  }
   if (input.hasRendering) {
-    return { label: "Review renderings", destination: "renderings" };
+    return { label: "Confirm proposal", destination: "renderings" };
   }
   if (input.hasSnapshot) {
     return { label: "Generate rendering", destination: "round1" };
   }
   if (input.hasRound1State) {
-    return { label: "Continue Round 1", destination: "round1" };
+    return { label: "Continue concept", destination: "round1" };
   }
-  return { label: "Start Round 1", destination: "round1" };
+  return { label: "Start concept", destination: "round1" };
 }

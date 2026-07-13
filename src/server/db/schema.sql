@@ -18,11 +18,15 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   disabled_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ,
   monthly_render_quota INTEGER NOT NULL DEFAULT 50
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS account TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_render_quota INTEGER NOT NULL DEFAULT 50;
+-- Soft-delete column. The code (findUserForLogin, listCompanyUsers, deleteUser)
+-- filters on deleted_at, so a fresh DB without it 500s on login. Idempotent add.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 UPDATE users
 SET account = lower(replace(email, '@', '_'))
 WHERE account IS NULL;
@@ -161,3 +165,23 @@ ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'INTAKE';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('OWNER', 'ADMIN', 'SALES', 'DESIGNER'));
+
+-- Migration (2026-07-08): design basis — the customer-confirmed Round 1 package
+-- (one rendering + the snapshot/style/color it was generated from) that
+-- technical design (Round 2) reads. Append-only: relocking inserts version+1;
+-- the current basis is the row with the highest version per project.
+CREATE TABLE IF NOT EXISTS design_basis (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL CHECK (version >= 1),
+  rendering_id UUID NOT NULL REFERENCES renderings(id) ON DELETE CASCADE,
+  round1_snapshot_id UUID NOT NULL REFERENCES round1_snapshots(id) ON DELETE CASCADE,
+  cabinet_style TEXT NOT NULL CHECK (cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED')),
+  door_color_id UUID NOT NULL,
+  locked_by_user_id UUID NOT NULL REFERENCES users(id),
+  locked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS design_basis_project_version_idx
+  ON design_basis(project_id, version DESC);

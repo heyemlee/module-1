@@ -2,50 +2,122 @@ import { describe, expect, test, vi } from "vitest";
 import { createOpenAILLMProvider } from "./openai-llm-provider";
 import { LLMProviderNotConfiguredError } from "./provider";
 
-function jsonResponse(body: unknown): Response {
+// The relay streams `chat.completion.chunk` SSE, so mocks emit that wire.
+function sseResponse(chunks: unknown[]): Response {
+  const text =
+    chunks.map((c) => `data: ${JSON.stringify(c)}`).join("\n\n") +
+    "\n\ndata: [DONE]\n\n";
   return {
     ok: true,
     status: 200,
-    async json() {
-      return body;
-    },
     async text() {
-      return JSON.stringify(body);
+      return text;
     }
   } as unknown as Response;
 }
 
+// Tool call split across delta fragments (id+name first, then argument text),
+// exactly how the relay streams it.
 function toolCallResponse(name: string, args: unknown) {
-  return jsonResponse({
-    choices: [
-      {
-        message: {
-          role: "assistant",
-          content: null,
-          tool_calls: [
-            {
-              id: "call_1",
-              type: "function",
-              function: { name, arguments: JSON.stringify(args) }
-            }
-          ]
+  return sseResponse([
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: "assistant",
+            tool_calls: [
+              { index: 0, id: "call_1", type: "function", function: { name, arguments: "" } }
+            ]
+          }
         }
-      }
-    ]
-  });
+      ]
+    },
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }]
+          }
+        }
+      ]
+    },
+    { choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] }
+  ]);
 }
 
 function finalResponse(text: string) {
-  return jsonResponse({
-    choices: [{ message: { role: "assistant", content: text } }]
-  });
+  return sseResponse([
+    { choices: [{ index: 0, delta: { role: "assistant", content: text } }] },
+    { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }
+  ]);
 }
 
 describe("createOpenAILLMProvider", () => {
-  test("throws when OPENAI_API_KEY is missing", () => {
+  test("throws when prioritized OpenAI API keys are missing", () => {
     expect(() => createOpenAILLMProvider({})).toThrow(
       LLMProviderNotConfiguredError
     );
+    expect(() => createOpenAILLMProvider({ OPENAI_API_KEY: "legacy-key" })).toThrow(
+      LLMProviderNotConfiguredError
+    );
+  });
+
+  test("uses the first configured key from OPENAI_API_KEY_PRIORITY", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(finalResponse("ok"));
+    const provider = createOpenAILLMProvider(
+      {
+        OPENAI_API_KEY_PRIMARY: "primary-key",
+        OPENAI_API_KEY_SECONDARY: "secondary-key",
+        OPENAI_API_KEY_PRIORITY: "SECONDARY,PRIMARY"
+      },
+      { fetchImpl }
+    );
+
+    await provider.runAgentLoop(
+      {
+        systemPrompt: "system",
+        history: [],
+        userMessage: "hello",
+        tools: []
+      },
+      vi.fn()
+    );
+
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer secondary-key"
+    });
+  });
+
+  test("uses the base URL for the selected prioritized API key", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(finalResponse("ok"));
+    const provider = createOpenAILLMProvider(
+      {
+        OPENAI_API_KEY_PRIMARY: "proxy-key",
+        OPENAI_API_KEY_SECONDARY: "official-key",
+        OPENAI_API_KEY_PRIORITY: "PRIMARY,SECONDARY",
+        OPENAI_BASE_URL_PRIMARY: "https://proxy.example.com/v1/"
+      },
+      { fetchImpl }
+    );
+
+    await provider.runAgentLoop(
+      {
+        systemPrompt: "system",
+        history: [],
+        userMessage: "hello",
+        tools: []
+      },
+      vi.fn()
+    );
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://proxy.example.com/v1/chat/completions"
+    );
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer proxy-key"
+    });
   });
 
   test("runs the tool loop: calls the tool, feeds back the result, returns final reply", async () => {
@@ -57,7 +129,7 @@ describe("createOpenAILLMProvider", () => {
     const executeTool = vi.fn().mockResolvedValue({ ok: true });
 
     const provider = createOpenAILLMProvider(
-      { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "test-model" },
+      { OPENAI_API_KEY_PRIMARY: "test-key", OPENAI_MODEL: "test-model" },
       { fetchImpl }
     );
 
@@ -100,7 +172,7 @@ describe("createOpenAILLMProvider", () => {
     const executeTool = vi.fn();
 
     const provider = createOpenAILLMProvider(
-      { OPENAI_API_KEY: "test-key" },
+      { OPENAI_API_KEY_PRIMARY: "test-key" },
       { fetchImpl }
     );
 

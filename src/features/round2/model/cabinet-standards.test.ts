@@ -44,8 +44,9 @@ describe("Round 2 cabinet standards", () => {
       }
     });
     expect(CABINET_STANDARDS.filler).toEqual({
-      minSixteenths: 12,
+      minSixteenths: 3 * 16,
       preferredSixteenths: 3 * 16,
+      maxSixteenths: 6 * 16,
       commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
     });
     expect(CABINET_STANDARDS.depths).toEqual({
@@ -67,6 +68,13 @@ describe("Round 2 cabinet standards", () => {
         widthOptionsSixteenths: [39, 42, 45].map((value) => value * 16),
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16,
+        adjacentWallPullSixteenths: 3 * 16
+      },
+      upperDiagonal: {
+        widthOptionsSixteenths: [24 * 16]
+      },
+      upperBlind: {
+        widthOptionsSixteenths: [27, 30].map((value) => value * 16),
         adjacentWallPullSixteenths: 3 * 16
       }
     });

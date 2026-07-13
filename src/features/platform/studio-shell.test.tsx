@@ -17,10 +17,11 @@ describe("StudioRail", () => {
     );
 
     expect(html).toContain("Projects");
-    expect(html).toContain("Round 1");
-    expect(html).toContain("Round 2");
+    expect(html).toContain("Concept");
+    expect(html).toContain("Proposal &amp; Confirm");
+    expect(html).toContain("Technical Design");
     expect(html).toContain('href="/projects/project-1/round2"');
-    expect(html).toContain("Renderings");
+    expect(html).toContain('href="/projects/project-1/renderings"');
     expect(html).not.toContain("Users");
     expect(html).not.toContain("Cabinet Colors");
     // The account footer (with sign out) now lives in the rail as a direct

@@ -1,7 +1,8 @@
 import { autofillRound2Model } from "./model/autofill";
 import {
-  moveFillerEnd,
   nudgeGroup,
+  recenterSink,
+  setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
   setSegmentKind,
@@ -15,6 +16,7 @@ import {
 } from "./model/design-intent";
 import {
   applyMeasurementsToModel,
+  hasBlockingDecisions,
   initializeMeasurements,
   measurementsComplete,
   requiredMeasurementKeys,
@@ -50,6 +52,7 @@ export function createRound2PrototypeState(
     drawingStatus: "STALE",
     selectedWall: null,
     selectedObjectId: null,
+    lastAbsorbed: null,
     issueObjectId: null,
     activeMeasurementKey: null,
     activeSheet: "A1",
@@ -62,12 +65,14 @@ export function reduceRound2Prototype(
   action: Round2PrototypeAction
 ): Round2PrototypeState {
   switch (action.type) {
-    case "LOCK_REFERENCE":
-      return lockReference(state, action.reference, 1);
-    case "REPLACE_REFERENCE":
-      return lockReference(state, action.reference, state.referenceVersion + 1);
-    case "OPEN_REFERENCE_HANDOFF":
-      return { ...state, referenceLocked: false };
+    case "RESTORE_DRAFT":
+      // Drafts saved before the absorb-feedback field existed lack it.
+      return normalizeRestoredState({
+        ...action.state,
+        lastAbsorbed: action.state.lastAbsorbed ?? null
+      });
+    case "ADOPT_BASIS":
+      return lockReference(state, action.reference, action.version);
     case "SET_ROLE":
       // Switching the demo "view as" role must not jump the user into a stage,
       // and never into a stage that is still gated (proposal before submit).
@@ -78,6 +83,11 @@ export function reduceRound2Prototype(
         (action.task === "PROPOSAL" || action.task === "DRAWINGS") &&
         !proposalUnlocked(state)
       ) {
+        return state;
+      }
+      // A blocking decision means the geometry is invalid; the drawings are a
+      // projection of that geometry, so they stay locked until it is fixed.
+      if (action.task === "DRAWINGS" && hasBlockingDecisions(state.model)) {
         return state;
       }
       return { ...state, task: action.task };
@@ -94,23 +104,35 @@ export function reduceRound2Prototype(
       return { ...state, activeMeasurementKey: action.field };
     case "SET_DESIGN_INTENT":
       if (!state.model) return state;
-      return {
-        ...state,
-        designIntent: setDesignIntentAnswer(
+      {
+        const designIntent = setDesignIntentAnswer(
           state.designIntent,
           action.key,
           action.value
-        ),
-        measurementStatus: "DRAFT",
-        proposalStatus:
-          state.measurementStatus === "SUBMITTED"
-            ? "STALE"
-            : state.proposalStatus,
-        drawingStatus:
-          state.measurementStatus === "SUBMITTED"
-            ? "STALE"
-            : state.drawingStatus
-      };
+        );
+        // Corner and fridge intents are edited from the proposal drawing, so
+        // they regenerate live whenever segments exist — even if another
+        // intent edit already dropped the measurement status back to DRAFT.
+        if (
+          proposalUnlocked(state) &&
+          (action.key.startsWith("corner.") || action.key.startsWith("fridge."))
+        ) {
+          return regenerateProposalFromIntent(state, designIntent, action.key);
+        }
+        return {
+          ...state,
+          designIntent,
+          measurementStatus: "DRAFT",
+          proposalStatus:
+            state.measurementStatus === "SUBMITTED"
+              ? "STALE"
+              : state.proposalStatus,
+          drawingStatus:
+            state.measurementStatus === "SUBMITTED"
+              ? "STALE"
+              : state.drawingStatus
+        };
+      }
     case "SUBMIT_MEASUREMENT":
       return submitMeasurement(state, false);
     case "REQUEST_REMEASURE":
@@ -123,30 +145,48 @@ export function reduceRound2Prototype(
     case "SUBMIT_NEW_MEASUREMENT":
       return submitMeasurement(state, true);
     case "SELECT_WALL":
-      return { ...state, selectedWall: action.wall };
+      return { ...state, selectedWall: action.wall, lastAbsorbed: null };
     case "SELECT_OBJECT":
       return {
         ...state,
         selectedWall: action.wall,
-        selectedObjectId: action.objectId
+        selectedObjectId: action.objectId,
+        lastAbsorbed: null
       };
-    case "STEP_CABINET_WIDTH":
-      return applyProposalAdjustment(
+    case "STEP_CABINET_WIDTH": {
+      const before = state.model;
+      const next = applyProposalAdjustment(
         state,
         (model) =>
           stepCabinetWidth(model, action.objectId, action.widthSixteenths),
         action.objectId
       );
+      if (next === state || !before || !next.model) return next;
+      const absorbed = findAbsorbedFiller(before, next.model, action.objectId);
+      return {
+        ...next,
+        lastAbsorbed: absorbed
+          ? { ...absorbed, token: (state.lastAbsorbed?.token ?? 0) + 1 }
+          : null
+      };
+    }
     case "NUDGE_GROUP":
       return applyProposalAdjustment(
         state,
         (model) => nudgeGroup(model, action.objectId, action.direction),
         action.objectId
       );
-    case "MOVE_FILLER_END":
+    case "RECENTER_SINK":
       return applyProposalAdjustment(
         state,
-        (model) => moveFillerEnd(model, action.objectId, action.end),
+        (model) => recenterSink(model, action.objectId),
+        action.objectId
+      );
+    case "SET_FILLER_PLACEMENT":
+      return applyProposalAdjustment(
+        state,
+        (model) =>
+          setFillerPlacement(model, action.objectId, action.placement),
         action.objectId
       );
     case "SET_SEGMENT_KIND":
@@ -170,6 +210,10 @@ export function reduceRound2Prototype(
         null
       );
     case "RESOLVE_DESIGN_DECISION":
+      // Only advisory decisions (confirmations, sub-minimum fillers) can be
+      // acknowledged. Blocking geometry errors can't be waived away — the
+      // designer has to edit or request a remeasure.
+      if (hasBlockingDecisions(state.model)) return state;
       return { ...state, proposalStatus: "READY", issueObjectId: null };
     case "SET_SHEET":
       return { ...state, activeSheet: action.sheet };
@@ -187,6 +231,64 @@ export function reduceRound2Prototype(
       return exhaustive;
     }
   }
+}
+
+function normalizeRestoredState(
+  state: Round2PrototypeState
+): Round2PrototypeState {
+  const designIntent = migrateCornerIntentDefaults(state.designIntent);
+  const intentChanged = designIntent !== state.designIntent;
+  const hasDeadCornerSegments = modelHasDeadCornerSegments(state.model);
+  if (!intentChanged && !hasDeadCornerSegments) return state;
+
+  if (!state.model || !state.model.walls.some((wall) => wall.segments.length > 0)) {
+    return { ...state, designIntent };
+  }
+
+  const model = autofillRound2Model(state.model, state.measurements, designIntent);
+  const selected =
+    (state.selectedObjectId
+      ? firstSegmentById(model, state.selectedObjectId)
+      : null) ?? firstSelectableSegment(model);
+
+  return {
+    ...state,
+    designIntent,
+    model,
+    proposalStatus: model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY",
+    drawingStatus:
+      state.drawingStatus === "REVIEWED" ? "REVIEW_READY" : state.drawingStatus,
+    selectedWall: selected?.wallId ?? state.selectedWall,
+    selectedObjectId: selected?.id ?? state.selectedObjectId,
+    issueObjectId: model.decisionItems[0]?.objectId ?? null
+  };
+}
+
+function migrateCornerIntentDefaults(
+  designIntent: Round2PrototypeState["designIntent"]
+): Round2PrototypeState["designIntent"] {
+  let changed = false;
+  const answers = Object.fromEntries(
+    Object.entries(designIntent.answers).map(([key, value]) => {
+      if (key.startsWith("corner.") && String(value) === "deadCorner") {
+        changed = true;
+        return [key, "lazySusan"];
+      }
+      return [key, value];
+    })
+  ) as Round2PrototypeState["designIntent"]["answers"];
+
+  return changed ? { ...designIntent, answers } : designIntent;
+}
+
+function modelHasDeadCornerSegments(model: Round2Model | null): boolean {
+  return Boolean(
+    model?.walls.some((wall) =>
+      wall.segments.some(
+        (segment) => segment.label.trim().toLowerCase() === "dead corner"
+      )
+    )
+  );
 }
 
 /**
@@ -288,6 +390,36 @@ function submitMeasurement(
   };
 }
 
+function regenerateProposalFromIntent(
+  state: Round2PrototypeState,
+  designIntent: Round2PrototypeState["designIntent"],
+  changedKey: string
+): Round2PrototypeState {
+  if (!state.model) return state;
+
+  const model = autofillRound2Model(state.model, state.measurements, designIntent);
+  const selectedSegment =
+    firstSegmentForCornerIntent(model, changedKey) ?? firstSelectableSegment(model);
+  const proposalStatus =
+    model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY";
+
+  return {
+    ...state,
+    designIntent,
+    model,
+    // The regen is a proposal-side edit: it must not fake a measurement
+    // submit, so an in-progress DRAFT stays DRAFT.
+    measurementStatus: state.measurementStatus,
+    proposalVersion: state.proposalVersion + 1,
+    proposalStatus,
+    drawingStatus: "STALE",
+    selectedWall: selectedSegment?.wallId ?? state.selectedWall,
+    selectedObjectId: selectedSegment?.id ?? state.selectedObjectId,
+    lastAbsorbed: null,
+    issueObjectId: model.decisionItems[0]?.objectId ?? null
+  };
+}
+
 function firstSelectableSegment(
   model: Round2Model
 ): { id: string; wallId: WallId } | null {
@@ -296,6 +428,43 @@ function firstSelectableSegment(
       (item) => item.kind !== "gap" && item.kind !== "opening"
     );
     if (segment) return { id: segment.id, wallId: wall.id };
+  }
+  return null;
+}
+
+function firstSegmentForCornerIntent(
+  model: Round2Model,
+  intentKey: string
+): { id: string; wallId: WallId } | null {
+  const cornerMatch = /^corner\.([^.]+)\.strategy$/.exec(intentKey);
+  const cornerId = cornerMatch?.[1];
+  if (cornerId) {
+    for (const wall of model.walls) {
+      const segment = wall.segments.find(
+        (item) => item.sourceCornerId === cornerId
+      );
+      if (segment) return { id: segment.id, wallId: wall.id };
+    }
+    return null;
+  }
+
+  // A fridge intent edit keeps the fridge tall unit selected (its panels share
+  // the same fixed point, so prefer the appliance segment).
+  const fridgeMatch = /^fridge\.([^.]+)\.(above|sides|aboveHeight)$/.exec(intentKey);
+  const fixedPointId = fridgeMatch?.[1];
+  if (fixedPointId) {
+    for (const wall of model.walls) {
+      const appliance = wall.segments.find(
+        (item) =>
+          item.sourceFixedPointId === fixedPointId &&
+          item.kind === "appliance"
+      );
+      if (appliance) return { id: appliance.id, wallId: wall.id };
+      const owned = wall.segments.find(
+        (item) => item.sourceFixedPointId === fixedPointId
+      );
+      if (owned) return { id: owned.id, wallId: wall.id };
+    }
   }
   return null;
 }
@@ -336,8 +505,40 @@ function applyProposalAdjustment(
     drawingStatus: "STALE",
     selectedWall: selectedSegment?.wallId ?? state.selectedWall,
     selectedObjectId: selectedObjectId ?? state.selectedObjectId,
+    lastAbsorbed: null,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
   };
+}
+
+/**
+ * Finds the filler whose width the last cabinet resize was absorbed into, so
+ * the elevation can pulse it. Fillers that vanished (absorbed down to zero)
+ * have nothing left to highlight and return null.
+ */
+function findAbsorbedFiller(
+  before: Round2Model,
+  after: Round2Model,
+  targetId: string
+): { segmentId: string; deltaSixteenths: number } | null {
+  const beforeWidths = new Map<string, number>();
+  for (const wall of before.walls) {
+    for (const segment of wall.segments) {
+      beforeWidths.set(segment.id, segment.widthSixteenths);
+    }
+  }
+  for (const wall of after.walls) {
+    for (const segment of wall.segments) {
+      if (segment.kind !== "filler" || segment.id === targetId) continue;
+      const previous = beforeWidths.get(segment.id) ?? 0;
+      if (segment.widthSixteenths !== previous) {
+        return {
+          segmentId: segment.id,
+          deltaSixteenths: segment.widthSixteenths - previous
+        };
+      }
+    }
+  }
+  return null;
 }
 
 function firstSegmentById(

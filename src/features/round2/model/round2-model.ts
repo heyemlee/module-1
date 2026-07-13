@@ -12,7 +12,11 @@ export type WallSegmentKind =
   | "filler"
   | "appliance"
   | "opening"
-  | "gap";
+  | "gap"
+  // A decorative finished panel (见光板): a side panel flanking a tall unit, or
+  // the closure panel over a fridge. Carries no cabinet number and never packs
+  // width itself — its width is fixed by the finished-panel standard.
+  | "panel";
 
 export type Round2FixedPointType =
   | "window"
@@ -33,7 +37,13 @@ export type Round2FixedPoint = {
   offsetSixteenths?: number | null;
 };
 
-export type FrontAccessory = "trashPullout" | "spicePullout" | "lazySusan";
+export type FrontAccessory =
+  | "trashPullout"
+  | "spicePullout"
+  | "lazySusan"
+  | "magicCorner"
+  | "blindCornerPullOut"
+  | "cornerPullOutShelves";
 
 /**
  * Cabinet front configuration. Only exceptions a designer made are stored;
@@ -60,6 +70,14 @@ export type WallSegment = {
   sourceFixedPointId?: string;
   sourceCornerId?: string;
   front?: WallSegmentFront;
+  /**
+   * A verified window alignment baked into the segment at autofill time — set
+   * only when the final packed sink center equals its wall's measured window
+   * center. Anchored segments act as a boundary for width redistribution (see
+   * model/adjustments.ts) so editing cabinets on either side never slides the
+   * sink off the window center.
+   */
+  anchored?: boolean;
 };
 
 export type Round2Wall = {
@@ -309,6 +327,38 @@ export function findWall(
   return model.walls.find((wall) => wall.id === wallId) ?? null;
 }
 
+/**
+ * How far (in sixteenths) an anchored sink must slide to sit centered under its
+ * wall's window: window center minus current sink center, rounded to the nearest
+ * sixteenth. A positive result means the sink is left of center and must move
+ * toward the wall end; negative means the reverse. Returns null when the wall
+ * has no measured window to center under.
+ */
+export function sinkCenteringOffsetSixteenths(
+  wall: Round2Wall,
+  segment: WallSegment
+): number | null {
+  const window = wall.fixedPoints.find((point) => point.type === "window");
+  if (
+    !window ||
+    window.offsetSixteenths == null ||
+    window.widthSixteenths == null
+  ) {
+    return null;
+  }
+
+  let start = 0;
+  for (const item of wall.segments) {
+    if (item.tier !== "base") continue;
+    if (item.id === segment.id) break;
+    start += item.widthSixteenths;
+  }
+
+  const sinkCenter = start + segment.widthSixteenths / 2;
+  const windowCenter = window.offsetSixteenths + window.widthSixteenths / 2;
+  return Math.round(windowCenter - sinkCenter);
+}
+
 export function findSegment(
   model: Round2Model | null,
   segmentId: string | null
@@ -319,6 +369,17 @@ export function findSegment(
     if (segment) return segment;
   }
   return null;
+}
+
+/**
+ * Blocking decisions (a wall run that overflows or fails to close, an
+ * impossible corner) are geometry errors, not advisories: they hard-gate the
+ * proposal — the design cannot be approved or drawn until they are fixed.
+ */
+export function hasBlockingDecisions(model: Round2Model | null): boolean {
+  return Boolean(
+    model?.decisionItems.some((item) => item.severity === "blocking")
+  );
 }
 
 export function sourceWallLabel(sourceWall: Round1Wall): string {

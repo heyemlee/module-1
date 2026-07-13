@@ -7,7 +7,12 @@ import {
 } from "./round2-model";
 import { deriveCorners } from "./corners";
 
-export type CornerStrategy = "lazySusan" | "blindBase" | "deadCorner";
+export type CornerStrategy =
+  | "lazySusan"
+  | "blindBase"
+  | "magicCorner"
+  | "blindCornerPullOut"
+  | "cornerPullOutShelves";
 export type UpperTermination = "standard" | "ceiling";
 export type FlatMouldingStyle = "none" | "flat2" | "flat3";
 export type TallCabinetLocation = "auto" | `wall:${WallId}`;
@@ -19,6 +24,19 @@ export type CabinetFrontPreference =
 export type HoodStyle = "cabinetInsert" | "chimney" | "underCabinet";
 export type HardwareStyle = "handle" | "fingerPull";
 export type SinkWindowAlignment = "align" | "keepRound1";
+export type UpperCornerStrategy = "diagonalUpper" | "blindUpper" | "openUpper";
+// What sits above a fridge tall unit, and which exposed sides get a finished
+// panel. Both are per-fridge, keyed by the fridge fixed point (see
+// fridgeAboveIntentKey / fridgeSidesIntentKey). Defaults reproduce the original
+// behaviour: an empty gap above and no side panels.
+export type FridgeAboveStrategy = "gap" | "wallCabinet" | "panel";
+export type FridgeSideStrategy = "none" | "left" | "right" | "both";
+/**
+ * Height (sixteenths) of the wall cabinet / panel above a fridge, measured down
+ * from the ceiling-aligned upper top. The fridge fills the remaining tall span
+ * beneath it. Stored numerically so a custom height is representable.
+ */
+export type FridgeAboveHeight = number;
 
 export type DesignIntentValue =
   | CornerStrategy
@@ -29,7 +47,26 @@ export type DesignIntentValue =
   | CabinetFrontPreference
   | HoodStyle
   | HardwareStyle
-  | SinkWindowAlignment;
+  | SinkWindowAlignment
+  | UpperCornerStrategy
+  | FridgeAboveStrategy
+  | FridgeSideStrategy
+  | FridgeAboveHeight;
+
+/** Per-fridge intent key for the treatment above the fridge tall unit. */
+export function fridgeAboveIntentKey(fixedPointId: string): string {
+  return `fridge.${fixedPointId}.above`;
+}
+
+/** Per-fridge intent key for finished side panels flanking the fridge. */
+export function fridgeSidesIntentKey(fixedPointId: string): string {
+  return `fridge.${fixedPointId}.sides`;
+}
+
+/** Per-fridge intent key for the height of the unit above the fridge. */
+export function fridgeAboveHeightIntentKey(fixedPointId: string): string {
+  return `fridge.${fixedPointId}.aboveHeight`;
+}
 
 export type DesignIntentKey = string;
 
@@ -40,6 +77,7 @@ export type Round2DesignIntent = {
 
 export type DesignIntentQuestionKind =
   | "corner-strategy"
+  | "corner-upper-strategy"
   | "upper-termination"
   | "flat-moulding"
   | "tall-location"
@@ -74,17 +112,62 @@ export function buildDesignIntentQuestions(
   const firstWall = model.walls[0];
   const questions: DesignIntentQuestion[] = [];
 
+  // The sink cabinet is confirmed first in the design proposal: it anchors to
+  // the window center and every other placement packs around it.
+  for (const wall of model.walls) {
+    const window = wall.fixedPoints.find((point) => point.type === "window");
+    const sink = wall.fixedPoints.find(
+      (point) => point.type === "appliance" && point.symbol === "sink"
+    );
+    if (!window || !sink) continue;
+    questions.push({
+      key: `sink-window.${wall.id}.alignment`,
+      kind: "sink-window-alignment",
+      label: `Center the sink under Wall ${wall.label} window?`,
+      helper: "This becomes a fixed alignment rule during autofill.",
+      defaultValue: "align",
+      options: [
+        { value: "align", label: "Center under window" },
+        { value: "keepRound1", label: "Keep Round 1 intent" }
+      ],
+      wallId: wall.id,
+      objectId: window.id
+    });
+  }
+
   for (const corner of deriveCorners(model)) {
     questions.push({
       key: corner.intentKey,
       kind: "corner-strategy",
       label: `Corner ${corner.primary.label}–${corner.secondary.label} strategy`,
-      helper: "Default reserves fillers on both walls until the corner is confirmed.",
-      defaultValue: "deadCorner",
+      helper: "Default uses a true corner cabinet; blind-base options stay straight on their main wall.",
+      defaultValue: "lazySusan",
       options: [
         { value: "lazySusan", label: "Lazy Susan" },
         { value: "blindBase", label: "Blind base" },
-        { value: "deadCorner", label: "Dead corner" }
+        { value: "magicCorner", label: "Blind base + Magic Corner" },
+        {
+          value: "blindCornerPullOut",
+          label: "Blind base + Blind Corner Pull-Out"
+        },
+        {
+          value: "cornerPullOutShelves",
+          label: "Blind base + Corner Pull-Out Shelves"
+        }
+      ],
+      wallId: corner.primary.id,
+      objectId: corner.objectId
+    });
+    questions.push({
+      key: corner.upperIntentKey,
+      kind: "corner-upper-strategy",
+      label: `Corner ${corner.primary.label}–${corner.secondary.label} upper cabinets`,
+      helper: "Default turns the corner with a diagonal wall cabinet; open leaves the upper corner empty.",
+      defaultValue: "diagonalUpper",
+      options: [
+        { value: "diagonalUpper", label: "Diagonal corner" },
+        { value: "blindUpper", label: "Blind upper" },
+        { value: "openUpper", label: "Leave open" }
       ],
       wallId: corner.primary.id,
       objectId: corner.objectId
@@ -196,27 +279,6 @@ export function buildDesignIntentQuestions(
       objectId: firstWall.id
     }
   );
-
-  for (const wall of model.walls) {
-    const window = wall.fixedPoints.find((point) => point.type === "window");
-    const sink = wall.fixedPoints.find(
-      (point) => point.type === "appliance" && point.symbol === "sink"
-    );
-    if (!window || !sink) continue;
-    questions.push({
-      key: `sink-window.${wall.id}.alignment`,
-      kind: "sink-window-alignment",
-      label: `Center the sink under Wall ${wall.label} window?`,
-      helper: "This becomes a fixed alignment rule during autofill.",
-      defaultValue: "align",
-      options: [
-        { value: "align", label: "Center under window" },
-        { value: "keepRound1", label: "Keep Round 1 intent" }
-      ],
-      wallId: wall.id,
-      objectId: window.id
-    });
-  }
 
   return questions;
 }

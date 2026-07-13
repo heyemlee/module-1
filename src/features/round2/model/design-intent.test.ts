@@ -23,6 +23,30 @@ describe("Round 2 design intent", () => {
     ).toHaveLength(count);
   });
 
+  test("offers corner hardware only in the corner strategy setup", () => {
+    const model = deriveWallsFromRound1(
+      planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
+    );
+    const question = buildDesignIntentQuestions(model, {}).find(
+      (item) => item.kind === "corner-strategy"
+    );
+
+    expect(question?.options).toEqual([
+      { value: "lazySusan", label: "Lazy Susan" },
+      { value: "blindBase", label: "Blind base" },
+      { value: "magicCorner", label: "Blind base + Magic Corner" },
+      {
+        value: "blindCornerPullOut",
+        label: "Blind base + Blind Corner Pull-Out"
+      },
+      {
+        value: "cornerPullOutShelves",
+        label: "Blind base + Corner Pull-Out Shelves"
+      }
+    ]);
+    expect(question?.defaultValue).toBe("lazySusan");
+  });
+
   test("asks about sink-to-window alignment only when both share a wall", () => {
     const base = planFor("LEFT_L_SHAPE", ["TOP", "LEFT"]);
     const withSinkUnderWindow = deriveWallsFromRound1({

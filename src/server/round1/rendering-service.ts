@@ -6,9 +6,13 @@ import type {
   ImageGenerationSize,
   OpenAIImageAdapter
 } from "@/infrastructure/image/openai-image-adapter";
+import {
+  normalizeRenderingImageBase64,
+  TARGET_RENDERING_SIZE
+} from "./rendering-image-normalization";
 
 // Landscape size that matches the top-down plan aspect ratio.
-export const DEFAULT_RENDERING_SIZE: ImageGenerationSize = "1536x1024";
+export const DEFAULT_RENDERING_SIZE: ImageGenerationSize = TARGET_RENDERING_SIZE;
 
 export type Round1RenderingPreferenceStamp = {
   cabinetStyle: CabinetStyle;
@@ -69,10 +73,11 @@ export async function generateRound1Rendering(input: {
     size,
     referenceImagesBase64: input.referenceImagesBase64
   });
+  const imageBase64 = await normalizeRenderingImageBase64(result.imageBase64);
 
   return {
     model: result.model,
-    imageBase64: result.imageBase64,
+    imageBase64,
     prompt,
     size,
     basedOnSnapshotGeneratedAt: input.snapshot.generatedAt,

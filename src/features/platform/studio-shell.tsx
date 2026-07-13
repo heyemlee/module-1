@@ -103,21 +103,21 @@ export function StudioRail({
     {
       id: "round1",
       href: projectId ? `/projects/${projectId}/round1` : "/projects",
-      label: "Round 1",
-      section: "project",
-      visible: Boolean(projectId)
-    },
-    {
-      id: "round2",
-      href: projectId ? `/projects/${projectId}/round2` : "/projects",
-      label: "Round 2",
+      label: "Concept",
       section: "project",
       visible: Boolean(projectId)
     },
     {
       id: "renderings",
       href: projectId ? `/projects/${projectId}/renderings` : "/projects",
-      label: "Renderings",
+      label: "Proposal & Confirm",
+      section: "project",
+      visible: Boolean(projectId)
+    },
+    {
+      id: "round2",
+      href: projectId ? `/projects/${projectId}/round2` : "/projects",
+      label: "Technical Design",
       section: "project",
       visible: Boolean(projectId)
     },
