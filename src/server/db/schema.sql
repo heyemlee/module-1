@@ -18,11 +18,15 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   disabled_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ,
   monthly_render_quota INTEGER NOT NULL DEFAULT 50
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS account TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_render_quota INTEGER NOT NULL DEFAULT 50;
+-- Soft-delete column. The code (findUserForLogin, listCompanyUsers, deleteUser)
+-- filters on deleted_at, so a fresh DB without it 500s on login. Idempotent add.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 UPDATE users
 SET account = lower(replace(email, '@', '_'))
 WHERE account IS NULL;

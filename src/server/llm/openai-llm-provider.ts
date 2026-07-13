@@ -7,6 +7,7 @@ import {
   type ToolExecutor,
   type ToolSpec
 } from "./provider";
+import { getPreferredOpenAIApiKey } from "@/infrastructure/openai-api-keys";
 
 type FetchImpl = typeof fetch;
 
@@ -24,10 +25,6 @@ type OpenAIMessage = {
   content: string | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
-};
-
-type OpenAIChatResponse = {
-  choices?: Array<{ message?: OpenAIMessage }>;
 };
 
 /**
@@ -67,7 +64,10 @@ export async function runOpenAICompatibleAgentLoop(
           model: config.model,
           messages,
           tools,
-          tool_choice: "auto"
+          tool_choice: "auto",
+          // The CRS relay only accepts streaming requests; OpenAI/DeepSeek also
+          // support it, so stream unconditionally and aggregate the deltas.
+          stream: true
         })
       }
     );
@@ -81,11 +81,7 @@ export async function runOpenAICompatibleAgentLoop(
       );
     }
 
-    const json = (await response.json()) as OpenAIChatResponse;
-    const message = json.choices?.[0]?.message;
-    if (!message) {
-      throw new Error("LLM response did not include a message");
-    }
+    const message = await readStreamedAssistantMessage(response);
 
     messages.push({
       role: "assistant",
@@ -124,6 +120,68 @@ export async function runOpenAICompatibleAgentLoop(
       lastAssistantText ||
       "I gathered what I could but reached my step limit for this turn. Please refine or repeat your request.",
     toolCallsMade
+  };
+}
+
+/**
+ * The relay (and OpenAI/DeepSeek) stream chat completions as
+ * `chat.completion.chunk` SSE. Reassemble the deltas into one assistant
+ * message: concatenate content, and merge tool_call fragments by index (id +
+ * name arrive in the first fragment, then argument text streams in chunks).
+ */
+async function readStreamedAssistantMessage(
+  response: Response
+): Promise<OpenAIMessage> {
+  const text = await response.text();
+  let content = "";
+  const calls = new Map<number, OpenAIToolCall>();
+
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    let chunk: {
+      choices?: Array<{
+        delta?: {
+          content?: string | null;
+          tool_calls?: Array<{
+            index: number;
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
+    };
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) continue;
+    if (typeof delta.content === "string") content += delta.content;
+    for (const fragment of delta.tool_calls ?? []) {
+      let slot = calls.get(fragment.index);
+      if (!slot) {
+        slot = { id: "", type: "function", function: { name: "", arguments: "" } };
+        calls.set(fragment.index, slot);
+      }
+      if (fragment.id) slot.id = fragment.id;
+      if (fragment.function?.name) slot.function.name += fragment.function.name;
+      if (fragment.function?.arguments) {
+        slot.function.arguments += fragment.function.arguments;
+      }
+    }
+  }
+
+  const toolCalls = [...calls.keys()]
+    .sort((a, b) => a - b)
+    .map((key) => calls.get(key)!);
+
+  return {
+    role: "assistant",
+    content: content || null,
+    tool_calls: toolCalls.length > 0 ? toolCalls : undefined
   };
 }
 
@@ -173,22 +231,23 @@ async function safeReadError(response: Response): Promise<string> {
 
 /**
  * Builds an OpenAI chat provider from environment configuration. Throws
- * `LLMProviderNotConfiguredError` when `OPENAI_API_KEY` is absent.
+ * `LLMProviderNotConfiguredError` when no prioritized OpenAI API key is set.
  */
 export function createOpenAILLMProvider(
   env: Record<string, string | undefined> = process.env,
   deps: { fetchImpl?: FetchImpl } = {}
 ): LLMProvider {
-  const apiKey = env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
+  const keyConfig = getPreferredOpenAIApiKey(env);
+  if (!keyConfig) {
     throw new LLMProviderNotConfiguredError(
-      "LLM_PROVIDER=openai but OPENAI_API_KEY is not set"
+      "LLM_PROVIDER=openai but no prioritized OpenAI API key is set"
     );
   }
-  const baseUrl = (env.OPENAI_BASE_URL?.trim() || DEFAULT_OPENAI_BASE_URL).replace(
+  const baseUrl = (keyConfig.baseUrl || DEFAULT_OPENAI_BASE_URL).replace(
     /\/+$/,
     ""
   );
+  const apiKey = keyConfig.apiKey;
   const model = env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
 

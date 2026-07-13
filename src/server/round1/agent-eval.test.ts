@@ -32,12 +32,12 @@
  *
  * Run:
  *   # OpenAI (default): gpt-4o-mini vs gpt-4o
- *   RUN_AGENT_EVAL=1 OPENAI_API_KEY=sk-... npx vitest run src/server/round1/agent-eval.test.ts
+ *   RUN_AGENT_EVAL=1 OPENAI_API_KEY_PRIMARY=sk-... npx vitest run src/server/round1/agent-eval.test.ts
  *   # Claude: haiku vs sonnet
  *   RUN_AGENT_EVAL=1 EVAL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... \
  *     npx vitest run src/server/round1/agent-eval.test.ts
  *   # override models / endpoint:
- *   ... EVAL_MODELS=gpt-4o-mini,gpt-4o [OPENAI_BASE_URL=...] ...
+ *   ... EVAL_MODELS=gpt-4o-mini,gpt-4o [OPENAI_BASE_URL_PRIMARY=...] ...
  */
 import { describe, expect, test } from "vitest";
 import type { Round1FormInput } from "@/domain/round1";
@@ -46,6 +46,7 @@ import { createAnthropicLLMProvider } from "@/server/llm/anthropic-llm-provider"
 import { createDeepSeekLLMProvider } from "@/server/llm/deepseek-llm-provider";
 import { createOpenAILLMProvider } from "@/server/llm/openai-llm-provider";
 import type { ChatMessage, LLMProvider } from "@/server/llm/provider";
+import { hasConfiguredOpenAIApiKey } from "@/infrastructure/openai-api-keys";
 import {
   ROUND1_AGENT_SYSTEM_PROMPT,
   ROUND1_AGENT_TOOLS,
@@ -348,7 +349,6 @@ async function runScenario(provider: LLMProvider, turns: string[]) {
 
 const PROVIDER = (process.env.EVAL_PROVIDER ?? "openai").toLowerCase();
 const KEY_ENV: Record<string, string> = {
-  openai: "OPENAI_API_KEY",
   deepseek: "DEEPSEEK_API_KEY",
   anthropic: "ANTHROPIC_API_KEY"
 };
@@ -371,7 +371,9 @@ function makeProvider(model: string): LLMProvider {
 
 const RUN =
   process.env.RUN_AGENT_EVAL === "1" &&
-  Boolean(process.env[KEY_ENV[PROVIDER] ?? "OPENAI_API_KEY"]);
+  (PROVIDER === "openai"
+    ? hasConfiguredOpenAIApiKey(process.env)
+    : Boolean(process.env[KEY_ENV[PROVIDER] ?? ""]));
 const MODELS = (process.env.EVAL_MODELS ?? DEFAULT_MODELS[PROVIDER] ?? "gpt-4o-mini,gpt-4o")
   .split(",")
   .map((s) => s.trim())

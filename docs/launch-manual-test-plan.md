@@ -39,7 +39,7 @@ npm run db:seed-cabinet-colors
 ```
 固定测试夹具：**1 个 admin（qa-admin）+ 2 个 sales（qa-sales-A / qa-sales-B）**。两个 sales 用于验证数据隔离（见 P0-07）。
 
-**环境变量降级用例**：staging 上跑一遍**不配 `OPENAI_API_KEY`** 的场景，确认渲染按钮的失败提示友好、不白屏（见 P1-Render）。
+**环境变量降级用例**：staging 上跑一遍**不配 `OPENAI_API_KEY_PRIMARY/SECONDARY/TERTIARY`** 的场景，确认渲染按钮的失败提示友好、不白屏（见 P1-Render）。
 
 ---
 
@@ -84,7 +84,7 @@ npm run db:seed-cabinet-colors
 | **P1-Print** | SVG 打印 | 浏览器内打印输出干净（仅客户面板面，无侧栏调试信息） |
 | **P1-Elev** | 立面图（第二渲染面） | `Adjust Positions` 后立面视图可切换/显示；每面墙立面渲染基柜/吊柜/转角柜/踢脚/台面；**改平面或拖拽后立面同步更新**；标注 `not for production` |
 | **P1-Agent** | 对话式 intake agent | 聊天能正确把自然语言改成对应**表单字段**（再校验入 schema）；rate limit **30 次/60s** 生效；**未配置 LLM 时降级提示友好**；服务端重新校验、不信任客户端传入数据 |
-| **P1-Render** | 真实渲染 + 配额 | 渲染按钮在「快照存在+已存+偏好确认」前 disabled；**偏好门控真值=选中颜色必须 active 且与所选 style 匹配**——admin 停用该颜色后渲染应**重新锁定**；点击后生成概念图、进渲染历史；**配额扣减正确**；配额耗尽报错友好；**无 `OPENAI_API_KEY` 时降级提示友好不白屏** |
+| **P1-Render** | 真实渲染 + 配额 | 渲染按钮在「快照存在+已存+偏好确认」前 disabled；**偏好门控真值=选中颜色必须 active 且与所选 style 匹配**——admin 停用该颜色后渲染应**重新锁定**；点击后生成概念图、进渲染历史；**配额扣减正确**；配额耗尽报错友好；**无 `OPENAI_API_KEY_PRIMARY/SECONDARY/TERTIARY` 时降级提示友好不白屏** |
 | **P1-Admin** | Admin 操作 | 停用/启用用户立即生效（被停用者无法登录）；配额调整生效；cabinet colors 批量编辑→Save All 落库；用户日志可见 |
 
 ## 5.5 重点功能详测卡片（Agent / 渲染门控）
@@ -119,7 +119,7 @@ npm run db:seed-cabinet-colors
 | RG-4 | **★ 中途停用（client/server 一致性）** | 会话中 admin 停用当前选中门色：① **服务端权威**——此刻触发生成 → **409 `INVALID_DOOR_COLOR`**（`isColorCompatibleWithStyle` 要求 active），**不出图、不扣配额**；② **客户端**——刷新/重拉颜色后该色从 active 列表消失、按钮重新 disabled；③ 已打开未刷新的会话即便按钮仍亮，点击也被 409 兜住，**UI 友好提示不假成功** |
 | RG-5 | 缺门色 | `renderingPreferences` 无 `doorColorId` → **409 `DOOR_COLOR_REQUIRED`** |
 | RG-6 | 缺快照 | 无 latest 快照 → **409 Round 1 snapshot required** |
-| RG-7 | 未配置图像 | 无 `OPENAI_API_KEY` → **503 `OPENAI_API_KEY_NOT_CONFIGURED`**，UI 友好 |
+| RG-7 | 未配置图像 | 无 `OPENAI_API_KEY_PRIMARY/SECONDARY/TERTIARY` → **503 `OPENAI_IMAGE_API_KEYS_NOT_CONFIGURED`**，UI 友好 |
 | RG-8 | 配额耗尽 | 当月渲染数 ≥ `monthlyRenderQuota` → **403 `QUOTA_EXCEEDED`**；admin 调高配额后可继续（交叉 P1-Admin） |
 | RG-9 | 限流 | 1 分钟 >20 次渲染 → **429 + `Retry-After`** |
 | RG-10 | 越权 | 对**别人项目**发 renderings POST → **404**（`getProjectForUser`） |
