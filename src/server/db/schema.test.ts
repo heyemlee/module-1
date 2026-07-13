@@ -49,6 +49,24 @@ describe("Postgres schema", () => {
     );
   });
 
+  test("adds nullable object storage metadata for image migration", () => {
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_object_key TEXT"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_content_type TEXT"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_bytes INTEGER"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE cabinet_colors ADD COLUMN IF NOT EXISTS swatch_object_key TEXT"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE cabinet_colors ADD COLUMN IF NOT EXISTS hover_object_key TEXT"
+    );
+  });
+
   test("stores editable Round 1 draft navigation state", () => {
     expect(schema).toContain("current_step INTEGER NOT NULL DEFAULT 0");
     expect(schema).toContain("max_accessible_step INTEGER NOT NULL DEFAULT 0");

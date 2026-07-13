@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS renderings (
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   round1_snapshot_id UUID NOT NULL REFERENCES round1_snapshots(id) ON DELETE CASCADE,
   model TEXT NOT NULL,
-  image_base64 TEXT NOT NULL,
+  image_base64 TEXT,
   prompt TEXT NOT NULL,
   size TEXT NOT NULL,
   based_on_snapshot_generated_at TIMESTAMPTZ NOT NULL,
@@ -118,6 +118,10 @@ CREATE TABLE IF NOT EXISTS renderings (
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'));
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_object_key TEXT;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_content_type TEXT;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_bytes INTEGER;
+ALTER TABLE renderings ALTER COLUMN image_base64 DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS cabinet_colors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -134,6 +138,9 @@ CREATE TABLE IF NOT EXISTS cabinet_colors (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE cabinet_colors ADD COLUMN IF NOT EXISTS swatch_object_key TEXT;
+ALTER TABLE cabinet_colors ADD COLUMN IF NOT EXISTS hover_object_key TEXT;
 
 CREATE INDEX IF NOT EXISTS customers_company_name_idx ON customers(company_id, name);
 CREATE INDEX IF NOT EXISTS projects_company_status_idx ON projects(company_id, status);
