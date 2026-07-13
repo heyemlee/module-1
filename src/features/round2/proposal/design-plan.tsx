@@ -38,20 +38,15 @@ const LANE_STEP = 10;
 const OPENING_LABEL_OFFSET = 16;
 const CHAIN_OFFSET = 30;
 
-const CARCASS_STROKE = "#2c2c2c";
-const OPENING_COLOR = "#5a8fb8";
-const UPPER_COLOR = "#41657a";
-const CORNER_ACCENT = "#8a6a1c";
-const GLYPH_STROKE = "#4b5651";
+const CABINET_FILL = "#ffffff";
+const CARCASS_STROKE = "#1d1d1b";
+const OPENING_COLOR = "#1d1d1b";
+const UPPER_COLOR = "#1d1d1b";
+const CORNER_ACCENT = "#1d1d1b";
+const GLYPH_STROKE = "#1d1d1b";
 
 function fillForSegment(segment: WallSegment) {
-  if (isCornerGap(segment)) return "#fdf9eb";
-  if (segment.cabinetKind === "corner") return "#f4efe2";
-  if (segment.cabinetKind === "sink") return "#eef7f4";
-  if (segment.cabinetKind === "tall") return "#f1ecf7";
-  if (segment.kind === "appliance") return "#edf5f7";
-  if (segment.kind === "filler") return "#fdf9eb";
-  return "#fbfbf8";
+  return CABINET_FILL;
 }
 
 export function DesignPlan({
@@ -801,13 +796,7 @@ function UpperOverlay({ wall }: { wall: Round2Wall }) {
             y={rect.y}
             width={Math.max(filler ? 2 : 4, rect.width)}
             height={Math.max(4, rect.height)}
-            fill={
-              filler
-                ? "rgba(214,186,86,0.14)"
-                : panel
-                  ? "rgba(65,101,122,0.04)"
-                  : "rgba(65,101,122,0.08)"
-            }
+            fill="none"
             stroke={UPPER_COLOR}
             strokeWidth={filler ? 1 : panel ? 1.1 : 1.3}
             strokeDasharray={filler ? "3 2" : panel ? "4 3" : "5 3"}
@@ -877,7 +866,7 @@ function UpperCornerFootprints({ walls }: { walls: Round2Wall[] }) {
             key={cornerId}
             data-plan-upper-corner={cornerId}
             d={pathFromPoints(points)}
-            fill="rgba(65,101,122,0.08)"
+            fill="none"
             stroke={UPPER_COLOR}
             strokeWidth="1.3"
             strokeDasharray="5 3"
@@ -1051,6 +1040,13 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
 
   const chainA = runPoint(wall, 0, chainOffset);
   const chainB = runPoint(wall, runEnd, chainOffset);
+  const overallOffset = chainOffset + 24;
+  const overallA = runPoint(wall, 0, overallOffset);
+  const overallB = runPoint(wall, runEnd, overallOffset);
+  const overallMid = runPoint(wall, runEnd / 2, overallOffset + textPad);
+  const overallRotate = horizontal
+    ? undefined
+    : `rotate(${wall.sourceWall === "RIGHT" ? 90 : -90} ${overallMid.x} ${overallMid.y})`;
 
   let mid = 0;
 
@@ -1062,6 +1058,42 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
       fill={DIMENSION_COLOR}
       fontFamily="var(--studio-mono)"
     >
+      <line
+        data-plan-overall-line={wall.id}
+        x1={overallA.x}
+        y1={overallA.y}
+        x2={overallB.x}
+        y2={overallB.y}
+        strokeWidth={DIMENSION_STROKE_WIDTH}
+      />
+      <line
+        data-plan-overall-tick-start={wall.id}
+        x1={runPoint(wall, 0, overallOffset - TICK).x}
+        y1={runPoint(wall, 0, overallOffset - TICK).y}
+        x2={runPoint(wall, 0, overallOffset + TICK).x}
+        y2={runPoint(wall, 0, overallOffset + TICK).y}
+        strokeWidth={DIMENSION_STROKE_WIDTH}
+      />
+      <line
+        data-plan-overall-tick-end={wall.id}
+        x1={runPoint(wall, runEnd, overallOffset - TICK).x}
+        y1={runPoint(wall, runEnd, overallOffset - TICK).y}
+        x2={runPoint(wall, runEnd, overallOffset + TICK).x}
+        y2={runPoint(wall, runEnd, overallOffset + TICK).y}
+        strokeWidth={DIMENSION_STROKE_WIDTH}
+      />
+      <text
+        data-plan-overall-label={wall.id}
+        x={overallMid.x}
+        y={overallMid.y}
+        textAnchor="middle"
+        fontSize={DIMENSION_FONT_SIZE}
+        fontWeight="bold"
+        stroke="none"
+        transform={overallRotate}
+      >
+        {wall.id} · {formatSixteenths(total)}
+      </text>
       <line
         x1={chainA.x}
         y1={chainA.y}

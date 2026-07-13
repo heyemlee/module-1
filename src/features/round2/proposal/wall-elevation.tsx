@@ -75,7 +75,8 @@ const OVERALL_DIMENSION_GUIDE_Y = 29;
 // pushing a dimension chain through the ceiling datum.
 const UPPER_CHAIN_LABEL_Y = 42;
 const BASE_CHAIN_LABEL_Y = 64;
-const CABINET_FACE_STROKE = "#a7aaa5";
+const CABINET_FILL = "#ffffff";
+const CABINET_FACE_STROKE = "#1d1d1b";
 const TALL_HEIGHT_CHAIN_X = 32;
 const TALL_HEIGHT_LABEL_X = 20;
 const ROOM_HEIGHT_CHAIN_X = 32;
@@ -92,16 +93,16 @@ function widthChainLabelY(
 // Corner returns follow NKBA section conventions: sectioned side profile in
 // amber hatch, hidden carcass in dashed gray, counter cut in dark poché, and
 // a parenthesized depth reference kept out of the teal cabinet chain.
-const CORNER_SECTION_COLOR = "#8a6a1c";
+const CORNER_SECTION_COLOR = "#1d1d1b";
 const CORNER_RETURN_FILL = "transparent";
-const HIDDEN_LINE_COLOR = "#8a8d83";
-const COUNTER_SECTION_FILL = "#44443e";
+const HIDDEN_LINE_COLOR = "#1d1d1b";
+const COUNTER_SECTION_FILL = "#1d1d1b";
 const COUNTER_THICKNESS_SIXTEENTHS = 24; // 1.5″
 // The counter slab drawn over the straight base run: a light poché band with
 // a solid ink surface line and a small end overhang, matching the reference
 // section conventions in the black/white theme.
-const COUNTER_SLAB_FILL = "#e8e5dd";
-const COUNTER_SLAB_STROKE = "#2c2c2c";
+const COUNTER_SLAB_FILL = CABINET_FILL;
+const COUNTER_SLAB_STROKE = "#1d1d1b";
 const COUNTER_END_OVERHANG_PX = 3;
 const TOE_KICK_HEIGHT_SIXTEENTHS = 72; // 4.5″
 const TOE_KICK_DEPTH_SIXTEENTHS = 48; // 3″
@@ -196,14 +197,7 @@ const EMPTY_ABOVE_HEIGHTS: ReadonlyMap<string, number> = new Map();
 
 
 function segmentFill(segment: WallSegment) {
-  if (segment.kind === "panel") return "#efe6f2";
-  if (segment.cabinetKind === "sink") return "#eef7f4";
-  if (segment.cabinetKind === "tall") return "#f1ecf7";
-  if (segment.cabinetKind === "corner") return "#f4efe2";
-  if (segment.kind === "opening") return "#dceff7";
-  if (segment.kind === "appliance") return "#edf5f7";
-  if (isFillerLikeSegment(segment)) return "#fdf9eb";
-  return "#fbfbf8";
+  return CABINET_FILL;
 }
 
 export function WallElevation({
@@ -881,7 +875,7 @@ function ElevationRun({
               height={height}
               fill={segmentFill(segment)}
               fillOpacity={1}
-              stroke={selected ? "#079ca5" : "#2c2c2c"}
+              stroke={selected ? "#079ca5" : "#1d1d1b"}
               strokeWidth={selected ? 3 : 1.5}
             />
             {segment.kind === "panel" && (
@@ -923,14 +917,14 @@ function ElevationRun({
                 y={y}
                 width={Math.max(8, width)}
                 height={height}
-                stroke="#4b5651"
+                stroke={CABINET_FACE_STROKE}
               />
             ) : (
               !front &&
               segment.kind === "appliance" && (
                 <path
                   d={`M ${x + 4} ${y + 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + 4}`}
-                  stroke="#a7aaa5"
+                  stroke={CABINET_FACE_STROKE}
                   strokeWidth="1"
                   fill="none"
                 />
@@ -942,7 +936,7 @@ function ElevationRun({
                 y={y}
                 width={Math.max(8, width)}
                 height={height}
-                stroke="#5a8fb8"
+                stroke={CABINET_FACE_STROKE}
               />
             )}
             {roleTag && width >= 26 && (
@@ -1259,7 +1253,7 @@ function CornerSideProfile({
         y1={layout.baseTop}
         x2={baseX + baseWidth}
         y2={layout.baseTop}
-        stroke="#2c2c2c"
+        stroke="#1d1d1b"
         strokeWidth="2"
       />
       <path
@@ -1396,8 +1390,8 @@ function CornerReturnSection({
           y={faceTop}
           width={visibleFaceWidth}
           height={floor - faceTop}
-          fill="#fbfbf8"
-          stroke="#2c2c2c"
+          fill={CABINET_FILL}
+          stroke="#1d1d1b"
           strokeWidth="1.5"
         />
       )}
@@ -1409,7 +1403,7 @@ function CornerReturnSection({
             y1={y}
             x2={x + width}
             y2={y}
-            stroke="#2c2c2c"
+            stroke="#1d1d1b"
             strokeWidth="2"
           />
           <path

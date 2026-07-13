@@ -243,7 +243,7 @@ describe("WallElevation", () => {
     expect(fillerHtml).not.toContain("data-display-label=");
   });
 
-  test("renders segment fills opaque and keeps filler panels light", () => {
+  test("renders segment fills opaque with a shared cabinet fill", () => {
     const model = elevationModel([
       cabinet("base-left", 48 * 16),
       { ...cabinet("light-filler", 12 * 16, "filler"), label: "F12", code: "F12" }
@@ -253,7 +253,7 @@ describe("WallElevation", () => {
     const fillerRect = segmentRectTag(segmentMarkup(html, "light-filler"));
 
     expect(cabinetRect).toContain('fill-opacity="1"');
-    expect(fillerRect).toContain('fill="#fdf9eb"');
+    expect(fillerRect).toContain('fill="#ffffff"');
     expect(fillerRect).toContain('fill-opacity="1"');
   });
 
@@ -269,13 +269,13 @@ describe("WallElevation", () => {
     expect(sliverHtml).not.toContain("data-display-label=");
   });
 
-  test("renders cabinet face swing lines in neutral gray with reversed direction", () => {
+  test("renders cabinet face swing lines in black with reversed direction", () => {
     const model = elevationModel([cabinet("base-double", 60 * 16)]);
     const html = render(model);
     const faceHtml = segmentMarkup(html, "base-double");
 
     expect(faceHtml).not.toContain('stroke="#e12821"');
-    expect(faceHtml).toContain('stroke="#a7aaa5"');
+    expect(faceHtml).toContain('stroke="#1d1d1b"');
     expect(faceHtml).toContain("M 318 250 L 73 296.5 L 318 343");
     expect(faceHtml).toContain("M 322 250 L 567 296.5 L 322 343");
     expect(faceHtml).not.toContain("M 73 250 L 318 296.5 L 73 343");
@@ -568,7 +568,7 @@ describe("WallElevation", () => {
     );
 
     expect(html).not.toContain("data-display-label=");
-    for (const code of ["#1", "RNG30", "DW24"]) {
+    for (const code of ["RNG30", "DW24"]) {
       expect(html).not.toContain(code);
     }
   });

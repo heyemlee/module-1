@@ -203,7 +203,7 @@ describe("DesignPlan", () => {
     expect(pentagon).toContain("L 618 157");
   });
 
-  test("annotates segments with dimension chains instead of redundant total labels", () => {
+  test("annotates segments and the wall total with dimension chains", () => {
     const html = render(
       modelWithSegments([
         wall("A", "TOP", [segment("top-blind-base", 45, "cabinet", "BB45")])
@@ -212,7 +212,8 @@ describe("DesignPlan", () => {
 
     const label = tagFor(html, "text", 'data-chain-label="top-blind-base"');
     expect(html.slice(html.indexOf(label))).toContain("45″");
-    expect(html).not.toContain('data-plan-overall-label="A"');
+    expect(html).toContain('data-plan-overall-label="A"');
+    expect(html).toContain("A · 120″");
     expect(html).not.toContain("data-display-label");
     // Codes survive only as hover tooltips, never as drawn text.
     expect(html).toContain("<title>BB45</title>");
