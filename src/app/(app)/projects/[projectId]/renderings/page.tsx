@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/server/platform/auth-service";
 import { listCabinetColorNames } from "@/server/platform/cabinet-color-repository";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import { listRenderings } from "@/server/platform/round1-postgres-repository";
+import { getCurrentDesignBasis } from "@/server/platform/design-basis-repository";
 
 export default async function ProjectRenderingsPage({
   params
@@ -16,9 +17,10 @@ export default async function ProjectRenderingsPage({
   const project = await getProjectForUser(projectId, user);
   if (!project) notFound();
 
-  const [renderings, colors] = await Promise.all([
+  const [renderings, colors, basis] = await Promise.all([
     listRenderings(projectId),
-    listCabinetColorNames(user.companyId)
+    listCabinetColorNames(user.companyId),
+    getCurrentDesignBasis(projectId)
   ]);
 
   return (
@@ -26,6 +28,7 @@ export default async function ProjectRenderingsPage({
       project={project}
       renderings={renderings}
       colors={colors}
+      basis={basis}
     />
   );
 }

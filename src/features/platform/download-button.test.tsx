@@ -10,7 +10,8 @@ describe("DownloadButton", () => {
     );
 
     expect(html).toContain('aria-label="Download rendering"');
-    expect(html).toContain("Download");
+    expect(html).toContain('title="Download rendering"');
+    expect(html).not.toContain("<span>Download</span>");
     expect(html).not.toContain("dl-Btn");
 
     const source = readFileSync(

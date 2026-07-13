@@ -96,7 +96,7 @@ describe("ProjectDashboard", () => {
     expect(html).toContain("Projects");
     expect(html).toContain("ACTIVE");
     expect(html).toContain("INTAKE");
-    expect(html).toContain("RENDER READY");
+    expect(html).toContain("CONCEPT READY");
     expect(html).toContain("TOTAL");
     expect(html).toContain('data-project-status="INTAKE"');
     expect(html).toContain('data-project-status="RENDERING_READY"');

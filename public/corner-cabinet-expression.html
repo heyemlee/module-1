@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Corner cabinet expression study</title>
+    <style>
+      :root {
+        --paper: #f7f8f6;
+        --grid: #dbe4e6;
+        --ink: #17242b;
+        --line: #55707a;
+        --muted: #b8cbd0;
+        --cabinet: #eaf1f2;
+        --corner: #a9d4f2;
+        --corner-deep: #46a5dc;
+        --return: #dcebf1;
+        --accent: #e26b61;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background: #e7ebea;
+        color: var(--ink);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      main {
+        width: min(1080px, calc(100vw - 40px));
+        padding: clamp(18px, 4vw, 46px);
+        background: var(--paper);
+        box-shadow: 0 24px 72px rgba(31, 54, 61, .16);
+      }
+
+      .drawing {
+        display: grid;
+        gap: clamp(24px, 4vw, 54px);
+      }
+
+      .sheet {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #cbd7d9;
+        background-color: #f9fbfa;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+
+      .elevation { aspect-ratio: 2.75 / 1; min-height: 230px; }
+      .plan { aspect-ratio: 2.75 / 1.35; min-height: 285px; }
+      svg { display: block; width: 100%; height: 100%; }
+
+      .wall { fill: var(--ink); }
+      .cabinet { fill: var(--cabinet); stroke: var(--line); stroke-width: 2; }
+      .door { fill: none; stroke: #8ca3aa; stroke-width: 1.2; }
+      .return { fill: var(--return); stroke: var(--line); stroke-width: 2; }
+      .corner { fill: var(--corner); stroke: var(--corner-deep); stroke-width: 2.5; }
+      .fold { fill: none; stroke: var(--corner-deep); stroke-width: 2; stroke-dasharray: 5 5; }
+      .projection { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 5; }
+      .edge { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: square; }
+
+      .corner-group { cursor: pointer; transform-origin: center; }
+      .corner-group:hover .corner { fill: #8fc7ec; }
+      .corner-group:hover .return { fill: #c8e3f1; }
+      .corner-group:focus-visible { outline: none; }
+      .corner-group:focus-visible .corner,
+      .corner-group:focus-visible .return { stroke: var(--accent); }
+
+      @media (max-width: 640px) {
+        body { place-items: start center; }
+        main { width: 100%; min-height: 100vh; padding: 16px; }
+        .elevation { min-height: 180px; }
+        .plan { min-height: 230px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="drawing" aria-label="Corner cabinet drawing study">
+        <section class="sheet elevation" aria-label="Elevation drawing">
+          <svg viewBox="0 0 1000 360" role="img" aria-label="An elevation with a cabinet returning around a corner">
+            <path class="wall" d="M80 285H920V302H80Z" />
+            <rect class="cabinet" x="98" y="105" width="190" height="180" />
+            <path class="door" d="M98 105L193 195L288 105M98 285L193 195L288 285" />
+            <rect class="cabinet" x="288" y="105" width="170" height="180" />
+            <path class="door" d="M288 105L373 195L458 105M288 285L373 195L458 285" />
+            <rect class="cabinet" x="458" y="105" width="132" height="180" />
+            <path class="door" d="M458 105L524 195L590 105M458 285L524 195L590 285" />
+
+            <g class="corner-group" tabindex="0" aria-label="Corner cabinet">
+              <path class="return" d="M590 105L676 142V252L590 285Z" />
+              <path class="corner" d="M590 105H722V285H590Z" />
+              <path class="door" d="M590 105L656 195L722 105M590 285L656 195L722 285" />
+              <path class="fold" d="M722 105L676 142M722 285L676 252M676 142V252" />
+              <path class="projection" d="M656 65V95M656 295V325" />
+            </g>
+
+            <rect class="cabinet" x="722" y="105" width="180" height="180" />
+            <path class="door" d="M722 105L812 195L902 105M722 285L812 195L902 285" />
+            <path class="edge" d="M80 85H920M80 302H920" opacity=".22" />
+          </svg>
+        </section>
+
+        <section class="sheet plan" aria-label="Plan drawing">
+          <svg viewBox="0 0 1000 500" role="img" aria-label="A plan showing the full L shaped corner cabinet">
+            <path class="wall" d="M98 80H902V108H126V420H98Z" />
+            <path class="edge" d="M126 108H902M126 108V420" opacity=".28" />
+
+            <rect class="cabinet" x="210" y="108" width="160" height="100" />
+            <path class="door" d="M210 108L290 158L370 108M210 208L290 158L370 208" />
+            <rect class="cabinet" x="370" y="108" width="145" height="100" />
+            <path class="door" d="M370 108L442.5 158L515 108M370 208L442.5 158L515 208" />
+            <rect class="cabinet" x="515" y="108" width="150" height="100" />
+            <path class="door" d="M515 108L590 158L665 108M515 208L590 158L665 208" />
+
+            <g class="corner-group" tabindex="0" aria-label="Corner cabinet">
+              <path class="return" d="M126 208H210V390H126Z" />
+              <path class="corner" d="M126 208H275V310H228V390H126Z" />
+              <path class="fold" d="M210 208V310H275M126 310H228" />
+              <path class="projection" d="M210 158H250M176 310V350" />
+            </g>
+
+            <rect class="cabinet" x="665" y="108" width="145" height="100" />
+            <path class="door" d="M665 108L737.5 158L810 108M665 208L737.5 158L810 208" />
+          </svg>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

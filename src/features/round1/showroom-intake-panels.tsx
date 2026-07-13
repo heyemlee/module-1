@@ -1,5 +1,5 @@
 import { Round1Feedback } from "./round1-feedback";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type SyntheticEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { WallElevationScene } from "./elevations/elevation-scene";
 import { WallElevationSvg } from "./elevations/elevation-preview";
@@ -39,6 +39,9 @@ function NewtonsCradle({ label }: { label?: string }) {
     </div>
   );
 }
+
+const MAX_RENDER_LOAD_ATTEMPTS = 3;
+const DEFAULT_RENDERING_ASPECT_RATIO = 1536 / 1024;
 
 export type SnapshotPersistState = "idle" | "saving" | "saved" | "error";
 
@@ -162,35 +165,92 @@ export function Round1InlineRenderPreview({
 }) {
   // Newest first; "previous" walks toward older (higher index).
   const [index, setIndex] = useState(0);
-  // Track render URLs whose <img> failed to load so we can show the cradle
-  // instead of the browser's broken-image icon on the dark canvas.
+  // Track render URLs whose <img> failed to load (after retries) so we can
+  // show the cradle instead of the browser's broken-image icon on the dark
+  // canvas. A single transient failure fetching the image bytes (e.g. DB pool
+  // contention) shouldn't read as "this rendering is broken" when the
+  // underlying render saved fine, so failures are retried with backoff first.
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [imageAspectRatio, setImageAspectRatio] = useState(
+    DEFAULT_RENDERING_ASPECT_RATIO
+  );
   const idx = Math.min(index, Math.max(0, renderings.length - 1));
   const current = renderings[idx];
+
+  useEffect(() => {
+    setLoadAttempt(0);
+    setImageAspectRatio(DEFAULT_RENDERING_ASPECT_RATIO);
+  }, [current?.url]);
+
   const imageBroken = current ? failedUrls.has(current.url) : false;
+  const imageSrc =
+    current &&
+    (loadAttempt === 0
+      ? current.url
+      : `${current.url}${current.url.includes("?") ? "&" : "?"}retry=${loadAttempt}`);
+
+  const handleImageError = () => {
+    if (!current) return;
+    if (loadAttempt + 1 < MAX_RENDER_LOAD_ATTEMPTS) {
+      const delay = 500 * 2 ** loadAttempt;
+      setTimeout(() => setLoadAttempt((a) => a + 1), delay);
+    } else {
+      setFailedUrls((prev) => new Set(prev).add(current.url));
+    }
+  };
+
+  const retryImage = () => {
+    if (!current) return;
+    setFailedUrls((prev) => {
+      if (!prev.has(current.url)) return prev;
+      const next = new Set(prev);
+      next.delete(current.url);
+      return next;
+    });
+    setLoadAttempt(0);
+  };
+  const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+    if (naturalWidth <= 0 || naturalHeight <= 0) return;
+
+    const ratio = naturalWidth / naturalHeight;
+    if (Number.isFinite(ratio) && ratio > 0) {
+      setImageAspectRatio(ratio);
+    }
+  };
   const colorName = current?.doorColorId
     ? cabinetColors.find((c) => c.id === current.doorColorId)?.name ?? null
     : null;
-  const meta = [styleLabel, colorName].filter(Boolean).join(" · ").toUpperCase();
+  const meta = colorName?.toUpperCase() ?? "";
   const hasOlder = idx < renderings.length - 1;
   const hasNewer = idx > 0;
 
   const arrow =
-    "absolute top-1/2 z-[4] flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-[rgba(20,20,22,0.45)] text-[16px] text-white backdrop-blur-sm transition disabled:opacity-30";
+    "absolute top-1/2 z-[5] flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(20,20,22,0.14)] bg-white/80 text-[16px] text-[#222225] shadow-[0_14px_34px_-20px_rgba(20,20,26,0.6)] backdrop-blur-sm transition hover:bg-white disabled:opacity-30";
+  const frameBackground = "linear-gradient(162deg,#3a3a3e,#101012)";
+  const frameStyle = fitViewport
+    ? {
+        background: frameBackground,
+        aspectRatio: imageAspectRatio,
+        width: `min(100cqw, calc(100cqh * ${imageAspectRatio}))`
+      }
+    : { background: frameBackground, aspectRatio: imageAspectRatio };
 
   return (
     <div
       data-rendering-fit={fitViewport ? "viewport" : undefined}
       className={cn(
-        "relative z-[3] shrink-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]",
+        "relative z-[3] shrink-0 overflow-visible",
         fitViewport
-          ? "h-full w-full"
-          : "mx-[18px] mt-[14px] aspect-video w-auto"
+          ? "max-h-full max-w-full"
+          : "mx-[18px] mt-[14px] w-auto"
       )}
-      style={{ background: "linear-gradient(162deg,#3a3a3e,#101012)" }}
+      style={frameStyle}
     >
-      {busy ? (
-        <div className="cmx">
+      <div className="absolute inset-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]">
+        {busy ? (
+          <div className="cmx">
           <div className="cmx-space">
             <div className="cmx-cube">
               <div className="cmx-face cmx-f-f" />
@@ -202,39 +262,39 @@ export function Round1InlineRenderPreview({
             </div>
             <div className="cmx-pop">RENDER</div>
           </div>
-        </div>
-      ) : error ? (
-        <NewtonsCradle label={`Could not generate the rendering: ${error}`} />
-      ) : imageBroken ? (
-        <NewtonsCradle label="Rendering image unavailable." />
-      ) : !current ? (
-        <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
-          <p className="font-mono text-[10px] tracking-[0.14em] text-white/45">
-            CONCEPT RENDERING
-          </p>
-          <p className="max-w-xs text-[12px] leading-5 text-white/45">
-            Lock a cabinet finish, then generate to preview the concept here.
-          </p>
-        </div>
-      ) : (
-        <>
+          </div>
+        ) : error ? (
+          <NewtonsCradle label={`Could not generate the rendering: ${error}`} />
+        ) : imageBroken ? (
+          <button
+            type="button"
+            onClick={retryImage}
+            className="flex h-full w-full flex-col items-center justify-center"
+          >
+            <NewtonsCradle label="Rendering image unavailable. Tap to retry." />
+          </button>
+        ) : !current ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
+            <p className="font-mono text-[10px] tracking-[0.14em] text-white/45">
+              CONCEPT RENDERING
+            </p>
+            <p className="max-w-xs text-[12px] leading-5 text-white/45">
+              Lock a cabinet finish, then generate to preview the concept here.
+            </p>
+          </div>
+        ) : (
+          <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={current.url}
+            key={imageSrc}
+            src={imageSrc}
             alt="Latest concept rendering"
-            onError={() =>
-              setFailedUrls((prev) => new Set(prev).add(current.url))
-            }
+            onLoad={handleImageLoad}
+            onError={handleImageError}
             className={cn(
               "absolute inset-0 h-full w-full",
               fitViewport ? "object-contain" : "object-cover"
             )}
-          />
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background: "linear-gradient(180deg,transparent 52%,rgba(10,10,12,0.82))"
-            }}
           />
           {idx === 0 && (
             <span className="absolute left-[18px] top-[14px] inline-flex h-6 items-center rounded-full bg-studio-action px-2.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-studio-action-ink z-[4]">
@@ -247,32 +307,33 @@ export function Round1InlineRenderPreview({
             </span>
           )}
           {meta && (
-            <div className="absolute bottom-4 left-[18px] font-mono text-[10px] tracking-[0.08em] text-white">
+            <div className="absolute bottom-4 left-[18px] z-[4] max-w-[calc(100%-36px)] rounded-full bg-[rgba(20,20,22,0.68)] px-2.5 py-1.5 font-mono text-[10px] tracking-[0.08em] text-white shadow-[0_10px_24px_-18px_rgba(0,0,0,0.8)] backdrop-blur-sm">
               {meta}
             </div>
           )}
-          {renderings.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setIndex((i) => Math.min(renderings.length - 1, i + 1))}
-                disabled={!hasOlder}
-                aria-label="Previous rendering"
-                className={cn(arrow, "left-3.5")}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={() => setIndex((i) => Math.max(0, i - 1))}
-                disabled={!hasNewer}
-                aria-label="Next rendering"
-                className={cn(arrow, "right-3.5")}
-              >
-                ›
-              </button>
-            </>
-          )}
+          </>
+        )}
+      </div>
+      {renderings.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setIndex((i) => Math.min(renderings.length - 1, i + 1))}
+            disabled={!hasOlder}
+            aria-label="Previous rendering"
+            className={cn(arrow, "left-0 -translate-x-[calc(100%+8px)]")}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndex((i) => Math.max(0, i - 1))}
+            disabled={!hasNewer}
+            aria-label="Next rendering"
+            className={cn(arrow, "right-0 translate-x-[calc(100%+8px)]")}
+          >
+            ›
+          </button>
         </>
       )}
     </div>

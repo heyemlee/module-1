@@ -9,6 +9,7 @@ import {
   projectNextAction,
   projectStatusPresentation
 } from "./project-presentation";
+import { renderingImageUrl } from "./rendering-image-url";
 
 type NodeState = "done" | "active" | "todo";
 
@@ -33,6 +34,7 @@ export function ProjectDetail({
       styleLabel?: string | null;
       colorName?: string | null;
     } | null;
+    basis: { version: number; lockedAt: string } | null;
   };
 }) {
   const router = useRouter();
@@ -42,16 +44,22 @@ export function ProjectDetail({
   const nextAction = projectNextAction({
     hasRound1State: progress.hasRound1State,
     hasSnapshot: progress.hasSnapshot,
-    hasRendering: Boolean(progress.latestRendering)
+    hasRendering: Boolean(progress.latestRendering),
+    hasBasis: Boolean(progress.basis)
   });
-  const nextHref =
-    nextAction.destination === "renderings"
-      ? `/projects/${project.id}/renderings`
-      : `/projects/${project.id}/round1`;
+  const nextHref = `/projects/${project.id}/${
+    nextAction.destination === "round1" ? "round1" : nextAction.destination
+  }`;
 
-  // Phase staging mirrors the design: driven by project status.
-  const stage =
-    project.status === "INTAKE" ? 0 : project.status === "RENDERING_READY" ? 1 : 2;
+  // Phase staging: a locked design basis is the authoritative signal that the
+  // project entered technical design; before that, status drives it.
+  const stage = progress.basis
+    ? 2
+    : project.status === "INTAKE"
+      ? 0
+      : 1;
+
+  const basisTag = progress.basis ? `BASIS v${progress.basis.version}` : null;
 
   const phases: {
     idx: string;
@@ -65,8 +73,8 @@ export function ProjectDetail({
   }[] = [
     {
       idx: "1",
-      title: "Round 1",
-      desc: "Store questionnaire & rough layout. Room, openings, appliances, draggable plan and cabinet fill.",
+      title: "Concept",
+      desc: "Store questionnaire & rough layout. Room, openings, appliances, draggable plan, cabinet fill and renderings.",
       href: `/projects/${project.id}/round1`,
       node: stage > 0 ? "done" : "active",
       lineOn: stage > 0,
@@ -75,22 +83,22 @@ export function ProjectDetail({
     },
     {
       idx: "2",
-      title: "Rendering",
-      desc: "Deterministic plan + finish selection produce a client concept image.",
+      title: "Proposal & confirm",
+      desc: "The customer confirms one rendering; locking it packages layout, style and color as the design basis.",
       href: `/projects/${project.id}/renderings`,
       node: stage > 1 ? "done" : stage === 1 ? "active" : "todo",
       lineOn: stage > 1,
-      tagLabel: stage > 1 ? "COMPLETE" : stage === 1 ? "CURRENT" : "LOCKED",
+      tagLabel: basisTag ?? (stage === 1 ? "CURRENT" : "LOCKED"),
       tagActive: stage >= 1
     },
     {
       idx: "3",
-      title: "Round 2",
-      desc: "Detailed re-measure & design. Reserved for the next phase.",
-      href: `/projects/${project.id}/round1`,
+      title: "Technical design",
+      desc: "Field measurement, cabinet proposal, drawings and BOM — driven by the locked design basis.",
+      href: `/projects/${project.id}/round2`,
       node: stage > 1 ? "active" : "todo",
       lineOn: false,
-      tagLabel: "UPCOMING",
+      tagLabel: stage > 1 ? "IN PROGRESS" : "UPCOMING",
       tagActive: stage > 1
     }
   ];
@@ -299,7 +307,7 @@ export function ProjectDetail({
             {progress.latestRendering ? (
               <>
                 <img
-                  src={`/api/projects/${project.id}/round1/renderings/${progress.latestRendering.id}/image`}
+                  src={renderingImageUrl(project.id, progress.latestRendering.id)}
                   alt="Latest concept rendering"
                   className="h-full w-full object-cover"
                 />

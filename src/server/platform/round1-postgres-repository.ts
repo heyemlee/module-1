@@ -81,13 +81,23 @@ export function mapRound1StateRow(row: Round1StateRow): Round1State {
 export type RenderingSummary = Omit<
   Round1ProjectRendering & { id: string },
   "imageBase64"
->;
+> & {
+  /** Snapshot the image was generated from — what a design-basis lock pins. */
+  round1SnapshotId: string;
+  /** Open Confirmation Required items on that snapshot, surfaced at lock time. */
+  confirmationCount: number;
+};
 
-type RenderingSummaryRow = Omit<RenderingHistoryRow, "image_base64">;
+type RenderingSummaryRow = Omit<RenderingHistoryRow, "image_base64"> & {
+  round1_snapshot_id: string;
+  confirmation_count: number | null;
+};
 
 export function mapRenderingSummaryRow(row: RenderingSummaryRow): RenderingSummary {
   return {
     id: row.id,
+    round1SnapshotId: row.round1_snapshot_id,
+    confirmationCount: row.confirmation_count ?? 0,
     model: row.model,
     prompt: row.prompt,
     size: row.size,
@@ -201,8 +211,12 @@ export async function saveRound1Snapshot(input: {
      RETURNING id`,
     [input.projectId, JSON.stringify(input.snapshot), input.snapshot.generatedAt, input.user.id]
   );
+  // Once a design basis is locked the project lives in the technical-design
+  // phase; renewed Round 1 exploration must not regress it (the basis, not the
+  // latest snapshot, is what Round 2 reads).
   await query(
-    `UPDATE projects SET status = 'INTAKE', updated_at = now() WHERE id = $1`,
+    `UPDATE projects SET status = 'INTAKE', updated_at = now()
+     WHERE id = $1 AND status NOT IN ('ROUND2_MEASURING', 'ARCHIVED')`,
     [input.projectId]
   );
   return result.rows[0].id;
@@ -257,7 +271,8 @@ export async function saveRenderingHistory(input: {
     ]
   );
   await query(
-    `UPDATE projects SET status = 'RENDERING_READY', updated_at = now() WHERE id = $1`,
+    `UPDATE projects SET status = 'RENDERING_READY', updated_at = now()
+     WHERE id = $1 AND status NOT IN ('ROUND2_MEASURING', 'ARCHIVED')`,
     [input.projectId]
   );
   return {
@@ -269,18 +284,33 @@ export async function saveRenderingHistory(input: {
 
 export async function listRenderings(projectId: string): Promise<RenderingSummary[]> {
   const result = await query<RenderingSummaryRow>(
-    `SELECT id, model, prompt, size,
-            based_on_snapshot_generated_at, based_on_cabinet_style,
-            based_on_door_color_id, based_on_color_updated_at,
-            sales_estimate_only, not_for_production, dimension_confidence,
-            created_at
-     FROM renderings
-     WHERE project_id = $1
-     ORDER BY created_at DESC
+    `SELECT r.id, r.model, r.prompt, r.size, r.round1_snapshot_id,
+            r.based_on_snapshot_generated_at, r.based_on_cabinet_style,
+            r.based_on_door_color_id, r.based_on_color_updated_at,
+            r.sales_estimate_only, r.not_for_production, r.dimension_confidence,
+            r.created_at,
+            COALESCE(jsonb_array_length(s.snapshot_json->'confirmationItems'), 0)
+              AS confirmation_count
+     FROM renderings r
+     JOIN round1_snapshots s ON s.id = r.round1_snapshot_id
+     WHERE r.project_id = $1
+     ORDER BY r.created_at DESC
      LIMIT 20`,
     [projectId]
   );
   return result.rows.map(mapRenderingSummaryRow);
+}
+
+export async function getRound1SnapshotById(projectId: string, snapshotId: string) {
+  const result = await query<{ id: string; snapshot_json: unknown }>(
+    `SELECT id, snapshot_json
+     FROM round1_snapshots
+     WHERE id = $1 AND project_id = $2
+     LIMIT 1`,
+    [snapshotId, projectId]
+  );
+  const row = result.rows[0];
+  return row ? { id: row.id, snapshot: row.snapshot_json as Round1Snapshot } : null;
 }
 
 /**

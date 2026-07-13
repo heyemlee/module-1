@@ -20,6 +20,7 @@ export function GlobalSidebar({
     | "projects"
     | "overview"
     | "round1"
+    | "round2"
     | "renderings"
     | "users"
     | "colors" = "projects";
@@ -36,6 +37,8 @@ export function GlobalSidebar({
       projectId = parts[2];
       if (parts[3] === "round1") {
         activeItem = "round1";
+      } else if (parts[3] === "round2") {
+        activeItem = "round2";
       } else if (parts[3] === "renderings") {
         activeItem = "renderings";
       } else {

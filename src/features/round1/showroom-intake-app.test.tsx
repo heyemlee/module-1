@@ -691,14 +691,18 @@ describe("Round1InlineRenderPreview", () => {
       />
     );
     expect(html).toContain("data:image/png;base64,abc");
-    expect(html).toContain("EUROPEAN FRAMELESS · GRAPHITE");
+    expect(html).toContain(">GRAPHITE<");
+    expect(html).not.toContain("EUROPEAN FRAMELESS · GRAPHITE");
     expect(html).toContain("Latest");
+    expect(html).not.toContain(
+      "linear-gradient(180deg,transparent 52%,rgba(10,10,12,0.82))"
+    );
     expect(html).not.toContain("LATEST CONCEPT");
     expect(html).not.toContain("View all");
     expect(html).not.toContain("Close preview");
   });
 
-  test("fits the complete rendering inside the available viewport", () => {
+  test("sizes the viewport preview frame from the rendering aspect ratio", () => {
     const html = renderToStaticMarkup(
       <Round1InlineRenderPreview
         busy={false}
@@ -712,8 +716,9 @@ describe("Round1InlineRenderPreview", () => {
     );
 
     expect(html).toContain('data-rendering-fit="viewport"');
-    expect(html).toContain("h-full");
-    expect(html).toContain("w-full");
+    expect(html).toContain("max-h-full");
+    expect(html).toContain("aspect-ratio:1.5");
+    expect(html).toContain("width:min(100cqw, calc(100cqh * 1.5))");
     expect(html).toContain("object-contain");
     expect(html).not.toContain("object-cover");
   });
@@ -743,6 +748,10 @@ describe("Round1InlineRenderPreview", () => {
     expect(many).toContain("1 / 2");
     expect(many).toContain('aria-label="Previous rendering"');
     expect(many).toContain('aria-label="Next rendering"');
+    expect(many).toContain("left-0 -translate-x-[calc(100%+8px)]");
+    expect(many).toContain("right-0 translate-x-[calc(100%+8px)]");
+    expect(many).not.toContain("left-3.5");
+    expect(many).not.toContain("right-3.5");
   });
 
   test("surfaces a generation error", () => {
