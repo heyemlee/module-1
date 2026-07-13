@@ -69,6 +69,13 @@ describe("Round 2 cabinet standards", () => {
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16,
         adjacentWallPullSixteenths: 3 * 16
+      },
+      upperDiagonal: {
+        widthOptionsSixteenths: [24 * 16]
+      },
+      upperBlind: {
+        widthOptionsSixteenths: [27, 30].map((value) => value * 16),
+        adjacentWallPullSixteenths: 3 * 16
       }
     });
     expect(CABINET_STANDARDS.appliances).toEqual({

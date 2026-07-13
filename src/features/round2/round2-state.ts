@@ -110,15 +110,14 @@ export function reduceRound2Prototype(
           action.key,
           action.value
         );
+        // Corner and fridge intents are edited from the proposal drawing, so
+        // they regenerate live whenever segments exist — even if another
+        // intent edit already dropped the measurement status back to DRAFT.
         if (
-          state.measurementStatus === "SUBMITTED" &&
-          action.key.startsWith("corner.")
+          proposalUnlocked(state) &&
+          (action.key.startsWith("corner.") || action.key.startsWith("fridge."))
         ) {
-          return regenerateSubmittedProposalFromIntent(
-            state,
-            designIntent,
-            action.key
-          );
+          return regenerateProposalFromIntent(state, designIntent, action.key);
         }
         return {
           ...state,
@@ -391,7 +390,7 @@ function submitMeasurement(
   };
 }
 
-function regenerateSubmittedProposalFromIntent(
+function regenerateProposalFromIntent(
   state: Round2PrototypeState,
   designIntent: Round2PrototypeState["designIntent"],
   changedKey: string
@@ -408,7 +407,9 @@ function regenerateSubmittedProposalFromIntent(
     ...state,
     designIntent,
     model,
-    measurementStatus: "SUBMITTED",
+    // The regen is a proposal-side edit: it must not fake a measurement
+    // submit, so an in-progress DRAFT stays DRAFT.
+    measurementStatus: state.measurementStatus,
     proposalVersion: state.proposalVersion + 1,
     proposalStatus,
     drawingStatus: "STALE",
@@ -435,14 +436,35 @@ function firstSegmentForCornerIntent(
   model: Round2Model,
   intentKey: string
 ): { id: string; wallId: WallId } | null {
-  const match = /^corner\.([^.]+)\.strategy$/.exec(intentKey);
-  const cornerId = match?.[1];
-  if (!cornerId) return null;
-  for (const wall of model.walls) {
-    const segment = wall.segments.find(
-      (item) => item.sourceCornerId === cornerId
-    );
-    if (segment) return { id: segment.id, wallId: wall.id };
+  const cornerMatch = /^corner\.([^.]+)\.strategy$/.exec(intentKey);
+  const cornerId = cornerMatch?.[1];
+  if (cornerId) {
+    for (const wall of model.walls) {
+      const segment = wall.segments.find(
+        (item) => item.sourceCornerId === cornerId
+      );
+      if (segment) return { id: segment.id, wallId: wall.id };
+    }
+    return null;
+  }
+
+  // A fridge intent edit keeps the fridge tall unit selected (its panels share
+  // the same fixed point, so prefer the appliance segment).
+  const fridgeMatch = /^fridge\.([^.]+)\.(above|sides|aboveHeight)$/.exec(intentKey);
+  const fixedPointId = fridgeMatch?.[1];
+  if (fixedPointId) {
+    for (const wall of model.walls) {
+      const appliance = wall.segments.find(
+        (item) =>
+          item.sourceFixedPointId === fixedPointId &&
+          item.kind === "appliance"
+      );
+      if (appliance) return { id: appliance.id, wallId: wall.id };
+      const owned = wall.segments.find(
+        (item) => item.sourceFixedPointId === fixedPointId
+      );
+      if (owned) return { id: owned.id, wallId: wall.id };
+    }
   }
   return null;
 }

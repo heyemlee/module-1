@@ -185,6 +185,84 @@ describe("Round 2 drawing sheets", () => {
     expect(html).toContain('data-drawing-layer="tall-height"');
   });
 
+  test("draws a countertop slab and depth note on the elevation sheet", () => {
+    const model = submittedModel({
+      ...planFor("ONE_WALL", ["TOP"]),
+      appliances: [appliance("sink", 340)]
+    }, 220 * 16);
+    const sheet = drawingSheetsForModel(model).find((item) => item.id === "A2")!;
+    const html = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={sheet}
+        model={model}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+
+    expect(html).toContain('data-drawing-layer="countertop"');
+    expect(html).toContain('data-countertop-band="0"');
+    expect(html).toContain('data-drawing-layer="depth-note"');
+    expect(html).toContain("BASE 24″ DEEP · UPPER 12″ DEEP");
+  });
+
+  test("uses the selected height for the wall cabinet above a fridge", () => {
+    const model = simpleWallModel("TOP");
+    model.walls[0].segments = [
+      {
+        id: "fridge-above",
+        wallId: "A",
+        tier: "upper",
+        kind: "cabinet",
+        widthSixteenths: 36 * 16,
+        label: "W36",
+        cabinetKind: "upper",
+        sourceFixedPointId: "fridge"
+      },
+      {
+        id: "fridge",
+        wallId: "A",
+        tier: "base",
+        kind: "appliance",
+        widthSixteenths: 36 * 16,
+        label: "REF36",
+        cabinetKind: "tall",
+        sourceFixedPointId: "fridge"
+      }
+    ];
+    model.walls[0].lengthSixteenths = 36 * 16;
+    model.walls[0].fixedPoints = [
+      {
+        id: "fridge",
+        type: "appliance",
+        label: "Fridge",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0,
+        symbol: "fridge"
+      }
+    ];
+    const html = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={{ id: "A2", label: "Wall A elevation", wallId: "A" }}
+        model={model}
+        intent={{
+          answers: { "fridge.fridge.aboveHeight": 18 * 16 },
+          confirmedKeys: []
+        }}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+
+    expect(html).toContain('data-fridge-above-height="18″"');
+    expect(html).toContain('data-fridge-height="72″"');
+  });
+
   test("creates elevation sheets from actual wall count", () => {
     const galley = submittedModel(planFor("GALLEY", ["TOP", "BOTTOM"]));
     expect(drawingSheetsForModel(galley).map((sheet) => sheet.id)).toEqual([

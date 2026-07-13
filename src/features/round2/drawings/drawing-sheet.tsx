@@ -17,6 +17,12 @@ import {
 } from "../model/segment-role";
 import { ApplianceGlyph, WindowGlyph } from "../appliance-glyphs";
 import type { Round2DesignIntent } from "../model/design-intent";
+import {
+  fridgeAboveHeightForSegment,
+  isCappedFridge,
+  isFridgeAboveUnit,
+  resolveFridgeAboveHeights
+} from "../model/fridge-surround";
 import type { DrawingSheetId } from "../round2-types";
 
 const COLORS = {
@@ -226,23 +232,33 @@ function PlanRun({ wall }: { wall: Round2Wall }) {
               y={rect.y}
               width={Math.max(2, rect.width)}
               height={Math.max(2, rect.height)}
-              fill={segment.kind === "filler" ? "#fff7d8" : "#fff"}
+              fill={
+                segment.kind === "panel"
+                  ? "#efe6f2"
+                  : segment.kind === "filler"
+                    ? "#fff7d8"
+                    : "#fff"
+              }
               stroke={segment.kind === "filler" ? COLORS.filler : COLORS.cabinet}
             />
-            <g data-drawing-layer="cabinet-numbers">
-              <text
-                x={rect.x + rect.width / 2}
-                y={rect.y + rect.height / 2 + 4}
-                textAnchor="middle"
-                fontFamily="var(--studio-mono)"
-                fontSize="10"
-                fill={segment.kind === "filler" ? COLORS.filler : COLORS.number}
-                stroke="none"
-                transform={rect.rotate}
-              >
-                {segment.code ?? segment.label}
-              </text>
-            </g>
+            {/* Finished panels are too thin in plan to letter — the stroke
+                and shade are enough; cabinets and fillers keep their number. */}
+            {segment.kind !== "panel" && (
+              <g data-drawing-layer="cabinet-numbers">
+                <text
+                  x={rect.x + rect.width / 2}
+                  y={rect.y + rect.height / 2 + 4}
+                  textAnchor="middle"
+                  fontFamily="var(--studio-mono)"
+                  fontSize="10"
+                  fill={segment.kind === "filler" ? COLORS.filler : COLORS.number}
+                  stroke="none"
+                  transform={rect.rotate}
+                >
+                  {segment.code ?? segment.label}
+                </text>
+              </g>
+            )}
           </g>
         );
       })}
@@ -301,6 +317,11 @@ function ElevationSheet({
   const total = wall?.lengthSixteenths ?? 1;
   const layout = sheetVerticalLayout(model);
   const mirrored = isMirroredElevationWall(wall);
+  const fridgeAboveHeights = resolveFridgeAboveHeights(
+    segments,
+    intent,
+    layout.profile
+  );
 
   return (
     <g>
@@ -343,6 +364,7 @@ function ElevationSheet({
           intent={intent}
           wall={wall}
           mirrored={mirrored}
+          fridgeAboveHeights={fridgeAboveHeights}
         />
         <ElevationRun
           segments={base}
@@ -351,15 +373,28 @@ function ElevationSheet({
           intent={intent}
           wall={wall}
           mirrored={mirrored}
+          fridgeAboveHeights={fridgeAboveHeights}
         />
       </g>
+
+      <SheetCounterBand
+        base={base}
+        total={total}
+        layout={layout}
+        wall={wall}
+        mirrored={mirrored}
+      />
 
       <g data-drawing-layer="cabinet-numbers" fill={COLORS.number} fontFamily="var(--studio-mono)" fontSize="18" textAnchor="middle">
         {[...elevationPlacements(upper, total, mirrored), ...elevationPlacements(base, total, mirrored)].map(({ segment, x, width }) => {
           // Gaps (corner clearance, tall-unit space above a full-height unit)
           // are not cabinets — they carry no number or label.
           if (segment.kind === "gap") return null;
-          const box = elevationBox(segment, layout);
+          const box = elevationBox(
+            segment,
+            layout,
+            fridgeAboveHeights
+          );
           const role = resolveSegmentRole(segment, wall);
           const mainLabel = segment.code ?? segment.label;
           const showMainLabel =
@@ -374,10 +409,28 @@ function ElevationSheet({
                 <text
                   data-segment-id={segment.id}
                   x={x + width / 2}
-                  y={box.y + box.height / 2 + (segment.kind === "filler" ? 4 : 6)}
-                  fill={segment.kind === "filler" ? COLORS.muted : COLORS.number}
-                  fontSize={segment.kind === "filler" ? "10" : undefined}
-                  letterSpacing={segment.kind === "filler" ? "0.08em" : undefined}
+                  y={
+                    box.y +
+                    box.height / 2 +
+                    (segment.kind === "filler" || segment.kind === "panel"
+                      ? 4
+                      : 6)
+                  }
+                  fill={
+                    segment.kind === "filler" || segment.kind === "panel"
+                      ? COLORS.muted
+                      : COLORS.number
+                  }
+                  fontSize={
+                    segment.kind === "filler" || segment.kind === "panel"
+                      ? "10"
+                      : undefined
+                  }
+                  letterSpacing={
+                    segment.kind === "filler" || segment.kind === "panel"
+                      ? "0.08em"
+                      : undefined
+                  }
                 >
                   {mainLabel}
                 </text>
@@ -427,9 +480,9 @@ function ElevationSheet({
         />
         <DimensionVertical
           x={910}
-          y1={layout.baseTop}
+          y1={layout.baseBodyTop}
           y2={ELEVATION.floor}
-          label={formatSixteenths(layout.profile.counterSixteenths)}
+          label={formatSixteenths(baseBodyHeightSixteenths(layout.profile))}
         />
         <DimensionVertical
           x={910}
@@ -443,23 +496,135 @@ function ElevationSheet({
         <g data-drawing-layer="tall-height">
           {elevationPlacements(base, total, mirrored)
             .filter(({ segment }) => segment.cabinetKind === "tall")
-            .map(({ segment, x, width }) => (
-              <DimensionVertical
-                key={`tall-height-${segment.id}`}
-                x={x + Math.min(16, width / 2)}
-                y1={layout.upperTop}
-                y2={ELEVATION.floor}
-                label={formatSixteenths(tallUnitHeightSixteenths(layout.profile))}
-              />
-            ))}
+            .map(({ segment, x, width }) => {
+              // A capped tall unit (wall cabinet / panel above) ends at the
+              // upper band's underside, so its height chain does too.
+              const aboveHeight = fridgeAboveHeightForSegment(
+                segment,
+                fridgeAboveHeights
+              );
+              const fridgeTop =
+                aboveHeight == null
+                  ? layout.upperTop
+                  : layout.upperTop + aboveHeight * layout.scale;
+              const fridgeHeight =
+                aboveHeight == null
+                  ? tallUnitHeightSixteenths(layout.profile)
+                  : tallUnitHeightSixteenths(layout.profile) - aboveHeight;
+              return (
+                <g key={`tall-height-${segment.id}`}>
+                  {aboveHeight != null && (
+                    <g data-fridge-above-height={formatSixteenths(aboveHeight)}>
+                      <DimensionVertical
+                        x={x + Math.min(16, width / 2)}
+                        y1={layout.upperTop}
+                        y2={fridgeTop}
+                        label={formatSixteenths(aboveHeight)}
+                      />
+                    </g>
+                  )}
+                  <g data-fridge-height={formatSixteenths(fridgeHeight)}>
+                    <DimensionVertical
+                      x={x + Math.min(16, width / 2) + (aboveHeight == null ? 0 : 10)}
+                      y1={fridgeTop}
+                      y2={ELEVATION.floor}
+                      label={formatSixteenths(fridgeHeight)}
+                    />
+                  </g>
+                </g>
+              );
+            })}
         </g>
       </g>
+
+      <text
+        data-drawing-layer="depth-note"
+        x="500"
+        y={ELEVATION.floor + 52}
+        textAnchor="middle"
+        fontFamily="var(--studio-mono)"
+        fontSize="11"
+        fontWeight="bold"
+        fill={COLORS.dimension}
+      >
+        {`BASE ${formatSixteenths(CABINET_STANDARDS.depths.baseSixteenths)} DEEP · UPPER ${formatSixteenths(CABINET_STANDARDS.depths.upperSixteenths)} DEEP`}
+      </text>
 
       <g fontFamily="var(--studio-mono)" fill={COLORS.muted} fontSize="9">
         <text x="500" y="622" textAnchor="middle">
           WALL {wall?.label ?? "?"} ELEVATION · CABINET IDENTIFICATION AND CONTROL DIMENSIONS
         </text>
       </g>
+    </g>
+  );
+}
+
+/**
+ * Countertop over the straight base run on the A-sheet: one poché slab per
+ * contiguous run of counter-topped base segments (tall units and freestanding
+ * ranges break it), drawn on top of the cabinet boxes with a solid surface
+ * line so the base body reads below it.
+ */
+function SheetCounterBand({
+  base,
+  total,
+  layout,
+  wall,
+  mirrored
+}: {
+  base: WallSegment[];
+  total: number;
+  layout: SheetVerticalLayout;
+  wall: Round2Wall | null;
+  mirrored: boolean;
+}) {
+  const thickness = layout.baseBodyTop - layout.baseTop;
+  if (thickness <= 0) return null;
+
+  const placements = elevationPlacements(base, total, mirrored)
+    .slice()
+    .sort((a, b) => a.x - b.x);
+
+  const bands: { start: number; end: number }[] = [];
+  for (const { segment, x, width } of placements) {
+    if (!hasCountertop(segment, wall)) continue;
+    const previous = bands[bands.length - 1];
+    if (previous && Math.abs(previous.end - x) < 0.5) {
+      previous.end = x + width;
+    } else {
+      bands.push({ start: x, end: x + width });
+    }
+  }
+  if (bands.length === 0) return null;
+
+  const overhang = 4;
+  return (
+    <g data-drawing-layer="countertop">
+      {bands.map((band, index) => {
+        const left = Math.max(110, band.start - overhang);
+        const right = Math.min(890, band.end + overhang);
+        return (
+          <g key={index} data-countertop-band={index}>
+            <rect
+              x={left}
+              y={layout.baseTop}
+              width={Math.max(1, right - left)}
+              height={thickness}
+              fill="#e8e5dd"
+              stroke={COLORS.ink}
+              strokeWidth="1.5"
+            />
+            <line
+              x1={left}
+              y1={layout.baseTop}
+              x2={right}
+              y2={layout.baseTop}
+              stroke={COLORS.ink}
+              strokeWidth="2.5"
+            />
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -526,7 +691,8 @@ function ElevationRun({
   layout,
   intent,
   wall,
-  mirrored
+  mirrored,
+  fridgeAboveHeights
 }: {
   segments: WallSegment[];
   total: number;
@@ -534,11 +700,16 @@ function ElevationRun({
   intent?: Round2DesignIntent;
   wall: Round2Wall | null;
   mirrored: boolean;
+  fridgeAboveHeights?: ReadonlyMap<string, number>;
 }) {
   return (
     <g>
       {elevationPlacements(segments, total, mirrored).map(({ segment, x, width }) => {
-        const { y, height } = elevationBox(segment, layout);
+        const { y, height } = elevationBox(
+          segment,
+          layout,
+          fridgeAboveHeights
+        );
         if (segment.kind === "gap") return null;
         const front = resolveSegmentFront(segment, intent);
         const role = resolveSegmentRole(segment, wall);
@@ -558,11 +729,13 @@ function ElevationRun({
               width={Math.max(2, width)}
               height={height}
               fill={
-                segment.kind === "filler"
-                  ? "#fff7d8"
-                  : isWindow
-                    ? "#eef6fb"
-                    : "#fff"
+                segment.kind === "panel"
+                  ? "#efe6f2"
+                  : segment.kind === "filler"
+                    ? "#fff7d8"
+                    : isWindow
+                      ? "#eef6fb"
+                      : "#fff"
               }
               stroke={
                 segment.kind === "filler"
@@ -572,7 +745,10 @@ function ElevationRun({
                     : COLORS.cabinet
               }
             />
-            {segment.kind !== "filler" && segment.kind !== "opening" && !isApplianceBox && (
+            {segment.kind !== "filler" &&
+              segment.kind !== "panel" &&
+              segment.kind !== "opening" &&
+              !isApplianceBox && (
               <CabinetFace
                 x={x}
                 y={y}
@@ -807,9 +983,13 @@ function dimensionLineForWall(wall: Round2Wall) {
 const ELEVATION = { floor: 562, ceiling: 120 } as const;
 
 type SheetVerticalLayout = {
+  /** Finished counter top (backsplash + counter-slab datum). */
   baseTop: number;
+  /** Top of the base cabinet body; the counter slab fills baseTop→here. */
+  baseBodyTop: number;
   upperTop: number;
   upperBottom: number;
+  scale: number;
   profile: Round2HeightProfile;
 };
 
@@ -825,9 +1005,32 @@ function sheetVerticalLayout(model: Round2Model | null): SheetVerticalLayout {
   const ceiling = model?.ceilingHeightSixteenths ?? 96 * 16;
   const scale = (ELEVATION.floor - ELEVATION.ceiling) / Math.max(1, ceiling);
   const baseTop = ELEVATION.floor - profile.counterSixteenths * scale;
+  const baseBodyTop = baseTop + counterThicknessSixteenths(profile) * scale;
   const upperBottom = baseTop - profile.backsplashSixteenths * scale;
   const upperTop = upperBottom - profile.upperHeightSixteenths * scale;
-  return { baseTop, upperTop, upperBottom, profile };
+  return { baseTop, baseBodyTop, upperTop, upperBottom, scale, profile };
+}
+
+/** Countertop thickness = finished counter height minus the base body height. */
+function counterThicknessSixteenths(profile: Round2HeightProfile): number {
+  return Math.max(
+    0,
+    profile.counterSixteenths - CABINET_STANDARDS.base.heightSixteenths
+  );
+}
+
+/** Base cabinet body height = finished counter height minus the slab. */
+function baseBodyHeightSixteenths(profile: Round2HeightProfile): number {
+  return profile.counterSixteenths - counterThicknessSixteenths(profile);
+}
+
+/** A base run segment carries a counter unless it is tall or a freestanding range. */
+function hasCountertop(segment: WallSegment, wall: Round2Wall | null): boolean {
+  if (segment.tier !== "base") return false;
+  if (segment.cabinetKind === "tall") return false;
+  if (segment.kind === "panel") return false;
+  if (segment.kind === "opening" || segment.kind === "gap") return false;
+  return resolveSegmentRole(segment, wall) !== "range";
 }
 
 /**
@@ -845,19 +1048,36 @@ function tallUnitHeightSixteenths(profile: Round2HeightProfile): number {
 
 function elevationBox(
   segment: WallSegment,
-  layout: SheetVerticalLayout
+  layout: SheetVerticalLayout,
+  fridgeAboveHeights: ReadonlyMap<string, number> = EMPTY_ABOVE_HEIGHTS
 ): { y: number; height: number } {
+  const aboveHeight = fridgeAboveHeightForSegment(segment, fridgeAboveHeights);
+  if (aboveHeight != null) {
+    if (isFridgeAboveUnit(segment, fridgeAboveHeights)) {
+      return { y: layout.upperTop, height: aboveHeight * layout.scale };
+    }
+    if (isCappedFridge(segment, fridgeAboveHeights)) {
+      const top = layout.upperTop + aboveHeight * layout.scale;
+      return { y: top, height: ELEVATION.floor - top };
+    }
+  }
   if (segment.tier === "upper") {
     return {
       y: layout.upperTop,
       height: layout.upperBottom - layout.upperTop
     };
   }
-  if (segment.tier === "full" || segment.cabinetKind === "tall") {
+  if (
+    segment.tier === "full" ||
+    segment.cabinetKind === "tall" ||
+    segment.kind === "panel"
+  ) {
     return { y: layout.upperTop, height: ELEVATION.floor - layout.upperTop };
   }
   return { y: layout.baseTop, height: ELEVATION.floor - layout.baseTop };
 }
+
+const EMPTY_ABOVE_HEIGHTS: ReadonlyMap<string, number> = new Map();
 
 function elevationPlacements(
   segments: WallSegment[],

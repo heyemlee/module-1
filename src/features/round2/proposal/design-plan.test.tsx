@@ -20,7 +20,7 @@ describe("DesignPlan", () => {
     expect(path).toContain("M 162 132");
     expect(path).toContain("L 298.8 132");
     expect(path).toContain("L 214 231.3");
-    expect(html).toContain('data-display-label="LS36"');
+    expect(html).toContain('data-plan-corner-glyph="TL"');
     expect(html).toContain('data-segment-id="top-lazy-susan"');
     expect(html).not.toContain('data-segment-id="left-lazy-return"');
   });
@@ -38,10 +38,97 @@ describe("DesignPlan", () => {
 
     expect(html).not.toContain('data-plan-corner-footprint="TL"');
     expect(html).toContain('data-segment-id="top-blind-base"');
-    expect(html).toContain('data-segment-id="left-blind-body"');
+    // The body reservation duplicates the corner square already covered by
+    // the blind cabinet's rectangle, so it keeps its dimension but no rect.
+    expect(html).not.toContain('data-segment-id="left-blind-body"');
+    expect(html).toContain('data-chain-label="left-blind-body"');
     expect(html).toContain('data-segment-id="left-blind-pull"');
-    expect(html).toContain('data-display-label="BB45"');
-    expect(html).toContain('data-display-label="BLIND"');
+  });
+
+  test("renders the diagonal upper corner as a chamfered pentagon at upper depth", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [
+          upperSegment("top-upper-corner-lazy", 24, "cabinet", "WDC24"),
+          upperSegment("top-upper-run", 36, "cabinet", "W36"),
+          segment("top-lazy-susan", 36, "cabinet", "LS36")
+        ]),
+        wall("B", "LEFT", [
+          upperSegment("left-upper-corner-lazy-return", 24, "gap", "WDC24 return"),
+          segment("left-lazy-return", 36, "gap", "LS36 return")
+        ])
+      ])
+    );
+
+    const pentagon = tagFor(html, "path", 'data-plan-upper-corner="TL"');
+    // 24″ along each wall at 12″ upper depth with a chamfered front:
+    // (162,132) → +91.2 → depth 26 → chamfer → close.
+    expect(pentagon).toContain("M 162 132");
+    expect(pentagon).toContain("L 253.2 132");
+    expect(pentagon).toContain("L 253.2 158");
+    expect(pentagon).toContain("L 188 198.2");
+    expect(pentagon).toContain('stroke-dasharray="5 3"');
+    // The diagonal cabinet must not double-draw as a straight dashed rect.
+    const overlays = html.match(/data-plan-upper="cabinet"/g) ?? [];
+    expect(overlays).toHaveLength(1);
+  });
+
+  test("annotates base and upper cabinet depth per wall", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [segment("top-base", 36, "cabinet", "B36")])
+      ])
+    );
+
+    const depth = tagFor(html, "g", 'data-plan-depth-wall="A"');
+    expect(depth).toContain('stroke="#079ca5"');
+    expect(html).toContain('data-plan-depth-base="A"');
+    expect(html).toContain('data-plan-depth-upper="A"');
+    // Base 24″ and upper 12″ read from the standards.
+    const base = tagFor(html, "text", 'data-plan-depth-base="A"');
+    expect(html.slice(html.indexOf(base))).toContain("24″");
+    const upper = tagFor(html, "text", 'data-plan-depth-upper="A"');
+    expect(html.slice(html.indexOf(upper))).toContain("12″");
+  });
+
+  test("omits the depth callout on a wall with no base cabinets", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [segment("top-opening", 30, "opening", "Window")])
+      ])
+    );
+
+    expect(html).not.toContain('data-plan-depth-wall="A"');
+  });
+
+  test("keeps upper fillers visible in the dashed projection", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [
+          upperSegment("top-upper-cabinet", 36, "cabinet", "W36"),
+          upperSegment("top-upper-filler", 4, "filler", "F4")
+        ])
+      ])
+    );
+
+    expect(html).toContain('data-plan-upper="filler"');
+  });
+
+  test("annotates segments with dimension chains instead of code labels", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [segment("top-blind-base", 45, "cabinet", "BB45")])
+      ])
+    );
+
+    const label = tagFor(html, "text", 'data-chain-label="top-blind-base"');
+    expect(html.slice(html.indexOf(label))).toContain("45″");
+    const overall = tagFor(html, "text", 'data-plan-overall-label="A"');
+    expect(html.slice(html.indexOf(overall))).toContain("A · 120″");
+    expect(html).not.toContain("data-display-label");
+    // Codes survive only as hover tooltips, never as drawn text.
+    expect(html).toContain("<title>BB45</title>");
+    expect(html).not.toContain("BB45</text>");
   });
 
   test("draws bottom wall runs from left to right like the measured model", () => {
@@ -115,6 +202,20 @@ function wall(
     fixedPoints: [],
     notes: [],
     segments: segments.map((segment) => ({ ...segment, wallId: id }))
+  };
+}
+
+function upperSegment(
+  id: string,
+  inches: number,
+  kind: WallSegment["kind"],
+  label: string
+): WallSegment {
+  return {
+    ...segment(id, inches, kind, label),
+    tier: "upper",
+    cabinetKind: kind === "cabinet" ? "upper" : undefined,
+    sourceCornerId: id.includes("corner") ? "TL" : undefined
   };
 }
 

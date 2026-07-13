@@ -12,7 +12,11 @@ export type WallSegmentKind =
   | "filler"
   | "appliance"
   | "opening"
-  | "gap";
+  | "gap"
+  // A decorative finished panel (见光板): a side panel flanking a tall unit, or
+  // the closure panel over a fridge. Carries no cabinet number and never packs
+  // width itself — its width is fixed by the finished-panel standard.
+  | "panel";
 
 export type Round2FixedPointType =
   | "window"

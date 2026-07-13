@@ -337,6 +337,60 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
   });
 
+  test("regenerates the fridge surround live and keeps the fridge selected", () => {
+    const withFridge = withFridgeFixedPoint(
+      submitComplete(createRound2PrototypeState("DESIGNER"))
+    );
+    const key = `fridge.${FRIDGE_FIXED_POINT_ID}.above`;
+
+    const adjusted = reduceRound2Prototype(withFridge, {
+      type: "SET_DESIGN_INTENT",
+      key,
+      value: "wallCabinet"
+    });
+
+    const fridgeSegment = adjusted.model?.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      );
+
+    expect(adjusted.measurementStatus).toBe("SUBMITTED");
+    expect(adjusted.designIntent.answers[key]).toBe("wallCabinet");
+    expect(fridgeSegment).toBeDefined();
+    // A wall cabinet now sits directly above the fridge tall unit.
+    expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
+    // Selection stays on the fridge rather than jumping to the first cabinet.
+    expect(adjusted.selectedObjectId).toBe(fridgeSegment?.id);
+    expect(adjusted.proposalVersion).toBe(withFridge.proposalVersion + 1);
+  });
+
+  test("still regenerates the fridge surround after another intent change marked measurements draft", () => {
+    const withFridge = withFridgeFixedPoint(
+      submitComplete(createRound2PrototypeState("DESIGNER"))
+    );
+    // Any non-live intent edit (hardware, hood style, …) drops the measurement
+    // status back to DRAFT while the proposal segments persist.
+    const drafted = reduceRound2Prototype(withFridge, {
+      type: "SET_DESIGN_INTENT",
+      key: "hardware.style",
+      value: "fingerPull"
+    });
+    expect(drafted.measurementStatus).toBe("DRAFT");
+
+    const adjusted = reduceRound2Prototype(drafted, {
+      type: "SET_DESIGN_INTENT",
+      key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
+      value: "wallCabinet"
+    });
+
+    expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
+    // The live regen must not fake a submit: the draft status stays.
+    expect(adjusted.measurementStatus).toBe("DRAFT");
+  });
+
   test("steps the global height profile and keeps the selection", () => {
     const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
     expect(submitted.model?.heightProfile).not.toBeNull();
@@ -501,6 +555,57 @@ function valueForKey(key: string): number {
 
 function referenceWithId(id: string): Round1ReferenceSource {
   return { ...ROUND1_REFERENCE_FIXTURE, id };
+}
+
+const FRIDGE_FIXED_POINT_ID = "state-test-fridge";
+
+/**
+ * The reference fixture carries no fridge, so add one to the first wall; the
+ * next autofill run (triggered by the intent edit under test) places the tall
+ * unit for it.
+ */
+function withFridgeFixedPoint(
+  state: Round2PrototypeState
+): Round2PrototypeState {
+  return {
+    ...state,
+    model: state.model && {
+      ...state.model,
+      walls: state.model.walls.map((wall, index) =>
+        index === 0
+          ? {
+              ...wall,
+              fixedPoints: [
+                ...wall.fixedPoints,
+                {
+                  id: FRIDGE_FIXED_POINT_ID,
+                  type: "appliance",
+                  label: "Fridge",
+                  sourceWall: wall.sourceWall,
+                  order: 99,
+                  positionRatio: 0.05,
+                  symbol: "fridge",
+                  widthSixteenths: 36 * 16
+                }
+              ]
+            }
+          : wall
+      )
+    }
+  };
+}
+
+function hasUpperCabinetAboveFridge(state: Round2PrototypeState): boolean {
+  return Boolean(
+    state.model?.walls
+      .flatMap((wall) => wall.segments)
+      .some(
+        (segment) =>
+          segment.tier === "upper" &&
+          segment.kind === "cabinet" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )
+  );
 }
 
 function firstResizableSegment(state: Round2PrototypeState) {

@@ -680,6 +680,95 @@ describe("WallElevation", () => {
     expect(editorCard).toContain("Re-center under window");
   });
 
+  test("shows fridge above/side controls when the fridge is selected", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("a-fridge", 36 * 16, "appliance"),
+        label: "REF36",
+        cabinetKind: "tall",
+        sourceFixedPointId: "a-appliance-fridge"
+      },
+      cabinet("a-right", 30 * 16)
+    ]);
+    model.walls[0].fixedPoints = [
+      {
+        id: "a-appliance-fridge",
+        type: "appliance",
+        label: "Fridge",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.1,
+        symbol: "fridge"
+      }
+    ];
+    const dispatched: unknown[] = [];
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={model}
+        selectedObjectId="a-fridge"
+        canEdit={true}
+        dispatch={(action) => dispatched.push(action)}
+        onSelect={() => {}}
+      />
+    );
+    const editorCard = html.slice(
+      html.indexOf('<div data-testid="segment-editor-card"')
+    );
+
+    expect(editorCard).toContain("ABOVE FRIDGE");
+    expect(editorCard).toContain("SIDE PANELS");
+    // The above options and side options are rendered as chips.
+    expect(editorCard).toContain("Wall cabinet");
+    expect(editorCard).toContain("Both");
+  });
+
+  test("caps the fridge box below an upper unit so the unit above stays visible", () => {
+    const fridge = {
+      ...cabinet("a-fridge", 36 * 16, "appliance"),
+      label: "REF36",
+      cabinetKind: "tall" as const,
+      sourceFixedPointId: "a-appliance-fridge"
+    };
+    const above: WallSegment = {
+      id: "a-upper-above-fridge",
+      wallId: "A",
+      tier: "upper",
+      kind: "cabinet",
+      widthSixteenths: 36 * 16,
+      label: "W36",
+      cabinetKind: "upper",
+      sourceFixedPointId: "a-appliance-fridge"
+    };
+    const boxFor = (segments: WallSegment[], id: string) => {
+      const model = elevationModel(segments);
+      model.walls[0].lengthSixteenths = 36 * 16;
+      const html = renderToStaticMarkup(
+        <WallElevation
+          wallId="A"
+          model={model}
+          selectedObjectId={null}
+          dispatch={() => {}}
+          onSelect={() => {}}
+        />
+      );
+      const group = html.slice(html.indexOf(`data-segment-id="${id}"`));
+      const match = group.match(/<rect[^>]*\sy="([^"]+)"[^>]*\sheight="([^"]+)"/);
+      expect(match).not.toBeNull();
+      return { y: Number(match?.[1]), height: Number(match?.[2]) };
+    };
+
+    const uncapped = boxFor([fridge], "a-fridge");
+    const capped = boxFor([above, fridge], "a-fridge");
+    const upperBox = boxFor([above, fridge], "a-upper-above-fridge");
+
+    // Alone, the fridge runs full height; with a unit above it starts exactly
+    // at that unit's underside instead of painting over it.
+    expect(capped.y).toBeGreaterThan(uncapped.y);
+    expect(capped.y).toBeCloseTo(upperBox.y + upperBox.height, 5);
+    expect(capped.y + capped.height).toBeCloseTo(uncapped.y + uncapped.height, 5);
+  });
+
   test("only exposes cabinet kind editing for non-appliance base segments", () => {
     expect(KIND_OPTIONS.map((option) => option.value)).toEqual([
       "base",
@@ -794,6 +883,54 @@ describe("WallElevation", () => {
     expect(render(elevationModel())).not.toContain(
       'data-elevation-layer="absorb-pulse"'
     );
+  });
+
+  test("draws a countertop slab over the base run and dimensions the cabinet body", () => {
+    const html = render(elevationModel());
+
+    expect(html).toContain('data-elevation-layer="countertop"');
+    expect(html).toContain('data-countertop-band="0"');
+    // The base height dimension now reads the cabinet body (34½″), not the
+    // finished counter height (36″).
+    const counter = tagFor(html, "text", 'data-height-label="counter"');
+    expect(html.slice(html.indexOf(counter))).toContain("34 1/2″");
+  });
+
+  test("breaks the countertop at a freestanding range", () => {
+    const model = elevationModel([
+      cabinet("left-base", 30 * 16),
+      {
+        ...cabinet("mid-range", 30 * 16, "appliance"),
+        label: "RNG30",
+        sourceFixedPointId: "top-appliance-range"
+      },
+      cabinet("right-base", 30 * 16)
+    ]);
+    model.walls[0].fixedPoints = [
+      {
+        id: "top-appliance-range",
+        type: "appliance",
+        label: "range",
+        sourceWall: "TOP",
+        order: 1,
+        positionRatio: 0.5,
+        symbol: "range"
+      }
+    ];
+    const html = render(model);
+
+    // Two separate counter bands (left + right of the range), not one.
+    expect(html).toContain('data-countertop-band="0"');
+    expect(html).toContain('data-countertop-band="1"');
+    expect(html).not.toContain('data-countertop-band="2"');
+  });
+
+  test("carries a teal depth reference note", () => {
+    const html = render(elevationModel());
+    const note = tagFor(html, "text", 'data-elevation-layer="depth-note"');
+
+    expect(note).toContain(`fill="${"#079ca5"}"`);
+    expect(html.slice(html.indexOf(note))).toContain("BASE 24″ DEEP · UPPER 12″ DEEP");
   });
 });
 

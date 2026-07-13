@@ -123,6 +123,91 @@ describe("Round 2 autofill", () => {
     }
   );
 
+  test("turns upper corners with a diagonal wall cabinet by default", () => {
+    const filled = autofillRound2Model(uShapeModel());
+    const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+    const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
+    const topUpper = upperTier(top);
+    const leftUpper = upperTier(left);
+
+    expect(topUpper[0]).toMatchObject({
+      kind: "cabinet",
+      cabinetKind: "corner",
+      label: "WDC24",
+      widthSixteenths: 24 * 16,
+      sourceCornerId: "TL"
+    });
+    expect(leftUpper[0]).toMatchObject({
+      kind: "gap",
+      label: "WDC24 return",
+      widthSixteenths: 24 * 16,
+      sourceCornerId: "TL"
+    });
+    // The wall over the base corner body beyond the diagonal unit is ordinary
+    // upper space, not a 36″ clearance copied from the base tier.
+    expect(leftUpper[1]).toMatchObject({
+      kind: "cabinet",
+      widthSixteenths: 12 * 16
+    });
+    expect(
+      filled.walls
+        .flatMap((wall) => wall.segments)
+        .filter((segment) => segment.label === "Corner clearance")
+    ).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
+  test("blind upper intent keeps the upper straight and yields depth plus pull", () => {
+    const filled = autofillRound2Model(
+      uShapeModel(),
+      {},
+      intentWith({ "corner.TL.upper": "blindUpper" })
+    );
+    const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+    const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
+    const leftUpper = upperTier(left);
+
+    expect(upperTier(top)[0]).toMatchObject({
+      kind: "cabinet",
+      cabinetKind: "corner",
+      label: "WBC30",
+      widthSixteenths: 30 * 16
+    });
+    expect(leftUpper[0]).toMatchObject({
+      kind: "gap",
+      label: "Blind upper",
+      widthSixteenths: CABINET_STANDARDS.depths.upperSixteenths
+    });
+    expect(leftUpper[1]).toMatchObject({
+      kind: "filler",
+      widthSixteenths:
+        CABINET_STANDARDS.corner.upperBlind.adjacentWallPullSixteenths
+    });
+    expectTiersClosed(filled);
+  });
+
+  test("open upper intent leaves the corner empty and clears the primary depth", () => {
+    const filled = autofillRound2Model(
+      uShapeModel(),
+      {},
+      intentWith({ "corner.TL.upper": "openUpper" })
+    );
+    const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+    const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
+
+    // No corner unit: the primary run reaches the wall end as ordinary uppers.
+    expect(upperTier(top)[0]).toMatchObject({
+      kind: "cabinet",
+      cabinetKind: "upper"
+    });
+    expect(upperTier(left)[0]).toMatchObject({
+      kind: "gap",
+      label: "Open upper corner",
+      widthSixteenths: CABINET_STANDARDS.depths.upperSixteenths
+    });
+    expectTiersClosed(filled);
+  });
+
   test("defaults to a lazy Susan corner instead of a dead corner", () => {
     const filled = autofillRound2Model(uShapeModel());
     const width = 36 * 16;
@@ -202,6 +287,48 @@ describe("Round 2 autofill", () => {
         title: "Sink placement conflicts with window alignment"
       })
     );
+  });
+
+  test("confirms the sink first so other appliances pack around it", () => {
+    const wall = wallWithLength(200 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-window",
+        type: "window",
+        positionRatio: 0.4,
+        widthSixteenths: 30 * 16,
+        offsetSixteenths: 60 * 16
+      }),
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.35 }),
+      // Desired range position overlaps the window-centered sink from the
+      // left; the movable range must yield instead of displacing the sink.
+      fixedPoint({
+        id: "top-appliance-range",
+        symbol: "range",
+        positionRatio: 0.3
+      })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const base = baseTier(filled.walls[0]);
+    const sink = segmentWithStart(base, (segment) => segment.cabinetKind === "sink");
+    const range = segmentWithStart(
+      base,
+      (segment) => segment.sourceFixedPointId === "top-appliance-range"
+    );
+    const windowCenter = 60 * 16 + 15 * 16;
+
+    expect(sink.start + sink.segment.widthSixteenths / 2).toBe(windowCenter);
+    expect(sink.segment.anchored).toBe(true);
+    expect(range.start + range.segment.widthSixteenths).toBeLessThanOrEqual(
+      sink.start
+    );
+    expect(filled.decisionItems).not.toContainEqual(
+      expect.objectContaining({
+        id: "decision-top-appliance-sink-window-placement"
+      })
+    );
+    expectTiersClosed(filled);
   });
 
   test("docks the dishwasher against the sink", () => {
@@ -744,6 +871,114 @@ describe("Round 2 autofill", () => {
   );
 });
 
+describe("Round 2 fridge surround", () => {
+  function fridgeWall(): Round2Wall {
+    const wall = wallWithLength(200 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-appliance-fridge",
+        symbol: "fridge",
+        positionRatio: 0.1,
+        widthSixteenths: 36 * 16
+      })
+    ];
+    return wall;
+  }
+
+  const FRIDGE_WIDTH = 36 * 16;
+  const PANEL_WIDTH = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
+
+  test("defaults to an empty gap above the fridge and no side panels", () => {
+    const filled = autofillRound2Model(modelWithWall(fridgeWall()));
+    const wall = filled.walls[0];
+    const fridge = baseTier(wall).find(
+      (segment) => segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+
+    expect(fridge?.kind).toBe("appliance");
+    expect(fridge?.widthSixteenths).toBe(FRIDGE_WIDTH);
+    expect(wall.segments.some((segment) => segment.kind === "panel")).toBe(false);
+    expectTiersClosed(filled);
+  });
+
+  test("wallCabinet intent puts an upper cabinet directly above the fridge", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(fridgeWall()),
+      {},
+      intentWith({ "fridge.top-appliance-fridge.above": "wallCabinet" })
+    );
+    const uppers = upperTier(filled.walls[0]);
+    const above = uppers.find(
+      (segment) => segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+
+    expect(above?.kind).toBe("cabinet");
+    expect(above?.cabinetKind).toBe("upper");
+    expect(above?.widthSixteenths).toBe(FRIDGE_WIDTH);
+    expectTiersClosed(filled);
+  });
+
+  test("panel intent closes the space above the fridge with a finished panel", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(fridgeWall()),
+      {},
+      intentWith({ "fridge.top-appliance-fridge.above": "panel" })
+    );
+    const uppers = upperTier(filled.walls[0]);
+    const above = uppers.find(
+      (segment) => segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+
+    expect(above?.kind).toBe("panel");
+    expect(above?.widthSixteenths).toBe(FRIDGE_WIDTH);
+    expectTiersClosed(filled);
+  });
+
+  test("both-sides intent flanks the fridge with full-width finished panels", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(fridgeWall()),
+      {},
+      intentWith({ "fridge.top-appliance-fridge.sides": "both" })
+    );
+    const base = baseTier(filled.walls[0]);
+    const panels = base.filter((segment) => segment.kind === "panel");
+    const fridge = base.find(
+      (segment) =>
+        segment.kind === "appliance" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+
+    expect(panels).toHaveLength(2);
+    expect(panels.every((panel) => panel.widthSixteenths === PANEL_WIDTH)).toBe(
+      true
+    );
+    expect(panels.every((panel) => panel.tier === "base")).toBe(true);
+    // The appliance keeps its own width; the panels consume additional run.
+    expect(fridge?.widthSixteenths).toBe(FRIDGE_WIDTH);
+    expectTiersClosed(filled);
+  });
+
+  test("left-only intent adds a single finished panel on the start side", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(fridgeWall()),
+      {},
+      intentWith({ "fridge.top-appliance-fridge.sides": "left" })
+    );
+    const base = baseTier(filled.walls[0]);
+    const fridgeIndex = base.findIndex(
+      (segment) =>
+        segment.kind === "appliance" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+    const panels = base.filter((segment) => segment.kind === "panel");
+
+    expect(panels).toHaveLength(1);
+    // The panel sits immediately before the fridge (start side).
+    expect(base[fridgeIndex - 1]?.kind).toBe("panel");
+    expectTiersClosed(filled);
+  });
+});
+
 function expectTiersClosed(model: Round2Model) {
   for (const wall of model.walls) {
     if (wall.lengthSixteenths == null) continue;
@@ -758,6 +993,10 @@ function expectTiersClosed(model: Round2Model) {
 
 function baseTier(wall: Round2Wall): WallSegment[] {
   return wall.segments.filter((segment) => segment.tier === "base");
+}
+
+function upperTier(wall: Round2Wall): WallSegment[] {
+  return wall.segments.filter((segment) => segment.tier === "upper");
 }
 
 function segmentWithStart(

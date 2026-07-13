@@ -69,6 +69,13 @@ export const cabinetStandardsSchema = z
         commonWidthsSixteenths: ascendingDimensionsSchema
       })
       .strict(),
+    finishedPanel: z
+      .object({
+        // A decorative finished end panel (见光板) closing an exposed side or the
+        // gap over a tall unit. In elevation its width is the panel thickness.
+        sideWidthSixteenths: dimensionSchema
+      })
+      .strict(),
     corner: z
       .object({
         lazySusan: z
@@ -83,6 +90,17 @@ export const cabinetStandardsSchema = z
             widthOptionsSixteenths: ascendingDimensionsSchema,
             heightSixteenths: dimensionSchema,
             depthSixteenths: dimensionSchema,
+            adjacentWallPullSixteenths: dimensionSchema
+          })
+          .strict(),
+        upperDiagonal: z
+          .object({
+            widthOptionsSixteenths: ascendingDimensionsSchema
+          })
+          .strict(),
+        upperBlind: z
+          .object({
+            widthOptionsSixteenths: ascendingDimensionsSchema,
             adjacentWallPullSixteenths: dimensionSchema
           })
           .strict()
@@ -221,6 +239,9 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
       maxSixteenths: 6 * 16,
       commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
     },
+    finishedPanel: {
+      sideWidthSixteenths: 12
+    },
     corner: {
       lazySusan: {
         widthOptionsSixteenths: [33, 36].map((value) => value * 16),
@@ -231,6 +252,16 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
         widthOptionsSixteenths: [39, 42, 45].map((value) => value * 16),
         heightSixteenths: 34 * 16 + 8,
         depthSixteenths: 24 * 16,
+        adjacentWallPullSixteenths: 3 * 16
+      },
+      // Diagonal corner wall cabinet: consumes the same run on both walls.
+      upperDiagonal: {
+        widthOptionsSixteenths: [24 * 16]
+      },
+      // Blind wall cabinet: straight on its main wall; the adjacent wall
+      // yields the upper depth plus a pull like the blind base below it.
+      upperBlind: {
+        widthOptionsSixteenths: [27 * 16, 30 * 16],
         adjacentWallPullSixteenths: 3 * 16
       }
     },

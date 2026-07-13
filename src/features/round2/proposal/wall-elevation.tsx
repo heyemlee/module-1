@@ -29,10 +29,22 @@ import {
   resolveSegmentFront,
   type ResolvedFront
 } from "../model/front";
-import type {
-  CornerStrategy,
-  Round2DesignIntent
+import {
+  fridgeAboveHeightIntentKey,
+  fridgeAboveIntentKey,
+  fridgeSidesIntentKey,
+  type CornerStrategy,
+  type FridgeAboveStrategy,
+  type FridgeSideStrategy,
+  type Round2DesignIntent
 } from "../model/design-intent";
+import {
+  fridgeAboveHeightForSegment,
+  fridgeAboveHeightSixteenths,
+  FRIDGE_ABOVE_HEIGHT_OPTIONS,
+  isFridgeAboveUnit,
+  resolveFridgeAboveHeights
+} from "../model/fridge-surround";
 import { deriveCorners, type CornerEnd } from "../model/corners";
 import type {
   Round2AbsorbedChange,
@@ -73,6 +85,12 @@ const CORNER_RETURN_FILL = "transparent";
 const HIDDEN_LINE_COLOR = "#8a8d83";
 const COUNTER_SECTION_FILL = "#44443e";
 const COUNTER_THICKNESS_SIXTEENTHS = 24; // 1.5″
+// The counter slab drawn over the straight base run: a light poché band with
+// a solid ink surface line and a small end overhang, matching the reference
+// section conventions in the black/white theme.
+const COUNTER_SLAB_FILL = "#e8e5dd";
+const COUNTER_SLAB_STROKE = "#2c2c2c";
+const COUNTER_END_OVERHANG_PX = 3;
 const TOE_KICK_HEIGHT_SIXTEENTHS = 72; // 4.5″
 const TOE_KICK_DEPTH_SIXTEENTHS = 48; // 3″
 
@@ -83,7 +101,10 @@ type CornerReturnTarget = {
 
 type VerticalLayout = {
   scale: number;
+  /** Finished counter top (datum for backsplash + counter slab). */
   baseTop: number;
+  /** Top of the base cabinet body — the counter slab fills baseTop→here. */
+  baseBodyTop: number;
   upperTop: number;
   upperBottom: number;
   profile: Round2HeightProfile;
@@ -101,25 +122,80 @@ function verticalLayout(model: Round2Model | null): VerticalLayout {
   const ceiling = model?.ceilingHeightSixteenths ?? 96 * 16;
   const scale = (FLOOR_Y - CEILING_Y) / Math.max(1, ceiling);
   const baseTop = FLOOR_Y - profile.counterSixteenths * scale;
+  const baseBodyTop = baseTop + counterThicknessSixteenths(profile) * scale;
   const upperBottom = baseTop - profile.backsplashSixteenths * scale;
   const upperTop = upperBottom - profile.upperHeightSixteenths * scale;
-  return { scale, baseTop, upperTop, upperBottom, profile };
+  return { scale, baseTop, baseBodyTop, upperTop, upperBottom, profile };
+}
+
+/**
+ * Countertop thickness = finished counter height minus the base cabinet body
+ * height, so a profile with a raised counter keeps a real 1.5″ slab.
+ */
+function counterThicknessSixteenths(profile: Round2HeightProfile): number {
+  return Math.max(
+    0,
+    profile.counterSixteenths - CABINET_STANDARDS.base.heightSixteenths
+  );
+}
+
+/** Base cabinet body height = finished counter height minus the slab. */
+function baseBodyHeightSixteenths(profile: Round2HeightProfile): number {
+  return profile.counterSixteenths - counterThicknessSixteenths(profile);
+}
+
+/** A base run segment carries a counter unless it is tall or a freestanding range. */
+function hasCountertop(
+  segment: WallSegment,
+  fixedPoints: Round2FixedPoint[]
+): boolean {
+  if (segment.tier !== "base") return false;
+  if (segment.cabinetKind === "tall") return false;
+  // A finished side panel runs full height beside its tall unit — no counter.
+  if (segment.kind === "panel") return false;
+  if (segment.kind === "opening" || segment.kind === "gap") return false;
+  return resolveSegmentRole(segment, { fixedPoints }) !== "range";
 }
 
 function segmentBox(
   segment: WallSegment,
-  layout: VerticalLayout
+  layout: VerticalLayout,
+  fridgeAboveHeights: ReadonlyMap<string, number> = EMPTY_ABOVE_HEIGHTS
 ): { y: number; height: number } {
+  const aboveHeight = fridgeAboveHeightForSegment(segment, fridgeAboveHeights);
+  // The wall cabinet / panel above a fridge hangs from the ceiling-aligned
+  // upper top at its own (usually shorter) height, and the fridge box is capped
+  // just beneath it — the base run paints after the upper run, so a full-height
+  // fridge would otherwise cover the unit above it.
+  if (aboveHeight != null) {
+    if (isFridgeAboveUnit(segment, fridgeAboveHeights)) {
+      return { y: layout.upperTop, height: aboveHeight * layout.scale };
+    }
+    if (segment.cabinetKind === "tall") {
+      const top = layout.upperTop + aboveHeight * layout.scale;
+      return { y: top, height: FLOOR_Y - top };
+    }
+  }
   if (segment.tier === "upper") {
     return { y: layout.upperTop, height: layout.upperBottom - layout.upperTop };
   }
-  if (segment.tier === "full" || segment.cabinetKind === "tall") {
+  // A base finished panel flanks a full-height tall unit, so it runs floor to
+  // cabinet top like one.
+  if (
+    segment.tier === "full" ||
+    segment.cabinetKind === "tall" ||
+    segment.kind === "panel"
+  ) {
     return { y: layout.upperTop, height: FLOOR_Y - layout.upperTop };
   }
   return { y: layout.baseTop, height: FLOOR_Y - layout.baseTop };
 }
 
+const EMPTY_ABOVE_HEIGHTS: ReadonlyMap<string, number> = new Map();
+
+
 function segmentFill(segment: WallSegment) {
+  if (segment.kind === "panel") return "#efe6f2";
   if (segment.cabinetKind === "sink") return "#eef7f4";
   if (segment.cabinetKind === "tall") return "#f1ecf7";
   if (segment.cabinetKind === "corner") return "#f4efe2";
@@ -159,6 +235,11 @@ export function WallElevation({
   const layout = verticalLayout(model);
   const upper = wall?.segments.filter((segment) => segment.tier === "upper") ?? [];
   const base = wall?.segments.filter((segment) => segment.tier !== "upper") ?? [];
+  const fridgeAboveHeights = resolveFridgeAboveHeights(
+    wall?.segments ?? [],
+    designIntent,
+    layout.profile
+  );
   const mirrored = isMirroredElevationWall(wall);
   const editingSegment =
     wall?.segments.find((segment) => segment.id === editingId) ?? null;
@@ -299,6 +380,7 @@ export function WallElevation({
               cornerReturns={cornerReturns}
               cornerHostSides={cornerHostSides}
               hatchPatternId={hatchPatternId}
+              fridgeAboveHeights={fridgeAboveHeights}
               onActivate={openEditor}
             />
             <ElevationRun
@@ -314,7 +396,15 @@ export function WallElevation({
               cornerReturns={cornerReturns}
               cornerHostSides={cornerHostSides}
               hatchPatternId={hatchPatternId}
+              fridgeAboveHeights={fridgeAboveHeights}
               onActivate={openEditor}
+            />
+            <CounterBand
+              fixedPoints={wall.fixedPoints}
+              base={base}
+              total={total}
+              layout={layout}
+              mirrored={mirrored}
             />
             {[...cornerHostSides.entries()].map(([cornerId, end]) => {
               const hostsCorner = wall.segments.some(
@@ -334,8 +424,14 @@ export function WallElevation({
               );
             })}
             <g stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
-              <TallUnitHeights base={base} total={total} layout={layout} />
+              <TallUnitHeights
+                base={base}
+                total={total}
+                layout={layout}
+                fridgeAboveHeights={fridgeAboveHeights}
+              />
             </g>
+            <DepthNote />
           </>
         ) : (
           <text
@@ -360,6 +456,7 @@ export function WallElevation({
           segment={editingSegment}
           wall={wall}
           designIntent={designIntent}
+          heightProfile={layout.profile}
           dispatch={dispatch}
           onClose={() => setEditingId(null)}
         />
@@ -396,21 +493,21 @@ function HeightChain({
         {formatSixteenths(model?.ceilingHeightSixteenths)}
       </text>
       <path
-        d={`M 58 ${layout.baseTop} H 66 M 58 ${FLOOR_Y} H 66 M 62 ${layout.baseTop} V ${FLOOR_Y}`}
+        d={`M 58 ${layout.baseBodyTop} H 66 M 58 ${FLOOR_Y} H 66 M 62 ${layout.baseBodyTop} V ${FLOOR_Y}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       <text
         data-height-label="counter"
         x="49"
-        y={(layout.baseTop + FLOOR_Y) / 2}
+        y={(layout.baseBodyTop + FLOOR_Y) / 2}
         textAnchor="middle"
         fontSize={DIMENSION_FONT_SIZE}
         fontWeight="bold"
         fill={DIMENSION_COLOR}
         stroke="none"
-        transform={`rotate(-90 49 ${(layout.baseTop + FLOOR_Y) / 2})`}
+        transform={`rotate(-90 49 ${(layout.baseBodyTop + FLOOR_Y) / 2})`}
       >
-        {formatSixteenths(profile.counterSixteenths)}
+        {formatSixteenths(baseBodyHeightSixteenths(profile))}
       </text>
       <path
         d={`M 58 ${layout.upperTop} H 66 M 58 ${layout.upperBottom} H 66 M 62 ${layout.upperTop} V ${layout.upperBottom}`}
@@ -434,6 +531,113 @@ function HeightChain({
 }
 
 /**
+ * Depth is perpendicular to the elevation, so it can't sit on a width chain;
+ * a teal reference note carries the base and upper cabinet depths in the same
+ * dimension style, reading them from the standards.
+ */
+function DepthNote() {
+  const base = CABINET_STANDARDS.depths.baseSixteenths;
+  const upper = CABINET_STANDARDS.depths.upperSixteenths;
+  return (
+    <text
+      data-elevation-layer="depth-note"
+      x={RUN_LEFT + RUN_WIDTH / 2}
+      y={FLOOR_Y + 50}
+      textAnchor="middle"
+      fontFamily="var(--studio-mono)"
+      fontSize="9"
+      letterSpacing="0.1em"
+      fontWeight="bold"
+      fill={DIMENSION_COLOR}
+      stroke="none"
+    >
+      {`BASE ${formatSixteenths(base)} DEEP · UPPER ${formatSixteenths(upper)} DEEP`}
+    </text>
+  );
+}
+
+/**
+ * Countertop over the straight base run: one poché slab per contiguous run of
+ * counter-topped base segments (tall units and freestanding ranges break it),
+ * drawn on top of the cabinet boxes with a solid surface line and a small
+ * overhang at exposed ends. The base cabinet body reads below the slab.
+ */
+function CounterBand({
+  fixedPoints,
+  base,
+  total,
+  layout,
+  mirrored
+}: {
+  fixedPoints: Round2FixedPoint[];
+  base: WallSegment[];
+  total: number;
+  layout: VerticalLayout;
+  mirrored: boolean;
+}) {
+  const thickness = layout.baseBodyTop - layout.baseTop;
+  if (thickness <= 0) return null;
+
+  type Placed = { segment: WallSegment; start: number; end: number };
+  const placed: Placed[] = [];
+  let cursor = 0;
+  for (const segment of base) {
+    const width = (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH;
+    const x = mirrored
+      ? RUN_LEFT + RUN_WIDTH - cursor - width
+      : RUN_LEFT + cursor;
+    placed.push({ segment, start: x, end: x + width });
+    cursor += width;
+  }
+  placed.sort((a, b) => a.start - b.start);
+
+  const bands: { start: number; end: number }[] = [];
+  for (const item of placed) {
+    if (!hasCountertop(item.segment, fixedPoints)) continue;
+    const previous = bands[bands.length - 1];
+    if (previous && Math.abs(previous.end - item.start) < 0.5) {
+      previous.end = item.end;
+    } else {
+      bands.push({ start: item.start, end: item.end });
+    }
+  }
+  if (bands.length === 0) return null;
+
+  return (
+    <g data-elevation-layer="countertop" className="pointer-events-none">
+      {bands.map((band, index) => {
+        const left = Math.max(RUN_LEFT, band.start - COUNTER_END_OVERHANG_PX);
+        const right = Math.min(
+          RUN_LEFT + RUN_WIDTH,
+          band.end + COUNTER_END_OVERHANG_PX
+        );
+        return (
+          <g key={index} data-countertop-band={index}>
+            <rect
+              x={left}
+              y={layout.baseTop}
+              width={Math.max(1, right - left)}
+              height={thickness}
+              fill={COUNTER_SLAB_FILL}
+              stroke={COUNTER_SLAB_STROKE}
+              strokeWidth="1.2"
+            />
+            <line
+              x1={left}
+              y1={layout.baseTop}
+              x2={right}
+              y2={layout.baseTop}
+              stroke={COUNTER_SLAB_STROKE}
+              strokeWidth="2"
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
  * Tall units (refrigerator, oven/pantry towers) run floor-to-cabinet-top with
  * no counter/upper split, so each gets its own overall height dimension drawn
  * inside its column — mirroring the A-sheet.
@@ -441,13 +645,15 @@ function HeightChain({
 function TallUnitHeights({
   base,
   total,
-  layout
+  layout,
+  fridgeAboveHeights = EMPTY_ABOVE_HEIGHTS
 }: {
   base: WallSegment[];
   total: number;
   layout: VerticalLayout;
+  fridgeAboveHeights?: ReadonlyMap<string, number>;
 }) {
-  const height =
+  const fullHeight =
     layout.profile.counterSixteenths +
     layout.profile.backsplashSixteenths +
     layout.profile.upperHeightSixteenths;
@@ -459,28 +665,64 @@ function TallUnitHeights({
         const widthPx = (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH;
         cursor += widthPx;
         if (segment.cabinetKind !== "tall") return null;
+        // When a wall cabinet / panel sits above the fridge, the tall column
+        // stacks two dimensions: the above unit's height near the ceiling and
+        // the shortened fridge height beneath it.
+        const aboveHeight = fridgeAboveHeightForSegment(
+          segment,
+          fridgeAboveHeights
+        );
         const x = TALL_HEIGHT_CHAIN_X - tallLane * 12;
         const labelX = TALL_HEIGHT_LABEL_X - tallLane * 12;
         tallLane += 1;
-        const mid = (layout.upperTop + FLOOR_Y) / 2;
+        const fridgeTop =
+          aboveHeight == null
+            ? layout.upperTop
+            : layout.upperTop + aboveHeight * layout.scale;
+        const fridgeHeight =
+          aboveHeight == null ? fullHeight : fullHeight - aboveHeight;
+
+        const chain = (
+          top: number,
+          bottom: number,
+          heightSixteenths: number,
+          key: string,
+          labelAttr?: string
+        ) => {
+          const mid = (top + bottom) / 2;
+          return (
+            <g key={key}>
+              <path
+                d={`M ${x - 4} ${top} H ${x + 4} M ${x - 4} ${bottom} H ${x + 4} M ${x} ${top} V ${bottom}`}
+                strokeWidth={DIMENSION_STROKE_WIDTH}
+              />
+              <text
+                {...(labelAttr ? { "data-tall-height-label": labelAttr } : {})}
+                x={labelX}
+                y={mid}
+                textAnchor="middle"
+                fontSize={DIMENSION_FONT_SIZE}
+                fontWeight="bold"
+                transform={`rotate(-90 ${labelX} ${mid})`}
+                stroke="none"
+              >
+                {formatSixteenths(heightSixteenths)}
+              </text>
+            </g>
+          );
+        };
+
         return (
           <g key={`tall-${segment.id}`}>
-            <path
-              d={`M ${x - 4} ${layout.upperTop} H ${x + 4} M ${x - 4} ${FLOOR_Y} H ${x + 4} M ${x} ${layout.upperTop} V ${FLOOR_Y}`}
-              strokeWidth={DIMENSION_STROKE_WIDTH}
-            />
-            <text
-              data-tall-height-label={segment.id}
-              x={labelX}
-              y={mid}
-              textAnchor="middle"
-              fontSize={DIMENSION_FONT_SIZE}
-              fontWeight="bold"
-              transform={`rotate(-90 ${labelX} ${mid})`}
-              stroke="none"
-            >
-              {formatSixteenths(height)}
-            </text>
+            {aboveHeight != null &&
+              chain(
+                layout.upperTop,
+                fridgeTop,
+                aboveHeight,
+                `above-${segment.id}`,
+                `above-${segment.id}`
+              )}
+            {chain(fridgeTop, FLOOR_Y, fridgeHeight, `fridge-${segment.id}`, segment.id)}
           </g>
         );
       })}
@@ -501,6 +743,7 @@ function ElevationRun({
   cornerReturns,
   cornerHostSides,
   hatchPatternId,
+  fridgeAboveHeights = EMPTY_ABOVE_HEIGHTS,
   onActivate
 }: {
   fixedPoints: Round2FixedPoint[];
@@ -515,6 +758,7 @@ function ElevationRun({
   cornerReturns?: Map<string, CornerReturnTarget>;
   cornerHostSides?: Map<string, CornerEnd>;
   hatchPatternId?: string;
+  fridgeAboveHeights?: ReadonlyMap<string, number>;
   onActivate: (segment: WallSegment) => void;
 }) {
   const widthsPx = segments.map(
@@ -532,7 +776,7 @@ function ElevationRun({
           ? RUN_LEFT + RUN_WIDTH - cursor - width
           : RUN_LEFT + cursor;
         cursor += width;
-        const { y, height } = segmentBox(segment, layout);
+        const { y, height } = segmentBox(segment, layout, fridgeAboveHeights);
         const selected = selectedObjectId === segment.id;
         const cornerReturn =
           segment.kind === "gap" && segment.sourceCornerId
@@ -630,6 +874,7 @@ function ElevationRun({
         const fillerLike = isFillerLikeSegment(segment);
         const front =
           fillerLike ||
+          segment.kind === "panel" ||
           segment.cabinetKind === "corner" ||
           breakdownCornerEnd != null
             ? null
@@ -680,6 +925,15 @@ function ElevationRun({
               stroke={selected ? "#079ca5" : "#2c2c2c"}
               strokeWidth={selected ? 3 : 1.5}
             />
+            {segment.kind === "panel" && (
+              <PanelHatch
+                x={x}
+                y={y}
+                width={Math.max(8, width)}
+                height={height}
+                clipId={clipId}
+              />
+            )}
             {front && hostedCornerEnd == null && (
               <SegmentFace
                 x={x}
@@ -1234,6 +1488,56 @@ function CornerReturnSection({
   );
 }
 
+/** Diagonal hatch + label marking a finished panel (见光板) in the elevation. */
+function PanelHatch({
+  x,
+  y,
+  width,
+  height,
+  clipId
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  clipId: string;
+}) {
+  const step = 7;
+  const count = Math.ceil((width + height) / step);
+  return (
+    <g clipPath={`url(#${clipId})`} className="pointer-events-none">
+      {Array.from({ length: count }).map((_, index) => {
+        const offset = index * step;
+        return (
+          <line
+            key={index}
+            x1={x + offset}
+            y1={y}
+            x2={x + offset - height}
+            y2={y + height}
+            stroke="#b7a6c4"
+            strokeWidth="0.6"
+          />
+        );
+      })}
+      {width >= 26 && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2}
+          textAnchor="middle"
+          transform={`rotate(-90 ${x + width / 2} ${y + height / 2})`}
+          fontFamily="var(--studio-mono)"
+          fontSize="9"
+          letterSpacing="0.1em"
+          fill="#6c5b78"
+        >
+          PANEL
+        </text>
+      )}
+    </g>
+  );
+}
+
 function isFillerLikeSegment(segment: WallSegment): boolean {
   const label = (segment.code ?? segment.label).trim();
   return (
@@ -1446,12 +1750,14 @@ function SegmentEditorCard({
   segment,
   wall,
   designIntent,
+  heightProfile,
   dispatch,
   onClose
 }: {
   segment: WallSegment;
   wall: Round2Wall;
   designIntent?: Round2DesignIntent;
+  heightProfile: Round2HeightProfile;
   dispatch: Dispatch<Round2PrototypeAction>;
   onClose: () => void;
 }) {
@@ -1462,8 +1768,10 @@ function SegmentEditorCard({
   const canAdjustWidth = isOrdinaryCabinet;
   const canSlide = isOrdinaryCabinet;
   const isFiller = segment.kind === "filler";
-  const front = resolveSegmentFront(segment, designIntent);
+  const isPanel = segment.kind === "panel";
+  const front = isPanel ? null : resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
+  const fridgeIntentKeys = fridgeIntentKeysForSegment(segment, wall);
   const sinkOffset = segment.anchored
     ? sinkCenteringOffsetSixteenths(wall, segment)
     : null;
@@ -1500,6 +1808,15 @@ function SegmentEditorCard({
           intentKey={cornerIntentKey}
           segment={segment}
           designIntent={designIntent}
+          dispatch={dispatch}
+        />
+      )}
+
+      {fridgeIntentKeys && (
+        <FridgeSetupControls
+          keys={fridgeIntentKeys}
+          designIntent={designIntent}
+          heightProfile={heightProfile}
           dispatch={dispatch}
         />
       )}
@@ -1804,6 +2121,153 @@ function CornerSetupControls({
 
 function cornerIntentKeyForSegment(segment: WallSegment): string | null {
   return segment.sourceCornerId ? `corner.${segment.sourceCornerId}.strategy` : null;
+}
+
+const FRIDGE_ABOVE_OPTIONS: { value: FridgeAboveStrategy; label: string }[] = [
+  { value: "gap", label: "Open gap" },
+  { value: "wallCabinet", label: "Wall cabinet" },
+  { value: "panel", label: "Panel" }
+];
+
+const FRIDGE_SIDE_OPTIONS: { value: FridgeSideStrategy; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+  { value: "both", label: "Both" }
+];
+
+/**
+ * Fridge-specific setup, shown when the fridge tall unit (or one of its finished
+ * side panels) is selected: what sits above the fridge and which exposed sides
+ * carry a finished panel. Mirrors CornerSetupControls — the choice lives in
+ * design intent and re-runs autofill live.
+ */
+function FridgeSetupControls({
+  keys,
+  designIntent,
+  heightProfile,
+  dispatch
+}: {
+  keys: { fixedPointId: string; above: string; sides: string; height: string };
+  designIntent?: Round2DesignIntent;
+  heightProfile: Round2HeightProfile;
+  dispatch: Dispatch<Round2PrototypeAction>;
+}) {
+  const above = (designIntent?.answers[keys.above] as FridgeAboveStrategy) ?? "gap";
+  const sides = (designIntent?.answers[keys.sides] as FridgeSideStrategy) ?? "none";
+  // The above unit's height only matters once something is placed above the
+  // fridge; a plain gap has no height to set.
+  const aboveHeight = fridgeAboveHeightSixteenths(
+    keys.fixedPointId,
+    designIntent,
+    heightProfile
+  );
+  return (
+    <>
+      <CardSectionLabel>ABOVE FRIDGE</CardSectionLabel>
+      <div className="mt-1.5 grid grid-cols-3 gap-1">
+        {FRIDGE_ABOVE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={above === option.value}
+            onClick={() =>
+              dispatch({
+                type: "SET_DESIGN_INTENT",
+                key: keys.above,
+                value: option.value
+              })
+            }
+            className={CARD_CHIP_CLASS}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {above !== "gap" && (
+        <>
+          <CardSectionLabel>ABOVE HEIGHT</CardSectionLabel>
+          <div className="mt-1.5 grid grid-cols-5 gap-1">
+            {FRIDGE_ABOVE_HEIGHT_OPTIONS.map((height) => (
+              <button
+                key={height}
+                type="button"
+                aria-pressed={aboveHeight === height}
+                onClick={() =>
+                  dispatch({
+                    type: "SET_DESIGN_INTENT",
+                    key: keys.height,
+                    value: height
+                  })
+                }
+                className={CARD_CHIP_CLASS}
+              >
+                {height / 16}″
+              </button>
+            ))}
+          </div>
+          <InchField
+            value={aboveHeight}
+            onChange={(value) => {
+              if (value != null && value > 0) {
+                dispatch({
+                  type: "SET_DESIGN_INTENT",
+                  key: keys.height,
+                  value
+                });
+              }
+            }}
+            ariaLabel="Custom above-fridge height"
+          />
+        </>
+      )}
+      <CardSectionLabel>SIDE PANELS</CardSectionLabel>
+      <div className="mt-1.5 grid grid-cols-4 gap-1">
+        {FRIDGE_SIDE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={sides === option.value}
+            onClick={() =>
+              dispatch({
+                type: "SET_DESIGN_INTENT",
+                key: keys.sides,
+                value: option.value
+              })
+            }
+            className={CARD_CHIP_CLASS}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Intent keys for a fridge tall unit or its finished panels. Both the fridge
+ * appliance segment and its flanking panels resolve to the same fridge, so
+ * clicking either opens the same controls.
+ */
+function fridgeIntentKeysForSegment(
+  segment: WallSegment,
+  wall: Round2Wall
+): { fixedPointId: string; above: string; sides: string; height: string } | null {
+  const point = wall.fixedPoints.find(
+    (item) => item.id === segment.sourceFixedPointId
+  );
+  if (point?.symbol !== "fridge") return null;
+  const isFridgeUnit =
+    segment.kind === "panel" ||
+    (segment.kind === "appliance" && segment.cabinetKind === "tall");
+  if (!isFridgeUnit) return null;
+  return {
+    fixedPointId: point.id,
+    above: fridgeAboveIntentKey(point.id),
+    sides: fridgeSidesIntentKey(point.id),
+    height: fridgeAboveHeightIntentKey(point.id)
+  };
 }
 
 function inferCornerStrategy(segment: WallSegment): CornerStrategy {

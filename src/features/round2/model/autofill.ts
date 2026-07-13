@@ -15,7 +15,12 @@ import { CABINET_STANDARDS } from "./cabinet-standards";
 import { deriveCorners, type Round2Corner } from "./corners";
 import {
   buildIntentConfirmationDecisions,
-  type Round2DesignIntent
+  fridgeAboveIntentKey,
+  fridgeSidesIntentKey,
+  type FridgeAboveStrategy,
+  type FridgeSideStrategy,
+  type Round2DesignIntent,
+  type UpperCornerStrategy
 } from "./design-intent";
 
 const BASE_WIDTHS_ASCENDING = CABINET_STANDARDS.base.widthsSixteenths;
@@ -31,6 +36,9 @@ type FillerSide = "start" | "end";
 
 /** Corner segments for one wall, ordered outward from the corner. */
 type TierInsets = { start: WallSegment[]; end: WallSegment[] };
+
+/** Corner reservations per tier — uppers turn corners independently of bases. */
+type WallInsets = { base: TierInsets; upper: TierInsets };
 
 type BlindBaseCornerStrategy =
   | "blindBase"
@@ -48,6 +56,13 @@ type PlacedReservation = {
   /** Measured window center requested by an aligned sink before packing. */
   requestedWindowCenter?: number;
   anchored?: boolean;
+  /**
+   * Finished side-panel widths bundled into a fridge reservation. When set, the
+   * placed reservation width already includes them, and fillBaseTier splits the
+   * block into [left panel, fridge, right panel] so the panels consume real
+   * wall width and shift neighbours like any other reservation.
+   */
+  fridgePanels?: { left: number; right: number };
 };
 
 type Reservation = Omit<PlacedReservation, "start" | "anchored"> & {
@@ -88,9 +103,18 @@ export function autofillRound2Model(
   const walls = measuredModel.walls.map((wall) => {
     if (wall.lengthSixteenths == null) return { ...wall, segments: [] };
 
-    const insets = insetsByWall.get(wall.id) ?? { start: [], end: [] };
-    const base = fillBaseTier(wall, insets, intent, decisionItems);
-    const upper = deriveUpperTier(wall, base, intent, decisionItems);
+    const insets = insetsByWall.get(wall.id) ?? {
+      base: { start: [], end: [] },
+      upper: { start: [], end: [] }
+    };
+    const base = fillBaseTier(wall, insets.base, intent, decisionItems);
+    const upper = deriveUpperTier(
+      wall,
+      base,
+      insets.upper,
+      intent,
+      decisionItems
+    );
     const numbered = [...upper, ...base].map((segment) => {
       if (
         segment.kind === "cabinet" ||
@@ -151,15 +175,20 @@ export function autofillRound2Model(
 function buildCornerInsets(
   model: Round2Model,
   intent?: Round2DesignIntent
-): Map<WallId, TierInsets> {
-  const insets = new Map<WallId, TierInsets>();
-  const tierFor = (wallId: WallId): TierInsets => {
+): Map<WallId, WallInsets> {
+  const insets = new Map<WallId, WallInsets>();
+  const wallInsets = (wallId: WallId): WallInsets => {
     const existing = insets.get(wallId);
     if (existing) return existing;
-    const created: TierInsets = { start: [], end: [] };
+    const created: WallInsets = {
+      base: { start: [], end: [] },
+      upper: { start: [], end: [] }
+    };
     insets.set(wallId, created);
     return created;
   };
+  const tierFor = (wallId: WallId): TierInsets => wallInsets(wallId).base;
+  const upperTierFor = (wallId: WallId): TierInsets => wallInsets(wallId).upper;
 
   for (const corner of deriveCorners(model)) {
     const strategy = resolveCornerStrategy(intent?.answers[corner.intentKey]);
@@ -167,6 +196,12 @@ function buildCornerInsets(
     const primaryId = corner.primary.id.toLowerCase();
     const secondaryId = corner.secondary.id.toLowerCase();
     const baseDepth = CABINET_STANDARDS.depths.baseSixteenths;
+
+    pushUpperCornerInsets(
+      corner,
+      resolveUpperCornerStrategy(intent?.answers[corner.upperIntentKey]),
+      upperTierFor
+    );
 
     if (strategy === "lazySusan") {
       const width = pickCornerWidth(
@@ -238,6 +273,106 @@ function buildCornerInsets(
   return insets;
 }
 
+// The upper tier turns each corner on its own terms: a diagonal wall cabinet
+// consumes its width on both walls, a blind upper stays straight on the
+// primary wall while the adjacent wall yields the upper depth plus a pull,
+// and an open corner just clears the primary run's upper depth.
+function pushUpperCornerInsets(
+  corner: Round2Corner,
+  strategy: UpperCornerStrategy,
+  upperTierFor: (wallId: WallId) => TierInsets
+): void {
+  const cornerId = corner.id.toLowerCase();
+  const primaryId = corner.primary.id.toLowerCase();
+  const secondaryId = corner.secondary.id.toLowerCase();
+  const upperDepth = CABINET_STANDARDS.depths.upperSixteenths;
+
+  if (strategy === "diagonalUpper") {
+    const width = pickCornerWidth(
+      CABINET_STANDARDS.corner.upperDiagonal.widthOptionsSixteenths,
+      [corner.primary, corner.secondary]
+    );
+    upperTierFor(corner.primary.id)[corner.primaryEnd].push({
+      id: `${primaryId}-upper-corner-${cornerId}`,
+      wallId: corner.primary.id,
+      tier: "upper",
+      kind: "cabinet",
+      cabinetKind: "corner",
+      widthSixteenths: width,
+      standardWidthSixteenths: width,
+      label: `WDC${width / 16}`,
+      sourceCornerId: corner.id
+    });
+    upperTierFor(corner.secondary.id)[corner.secondaryEnd].push({
+      id: `${secondaryId}-upper-corner-${cornerId}-return`,
+      wallId: corner.secondary.id,
+      tier: "upper",
+      kind: "gap",
+      widthSixteenths: width,
+      label: `WDC${width / 16} return`,
+      sourceCornerId: corner.id
+    });
+    return;
+  }
+
+  if (strategy === "blindUpper") {
+    const width = pickCornerWidth(
+      CABINET_STANDARDS.corner.upperBlind.widthOptionsSixteenths,
+      [corner.primary]
+    );
+    const pull = CABINET_STANDARDS.corner.upperBlind.adjacentWallPullSixteenths;
+    upperTierFor(corner.primary.id)[corner.primaryEnd].push({
+      id: `${primaryId}-upper-corner-${cornerId}`,
+      wallId: corner.primary.id,
+      tier: "upper",
+      kind: "cabinet",
+      cabinetKind: "corner",
+      widthSixteenths: width,
+      standardWidthSixteenths: width,
+      label: `WBC${width / 16}`,
+      sourceCornerId: corner.id
+    });
+    upperTierFor(corner.secondary.id)[corner.secondaryEnd].push(
+      {
+        id: `${secondaryId}-upper-corner-${cornerId}-body`,
+        wallId: corner.secondary.id,
+        tier: "upper",
+        kind: "gap",
+        widthSixteenths: upperDepth,
+        label: "Blind upper",
+        sourceCornerId: corner.id
+      },
+      {
+        id: `${secondaryId}-upper-corner-${cornerId}-pull`,
+        wallId: corner.secondary.id,
+        tier: "upper",
+        kind: "filler",
+        widthSixteenths: pull,
+        label: `F${pull / 16}`,
+        sourceCornerId: corner.id
+      }
+    );
+    return;
+  }
+
+  // openUpper: no corner unit. The primary run finishes at the wall; the
+  // secondary run clears the primary's upper depth.
+  upperTierFor(corner.secondary.id)[corner.secondaryEnd].push({
+    id: `${secondaryId}-upper-corner-${cornerId}-clearance`,
+    wallId: corner.secondary.id,
+    tier: "upper",
+    kind: "gap",
+    widthSixteenths: CABINET_STANDARDS.depths.upperSixteenths,
+    label: "Open upper corner",
+    sourceCornerId: corner.id
+  });
+}
+
+function resolveUpperCornerStrategy(strategy: unknown): UpperCornerStrategy {
+  if (strategy === "blindUpper" || strategy === "openUpper") return strategy;
+  return "diagonalUpper";
+}
+
 function resolveCornerStrategy(
   strategy: unknown
 ): "lazySusan" | BlindBaseCornerStrategy {
@@ -279,6 +414,27 @@ function pickCornerWidth(
   return fitting.length > 0
     ? fitting[fitting.length - 1]
     : options[0];
+}
+
+/** A full-height finished side panel (见光板) flanking a tall unit. */
+const FINISHED_PANEL_LABEL = "Panel";
+
+function finishedPanelSegment(
+  id: string,
+  wallId: WallId,
+  width: number,
+  sourceFixedPointId: string
+): WallSegment {
+  return {
+    id,
+    wallId,
+    tier: "base",
+    kind: "panel",
+    widthSixteenths: width,
+    label: FINISHED_PANEL_LABEL,
+    standardWidthSixteenths: width,
+    sourceFixedPointId
+  };
 }
 
 function fillBaseTier(
@@ -368,18 +524,43 @@ function fillBaseTier(
 
   for (const item of reservations) {
     pushSpan(cursor, item.start);
+    const wallPrefix = wall.id.toLowerCase();
+    const panels = item.fridgePanels;
+    const applianceWidth = panels
+      ? item.width - panels.left - panels.right
+      : item.width;
+    if (panels && panels.left > 0) {
+      segments.push(
+        finishedPanelSegment(
+          `${wallPrefix}-base-${sequence}-panel-left-${item.fixedPoint.id}`,
+          wall.id,
+          panels.left,
+          item.fixedPoint.id
+        )
+      );
+    }
     segments.push({
-      id: `${wall.id.toLowerCase()}-base-${sequence}-${item.kind}-${item.fixedPoint.id}`,
+      id: `${wallPrefix}-base-${sequence}-${item.kind}-${item.fixedPoint.id}`,
       wallId: wall.id,
       tier: "base",
       kind: item.kind,
-      widthSixteenths: item.width,
+      widthSixteenths: applianceWidth,
       label: item.label,
       cabinetKind: item.cabinetKind,
-      standardWidthSixteenths: item.width,
+      standardWidthSixteenths: applianceWidth,
       sourceFixedPointId: item.fixedPoint.id,
       anchored: item.anchored
     });
+    if (panels && panels.right > 0) {
+      segments.push(
+        finishedPanelSegment(
+          `${wallPrefix}-base-${sequence}-panel-right-${item.fixedPoint.id}`,
+          wall.id,
+          panels.right,
+          item.fixedPoint.id
+        )
+      );
+    }
     sequence += 1;
     cursor = item.start + item.width;
   }
@@ -387,6 +568,35 @@ function fillBaseTier(
   segments.push(...endInsets);
 
   return tagFunctionalNeighbors(segments, intent);
+}
+
+/** The finished-panel treatment a designer chose above a fridge tall unit. */
+function fridgeAboveStrategy(
+  fixedPointId: string,
+  intent: Round2DesignIntent | undefined
+): FridgeAboveStrategy {
+  const value = intent?.answers[fridgeAboveIntentKey(fixedPointId)];
+  return value === "wallCabinet" || value === "panel" ? value : "gap";
+}
+
+/**
+ * Finished side-panel widths flanking a fridge, from the per-fridge sides
+ * intent. Returns null (no panels) for the default so autofill reproduces the
+ * original single-segment fridge exactly.
+ */
+function fridgeSidePanels(
+  point: Round2FixedPoint,
+  intent: Round2DesignIntent | undefined
+): { left: number; right: number } | null {
+  const value = intent?.answers[fridgeSidesIntentKey(point.id)] as
+    | FridgeSideStrategy
+    | undefined;
+  if (value == null || value === "none") return null;
+  const panel = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
+  return {
+    left: value === "left" || value === "both" ? panel : 0,
+    right: value === "right" || value === "both" ? panel : 0
+  };
 }
 
 // Rule 2 — fixed points become anchors: the sink centers on the window, the
@@ -463,7 +673,13 @@ function baseReservations(
     }
     const standard = applianceStandard(point);
     if (!standard) continue;
-    const width = standard.widthSixteenths;
+    const applianceWidth = standard.widthSixteenths;
+    const fridgePanels =
+      point.symbol === "fridge" ? fridgeSidePanels(point, intent) : null;
+    // The reservation block spans the fridge plus any bundled side panels, so
+    // packing and overflow checks treat the finished sides as consumed width.
+    const width =
+      applianceWidth + (fridgePanels?.left ?? 0) + (fridgePanels?.right ?? 0);
     let desiredStart = Math.round(
       point.positionRatio * Math.max(0, length - width)
     );
@@ -493,7 +709,8 @@ function baseReservations(
         point.symbol === "oven" ||
         point.symbol === "microwave"
           ? "tall"
-          : undefined
+          : undefined,
+      fridgePanels: fridgePanels ?? undefined
     });
   }
 
@@ -507,39 +724,89 @@ function packReservations(
   wall: Round2Wall,
   decisionItems: Round2DecisionItem[]
 ): PlacedReservation[] {
-  const placed: PlacedReservation[] = [];
-  let cursor = fillStart;
-
-  for (const item of [...reservations].sort(
+  const sorted = [...reservations].sort(
     (a, b) =>
       a.desiredStart - b.desiredStart ||
       a.fixedPoint.id.localeCompare(b.fixedPoint.id)
-  )) {
+  );
+  const sink = sorted.find((item) => item.requestedWindowCenter != null);
+  if (!sink) {
+    return packInterval(sorted, fillStart, fillEnd, wall, decisionItems);
+  }
+
+  // The window-aligned sink is confirmed first: it pins to the measured
+  // window center — only immutable corner geometry can bound it — and every
+  // other reservation packs around it instead of displacing it.
+  const sinkStart = Math.max(
+    fillStart,
+    Math.min(sink.desiredStart, fillEnd - sink.width)
+  );
+  const before = sorted.filter(
+    (item) => item !== sink && item.desiredStart < sinkStart
+  );
+  const after = sorted.filter(
+    (item) => item !== sink && item.desiredStart >= sinkStart
+  );
+
+  return [
+    ...packInterval(before, fillStart, sinkStart, wall, decisionItems),
+    placeReservation(sink, sinkStart, fillEnd, wall, decisionItems),
+    ...packInterval(
+      after,
+      Math.max(sinkStart + sink.width, fillStart),
+      fillEnd,
+      wall,
+      decisionItems
+    )
+  ];
+}
+
+function packInterval(
+  reservations: Reservation[],
+  intervalStart: number,
+  intervalEnd: number,
+  wall: Round2Wall,
+  decisionItems: Round2DecisionItem[]
+): PlacedReservation[] {
+  const placed: PlacedReservation[] = [];
+  let cursor = intervalStart;
+
+  for (const item of reservations) {
     const start = Math.max(
       cursor,
-      Math.min(item.desiredStart, fillEnd - item.width)
+      Math.min(item.desiredStart, intervalEnd - item.width)
     );
-    const width = item.width;
-    const overflow = start + width - fillEnd;
-    if (overflow > 0) {
-      decisionItems.push({
-        id: `decision-${item.fixedPoint.id}-reservation-overflow`,
-        objectId: item.fixedPoint.id,
-        wallId: wall.id,
-        severity: "blocking",
-        title: "Fixed reservation exceeds available wall space",
-        body: `${item.label} needs ${formatSixteenths(width)} but extends ${formatSixteenths(overflow)} beyond the available run. Keep the fixed geometry and revise the layout, corner strategy, or measurement.`
-      });
-    }
-    const anchored =
-      item.requestedWindowCenter == null
-        ? undefined
-        : start + width / 2 === item.requestedWindowCenter;
-    placed.push({ ...item, start, width, anchored });
-    cursor = start + width;
+    placed.push(placeReservation(item, start, intervalEnd, wall, decisionItems));
+    cursor = start + item.width;
   }
 
   return placed;
+}
+
+function placeReservation(
+  item: Reservation,
+  start: number,
+  intervalEnd: number,
+  wall: Round2Wall,
+  decisionItems: Round2DecisionItem[]
+): PlacedReservation {
+  const width = item.width;
+  const overflow = start + width - intervalEnd;
+  if (overflow > 0) {
+    decisionItems.push({
+      id: `decision-${item.fixedPoint.id}-reservation-overflow`,
+      objectId: item.fixedPoint.id,
+      wallId: wall.id,
+      severity: "blocking",
+      title: "Fixed reservation exceeds available wall space",
+      body: `${item.label} needs ${formatSixteenths(width)} but extends ${formatSixteenths(overflow)} beyond the available run. Keep the fixed geometry and revise the layout, corner strategy, or measurement.`
+    });
+  }
+  const anchored =
+    item.requestedWindowCenter == null
+      ? undefined
+      : start + width / 2 === item.requestedWindowCenter;
+  return { ...item, start, width, anchored };
 }
 
 // Rule 3 + 4 — zones between anchors are packed as an exact partition of
@@ -847,11 +1114,19 @@ function tagFunctionalNeighbors(
 function deriveUpperTier(
   wall: Round2Wall,
   baseSegments: WallSegment[],
+  insets: TierInsets,
   intent: Round2DesignIntent | undefined,
   decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   const length = wall.lengthSixteenths ?? 0;
   if (length === 0) return [];
+
+  const startInsets = insets.start;
+  const endInsets = [...insets.end].reverse();
+  const fillStart = Math.min(segmentTotal(startInsets), length);
+  // A wall too short for its corner strategy is already reported by the base
+  // tier; clamp so the upper derivation stays inside the wall regardless.
+  const fillEnd = Math.max(length - segmentTotal(endInsets), fillStart);
 
   type Placed = { segment: WallSegment; start: number; end: number };
   const basePlaced: Placed[] = [];
@@ -893,7 +1168,7 @@ function deriveUpperTier(
     openings.push({ point, start, end: start + width });
   }
 
-  const cuts = new Set<number>([0, length]);
+  const cuts = new Set<number>([fillStart, fillEnd]);
   for (const placed of basePlaced) {
     cuts.add(placed.start);
     cuts.add(placed.end);
@@ -903,11 +1178,11 @@ function deriveUpperTier(
     cuts.add(Math.min(length, opening.end));
   }
   const bounds = [...cuts]
-    .filter((value) => value >= 0 && value <= length)
+    .filter((value) => value >= fillStart && value <= fillEnd)
     .sort((a, b) => a - b);
 
   type Piece = {
-    type: "opening" | "hood" | "gap" | "cabinet" | "filler";
+    type: "opening" | "hood" | "gap" | "cabinet" | "filler" | "panel";
     ref: string;
     label: string;
     width: number;
@@ -950,7 +1225,7 @@ function deriveUpperTier(
     }
   }
 
-  return pieces.flatMap((piece, index) => {
+  const derived = pieces.flatMap((piece, index) => {
     const id = `${wall.id.toLowerCase()}-upper-${index + 1}-${piece.type}`;
     if (piece.type === "opening") {
       return {
@@ -988,6 +1263,17 @@ function deriveUpperTier(
         }
       );
     }
+    if (piece.type === "panel") {
+      return {
+        id,
+        wallId: wall.id,
+        tier: "upper" as const,
+        kind: "panel" as const,
+        widthSixteenths: piece.width,
+        label: piece.label,
+        sourceFixedPointId: piece.sourceFixedPointId
+      };
+    }
     const label =
       piece.type === "hood"
         ? `HD${Math.round(piece.width / 16)}`
@@ -1004,6 +1290,8 @@ function deriveUpperTier(
       sourceFixedPointId: piece.sourceFixedPointId
     };
   });
+
+  return [...startInsets, ...derived, ...endInsets];
 }
 
 function mapBaseToUpperPiece(
@@ -1012,7 +1300,7 @@ function mapBaseToUpperPiece(
   width: number,
   intent?: Round2DesignIntent
 ): {
-  type: "hood" | "gap" | "cabinet" | "filler";
+  type: "hood" | "gap" | "cabinet" | "filler" | "panel";
   ref: string;
   label: string;
   width: number;
@@ -1022,14 +1310,9 @@ function mapBaseToUpperPiece(
   if (!placed) return null;
   const base = placed.segment;
 
-  if (base.sourceCornerId && base.kind !== "cabinet") {
-    return {
-      type: "gap",
-      ref: base.id,
-      label: "Corner clearance",
-      width,
-      sourceCornerId: base.sourceCornerId
-    };
+  // A finished side panel is full height, so nothing stacks above it.
+  if (base.kind === "panel") {
+    return { type: "gap", ref: base.id, label: base.label, width };
   }
 
   if (base.kind === "appliance") {
@@ -1055,10 +1338,31 @@ function mapBaseToUpperPiece(
         sourceFixedPointId: point.id
       };
     }
-    // The refrigerator is a single full-height unit (European frameless): the
-    // full-height base box already fills the wall, so the upper tier leaves a
-    // gap over it — no separate deep upper. Same as any other tall unit.
+    // Above a fridge the designer can leave the default gap, drop in a deep
+    // wall cabinet, or close it with a finished panel (见光板). Other tall units
+    // (oven/pantry towers) keep the plain gap.
     if (base.cabinetKind === "tall") {
+      if (point?.symbol === "fridge") {
+        const above = fridgeAboveStrategy(point.id, intent);
+        if (above === "wallCabinet") {
+          return {
+            type: "cabinet",
+            ref: base.id,
+            label: "",
+            width,
+            sourceFixedPointId: point.id
+          };
+        }
+        if (above === "panel") {
+          return {
+            type: "panel",
+            ref: base.id,
+            label: FINISHED_PANEL_LABEL,
+            width,
+            sourceFixedPointId: point.id
+          };
+        }
+      }
       return {
         type: "gap",
         ref: base.id,
@@ -1079,7 +1383,11 @@ function mapBaseToUpperPiece(
   if (base.kind === "filler") {
     return { type: "filler", ref: base.id, label: "", width };
   }
-  if (base.kind === "gap" || base.kind === "opening") {
+  // The wall over a base corner body (lazy-Susan return, blind body) is
+  // ordinary upper space — the corner reservation for the upper tier is
+  // already carved out by the upper insets — so only doors and genuinely
+  // unresolved gaps block the run.
+  if (base.kind === "opening" || (base.kind === "gap" && !base.sourceCornerId)) {
     return { type: "gap", ref: base.id, label: base.label, width };
   }
 
