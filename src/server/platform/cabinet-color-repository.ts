@@ -67,10 +67,10 @@ export type CabinetColorRow = {
   cabinet_style: CabinetStyle;
   name: string;
   color_code: string | null;
-  swatch_image_url: string | null;
+  swatch_image_url?: string | null;
   swatch_object_key?: string | null;
   swatch_hex: string | null;
-  hover_example_image_url: string | null;
+  hover_example_image_url?: string | null;
   hover_object_key?: string | null;
   prompt_description: string;
   active: boolean;
@@ -98,10 +98,10 @@ export type CabinetColor = {
 export function mapCabinetColorRow(row: CabinetColorRow): CabinetColor {
   const swatchImageUrl = row.swatch_object_key
     ? `/api/cabinet-colors/${row.id}/image?variant=swatch`
-    : row.swatch_image_url;
+    : row.swatch_image_url ?? null;
   const hoverExampleImageUrl = row.hover_object_key
     ? `/api/cabinet-colors/${row.id}/image?variant=hover`
-    : row.hover_example_image_url;
+    : row.hover_example_image_url ?? null;
 
   return {
     id: row.id,
@@ -129,11 +129,11 @@ export function isColorCompatibleWithStyle(
 
 export function buildCabinetColorListQuery(includeHoverExampleImages = true) {
   const hoverExampleColumn = includeHoverExampleImages
-    ? "hover_example_image_url"
-    : "NULL::text AS hover_example_image_url";
+    ? "hover_object_key"
+    : "NULL::text AS hover_object_key";
 
-  return `SELECT id, company_id, cabinet_style, name, color_code, swatch_image_url,
-            swatch_object_key, swatch_hex, ${hoverExampleColumn}, hover_object_key,
+  return `SELECT id, company_id, cabinet_style, name, color_code,
+            swatch_object_key, swatch_hex, ${hoverExampleColumn},
             prompt_description, active,
             sort_order, created_at, updated_at
      FROM cabinet_colors
@@ -168,8 +168,8 @@ export async function listCabinetColorNames(companyId: string) {
 
 export async function getCabinetColor(companyId: string, colorId: string) {
   const result = await query<CabinetColorRow>(
-    `SELECT id, company_id, cabinet_style, name, color_code, swatch_image_url,
-            swatch_object_key, swatch_hex, hover_example_image_url, hover_object_key,
+    `SELECT id, company_id, cabinet_style, name, color_code,
+            swatch_object_key, swatch_hex, hover_object_key,
             prompt_description, active,
             sort_order, created_at, updated_at
      FROM cabinet_colors
@@ -186,13 +186,13 @@ export async function createCabinetColor(companyId: string, input: CabinetColorI
   const hover = await storeInlineImage(storage, id, "hover", input.hoverExampleImageUrl);
   const result = await query<CabinetColorRow>(
     `INSERT INTO cabinet_colors (
-       id, company_id, cabinet_style, name, color_code, swatch_image_url,
-       swatch_object_key, swatch_hex, hover_example_image_url, hover_object_key,
+       id, company_id, cabinet_style, name, color_code,
+       swatch_object_key, swatch_hex, hover_object_key,
        prompt_description, active, sort_order
      )
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-     RETURNING id, company_id, cabinet_style, name, color_code, swatch_image_url,
-               swatch_object_key, swatch_hex, hover_example_image_url, hover_object_key,
+     RETURNING id, company_id, cabinet_style, name, color_code,
+               swatch_object_key, swatch_hex, hover_object_key,
                prompt_description, active,
                sort_order, created_at, updated_at`,
     [
@@ -201,10 +201,8 @@ export async function createCabinetColor(companyId: string, input: CabinetColorI
       input.cabinetStyle,
       input.name,
       input.colorCode ?? null,
-      swatch.legacyValue,
       swatch.objectKey,
       input.swatchHex ?? null,
-      hover.legacyValue,
       hover.objectKey,
       input.promptDescription,
       input.active,
@@ -223,18 +221,16 @@ export async function updateCabinetColor(companyId: string, colorId: string, inp
        cabinet_style = $3,
        name = $4,
        color_code = CASE WHEN $5::boolean THEN $6 ELSE color_code END,
-       swatch_image_url = CASE WHEN $7::boolean THEN $8 ELSE swatch_image_url END,
-       swatch_object_key = CASE WHEN $9::boolean THEN $10 ELSE swatch_object_key END,
-       swatch_hex = CASE WHEN $11::boolean THEN $12 ELSE swatch_hex END,
-       hover_example_image_url = CASE WHEN $13::boolean THEN $14 ELSE hover_example_image_url END,
-       hover_object_key = CASE WHEN $15::boolean THEN $16 ELSE hover_object_key END,
-       prompt_description = $17,
-       active = $18,
-       sort_order = $19,
+       swatch_object_key = CASE WHEN $7::boolean THEN $8 ELSE swatch_object_key END,
+       swatch_hex = CASE WHEN $9::boolean THEN $10 ELSE swatch_hex END,
+       hover_object_key = CASE WHEN $11::boolean THEN $12 ELSE hover_object_key END,
+       prompt_description = $13,
+       active = $14,
+       sort_order = $15,
        updated_at = now()
      WHERE company_id = $1 AND id = $2
-     RETURNING id, company_id, cabinet_style, name, color_code, swatch_image_url,
-               swatch_object_key, swatch_hex, hover_example_image_url, hover_object_key,
+     RETURNING id, company_id, cabinet_style, name, color_code,
+               swatch_object_key, swatch_hex, hover_object_key,
                prompt_description, active,
                sort_order, created_at, updated_at`,
     [
@@ -245,13 +241,9 @@ export async function updateCabinetColor(companyId: string, colorId: string, inp
       input.colorCode !== undefined,
       input.colorCode ?? null,
       input.swatchImageUrl !== undefined,
-      swatch.legacyValue,
-      input.swatchImageUrl !== undefined,
       swatch.objectKey,
       input.swatchHex !== undefined,
       input.swatchHex ?? null,
-      input.hoverExampleImageUrl !== undefined,
-      hover.legacyValue,
       input.hoverExampleImageUrl !== undefined,
       hover.objectKey,
       input.promptDescription,
@@ -292,9 +284,8 @@ export async function getCabinetColorImage(
   variant: "swatch" | "hover"
 ) {
   const column = variant === "swatch" ? "swatch_object_key" : "hover_object_key";
-  const legacyColumn = variant === "swatch" ? "swatch_image_url" : "hover_example_image_url";
-  const result = await query<{ object_key: string | null; legacy_value: string | null }>(
-    `SELECT ${column} AS object_key, ${legacyColumn} AS legacy_value
+  const result = await query<{ object_key: string | null }>(
+    `SELECT ${column} AS object_key
      FROM cabinet_colors WHERE company_id = $1 AND id = $2 LIMIT 1`,
     [companyId, colorId]
   );
@@ -304,12 +295,9 @@ export async function getCabinetColorImage(
   if (row.object_key && storage) {
     try {
       return await storage.getObject(row.object_key);
-    } catch (error) {
-      if (!row.legacy_value?.startsWith("data:")) throw error;
+    } catch {
+      return null;
     }
   }
-  const image = row.legacy_value?.match(/^data:(image\/[^;]+);base64,(.+)$/s);
-  return image
-    ? { body: Buffer.from(image[2], "base64"), contentType: image[1] }
-    : null;
+  return null;
 }

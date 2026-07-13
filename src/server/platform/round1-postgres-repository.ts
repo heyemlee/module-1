@@ -265,20 +265,19 @@ export async function saveRenderingHistory(input: {
 
   const result = await query<{ id: string; created_at: Date }>(
     `INSERT INTO renderings (
-       id, project_id, round1_snapshot_id, model, image_base64,
+       id, project_id, round1_snapshot_id, model,
        image_object_key, image_content_type, image_bytes, prompt, size,
        based_on_snapshot_generated_at, based_on_cabinet_style,
        based_on_door_color_id, based_on_color_updated_at, sales_estimate_only,
        not_for_production, dimension_confidence, created_by_user_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, true, 'ROUGH', $15)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, true, 'ROUGH', $14)
      RETURNING id, created_at`,
     [
       renderingId,
       input.projectId,
       input.snapshotId,
       input.rendering.model,
-      storage ? null : input.rendering.imageBase64,
       imageObjectKey,
       storage ? "image/png" : null,
       storage ? imageBuffer.length : null,
@@ -340,8 +339,8 @@ export async function getRound1SnapshotById(projectId: string, snapshotId: strin
  * caller can answer 404 without leaking other projects' images.
  */
 export async function getRenderingImage(projectId: string, renderingId: string) {
-  const result = await query<{ image_object_key: string | null; image_base64: string | null }>(
-    `SELECT image_object_key, image_base64
+  const result = await query<{ image_object_key: string | null }>(
+    `SELECT image_object_key
      FROM renderings WHERE id = $1 AND project_id = $2 LIMIT 1`,
     [renderingId, projectId]
   );
@@ -353,13 +352,12 @@ export async function getRenderingImage(projectId: string, renderingId: string) 
     if (storage) {
       try {
         return (await storage.getObject(row.image_object_key)).body;
-      } catch (error) {
-        if (!row.image_base64) throw error;
+      } catch {
+        return null;
       }
     }
   }
-
-  return row.image_base64 ? Buffer.from(row.image_base64, "base64") : null;
+  return null;
 }
 
 export async function getRenderCountForCurrentMonth(userId: string): Promise<number> {

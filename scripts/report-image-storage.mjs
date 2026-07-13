@@ -15,15 +15,12 @@ try {
     pool.query(`
       SELECT count(*)::int AS total,
              count(image_object_key)::int AS migrated,
-             count(*) FILTER (WHERE image_object_key IS NULL)::int AS remaining,
-             pg_size_pretty(COALESCE(sum(length(image_base64)), 0)::bigint) AS legacy_size
+             count(*) FILTER (WHERE image_object_key IS NULL)::int AS remaining
       FROM renderings`),
     pool.query(`
       SELECT count(*)::int AS total,
              count(swatch_object_key)::int AS swatch_migrated,
-             count(hover_object_key)::int AS hover_migrated,
-             pg_size_pretty(COALESCE(sum(length(CASE WHEN swatch_image_url LIKE 'data:%' THEN swatch_image_url ELSE '' END) +
-                                      length(CASE WHEN hover_example_image_url LIKE 'data:%' THEN hover_example_image_url ELSE '' END)), 0)::bigint) AS legacy_size
+             count(hover_object_key)::int AS hover_migrated
       FROM cabinet_colors`),
     pool.query(`
       WITH unreferenced AS (

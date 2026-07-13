@@ -58,8 +58,8 @@ describe("cabinet color repository helpers", () => {
   test("can build a lightweight list query without hover example image payloads", () => {
     const query = buildCabinetColorListQuery(false);
 
-    expect(query).toContain("NULL::text AS hover_example_image_url");
-    expect(query).not.toContain("swatch_hex, hover_example_image_url,");
+    expect(query).toContain("NULL::text AS hover_object_key");
+    expect(query).not.toContain("swatch_hex, hover_object_key,");
   });
 
   test("validates cabinet color input", () => {

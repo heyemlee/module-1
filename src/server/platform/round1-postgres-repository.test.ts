@@ -140,10 +140,10 @@ describe("round1 postgres mappers", () => {
       "project-1",
       "snapshot-1",
       "gpt-image-test",
-      "rendered"
+      null
     ]);
-    expect(values.slice(5, 8)).toEqual([null, null, null]);
-    expect(values.slice(8)).toEqual([
+    expect(values.slice(5, 7)).toEqual([null, null]);
+    expect(values.slice(7)).toEqual([
       "concept prompt",
       "1536x1024",
       "2026-06-18T00:00:00.000Z",
@@ -202,8 +202,7 @@ describe("round1 postgres mappers", () => {
       Buffer.from("png-bytes"),
       "image/png"
     );
-    expect((vi.mocked(query).mock.calls[0][1] as unknown[])[4]).toBeNull();
-    expect((vi.mocked(query).mock.calls[0][1] as unknown[])[5]).toEqual(
+    expect((vi.mocked(query).mock.calls[0][1] as unknown[])[4]).toEqual(
       expect.stringMatching(/^renderings\/project-1\/.+\.png$/)
     );
   });
@@ -240,14 +239,12 @@ describe("rendering gallery payload", () => {
   });
 
   test("getRenderingImage returns decoded PNG bytes scoped to the project", async () => {
-    const base64 = Buffer.from("png-bytes").toString("base64");
-    vi.mocked(query).mockResolvedValue({ rows: [{ image_base64: base64 }] } as never);
+    vi.mocked(query).mockResolvedValue({ rows: [{ image_object_key: null }] } as never);
 
     const image = await getRenderingImage("project-1", "rendering-1");
 
     expect(vi.mocked(query).mock.calls[0][1]).toEqual(["rendering-1", "project-1"]);
-    expect(image).toBeInstanceOf(Buffer);
-    expect(image?.toString()).toBe("png-bytes");
+    expect(image).toBeNull();
   });
 
   test("getRenderingImage prefers the Bucket object when an object key exists", async () => {
@@ -261,7 +258,7 @@ describe("rendering gallery payload", () => {
       deleteObject: vi.fn()
     });
     vi.mocked(query).mockResolvedValue({
-      rows: [{ image_object_key: "renderings/project-1/rendering-1.webp", image_base64: null }]
+      rows: [{ image_object_key: "renderings/project-1/rendering-1.webp" }]
     } as never);
 
     const image = await getRenderingImage("project-1", "rendering-1");
