@@ -180,7 +180,7 @@ function WallDimension({
   const key = wallLengthMeasurementKey(wall.id);
   const active = key === activeMeasurementKey;
   const label = formatSixteenths(wall.lengthSixteenths);
-  const color = label === "待量" ? BLUE : (active ? ACTIVE : BLUE);
+  const color = label === "TBD" ? BLUE : (active ? ACTIVE : BLUE);
 
   if (wall.sourceWall === "TOP") {
     return (
