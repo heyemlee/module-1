@@ -30,8 +30,8 @@ describe("Postgres schema", () => {
   test("defines cabinet color library and rendering preference metadata", () => {
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS cabinet_colors");
     expect(schema).toContain("cabinet_style TEXT NOT NULL CHECK (cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'))");
-    expect(schema).toContain("swatch_image_url TEXT");
-    expect(schema).toContain("hover_example_image_url TEXT");
+    expect(schema).not.toContain("swatch_image_url TEXT");
+    expect(schema).not.toContain("hover_example_image_url TEXT");
     expect(schema).toContain("prompt_description TEXT NOT NULL");
     expect(schema).toContain("based_on_cabinet_style TEXT");
     expect(schema).toContain("based_on_door_color_id UUID");

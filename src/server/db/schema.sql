@@ -101,7 +101,6 @@ CREATE TABLE IF NOT EXISTS renderings (
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   round1_snapshot_id UUID NOT NULL REFERENCES round1_snapshots(id) ON DELETE CASCADE,
   model TEXT NOT NULL,
-  image_base64 TEXT,
   prompt TEXT NOT NULL,
   size TEXT NOT NULL,
   based_on_snapshot_generated_at TIMESTAMPTZ NOT NULL,
@@ -121,7 +120,6 @@ ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMEST
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_object_key TEXT;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_content_type TEXT;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_bytes INTEGER;
-ALTER TABLE renderings ALTER COLUMN image_base64 DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS cabinet_colors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -129,9 +127,7 @@ CREATE TABLE IF NOT EXISTS cabinet_colors (
   cabinet_style TEXT NOT NULL CHECK (cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED')),
   name TEXT NOT NULL,
   color_code TEXT,
-  swatch_image_url TEXT,
   swatch_hex TEXT,
-  hover_example_image_url TEXT,
   prompt_description TEXT NOT NULL,
   active BOOLEAN NOT NULL DEFAULT true,
   sort_order INTEGER NOT NULL DEFAULT 0,
