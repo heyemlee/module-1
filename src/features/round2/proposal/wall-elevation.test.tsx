@@ -500,8 +500,28 @@ describe("WallElevation", () => {
       false
     );
     expect(
+      canOpenSegmentEditor({
+        ...cabinet("intentional-gap", 24 * 16, "gap"),
+        intentionalGap: true
+      })
+    ).toBe(true);
+    expect(
       canOpenSegmentEditor(cabinet("window-opening", 30 * 16, "opening"))
     ).toBe(false);
+  });
+
+  test("renders an intentional gap with a dashed boundary and width label", () => {
+    const html = render(
+      elevationModel([
+        cabinet("left-cabinet", 30 * 16),
+        { ...cabinet("window-filler", 3 * 16, "gap"), intentionalGap: true },
+        cabinet("right-cabinet", 30 * 16)
+      ])
+    );
+
+    expect(html).toContain('data-open-gap="window-filler"');
+    expect(html).toContain('data-chain-label="window-filler"');
+    expect(html).toContain('stroke-dasharray="6 4"');
   });
 
   test("identifies appliance cabinets with glyphs and role tags", () => {
@@ -652,6 +672,35 @@ describe("WallElevation", () => {
     expect(editor).not.toContain("WIDTH");
     expect(editor).not.toContain('aria-label="Custom width"');
     expect(editor).not.toContain("NUDGE");
+  });
+
+  test("offers remove and restore controls for an intentional gap", () => {
+    const fillerHtml = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([cabinet("window-filler", 3 * 16, "filler")])}
+        selectedObjectId="window-filler"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    expect(fillerHtml).toContain("Remove filler · keep open space");
+
+    const gapHtml = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          { ...cabinet("window-filler", 3 * 16, "gap"), intentionalGap: true }
+        ])}
+        selectedObjectId="window-filler"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    expect(gapHtml).toContain("Restore filler");
+    expect(gapHtml).toContain("Cabinets beside it will not resize or shift.");
   });
 
   test("offers a re-center control on an anchored sink that has drifted off the window", () => {

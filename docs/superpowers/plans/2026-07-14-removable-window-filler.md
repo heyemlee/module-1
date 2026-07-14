@@ -65,7 +65,7 @@
 - [ ] **Step 2: Run** `npm test -- --run src/features/round2/proposal/wall-elevation.test.tsx` and confirm failure.
 - [ ] **Step 3: Add the buttons** in `SegmentEditorCard`, dispatching the new actions and retaining the existing placement controls for ordinary fillers.
 - [ ] **Step 4: Add an intentional-gap visual treatment** in the segment SVG branch: preserve the segment width and dimension label, but use open white space with a dashed neutral boundary and `OPEN GAP` metadata.
-- [ ] **Step 5: Run focused component tests and confirm PASS.
+- [ ] **Step 5: Run focused component tests and confirm PASS.**
 - [ ] **Step 6: Commit** with `git add src/features/round2/proposal/wall-elevation.tsx src/features/round2/proposal/wall-elevation.test.tsx && git commit -m "feat: let designers remove window fillers"`.
 
 ### Task 4: Full verification and browser QA

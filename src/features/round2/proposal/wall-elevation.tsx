@@ -825,6 +825,7 @@ function ElevationRun({
             ? breakdownCornerEnd === "end"
             : breakdownCornerEnd === "start");
         const fillerLike = isFillerLikeSegment(segment);
+        const intentionalGap = segment.kind === "gap" && segment.intentionalGap;
         const front =
           fillerLike ||
           segment.kind === "panel" ||
@@ -869,14 +870,22 @@ function ElevationRun({
               <rect x={x} y={y} width={Math.max(8, width)} height={height} />
             </clipPath>
             <rect
+              data-open-gap={intentionalGap ? segment.id : undefined}
               x={x}
               y={y}
               width={Math.max(8, width)}
               height={height}
               fill={segmentFill(segment)}
               fillOpacity={1}
-              stroke={selected ? "#079ca5" : "#1d1d1b"}
+              stroke={
+                selected
+                  ? "#079ca5"
+                  : intentionalGap
+                    ? "#8b9490"
+                    : "#1d1d1b"
+              }
               strokeWidth={selected ? 3 : 1.5}
+              strokeDasharray={intentionalGap ? "6 4" : undefined}
             />
             {segment.kind === "panel" && (
               <PanelHatch
@@ -954,7 +963,7 @@ function ElevationRun({
                 {roleTag}
               </text>
             )}
-            {segment.kind !== "gap" && (
+            {(segment.kind !== "gap" || intentionalGap) && (
               <g data-elevation-layer="width-chain">
                 <path
                   data-chain-guide={segment.id}
@@ -1662,7 +1671,9 @@ export function canEditSegmentKind(segment: WallSegment): boolean {
 
 export function canOpenSegmentEditor(segment: WallSegment): boolean {
   if (segment.kind === "opening") return false;
-  if (segment.kind === "gap") return Boolean(segment.sourceCornerId);
+  if (segment.kind === "gap") {
+    return Boolean(segment.sourceCornerId || segment.intentionalGap);
+  }
   return true;
 }
 
@@ -1685,8 +1696,8 @@ function CardSectionLabel({ children }: { children: string }) {
 /**
  * The single editing entry point: clicking a cabinet or its chain label opens
  * this card. Cabinets take width steps / custom widths (STEP_CABINET_WIDTH,
- * absorbed by a same-zone filler), fronts and kinds; fillers are remainder
- * space, so they expose placement only (SET_FILLER_PLACEMENT) — never a width.
+ * absorbed by a same-zone filler), fronts and kinds; fillers expose placement
+ * plus the reversible intentional-gap action — never a direct width edit.
  */
 function SegmentEditorCard({
   segment,
@@ -1710,6 +1721,7 @@ function SegmentEditorCard({
   const canAdjustWidth = isOrdinaryCabinet;
   const canSlide = isOrdinaryCabinet;
   const isFiller = segment.kind === "filler";
+  const isIntentionalGap = segment.kind === "gap" && segment.intentionalGap;
   const isPanel = segment.kind === "panel";
   const front = isPanel ? null : resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
@@ -1732,6 +1744,11 @@ function SegmentEditorCard({
           {isFiller && (
             <span className="rounded-full bg-[#f6ead4] px-2 py-0.5 font-mono text-[7px] tracking-[0.08em] text-[#815416]">
               REMAINDER · AUTO
+            </span>
+          )}
+          {isIntentionalGap && (
+            <span className="rounded-full bg-[#eef1ef] px-2 py-0.5 font-mono text-[7px] tracking-[0.08em] text-[#5d6b64]">
+              OPEN GAP
             </span>
           )}
           <button
@@ -2008,6 +2025,33 @@ function SegmentEditorCard({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({ type: "REMOVE_FILLER", objectId: segment.id })
+            }
+            className="mt-2 w-full rounded-[8px] border border-[#c7d0ca] bg-[#f7faf8] px-2 py-1.5 font-mono text-[9px] text-studio-ink outline-none transition-colors hover:border-studio-ink"
+          >
+            Remove filler · keep open space
+          </button>
+        </>
+      )}
+
+      {isIntentionalGap && (
+        <>
+          <p className="mt-2 text-[9.5px] leading-4 text-studio-muted">
+            Open space is preserved at {formatSixteenths(segment.widthSixteenths)}.
+            Cabinets beside it will not resize or shift.
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({ type: "RESTORE_FILLER", objectId: segment.id })
+            }
+            className="mt-2 w-full rounded-[8px] border border-studio-line bg-white px-2 py-1.5 font-mono text-[9px] text-studio-ink outline-none transition-colors hover:border-studio-ink"
+          >
+            Restore filler
+          </button>
         </>
       )}
     </div>

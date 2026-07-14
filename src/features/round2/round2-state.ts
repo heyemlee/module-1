@@ -2,6 +2,8 @@ import { autofillRound2Model } from "./model/autofill";
 import {
   nudgeGroup,
   recenterSink,
+  removeFiller,
+  restoreFiller,
   setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
@@ -205,6 +207,18 @@ export function reduceRound2Prototype(
         state,
         (model) =>
           setFillerPlacement(model, action.objectId, action.placement),
+        action.objectId
+      );
+    case "REMOVE_FILLER":
+      return applyProposalAdjustment(
+        state,
+        (model) => removeFiller(model, action.objectId),
+        action.objectId
+      );
+    case "RESTORE_FILLER":
+      return applyProposalAdjustment(
+        state,
+        (model) => restoreFiller(model, action.objectId),
         action.objectId
       );
     case "SET_SEGMENT_KIND":

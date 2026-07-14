@@ -78,6 +78,8 @@ export type WallSegment = {
    * sink off the window center.
    */
   anchored?: boolean;
+  /** User explicitly kept this former filler as open space. */
+  intentionalGap?: boolean;
 };
 
 export type Round2Wall = {

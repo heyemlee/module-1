@@ -163,9 +163,34 @@ export function autofillRound2Model(
   );
   decisionItems.push(...height.decisions);
 
+  // A designer may intentionally convert a filler into open space. Preserve
+  // that explicit choice when another intent edit regenerates the run.
+  const intentionalGaps = new Map(
+    measuredModel.walls.flatMap((wall) =>
+      wall.segments
+        .filter((segment) => segment.kind === "gap" && segment.intentionalGap)
+        .map((segment) => [segment.id, segment] as const)
+    )
+  );
+  const preservedWalls = walls.map((wall) => ({
+    ...wall,
+    segments: wall.segments.map((segment) => {
+      const preserved = intentionalGaps.get(segment.id);
+      return preserved
+        ? {
+            ...segment,
+            kind: "gap" as const,
+            label: preserved.label,
+            intentionalGap: true,
+            widthSixteenths: preserved.widthSixteenths
+          }
+        : segment;
+    })
+  }));
+
   const filledModel: Round2Model = {
     ...measuredModel,
-    walls,
+    walls: preservedWalls,
     heightProfile: height.profile,
     decisionItems
   };

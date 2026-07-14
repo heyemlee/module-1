@@ -8,6 +8,8 @@ import {
   heightProfileTotal,
   nudgeGroup,
   recenterSink,
+  removeFiller,
+  restoreFiller,
   setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
@@ -127,6 +129,49 @@ describe("Round 2 constrained adjustments", () => {
     expect(wallTierTotal(adjusted.walls[0], "base")).toBe(
       adjusted.walls[0].lengthSixteenths
     );
+  });
+
+  test("removes a filler into an intentional gap without changing its geometry", () => {
+    const model = modelWithWall(wallWithSegments());
+    const before = model.walls[0].segments
+      .filter((segment) => segment.widthSixteenths > 0)
+      .map((segment) => segment.id);
+    const adjusted = removeFiller(model, "a-base-filler");
+    const segment = adjusted.walls[0].segments.find(
+      (item) => item.id === "a-base-filler"
+    );
+
+    expect(
+      adjusted.walls[0].segments
+        .filter((item) => item.widthSixteenths > 0)
+        .map((item) => item.id)
+    ).toEqual(before);
+    expect(segment).toMatchObject({
+      kind: "gap",
+      intentionalGap: true,
+      widthSixteenths: 6 * 16,
+      label: "Open gap"
+    });
+    expect(wallTierTotal(adjusted.walls[0], "base")).toBe(
+      adjusted.walls[0].lengthSixteenths
+    );
+  });
+
+  test("restores only an intentionally removed filler", () => {
+    const model = modelWithWall(wallWithSegments());
+    const removed = removeFiller(model, "a-base-filler");
+    const restored = restoreFiller(removed, "a-base-filler");
+    const segment = restored.walls[0].segments.find(
+      (item) => item.id === "a-base-filler"
+    );
+
+    expect(segment).toMatchObject({
+      kind: "filler",
+      widthSixteenths: 6 * 16,
+      label: "F6"
+    });
+    expect(segment?.intentionalGap).toBeUndefined();
+    expect(restoreFiller(model, "a-base-cabinet")).toBe(model);
   });
 
   test("does not convert ordinary base cabinets into sink cabinets", () => {
