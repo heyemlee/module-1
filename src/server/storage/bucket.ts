@@ -43,6 +43,31 @@ async function bodyToBuffer(body: DownloadBody) {
   return Buffer.concat(chunks);
 }
 
+// The storage proxy (Tigris) occasionally resets a connection mid-download
+// (ECONNRESET / "aborted" / socket hang up). The AWS SDK retries the initial
+// request but NOT a reset while the response body streams, so a single swatch
+// fetch can fail even though the stored object is intact — surfacing as random
+// broken images across a gallery. GET is idempotent, so re-issue it a few times
+// on transient network errors before giving up.
+const GET_OBJECT_MAX_ATTEMPTS = 4;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTransientBucketError(error: unknown) {
+  const meta = error as {
+    code?: string;
+    name?: string;
+    message?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  const label = `${meta?.code ?? ""} ${meta?.name ?? ""} ${meta?.message ?? ""}`.toLowerCase();
+  if (/econnreset|econnaborted|etimedout|epipe|aborted|socket hang up|timeout|network/.test(label)) {
+    return true;
+  }
+  const status = meta?.$metadata?.httpStatusCode;
+  return typeof status === "number" && status >= 500;
+}
+
 export function createBucketStorage({
   bucket,
   client
@@ -63,16 +88,28 @@ export function createBucketStorage({
     },
 
     async getObject(key) {
-      const response = await client.send(
-        new GetObjectCommand({
-          Bucket: bucket,
-          Key: key
-        })
-      );
-      return {
-        body: await bodyToBuffer(response.Body as DownloadBody),
-        contentType: response.ContentType
-      };
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= GET_OBJECT_MAX_ATTEMPTS; attempt++) {
+        try {
+          const response = await client.send(
+            new GetObjectCommand({
+              Bucket: bucket,
+              Key: key
+            })
+          );
+          // Buffer inside the try: a mid-stream reset throws here, not from send().
+          const body = await bodyToBuffer(response.Body as DownloadBody);
+          return { body, contentType: response.ContentType };
+        } catch (error) {
+          lastError = error;
+          if (attempt < GET_OBJECT_MAX_ATTEMPTS && isTransientBucketError(error)) {
+            await delay(150 * attempt);
+            continue;
+          }
+          throw error;
+        }
+      }
+      throw lastError;
     },
 
     async deleteObject(key) {
