@@ -49,4 +49,35 @@ describe("bucket storage", () => {
       contentType: "image/webp"
     });
   });
+
+  it("retries getObject when the connection resets mid-download", async () => {
+    const reset = Object.assign(new Error("aborted"), { code: "ECONNRESET" });
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(reset)
+      .mockRejectedValueOnce(reset)
+      .mockResolvedValue({
+        Body: new Uint8Array(Buffer.from("image")),
+        ContentType: "image/webp"
+      });
+    const storage = createBucketStorage({ bucket: "assets", client: { send } });
+
+    await expect(storage.getObject("cabinet-colors/x/swatch.jpg")).resolves.toEqual({
+      body: Buffer.from("image"),
+      contentType: "image/webp"
+    });
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry getObject on a non-transient error", async () => {
+    const notFound = Object.assign(new Error("not found"), {
+      name: "NoSuchKey",
+      $metadata: { httpStatusCode: 404 }
+    });
+    const send = vi.fn().mockRejectedValue(notFound);
+    const storage = createBucketStorage({ bucket: "assets", client: { send } });
+
+    await expect(storage.getObject("cabinet-colors/missing/swatch.jpg")).rejects.toThrow("not found");
+    expect(send).toHaveBeenCalledTimes(1);
+  });
 });
