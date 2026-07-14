@@ -12,7 +12,7 @@ describe("DesignPlan", () => {
     );
 
     const drawing = tagFor(html, "g", 'data-plan-drawing="true"');
-    expect(drawing).toContain('transform="translate(30 15)"');
+    expect(drawing).toContain('transform="translate(50 15)"');
     expect(html).not.toContain("TOP VIEW · READ-ONLY PROJECTION");
     expect(html).not.toContain(">BASE<");
   });

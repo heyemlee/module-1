@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { formatSixteenths } from "../model/round2-model";
 import { heightProfileTotal } from "../model/adjustments";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
+import { gapResolutionIntentKey } from "../model/design-intent";
 import type {
   Round2PrototypeAction,
   Round2PrototypeState
@@ -109,6 +110,13 @@ export function DecisionRail({
                       dispatch={dispatch}
                     />
                   )}
+                {decision.id.endsWith("-below-filler-minimum") && (
+                  <GapQuickFix
+                    gapSegmentId={decision.objectId}
+                    disabled={!canEditGlobals}
+                    dispatch={dispatch}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -250,6 +258,51 @@ export function DecisionRail({
         )}
       </section>
     </aside>
+  );
+}
+
+/**
+ * One-click resolutions for a span no standard partition can close: fill it
+ * with confirmed filler strips or accept it as intentional open space. The
+ * third path — stepping a neighbor cabinet's width — happens on the drawing.
+ */
+function GapQuickFix({
+  gapSegmentId,
+  disabled,
+  dispatch
+}: {
+  gapSegmentId: string;
+  disabled: boolean;
+  dispatch: Dispatch<Round2PrototypeAction>;
+}) {
+  const resolve = (value: "fillerFill" | "leaveOpen") =>
+    dispatch({
+      type: "SET_DESIGN_INTENT",
+      key: gapResolutionIntentKey(gapSegmentId),
+      value
+    });
+
+  return (
+    <div className="mt-2 grid gap-1.5">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => resolve("fillerFill")}
+      >
+        Fill with filler strips
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => resolve("leaveOpen")}
+      >
+        Confirm as open space
+      </Button>
+    </div>
   );
 }
 

@@ -15,10 +15,14 @@ import { CABINET_STANDARDS } from "./cabinet-standards";
 import { deriveCorners, type Round2Corner } from "./corners";
 import {
   buildIntentConfirmationDecisions,
+  dishwasherPlacementIntentKey,
   fridgeAboveIntentKey,
   fridgeSidesIntentKey,
+  gapResolutionIntentKey,
+  type DishwasherPlacement,
   type FridgeAboveStrategy,
   type FridgeSideStrategy,
+  type GapResolution,
   type Round2DesignIntent,
   type UpperCornerStrategy
 } from "./design-intent";
@@ -124,7 +128,14 @@ export function autofillRound2Model(
       }
       if (segment.kind === "filler") {
         const code = `F${fillerNumber++}`;
+        // A strip the designer explicitly confirmed via a gap resolution is
+        // not an accidental sliver — skip the below-minimum warning for it.
+        const sourceGapId = segment.id.replace(/-filler-\d+$/, "");
+        const confirmedStrip =
+          sourceGapId !== segment.id &&
+          gapResolution(sourceGapId, intent) === "fillerFill";
         if (
+          !confirmedStrip &&
           segment.widthSixteenths > 0 &&
           segment.widthSixteenths < FILLER_MIN_SIXTEENTHS
         ) {
@@ -465,8 +476,14 @@ function fillBaseTier(
     fillEnd = fillStart;
   }
 
-  const reservations = packReservations(
-    baseReservations(wall, fillStart, fillEnd, intent),
+  const reservations = nudgeRangeToCloseRuns(
+    packReservations(
+      baseReservations(wall, fillStart, fillEnd, intent),
+      fillStart,
+      fillEnd,
+      wall,
+      decisionItems
+    ),
     fillStart,
     fillEnd,
     wall,
@@ -516,6 +533,7 @@ function fillBaseTier(
         spanEnd,
         sequence,
         side,
+        intent,
         decisionItems
       )
     );
@@ -568,6 +586,15 @@ function fillBaseTier(
   segments.push(...endInsets);
 
   return tagFunctionalNeighbors(segments, intent);
+}
+
+/** Whether a dishwasher docks against the sink or keeps its Round 1 spot. */
+function dishwasherPlacement(
+  fixedPointId: string,
+  intent: Round2DesignIntent | undefined
+): DishwasherPlacement {
+  const value = intent?.answers[dishwasherPlacementIntentKey(fixedPointId)];
+  return value === "keepRound1" ? "keepRound1" : "dockToSink";
 }
 
 /** The finished-panel treatment a designer chose above a fridge tall unit. */
@@ -692,7 +719,12 @@ function baseReservations(
       }
     } else if (point.symbol === "fridge") {
       desiredStart = point.positionRatio < 0.5 ? fillStart : fillEnd - width;
-    } else if (point.symbol === "dishwasher" && sinkPoint && sinkStart != null) {
+    } else if (
+      point.symbol === "dishwasher" &&
+      sinkPoint &&
+      sinkStart != null &&
+      dishwasherPlacement(point.id, intent) === "dockToSink"
+    ) {
       desiredStart =
         point.positionRatio <= sinkPoint.positionRatio
           ? sinkStart - width
@@ -715,6 +747,112 @@ function baseReservations(
   }
 
   return items;
+}
+
+/**
+ * How far the range may slide off its requested position (gas mark or Round 1
+ * ratio) when doing so lets the neighboring runs close on standard widths.
+ * Gas connections use flexible hoses, so a small offset is installable.
+ */
+const RANGE_NUDGE_TOLERANCE_SIXTEENTHS = 3 * 16;
+
+/** Fewer blocking spans, then fewer fillers, then less filler width wins. */
+type NudgeScore = readonly [number, number, number];
+
+function betterNudgeScore(candidate: NudgeScore, current: NudgeScore): boolean {
+  for (let index = 0; index < candidate.length; index += 1) {
+    if (candidate[index] !== current[index]) {
+      return candidate[index] < current[index];
+    }
+  }
+  return false;
+}
+
+// Rule 2a — the range is a soft anchor: its requested position is honored
+// within a small tolerance. When sliding it a hair lets the spans on both
+// sides partition into standard widths with fewer (ideally zero) fillers, the
+// nudge is applied; a gas mark makes the offset a designer-visible warning.
+function nudgeRangeToCloseRuns(
+  placed: PlacedReservation[],
+  fillStart: number,
+  fillEnd: number,
+  wall: Round2Wall,
+  decisionItems: Round2DecisionItem[]
+): PlacedReservation[] {
+  const result = [...placed];
+
+  for (let index = 0; index < result.length; index += 1) {
+    const item = result[index];
+    if (item.kind !== "appliance" || item.fixedPoint.symbol !== "range") {
+      continue;
+    }
+    const previous = result[index - 1];
+    const next = result[index + 1];
+    const leftBound = previous ? previous.start + previous.width : fillStart;
+    const rightBound = next ? next.start : fillEnd;
+    const leftSpan = item.start - leftBound;
+    const rightSpan = rightBound - (item.start + item.width);
+    // Overlapping reservations already carry their own blocking decision.
+    if (leftSpan < 0 || rightSpan < 0) continue;
+
+    const scoreFor = (left: number, right: number): NudgeScore => {
+      let blocked = 0;
+      let fillers = 0;
+      let fillerWidth = 0;
+      for (const span of [left, right]) {
+        if (span === 0) continue;
+        const partition = partitionBaseSpan(span);
+        if (!partition) {
+          blocked += 1;
+        } else if (partition.fillerWidth > 0) {
+          fillers += 1;
+          fillerWidth += partition.fillerWidth;
+        }
+      }
+      return [blocked, fillers, fillerWidth];
+    };
+
+    let bestDelta = 0;
+    let bestScore = scoreFor(leftSpan, rightSpan);
+    if (bestScore[0] === 0 && bestScore[1] === 0) continue;
+
+    // Ascending magnitude, so the smallest sufficient offset wins.
+    for (
+      let magnitude = 1;
+      magnitude <= RANGE_NUDGE_TOLERANCE_SIXTEENTHS;
+      magnitude += 1
+    ) {
+      for (const delta of [-magnitude, magnitude]) {
+        if (leftSpan + delta < 0 || rightSpan - delta < 0) continue;
+        const score = scoreFor(leftSpan + delta, rightSpan - delta);
+        if (betterNudgeScore(score, bestScore)) {
+          bestDelta = delta;
+          bestScore = score;
+        }
+      }
+    }
+    if (bestDelta === 0) continue;
+
+    result[index] = { ...item, start: item.start + bestDelta };
+
+    const gas = wall.fixedPoints.find(
+      (point) => point.type === "marker" && point.symbol === "G"
+    );
+    if (gas) {
+      decisionItems.push({
+        id: `decision-${item.fixedPoint.id}-nudge`,
+        objectId: item.fixedPoint.id,
+        wallId: wall.id,
+        severity: "warning",
+        title: "Range nudged off the gas mark",
+        body: `${item.label} moved ${formatSixteenths(Math.abs(bestDelta))} ${
+          bestDelta > 0 ? "right" : "left"
+        } of the gas mark so the neighboring runs close on standard widths. Confirm the connection reach.`
+      });
+    }
+  }
+
+  return result;
 }
 
 function packReservations(
@@ -811,7 +949,8 @@ function placeReservation(
 
 // Rule 3 + 4 — zones between anchors are packed as an exact partition of
 // standard cabinet widths. A filler is allowed only when the partition leaves
-// one approved 3–6″ remainder; otherwise the span stays visibly unresolved.
+// one approved 3–6″ remainder; otherwise the span stays visibly unresolved
+// until the designer picks a gap resolution.
 function fillSpan(
   wall: Round2Wall,
   tier: FillTier,
@@ -819,6 +958,7 @@ function fillSpan(
   spanEnd: number,
   sequence: number,
   fillerSide: FillerSide,
+  intent: Round2DesignIntent | undefined,
   decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   const span = spanEnd - spanStart;
@@ -826,7 +966,7 @@ function fillSpan(
 
   const partition = partitionBaseSpan(span);
   if (!partition) {
-    return blockingGapSegments(wall, tier, sequence, span, decisionItems);
+    return blockingGapSegments(wall, tier, sequence, span, intent, decisionItems);
   }
 
   const prefix = tier === "upper" ? "W" : "B";
@@ -846,6 +986,7 @@ function fillSpan(
     tier,
     sequence,
     partition.fillerWidth,
+    intent,
     decisionItems
   );
 
@@ -951,8 +1092,8 @@ function residualSegments(
   tier: FillTier,
   sequence: number,
   width: number,
-  decisionItems: Round2DecisionItem[],
-  source?: Pick<WallSegment, "sourceCornerId" | "sourceFixedPointId">
+  intent: Round2DesignIntent | undefined,
+  decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   if (width <= 0) return [];
 
@@ -964,19 +1105,19 @@ function residualSegments(
       tier,
       kind: "filler" as const,
       widthSixteenths: fillerWidth,
-      label: `F${Math.round(fillerWidth / 16)}`,
-      ...source
+      label: `F${Math.round(fillerWidth / 16)}`
     }));
   }
 
-  return blockingGapSegments(
-    wall,
-    tier,
-    sequence,
-    width,
-    decisionItems,
-    source
-  );
+  return blockingGapSegments(wall, tier, sequence, width, intent, decisionItems);
+}
+
+function gapResolution(
+  gapSegmentId: string,
+  intent: Round2DesignIntent | undefined
+): GapResolution | null {
+  const value = intent?.answers[gapResolutionIntentKey(gapSegmentId)];
+  return value === "fillerFill" || value === "leaveOpen" ? value : null;
 }
 
 function blockingGapSegments(
@@ -984,17 +1125,46 @@ function blockingGapSegments(
   tier: FillTier,
   sequence: number,
   width: number,
-  decisionItems: Round2DecisionItem[],
-  source?: Pick<WallSegment, "sourceCornerId" | "sourceFixedPointId">
+  intent: Round2DesignIntent | undefined,
+  decisionItems: Round2DecisionItem[]
 ): WallSegment[] {
   const id = `${wall.id.toLowerCase()}-${tier}-${sequence}-gap`;
+
+  // A designer resolution recorded against this span replaces the blocking
+  // gap: filler strips (split into approved widths where possible, a single
+  // scribe strip when the span is below the minimum) or confirmed open space.
+  const resolution = gapResolution(id, intent);
+  if (resolution === "fillerFill") {
+    const fillerWidths = splitFillerWidths(width) ?? [width];
+    return fillerWidths.map((fillerWidth, index) => ({
+      id: `${id}-filler-${index + 1}`,
+      wallId: wall.id,
+      tier,
+      kind: "filler" as const,
+      widthSixteenths: fillerWidth,
+      label: `F${Math.round(fillerWidth / 16)}`
+    }));
+  }
+  if (resolution === "leaveOpen") {
+    return [
+      {
+        id,
+        wallId: wall.id,
+        tier,
+        kind: "gap",
+        widthSixteenths: width,
+        label: "Open space"
+      }
+    ];
+  }
+
   decisionItems.push({
     id: `decision-${id}-below-filler-minimum`,
     objectId: id,
     wallId: wall.id,
     severity: "blocking",
     title: `Wall ${wall.label} gap below filler minimum`,
-    body: `${formatSixteenths(width)} cannot be filled with the approved ${formatSixteenths(FILLER_MIN_SIXTEENTHS)}-${formatSixteenths(FILLER_MAX_SIXTEENTHS)} filler range. Step a neighbor width or remeasure.`
+    body: `${formatSixteenths(width)} cannot be filled with the approved ${formatSixteenths(FILLER_MIN_SIXTEENTHS)}-${formatSixteenths(FILLER_MAX_SIXTEENTHS)} filler range. Step a neighbor width, fill it with filler strips, or confirm it as open space.`
   });
   return [
     {
@@ -1003,8 +1173,7 @@ function blockingGapSegments(
       tier,
       kind: "gap",
       widthSixteenths: width,
-      label: "Unresolved gap",
-      ...source
+      label: "Unresolved gap"
     }
   ];
 }
@@ -1108,9 +1277,21 @@ function tagFunctionalNeighbors(
   return tagged;
 }
 
-// Rule 5 — the upper tier is a projection of the base tier: seams copy up,
-// the hood follows the range width, the fridge gets a deep upper, tall units
-// leave a gap, and window/door openings are carved out afterwards.
+/** One classified stretch of the upper tier before segments are emitted. */
+type UpperPiece = {
+  type: "opening" | "hood" | "gap" | "cabinet" | "panel" | "fill";
+  ref: string;
+  label: string;
+  width: number;
+  sourceFixedPointId?: string;
+  sourceCornerId?: string;
+};
+
+// Rule 5 — the upper tier shares the base tier's anchors, not its seams:
+// window/door openings are carved out, the hood follows the range, tall units
+// and finished panels reserve their columns, and every remaining continuous
+// run is repartitioned into standard widths with at most one approved filler
+// pushed to the run's edge (Rules 3 + 4 applied to the upper tier).
 function deriveUpperTier(
   wall: Round2Wall,
   baseSegments: WallSegment[],
@@ -1181,16 +1362,7 @@ function deriveUpperTier(
     .filter((value) => value >= fillStart && value <= fillEnd)
     .sort((a, b) => a - b);
 
-  type Piece = {
-    type: "opening" | "hood" | "gap" | "cabinet" | "filler" | "panel";
-    ref: string;
-    label: string;
-    width: number;
-    cabinetKind?: "upper";
-    sourceFixedPointId?: string;
-    sourceCornerId?: string;
-  };
-  const pieces: Piece[] = [];
+  const pieces: UpperPiece[] = [];
 
   for (let index = 0; index < bounds.length - 1; index += 1) {
     const from = bounds[index];
@@ -1201,113 +1373,137 @@ function deriveUpperTier(
     const opening = openings.find(
       (item) => item.start <= from && to <= item.end
     );
-    const piece = opening
-      ? ({
+    const piece: UpperPiece = opening
+      ? {
           type: "opening",
           ref: opening.point.id,
           label: opening.point.label,
           width,
           sourceFixedPointId: opening.point.id
-        } as Piece)
+        }
       : mapBaseToUpperPiece(
           wall,
           basePlaced.find((item) => item.start <= from && to <= item.end),
           width,
           intent
         );
-    if (!piece) continue;
 
     const previous = pieces[pieces.length - 1];
-    if (previous && previous.type === piece.type && previous.ref === piece.ref) {
+    if (
+      previous &&
+      previous.type === piece.type &&
+      (piece.type === "fill" || previous.ref === piece.ref)
+    ) {
       previous.width += piece.width;
     } else {
       pieces.push(piece);
     }
   }
 
-  const derived = pieces.flatMap((piece, index) => {
+  const hasStartCorner = startInsets.length > 0;
+  const hasEndCorner = endInsets.length > 0;
+  const derived: WallSegment[] = [];
+  let cursor = fillStart;
+
+  pieces.forEach((piece, index) => {
+    const from = cursor;
+    const to = from + piece.width;
+    cursor = to;
+
+    if (piece.type === "fill") {
+      derived.push(
+        ...fillSpan(
+          wall,
+          "upper",
+          from,
+          to,
+          index + 1,
+          fillerSideForSpan(
+            from,
+            to,
+            fillStart,
+            fillEnd,
+            hasStartCorner,
+            hasEndCorner,
+            length
+          ),
+          intent,
+          decisionItems
+        )
+      );
+      return;
+    }
+
     const id = `${wall.id.toLowerCase()}-upper-${index + 1}-${piece.type}`;
     if (piece.type === "opening") {
-      return {
+      derived.push({
         id,
         wallId: wall.id,
-        tier: "upper" as const,
-        kind: "opening" as const,
+        tier: "upper",
+        kind: "opening",
         widthSixteenths: piece.width,
         label: piece.label,
         sourceFixedPointId: piece.sourceFixedPointId
-      };
+      });
+      return;
     }
     if (piece.type === "gap") {
-      return {
+      derived.push({
         id,
         wallId: wall.id,
-        tier: "upper" as const,
-        kind: "gap" as const,
+        tier: "upper",
+        kind: "gap",
         widthSixteenths: piece.width,
         label: piece.label,
         sourceCornerId: piece.sourceCornerId,
         sourceFixedPointId: piece.sourceFixedPointId
-      };
-    }
-    if (piece.type === "filler") {
-      return residualSegments(
-        wall,
-        "upper",
-        index + 1,
-        piece.width,
-        decisionItems,
-        {
-          sourceCornerId: piece.sourceCornerId,
-          sourceFixedPointId: piece.sourceFixedPointId
-        }
-      );
+      });
+      return;
     }
     if (piece.type === "panel") {
-      return {
+      derived.push({
         id,
         wallId: wall.id,
-        tier: "upper" as const,
-        kind: "panel" as const,
+        tier: "upper",
+        kind: "panel",
         widthSixteenths: piece.width,
         label: piece.label,
         sourceFixedPointId: piece.sourceFixedPointId
-      };
+      });
+      return;
     }
     const label =
       piece.type === "hood"
         ? `HD${Math.round(piece.width / 16)}`
         : `W${Math.round(piece.width / 16)}`;
-    return {
+    derived.push({
       id,
       wallId: wall.id,
-      tier: "upper" as const,
-      kind: "cabinet" as const,
+      tier: "upper",
+      kind: "cabinet",
       widthSixteenths: piece.width,
       label,
-      cabinetKind: "upper" as const,
+      cabinetKind: "upper",
       standardWidthSixteenths: piece.width,
       sourceFixedPointId: piece.sourceFixedPointId
-    };
+    });
   });
 
   return [...startInsets, ...derived, ...endInsets];
 }
 
+// Classifies the wall area above one base piece. Openings, the hood, tall
+// units, and finished panels reserve their columns ("hard" pieces); everything
+// else — base cabinets, fillers, sink/dishwasher runs, and the wall over a
+// base corner body — is ordinary upper space that joins the surrounding
+// fillable run and is repartitioned by fillSpan.
 function mapBaseToUpperPiece(
   wall: Round2Wall,
   placed: { segment: WallSegment } | undefined,
   width: number,
   intent?: Round2DesignIntent
-): {
-  type: "hood" | "gap" | "cabinet" | "filler" | "panel";
-  ref: string;
-  label: string;
-  width: number;
-  sourceFixedPointId?: string;
-  sourceCornerId?: string;
-} | null {
-  if (!placed) return null;
+): UpperPiece {
+  if (!placed) return { type: "fill", ref: "open-wall", label: "", width };
   const base = placed.segment;
 
   // A finished side panel is full height, so nothing stacks above it.
@@ -1371,31 +1567,20 @@ function mapBaseToUpperPiece(
         sourceFixedPointId: base.sourceFixedPointId
       };
     }
-    // Sink and dishwasher runs carry ordinary uppers aligned to their seams.
-    // Window cuts can leave a sliver, which must become a filler (or blocking
-    // gap through residualSegments) instead of an undersized upper cabinet.
-    if (width < MIN_CABINET_WIDTH_SIXTEENTHS) {
-      return { type: "filler", ref: base.id, label: "", width };
-    }
-    return { type: "cabinet", ref: base.id, label: "", width };
+    // Sink and dishwasher columns carry ordinary uppers; they merge into the
+    // surrounding run so window cuts repartition instead of leaving slivers.
+    return { type: "fill", ref: base.id, label: "", width };
   }
 
-  if (base.kind === "filler") {
-    return { type: "filler", ref: base.id, label: "", width };
-  }
-  // The wall over a base corner body (lazy-Susan return, blind body) is
-  // ordinary upper space — the corner reservation for the upper tier is
-  // already carved out by the upper insets — so only doors and genuinely
-  // unresolved gaps block the run.
+  // Doors block the upper run; a genuinely unresolved base gap stays visible.
   if (base.kind === "opening" || (base.kind === "gap" && !base.sourceCornerId)) {
     return { type: "gap", ref: base.id, label: base.label, width };
   }
 
-  // Seam-copied upper; slivers left by window carving become fillers.
-  if (width < MIN_CABINET_WIDTH_SIXTEENTHS) {
-    return { type: "filler", ref: base.id, label: "", width };
-  }
-  return { type: "cabinet", ref: base.id, label: "", width };
+  // Base cabinets, fillers, and the wall over a base corner body (lazy-Susan
+  // return, blind body) are ordinary upper space — the upper tier's own corner
+  // reservation is already carved out by the upper insets.
+  return { type: "fill", ref: base.id, label: "", width };
 }
 
 // Rule 6 — the height chain consumes the measured ceiling: the upper height

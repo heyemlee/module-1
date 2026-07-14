@@ -125,12 +125,15 @@ export function reduceRound2Prototype(
           action.key,
           action.value
         );
-        // Corner and fridge intents are edited from the proposal drawing, so
-        // they regenerate live whenever segments exist — even if another
-        // intent edit already dropped the measurement status back to DRAFT.
+        // Corner, fridge, and gap-resolution intents are edited from the
+        // proposal (drawing or rail card), so they regenerate live whenever
+        // segments exist — even if another intent edit already dropped the
+        // measurement status back to DRAFT.
         if (
           proposalUnlocked(state) &&
-          (action.key.startsWith("corner.") || action.key.startsWith("fridge."))
+          (action.key.startsWith("corner.") ||
+            action.key.startsWith("fridge.") ||
+            action.key.startsWith("gap."))
         ) {
           return regenerateProposalFromIntent(state, designIntent, action.key);
         }

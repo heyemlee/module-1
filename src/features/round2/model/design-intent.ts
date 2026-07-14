@@ -1,10 +1,12 @@
 import {
   ceilingMeasurementKey,
   formatSixteenths,
+  wallLengthMeasurementKey,
   type Round2DecisionItem,
   type Round2Model,
   type WallId
 } from "./round2-model";
+import { CABINET_STANDARDS } from "./cabinet-standards";
 import { deriveCorners } from "./corners";
 
 export type CornerStrategy =
@@ -24,6 +26,13 @@ export type CabinetFrontPreference =
 export type HoodStyle = "cabinetInsert" | "chimney" | "underCabinet";
 export type HardwareStyle = "handle" | "fingerPull";
 export type SinkWindowAlignment = "align" | "keepRound1";
+export type DishwasherPlacement = "dockToSink" | "keepRound1";
+/**
+ * How a designer resolved a span that no standard cabinet-plus-filler
+ * partition can close: force filler strips (split into approved widths where
+ * possible) or confirm it as intentional open space. Absent = still blocking.
+ */
+export type GapResolution = "fillerFill" | "leaveOpen";
 export type UpperCornerStrategy = "diagonalUpper" | "blindUpper" | "openUpper";
 // What sits above a fridge tall unit, and which exposed sides get a finished
 // panel. Both are per-fridge, keyed by the fridge fixed point (see
@@ -48,10 +57,26 @@ export type DesignIntentValue =
   | HoodStyle
   | HardwareStyle
   | SinkWindowAlignment
+  | DishwasherPlacement
+  | GapResolution
   | UpperCornerStrategy
   | FridgeAboveStrategy
   | FridgeSideStrategy
   | FridgeAboveHeight;
+
+/** Per-dishwasher intent key for docking to the sink vs the Round 1 spot. */
+export function dishwasherPlacementIntentKey(fixedPointId: string): string {
+  return `dishwasher.${fixedPointId}.placement`;
+}
+
+/**
+ * Per-span intent key for resolving an unfillable gap. The id is the gap
+ * segment's deterministic id (wall + tier + span sequence), so the same
+ * measurements and intent reproduce the same key across autofill reruns.
+ */
+export function gapResolutionIntentKey(gapSegmentId: string): string {
+  return `gap.${gapSegmentId}.resolution`;
+}
 
 /** Per-fridge intent key for the treatment above the fridge tall unit. */
 export function fridgeAboveIntentKey(fixedPointId: string): string {
@@ -70,6 +95,12 @@ export function fridgeAboveHeightIntentKey(fixedPointId: string): string {
 
 export type DesignIntentKey = string;
 
+/**
+ * A dishwasher whose Round 1 spot is farther than this from its docked
+ * position (one base-cabinet width) triggers a placement confirmation.
+ */
+const DISHWASHER_DOCK_CONFIRM_THRESHOLD_SIXTEENTHS = 24 * 16;
+
 export type Round2DesignIntent = {
   answers: Record<DesignIntentKey, DesignIntentValue>;
   confirmedKeys: DesignIntentKey[];
@@ -85,7 +116,8 @@ export type DesignIntentQuestionKind =
   | "cabinet-fronts"
   | "hood-style"
   | "hardware"
-  | "sink-window-alignment";
+  | "sink-window-alignment"
+  | "dishwasher-placement";
 
 export type DesignIntentOption = {
   value: DesignIntentValue;
@@ -133,6 +165,51 @@ export function buildDesignIntentQuestions(
       wallId: wall.id,
       objectId: window.id
     });
+  }
+
+  // The dishwasher docks against the sink by default (shared plumbing). When
+  // Round 1 placed it more than one cabinet away from the docked position,
+  // that may be deliberate — ask instead of silently snapping.
+  for (const wall of model.walls) {
+    const sink = wall.fixedPoints.find(
+      (point) => point.type === "appliance" && point.symbol === "sink"
+    );
+    if (!sink) continue;
+    const length =
+      wall.lengthSixteenths ?? measurements[wallLengthMeasurementKey(wall.id)];
+    if (length == null) continue;
+    for (const point of wall.fixedPoints) {
+      if (point.type !== "appliance" || point.symbol !== "dishwasher") continue;
+      const sinkWidth =
+        sink.widthSixteenths ??
+        CABINET_STANDARDS.appliances.sinkBase.defaultWidthSixteenths;
+      const dishwasherWidth =
+        point.widthSixteenths ??
+        CABINET_STANDARDS.appliances.dishwasher.defaultWidthSixteenths;
+      const centerDistance =
+        Math.abs(point.positionRatio - sink.positionRatio) * length;
+      const dockedDistance = (sinkWidth + dishwasherWidth) / 2;
+      if (
+        centerDistance - dockedDistance <=
+        DISHWASHER_DOCK_CONFIRM_THRESHOLD_SIXTEENTHS
+      ) {
+        continue;
+      }
+      questions.push({
+        key: dishwasherPlacementIntentKey(point.id),
+        kind: "dishwasher-placement",
+        label: `Keep the dishwasher docked to the Wall ${wall.label} sink?`,
+        helper:
+          "Round 1 placed it farther away; docking shares the sink plumbing.",
+        defaultValue: "dockToSink",
+        options: [
+          { value: "dockToSink", label: "Dock to sink" },
+          { value: "keepRound1", label: "Keep Round 1 position" }
+        ],
+        wallId: wall.id,
+        objectId: point.id
+      });
+    }
   }
 
   for (const corner of deriveCorners(model)) {

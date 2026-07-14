@@ -37,6 +37,10 @@ const LANE_STEP = 10;
 // segments step further out, and the wall total is the outermost line.
 const OPENING_LABEL_OFFSET = 16;
 const CHAIN_OFFSET = 30;
+// Keep plan dimension rows on the same rhythm as the elevation rows
+// (upper-to-base spacing is 22 SVG units there).
+const DIMENSION_ROW_GAP = 22;
+const DEPTH_ROW_GAP = 22;
 
 const CABINET_FILL = "#ffffff";
 const CARCASS_STROKE = "#1d1d1b";
@@ -71,7 +75,7 @@ export function DesignPlan({
         aria-label="Cabinet proposal top view"
         className="relative h-full w-full"
       >
-        <g data-plan-drawing="true" transform="translate(30 15)">
+        <g data-plan-drawing="true" transform="translate(50 15)">
         {walls.map((wall) => {
           const line = wallLine(wall);
           return (
@@ -1040,7 +1044,7 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
 
   const chainA = runPoint(wall, 0, chainOffset);
   const chainB = runPoint(wall, runEnd, chainOffset);
-  const overallOffset = chainOffset + 24;
+  const overallOffset = chainOffset + DIMENSION_ROW_GAP;
   const overallA = runPoint(wall, 0, overallOffset);
   const overallB = runPoint(wall, runEnd, overallOffset);
   const overallMid = runPoint(wall, runEnd / 2, overallOffset + textPad);
@@ -1188,7 +1192,7 @@ function DepthDimension({ wall }: { wall: Round2Wall }) {
       {
         id: "base",
         value: baseDepth,
-        x: VIEW.left - 40,
+        x: VIEW.left - 20 - DEPTH_ROW_GAP,
         endY: baseFrontY
       }
     ] as const;
@@ -1251,7 +1255,7 @@ function DepthDimension({ wall }: { wall: Round2Wall }) {
       {
         id: "base",
         value: baseDepth,
-        y: VIEW.top - 30,
+        y: VIEW.top - 10 - DEPTH_ROW_GAP,
         endX: baseFrontX
       }
     ] as const;

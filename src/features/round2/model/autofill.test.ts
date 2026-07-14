@@ -144,10 +144,11 @@ describe("Round 2 autofill", () => {
       sourceCornerId: "TL"
     });
     // The wall over the base corner body beyond the diagonal unit is ordinary
-    // upper space, not a 36″ clearance copied from the base tier.
+    // upper space, not a 36″ clearance copied from the base tier: the whole
+    // 96″ run repartitions as its own standard-width run.
     expect(leftUpper[1]).toMatchObject({
       kind: "cabinet",
-      widthSixteenths: 12 * 16
+      widthSixteenths: 36 * 16
     });
     expect(
       filled.walls
@@ -352,6 +353,106 @@ describe("Round 2 autofill", () => {
     expect(dishwasher.start + dishwasher.segment.widthSixteenths).toBe(sink.start);
   });
 
+  test("keeps a far-away dishwasher at its Round 1 spot when the intent says so", () => {
+    const wall = wallWithLength(200 * 16);
+    wall.fixedPoints = [
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.5 }),
+      fixedPoint({
+        id: "top-appliance-dishwasher",
+        symbol: "dishwasher",
+        positionRatio: 0.1
+      })
+    ];
+
+    const kept = autofillRound2Model(
+      modelWithWall(wall),
+      {},
+      intentWith({
+        "dishwasher.top-appliance-dishwasher.placement": "keepRound1"
+      })
+    );
+    const keptBase = baseTier(kept.walls[0]);
+    const keptSink = segmentWithStart(
+      keptBase,
+      (segment) => segment.cabinetKind === "sink"
+    );
+    const keptDishwasher = segmentWithStart(
+      keptBase,
+      (segment) => segment.sourceFixedPointId === "top-appliance-dishwasher"
+    );
+
+    expect(
+      keptDishwasher.start + keptDishwasher.segment.widthSixteenths
+    ).not.toBe(keptSink.start);
+    expect(keptDishwasher.start).toBe(Math.round(0.1 * (200 - 24) * 16));
+    expectTiersClosed(kept);
+  });
+
+  test("nudges the range within tolerance so both neighboring runs close", () => {
+    // 99″ wall: the ratio-placed range leaves 34 1/2″ on each side (two 4 1/2″
+    // fillers); sliding it 1 1/2″ left closes both runs exactly (33″ + 36″).
+    const wall = wallWithLength(99 * 16);
+    wall.fixedPoints = [
+      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const base = baseTier(filled.walls[0]);
+    const range = segmentWithStart(
+      base,
+      (segment) => segment.sourceFixedPointId === "top-appliance-range"
+    );
+
+    expect(range.start).toBe(33 * 16);
+    expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
+    expect(filled.decisionItems).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
+  test("flags a range nudged off its gas mark as a warning", () => {
+    const wall = wallWithLength(99 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-marker-gas",
+        type: "marker",
+        symbol: "G",
+        positionRatio: 0.5
+      }),
+      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const base = baseTier(filled.walls[0]);
+
+    expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
+    expect(filled.decisionItems).toContainEqual(
+      expect.objectContaining({
+        id: "decision-top-appliance-range-nudge",
+        objectId: "top-appliance-range",
+        severity: "warning",
+        title: "Range nudged off the gas mark"
+      })
+    );
+  });
+
+  test("leaves the range on its mark when no nudge improves the runs", () => {
+    // 96″ wall: 33″ on each side of the range already partitions exactly.
+    const wall = wallWithLength(96 * 16);
+    wall.fixedPoints = [
+      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const range = segmentWithStart(
+      baseTier(filled.walls[0]),
+      (segment) => segment.sourceFixedPointId === "top-appliance-range"
+    );
+
+    expect(range.start).toBe(33 * 16);
+    expect(filled.decisionItems).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
   test("pushes the remainder filler to the wall end, never between cabinets", () => {
     const filled = autofillRound2Model(modelWithWall(wallWithLength(100 * 16)));
 
@@ -429,6 +530,80 @@ describe("Round 2 autofill", () => {
     );
   });
 
+  test("fills an unresolvable span with confirmed filler strips", () => {
+    // 9 1/16″ has no cabinet partition; the recorded resolution turns the base
+    // span into approved strips (6″ + 3 1/16″) and clears the blocking gap.
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithLength(9 * 16 + 1)),
+      {},
+      intentWith({
+        "gap.a-base-1-gap.resolution": "fillerFill",
+        "gap.a-upper-1-gap.resolution": "leaveOpen"
+      })
+    );
+    const base = baseTier(filled.walls[0]);
+
+    expect(base.filter((segment) => segment.kind === "gap")).toHaveLength(0);
+    expect(
+      base
+        .filter((segment) => segment.kind === "filler")
+        .map((segment) => segment.widthSixteenths)
+    ).toEqual([6 * 16, 3 * 16 + 1]);
+    expect(
+      filled.decisionItems.filter((item) => item.severity === "blocking")
+    ).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
+  test("keeps a confirmed open span as a labeled gap without blocking", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithLength(9 * 16 + 1)),
+      {},
+      intentWith({
+        "gap.a-base-1-gap.resolution": "leaveOpen",
+        "gap.a-upper-1-gap.resolution": "leaveOpen"
+      })
+    );
+    const base = baseTier(filled.walls[0]);
+
+    expect(base).toContainEqual(
+      expect.objectContaining({
+        kind: "gap",
+        label: "Open space",
+        widthSixteenths: 9 * 16 + 1
+      })
+    );
+    expect(
+      filled.decisionItems.filter((item) => item.severity === "blocking")
+    ).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
+  test("does not flag a confirmed below-minimum strip as an accidental sliver", () => {
+    // A 2″ span can only be closed by a scribe strip below the 3″ minimum;
+    // once confirmed, the strip carries no below-minimum warning.
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithLength(2 * 16)),
+      {},
+      intentWith({
+        "gap.a-base-1-gap.resolution": "fillerFill",
+        "gap.a-upper-1-gap.resolution": "leaveOpen"
+      })
+    );
+    const base = baseTier(filled.walls[0]);
+
+    expect(base).toEqual([
+      expect.objectContaining({ kind: "filler", widthSixteenths: 2 * 16 })
+    ]);
+    expect(
+      filled.decisionItems.filter(
+        (item) =>
+          item.severity === "blocking" || item.title.includes("filler below")
+      )
+    ).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
   test.each([
     { ceiling: 96 * 16, expectedUpper: 36 * 16 },
     { ceiling: 108 * 16, expectedUpper: 42 * 16 }
@@ -492,7 +667,7 @@ describe("Round 2 autofill", () => {
     expectTiersClosed(filled);
   });
 
-  test("turns a six-inch upper fragment cut from a sink projection into a filler", () => {
+  test("repartitions the upper runs beside a window instead of leaving slivers", () => {
     const wall = wallWithLength(200 * 16);
     wall.fixedPoints = [
       fixedPoint({
@@ -510,15 +685,21 @@ describe("Round 2 autofill", () => {
       (segment) => segment.tier === "upper"
     );
 
-    expect(uppers).toContainEqual(
-      expect.objectContaining({ kind: "filler", widthSixteenths: 6 * 16 })
-    );
+    // The run left of the window (60″) closes exactly on standard widths; the
+    // run right of it (116″) keeps one approved filler at the wall end instead
+    // of a sliver against the window and an unexplained blank.
     expect(
       uppers.some(
         (segment) =>
           segment.kind === "cabinet" && segment.widthSixteenths < 9 * 16
       )
     ).toBe(false);
+    expect(uppers.filter((segment) => segment.kind === "gap")).toHaveLength(0);
+    expect(uppers.filter((segment) => segment.kind === "filler")).toEqual([
+      expect.objectContaining({ widthSixteenths: 5 * 16 })
+    ]);
+    expect(uppers[uppers.length - 1].kind).toBe("filler");
+    expectTiersClosed(filled);
   });
 
   test("hugs the fridge to the wall end as one full-height unit with a gap above", () => {
@@ -631,11 +812,14 @@ describe("Round 2 autofill", () => {
     expect(sink.start + sink.segment.widthSixteenths / 2).toBe(
       80 * 16 + (30 * 16) / 2
     );
+    // The range nudge closes both of its flanking spans exactly; only the
+    // wall-start filler beyond the dishwasher (out of the range's reach)
+    // remains.
     expect(
       base.filter((segment) => segment.kind === "filler").map(
         (segment) => segment.widthSixteenths
       )
-    ).toEqual([5 * 16, 4 * 16, 5 * 16]);
+    ).toEqual([5 * 16]);
     expectTiersClosed(filled);
 
     const adjacentCabinet = base[base.indexOf(sink.segment) + 1]!;
