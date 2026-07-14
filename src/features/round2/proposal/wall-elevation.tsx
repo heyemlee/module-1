@@ -74,22 +74,35 @@ const OVERALL_DIMENSION_GUIDE_Y = 29;
 // independent of the ceiling lets the full elevation sit lower without
 // pushing a dimension chain through the ceiling datum.
 const UPPER_CHAIN_LABEL_Y = 42;
-const CABINET_FACE_STROKE = "#a7aaa5";
+const BASE_CHAIN_LABEL_Y = 64;
+const CABINET_FILL = "#ffffff";
+const CABINET_FACE_STROKE = "#1d1d1b";
 const TALL_HEIGHT_CHAIN_X = 32;
 const TALL_HEIGHT_LABEL_X = 20;
+const ROOM_HEIGHT_CHAIN_X = 32;
+const ROOM_HEIGHT_LABEL_X = 20;
+
+function widthChainLabelY(
+  labelSide: "above" | "below",
+  tier: WallSegment["tier"]
+): number {
+  if (labelSide === "below") return FLOOR_Y + 22;
+  return tier === "upper" ? UPPER_CHAIN_LABEL_Y : BASE_CHAIN_LABEL_Y;
+}
+
 // Corner returns follow NKBA section conventions: sectioned side profile in
 // amber hatch, hidden carcass in dashed gray, counter cut in dark poché, and
 // a parenthesized depth reference kept out of the teal cabinet chain.
-const CORNER_SECTION_COLOR = "#8a6a1c";
+const CORNER_SECTION_COLOR = "#1d1d1b";
 const CORNER_RETURN_FILL = "transparent";
-const HIDDEN_LINE_COLOR = "#8a8d83";
-const COUNTER_SECTION_FILL = "#44443e";
+const HIDDEN_LINE_COLOR = "#1d1d1b";
+const COUNTER_SECTION_FILL = "#1d1d1b";
 const COUNTER_THICKNESS_SIXTEENTHS = 24; // 1.5″
 // The counter slab drawn over the straight base run: a light poché band with
 // a solid ink surface line and a small end overhang, matching the reference
 // section conventions in the black/white theme.
-const COUNTER_SLAB_FILL = "#e8e5dd";
-const COUNTER_SLAB_STROKE = "#2c2c2c";
+const COUNTER_SLAB_FILL = CABINET_FILL;
+const COUNTER_SLAB_STROKE = "#1d1d1b";
 const COUNTER_END_OVERHANG_PX = 3;
 const TOE_KICK_HEIGHT_SIXTEENTHS = 72; // 4.5″
 const TOE_KICK_DEPTH_SIXTEENTHS = 48; // 3″
@@ -122,26 +135,15 @@ function verticalLayout(model: Round2Model | null): VerticalLayout {
   const ceiling = model?.ceilingHeightSixteenths ?? 96 * 16;
   const scale = (FLOOR_Y - CEILING_Y) / Math.max(1, ceiling);
   const baseTop = FLOOR_Y - profile.counterSixteenths * scale;
-  const baseBodyTop = baseTop + counterThicknessSixteenths(profile) * scale;
+  const baseBodyTop = baseTop;
   const upperBottom = baseTop - profile.backsplashSixteenths * scale;
   const upperTop = upperBottom - profile.upperHeightSixteenths * scale;
   return { scale, baseTop, baseBodyTop, upperTop, upperBottom, profile };
 }
 
-/**
- * Countertop thickness = finished counter height minus the base cabinet body
- * height, so a profile with a raised counter keeps a real 1.5″ slab.
- */
-function counterThicknessSixteenths(profile: Round2HeightProfile): number {
-  return Math.max(
-    0,
-    profile.counterSixteenths - CABINET_STANDARDS.base.heightSixteenths
-  );
-}
-
-/** Base cabinet body height = finished counter height minus the slab. */
+/** The elevation treats the configured counter height as the cabinet height. */
 function baseBodyHeightSixteenths(profile: Round2HeightProfile): number {
-  return profile.counterSixteenths - counterThicknessSixteenths(profile);
+  return profile.counterSixteenths;
 }
 
 /** A base run segment carries a counter unless it is tall or a freestanding range. */
@@ -195,14 +197,7 @@ const EMPTY_ABOVE_HEIGHTS: ReadonlyMap<string, number> = new Map();
 
 
 function segmentFill(segment: WallSegment) {
-  if (segment.kind === "panel") return "#efe6f2";
-  if (segment.cabinetKind === "sink") return "#eef7f4";
-  if (segment.cabinetKind === "tall") return "#f1ecf7";
-  if (segment.cabinetKind === "corner") return "#f4efe2";
-  if (segment.kind === "opening") return "#dceff7";
-  if (segment.kind === "appliance") return "#edf5f7";
-  if (isFillerLikeSegment(segment)) return "#fdf9eb";
-  return "#fbfbf8";
+  return CABINET_FILL;
 }
 
 export function WallElevation({
@@ -287,7 +282,6 @@ export function WallElevation({
             ))}
           </div>
         </div>
-        <span className="font-mono text-[9px] text-black/45">1:30</span>
       </div>
 
       <svg
@@ -431,7 +425,6 @@ export function WallElevation({
                 fridgeAboveHeights={fridgeAboveHeights}
               />
             </g>
-            <DepthNote />
           </>
         ) : (
           <text
@@ -476,19 +469,19 @@ function HeightChain({
   return (
     <g data-elevation-layer="height-chain">
       <path
-        d={`M 586 ${CEILING_Y} H 598 M 586 ${FLOOR_Y} H 598 M 592 ${CEILING_Y} V ${FLOOR_Y}`}
+        d={`M ${ROOM_HEIGHT_CHAIN_X - 6} ${CEILING_Y} H ${ROOM_HEIGHT_CHAIN_X + 6} M ${ROOM_HEIGHT_CHAIN_X - 6} ${FLOOR_Y} H ${ROOM_HEIGHT_CHAIN_X + 6} M ${ROOM_HEIGHT_CHAIN_X} ${CEILING_Y} V ${FLOOR_Y}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
       <text
         data-height-label="ceiling"
-        x="611"
+        x={ROOM_HEIGHT_LABEL_X}
         y={(CEILING_Y + FLOOR_Y) / 2}
         textAnchor="middle"
         fontSize={DIMENSION_FONT_SIZE}
         fontWeight="bold"
         fill={DIMENSION_COLOR}
         stroke="none"
-        transform={`rotate(90 611 ${(CEILING_Y + FLOOR_Y) / 2})`}
+        transform={`rotate(-90 ${ROOM_HEIGHT_LABEL_X} ${(CEILING_Y + FLOOR_Y) / 2})`}
       >
         {formatSixteenths(model?.ceilingHeightSixteenths)}
       </text>
@@ -531,36 +524,8 @@ function HeightChain({
 }
 
 /**
- * Depth is perpendicular to the elevation, so it can't sit on a width chain;
- * a teal reference note carries the base and upper cabinet depths in the same
- * dimension style, reading them from the standards.
- */
-function DepthNote() {
-  const base = CABINET_STANDARDS.depths.baseSixteenths;
-  const upper = CABINET_STANDARDS.depths.upperSixteenths;
-  return (
-    <text
-      data-elevation-layer="depth-note"
-      x={RUN_LEFT + RUN_WIDTH / 2}
-      y={FLOOR_Y + 50}
-      textAnchor="middle"
-      fontFamily="var(--studio-mono)"
-      fontSize="9"
-      letterSpacing="0.1em"
-      fontWeight="bold"
-      fill={DIMENSION_COLOR}
-      stroke="none"
-    >
-      {`BASE ${formatSixteenths(base)} DEEP · UPPER ${formatSixteenths(upper)} DEEP`}
-    </text>
-  );
-}
-
-/**
- * Countertop over the straight base run: one poché slab per contiguous run of
- * counter-topped base segments (tall units and freestanding ranges break it),
- * drawn on top of the cabinet boxes with a solid surface line and a small
- * overhang at exposed ends. The base cabinet body reads below the slab.
+ * Counter surface over the straight base run: one line per contiguous run of
+ * counter-topped base segments (tall units and freestanding ranges break it).
  */
 function CounterBand({
   fixedPoints,
@@ -575,9 +540,6 @@ function CounterBand({
   layout: VerticalLayout;
   mirrored: boolean;
 }) {
-  const thickness = layout.baseBodyTop - layout.baseTop;
-  if (thickness <= 0) return null;
-
   type Placed = { segment: WallSegment; start: number; end: number };
   const placed: Placed[] = [];
   let cursor = 0;
@@ -613,16 +575,8 @@ function CounterBand({
         );
         return (
           <g key={index} data-countertop-band={index}>
-            <rect
-              x={left}
-              y={layout.baseTop}
-              width={Math.max(1, right - left)}
-              height={thickness}
-              fill={COUNTER_SLAB_FILL}
-              stroke={COUNTER_SLAB_STROKE}
-              strokeWidth="1.2"
-            />
             <line
+              data-countertop-band={index}
               x1={left}
               y1={layout.baseTop}
               x2={right}
@@ -787,8 +741,7 @@ function ElevationRun({
           const cornerAtLeft = mirrored
             ? cornerReturn.side === "end"
             : cornerReturn.side === "start";
-          const labelY =
-            labelSide === "below" ? FLOOR_Y + 22 : UPPER_CHAIN_LABEL_Y;
+          const labelY = widthChainLabelY(labelSide, segment.tier);
           const guideY = labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
           return (
             <g
@@ -872,6 +825,7 @@ function ElevationRun({
             ? breakdownCornerEnd === "end"
             : breakdownCornerEnd === "start");
         const fillerLike = isFillerLikeSegment(segment);
+        const intentionalGap = segment.kind === "gap" && segment.intentionalGap;
         const front =
           fillerLike ||
           segment.kind === "panel" ||
@@ -900,7 +854,7 @@ function ElevationRun({
         const labelY =
           labelSide === "below"
             ? FLOOR_Y + 22 + lane * LANE_STEP
-            : UPPER_CHAIN_LABEL_Y - lane * LANE_STEP;
+            : widthChainLabelY(labelSide, segment.tier) - lane * LANE_STEP;
         const guideY =
           labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
         return (
@@ -916,14 +870,22 @@ function ElevationRun({
               <rect x={x} y={y} width={Math.max(8, width)} height={height} />
             </clipPath>
             <rect
+              data-open-gap={intentionalGap ? segment.id : undefined}
               x={x}
               y={y}
               width={Math.max(8, width)}
               height={height}
               fill={segmentFill(segment)}
               fillOpacity={1}
-              stroke={selected ? "#079ca5" : "#2c2c2c"}
+              stroke={
+                selected
+                  ? "#079ca5"
+                  : intentionalGap
+                    ? "#8b9490"
+                    : "#1d1d1b"
+              }
               strokeWidth={selected ? 3 : 1.5}
+              strokeDasharray={intentionalGap ? "6 4" : undefined}
             />
             {segment.kind === "panel" && (
               <PanelHatch
@@ -964,14 +926,14 @@ function ElevationRun({
                 y={y}
                 width={Math.max(8, width)}
                 height={height}
-                stroke="#4b5651"
+                stroke={CABINET_FACE_STROKE}
               />
             ) : (
               !front &&
               segment.kind === "appliance" && (
                 <path
                   d={`M ${x + 4} ${y + 4} L ${x + width / 2} ${y + height / 2} L ${x + width - 4} ${y + 4}`}
-                  stroke="#a7aaa5"
+                  stroke={CABINET_FACE_STROKE}
                   strokeWidth="1"
                   fill="none"
                 />
@@ -983,7 +945,7 @@ function ElevationRun({
                 y={y}
                 width={Math.max(8, width)}
                 height={height}
-                stroke="#5a8fb8"
+                stroke={CABINET_FACE_STROKE}
               />
             )}
             {roleTag && width >= 26 && (
@@ -1001,7 +963,7 @@ function ElevationRun({
                 {roleTag}
               </text>
             )}
-            {segment.kind !== "gap" && (
+            {(segment.kind !== "gap" || intentionalGap) && (
               <g data-elevation-layer="width-chain">
                 <path
                   data-chain-guide={segment.id}
@@ -1279,18 +1241,12 @@ function CornerSideProfile({
   const upperWidth = depths.upperSixteenths * pxPerSixteenth;
   const baseX = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH - baseWidth;
   const upperX = atLeft ? RUN_LEFT : RUN_LEFT + RUN_WIDTH - upperWidth;
-  const counterThickness = Math.max(
-    3,
-    COUNTER_THICKNESS_SIXTEENTHS * layout.scale
-  );
-  const counterOverhang = COUNTER_THICKNESS_SIXTEENTHS * pxPerSixteenth;
-  const counterX = atLeft ? baseX : baseX - counterOverhang;
   const toeHeight = Math.max(6, TOE_KICK_HEIGHT_SIXTEENTHS * layout.scale);
   const toeDepth = Math.min(
     baseWidth / 3,
     TOE_KICK_DEPTH_SIXTEENTHS * pxPerSixteenth
   );
-  const faceTop = layout.baseTop + counterThickness;
+  const faceTop = layout.baseTop;
   const profileFill = hatchPatternId ? `url(#${hatchPatternId})` : "none";
   const basePath = atLeft
     ? `M ${baseX} ${faceTop} H ${baseX + baseWidth} V ${FLOOR_Y - toeHeight} H ${baseX + baseWidth - toeDepth} V ${FLOOR_Y} H ${baseX} Z`
@@ -1300,15 +1256,14 @@ function CornerSideProfile({
       data-elevation-layer="corner-side-profile"
       className="pointer-events-none"
     >
-      <rect
+      <line
         data-corner-side-profile="counter"
-        x={counterX}
-        y={layout.baseTop}
-        width={baseWidth + counterOverhang}
-        height={counterThickness}
-        fill={COUNTER_SECTION_FILL}
-        stroke="#2c2c2c"
-        strokeWidth="1"
+        x1={baseX}
+        y1={layout.baseTop}
+        x2={baseX + baseWidth}
+        y2={layout.baseTop}
+        stroke="#1d1d1b"
+        strokeWidth="2"
       />
       <path
         data-corner-side-profile="base"
@@ -1407,15 +1362,12 @@ function CornerReturnSection({
   const depthSixteenths = isBase ? depths.baseSixteenths : depths.upperSixteenths;
   const profileWidth = Math.min(width, depthSixteenths * pxPerSixteenth);
   const profileX = cornerAtLeft ? x : x + width - profileWidth;
-  const counterThickness = isBase
-    ? Math.max(3, COUNTER_THICKNESS_SIXTEENTHS * layout.scale)
-    : 0;
   const toeHeight = Math.max(6, TOE_KICK_HEIGHT_SIXTEENTHS * layout.scale);
   const toeDepth = Math.min(
     profileWidth / 3,
     TOE_KICK_DEPTH_SIXTEENTHS * pxPerSixteenth
   );
-  const faceTop = y + counterThickness;
+  const faceTop = y;
   const floor = y + height;
   const profileFill = hatchPatternId
     ? `url(#${hatchPatternId})`
@@ -1447,22 +1399,21 @@ function CornerReturnSection({
           y={faceTop}
           width={visibleFaceWidth}
           height={floor - faceTop}
-          fill="#fbfbf8"
-          stroke="#2c2c2c"
+          fill={CABINET_FILL}
+          stroke="#1d1d1b"
           strokeWidth="1.5"
         />
       )}
       {isBase ? (
         <>
-          <rect
+          <line
             data-corner-return-counter="true"
-            x={x}
-            y={y}
-            width={width}
-            height={counterThickness}
-            fill={COUNTER_SECTION_FILL}
-            stroke="#2c2c2c"
-            strokeWidth="1"
+            x1={x}
+            y1={y}
+            x2={x + width}
+            y2={y}
+            stroke="#1d1d1b"
+            strokeWidth="2"
           />
           <path
             data-corner-return-profile="true"
@@ -1720,7 +1671,9 @@ export function canEditSegmentKind(segment: WallSegment): boolean {
 
 export function canOpenSegmentEditor(segment: WallSegment): boolean {
   if (segment.kind === "opening") return false;
-  if (segment.kind === "gap") return Boolean(segment.sourceCornerId);
+  if (segment.kind === "gap") {
+    return Boolean(segment.sourceCornerId || segment.intentionalGap);
+  }
   return true;
 }
 
@@ -1743,8 +1696,8 @@ function CardSectionLabel({ children }: { children: string }) {
 /**
  * The single editing entry point: clicking a cabinet or its chain label opens
  * this card. Cabinets take width steps / custom widths (STEP_CABINET_WIDTH,
- * absorbed by a same-zone filler), fronts and kinds; fillers are remainder
- * space, so they expose placement only (SET_FILLER_PLACEMENT) — never a width.
+ * absorbed by a same-zone filler), fronts and kinds; fillers expose placement
+ * plus the reversible intentional-gap action — never a direct width edit.
  */
 function SegmentEditorCard({
   segment,
@@ -1768,6 +1721,7 @@ function SegmentEditorCard({
   const canAdjustWidth = isOrdinaryCabinet;
   const canSlide = isOrdinaryCabinet;
   const isFiller = segment.kind === "filler";
+  const isIntentionalGap = segment.kind === "gap" && segment.intentionalGap;
   const isPanel = segment.kind === "panel";
   const front = isPanel ? null : resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
@@ -1790,6 +1744,11 @@ function SegmentEditorCard({
           {isFiller && (
             <span className="rounded-full bg-[#f6ead4] px-2 py-0.5 font-mono text-[7px] tracking-[0.08em] text-[#815416]">
               REMAINDER · AUTO
+            </span>
+          )}
+          {isIntentionalGap && (
+            <span className="rounded-full bg-[#eef1ef] px-2 py-0.5 font-mono text-[7px] tracking-[0.08em] text-[#5d6b64]">
+              OPEN GAP
             </span>
           )}
           <button
@@ -2066,6 +2025,33 @@ function SegmentEditorCard({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({ type: "REMOVE_FILLER", objectId: segment.id })
+            }
+            className="mt-2 w-full rounded-[8px] border border-[#c7d0ca] bg-[#f7faf8] px-2 py-1.5 font-mono text-[9px] text-studio-ink outline-none transition-colors hover:border-studio-ink"
+          >
+            Remove filler · keep open space
+          </button>
+        </>
+      )}
+
+      {isIntentionalGap && (
+        <>
+          <p className="mt-2 text-[9.5px] leading-4 text-studio-muted">
+            Open space is preserved at {formatSixteenths(segment.widthSixteenths)}.
+            Cabinets beside it will not resize or shift.
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({ type: "RESTORE_FILLER", objectId: segment.id })
+            }
+            className="mt-2 w-full rounded-[8px] border border-studio-line bg-white px-2 py-1.5 font-mono text-[9px] text-studio-ink outline-none transition-colors hover:border-studio-ink"
+          >
+            Restore filler
+          </button>
         </>
       )}
     </div>

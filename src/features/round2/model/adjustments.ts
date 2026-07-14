@@ -17,6 +17,35 @@ import {
 export type NudgeDirection = "left" | "right";
 export type FillerPlacement = "start" | "end" | "split";
 
+export function removeFiller(model: Round2Model, segmentId: string): Round2Model {
+  const context = findSegmentContext(model, segmentId);
+  if (!context || context.segment.kind !== "filler") return model;
+  const segments = context.wall.segments.map((segment) =>
+    segment.id === segmentId
+      ? { ...segment, kind: "gap" as const, intentionalGap: true, label: "Open gap" }
+      : segment
+  );
+  return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
+}
+
+export function restoreFiller(model: Round2Model, segmentId: string): Round2Model {
+  const context = findSegmentContext(model, segmentId);
+  if (!context || context.segment.kind !== "gap" || !context.segment.intentionalGap) {
+    return model;
+  }
+  const segments = context.wall.segments.map((segment) =>
+    segment.id === segmentId
+      ? {
+          ...segment,
+          kind: "filler" as const,
+          intentionalGap: undefined,
+          label: `F${Math.round(segment.widthSixteenths / 16)}`
+        }
+      : segment
+  );
+  return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
+}
+
 export function standardWidthOptionsSixteenths(): number[] {
   return [...CABINET_STANDARDS.base.widthsSixteenths];
 }

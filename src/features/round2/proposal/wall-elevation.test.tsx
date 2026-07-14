@@ -18,6 +18,7 @@ describe("WallElevation", () => {
     expect(html).toMatch(
       /data-elevation-layer="header"[^>]*bg-white/
     );
+    expect(html).not.toContain(">1:30<");
   });
 
   test("renders fronts from the resolved configuration", () => {
@@ -69,6 +70,20 @@ describe("WallElevation", () => {
     const labelY = chainLabelY(html, "upper-left");
 
     expect(labelY).toBeLessThanOrEqual(upperTop - 14);
+  });
+
+  test("puts upper dimensions above and base dimensions below the elevation", () => {
+    const html = render(
+      elevationModel([
+        { ...cabinet("upper-row", 36 * 16), tier: "upper" },
+        cabinet("base-row", 36 * 16),
+        { ...cabinet("full-row", 24 * 16), tier: "full" }
+      ])
+    );
+
+    expect(chainLabelY(html, "upper-row")).toBe(42);
+    expect(chainLabelY(html, "base-row")).toBe(368);
+    expect(chainLabelY(html, "full-row")).toBe(368);
   });
 
   test("keeps overall and upper dimensions above the ceiling line", () => {
@@ -228,7 +243,7 @@ describe("WallElevation", () => {
     expect(fillerHtml).not.toContain("data-display-label=");
   });
 
-  test("renders segment fills opaque and keeps filler panels light", () => {
+  test("renders segment fills opaque with a shared cabinet fill", () => {
     const model = elevationModel([
       cabinet("base-left", 48 * 16),
       { ...cabinet("light-filler", 12 * 16, "filler"), label: "F12", code: "F12" }
@@ -238,7 +253,7 @@ describe("WallElevation", () => {
     const fillerRect = segmentRectTag(segmentMarkup(html, "light-filler"));
 
     expect(cabinetRect).toContain('fill-opacity="1"');
-    expect(fillerRect).toContain('fill="#fdf9eb"');
+    expect(fillerRect).toContain('fill="#ffffff"');
     expect(fillerRect).toContain('fill-opacity="1"');
   });
 
@@ -254,13 +269,13 @@ describe("WallElevation", () => {
     expect(sliverHtml).not.toContain("data-display-label=");
   });
 
-  test("renders cabinet face swing lines in neutral gray with reversed direction", () => {
+  test("renders cabinet face swing lines in black with reversed direction", () => {
     const model = elevationModel([cabinet("base-double", 60 * 16)]);
     const html = render(model);
     const faceHtml = segmentMarkup(html, "base-double");
 
     expect(faceHtml).not.toContain('stroke="#e12821"');
-    expect(faceHtml).toContain('stroke="#a7aaa5"');
+    expect(faceHtml).toContain('stroke="#1d1d1b"');
     expect(faceHtml).toContain("M 318 250 L 73 296.5 L 318 343");
     expect(faceHtml).toContain("M 322 250 L 567 296.5 L 322 343");
     expect(faceHtml).not.toContain("M 73 250 L 318 296.5 L 73 343");
@@ -485,8 +500,28 @@ describe("WallElevation", () => {
       false
     );
     expect(
+      canOpenSegmentEditor({
+        ...cabinet("intentional-gap", 24 * 16, "gap"),
+        intentionalGap: true
+      })
+    ).toBe(true);
+    expect(
       canOpenSegmentEditor(cabinet("window-opening", 30 * 16, "opening"))
     ).toBe(false);
+  });
+
+  test("renders an intentional gap with a dashed boundary and width label", () => {
+    const html = render(
+      elevationModel([
+        cabinet("left-cabinet", 30 * 16),
+        { ...cabinet("window-filler", 3 * 16, "gap"), intentionalGap: true },
+        cabinet("right-cabinet", 30 * 16)
+      ])
+    );
+
+    expect(html).toContain('data-open-gap="window-filler"');
+    expect(html).toContain('data-chain-label="window-filler"');
+    expect(html).toContain('stroke-dasharray="6 4"');
   });
 
   test("identifies appliance cabinets with glyphs and role tags", () => {
@@ -553,7 +588,7 @@ describe("WallElevation", () => {
     );
 
     expect(html).not.toContain("data-display-label=");
-    for (const code of ["#1", "RNG30", "DW24"]) {
+    for (const code of ["RNG30", "DW24"]) {
       expect(html).not.toContain(code);
     }
   });
@@ -637,6 +672,35 @@ describe("WallElevation", () => {
     expect(editor).not.toContain("WIDTH");
     expect(editor).not.toContain('aria-label="Custom width"');
     expect(editor).not.toContain("NUDGE");
+  });
+
+  test("offers remove and restore controls for an intentional gap", () => {
+    const fillerHtml = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([cabinet("window-filler", 3 * 16, "filler")])}
+        selectedObjectId="window-filler"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    expect(fillerHtml).toContain("Remove filler · keep open space");
+
+    const gapHtml = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          { ...cabinet("window-filler", 3 * 16, "gap"), intentionalGap: true }
+        ])}
+        selectedObjectId="window-filler"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    expect(gapHtml).toContain("Restore filler");
+    expect(gapHtml).toContain("Cabinets beside it will not resize or shift.");
   });
 
   test("offers a re-center control on an anchored sink that has drifted off the window", () => {
@@ -885,15 +949,17 @@ describe("WallElevation", () => {
     );
   });
 
-  test("draws a countertop slab over the base run and dimensions the cabinet body", () => {
+  test("draws a counter surface line without thickness and dimensions the 36 inch cabinet", () => {
     const html = render(elevationModel());
 
     expect(html).toContain('data-elevation-layer="countertop"');
     expect(html).toContain('data-countertop-band="0"');
-    // The base height dimension now reads the cabinet body (34½″), not the
-    // finished counter height (36″).
+    expect(tagFor(html, "line", 'data-countertop-band="0"')).toContain(
+      'stroke-width="2"'
+    );
+    expect(html).not.toContain('data-countertop-band="0"><rect');
     const counter = tagFor(html, "text", 'data-height-label="counter"');
-    expect(html.slice(html.indexOf(counter))).toContain("34 1/2″");
+    expect(html.slice(html.indexOf(counter))).toContain("36″");
   });
 
   test("breaks the countertop at a freestanding range", () => {
@@ -925,12 +991,11 @@ describe("WallElevation", () => {
     expect(html).not.toContain('data-countertop-band="2"');
   });
 
-  test("carries a teal depth reference note", () => {
+  test("omits the redundant depth reference note", () => {
     const html = render(elevationModel());
-    const note = tagFor(html, "text", 'data-elevation-layer="depth-note"');
 
-    expect(note).toContain(`fill="${"#079ca5"}"`);
-    expect(html.slice(html.indexOf(note))).toContain("BASE 24″ DEEP · UPPER 12″ DEEP");
+    expect(html).not.toContain('data-elevation-layer="depth-note"');
+    expect(html).not.toContain("BASE 24″ DEEP · UPPER 12″ DEEP");
   });
 });
 

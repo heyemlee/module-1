@@ -107,6 +107,8 @@ export type Round2PrototypeAction =
   | { type: "NUDGE_GROUP"; objectId: string; direction: NudgeDirection }
   | { type: "RECENTER_SINK"; objectId: string }
   | { type: "SET_FILLER_PLACEMENT"; objectId: string; placement: FillerPlacement }
+  | { type: "REMOVE_FILLER"; objectId: string }
+  | { type: "RESTORE_FILLER"; objectId: string }
   | { type: "SET_SEGMENT_KIND"; objectId: string; cabinetKind: CabinetKind }
   | { type: "SET_SEGMENT_FRONT"; objectId: string; front: WallSegmentFront }
   | { type: "SET_HEIGHT_PROFILE"; profile: Partial<Round2HeightProfile> }

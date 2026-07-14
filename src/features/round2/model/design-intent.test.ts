@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { FloorPlan, Wall } from "@/features/round1/floorplan/plan-geometry";
 import { ROUND1_REFERENCE_FIXTURE } from "../round2-fixtures";
 import { deriveWallsFromRound1 } from "./derive-walls";
+import type { Round2Model } from "./round2-model";
 import {
   buildDesignIntentQuestions,
   buildIntentConfirmationDecisions,
@@ -87,6 +88,58 @@ describe("Round 2 design intent", () => {
     }).find((item) => item.key === "uppers.termination");
 
     expect(question?.label).toContain("108″ ceiling");
+  });
+
+  test("asks about dishwasher placement only when Round 1 parked it far from the sink", () => {
+    const modelFor = (dishwasherRatio: number): Round2Model => ({
+      ceilingHeightSixteenths: 96 * 16,
+      walls: [
+        {
+          id: "A",
+          label: "A",
+          sourceWall: "TOP",
+          lengthSixteenths: 200 * 16,
+          fixedPoints: [
+            {
+              id: "top-appliance-sink",
+              type: "appliance",
+              symbol: "sink",
+              label: "Sink",
+              sourceWall: "TOP",
+              order: 1,
+              positionRatio: 0.5
+            },
+            {
+              id: "top-appliance-dishwasher",
+              type: "appliance",
+              symbol: "dishwasher",
+              label: "DW",
+              sourceWall: "TOP",
+              order: 2,
+              positionRatio: dishwasherRatio
+            }
+          ],
+          segments: [],
+          notes: []
+        }
+      ],
+      decisionItems: []
+    });
+
+    const farQuestions = buildDesignIntentQuestions(modelFor(0.1), {}).filter(
+      (question) => question.kind === "dishwasher-placement"
+    );
+    expect(farQuestions).toHaveLength(1);
+    expect(farQuestions[0]).toMatchObject({
+      key: "dishwasher.top-appliance-dishwasher.placement",
+      defaultValue: "dockToSink",
+      objectId: "top-appliance-dishwasher"
+    });
+    expect(
+      buildDesignIntentQuestions(modelFor(0.4), {}).filter(
+        (question) => question.kind === "dishwasher-placement"
+      )
+    ).toHaveLength(0);
   });
 
   test("initializes every question with a default but leaves it unconfirmed", () => {

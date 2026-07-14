@@ -40,6 +40,34 @@ describe("DecisionRail", () => {
     expect(html).toContain("Tap any cabinet on the drawing");
   });
 
+  test("offers one-click resolutions on an unfillable-gap card", () => {
+    const state = submittedState();
+    const withGap: Round2PrototypeState = {
+      ...state,
+      model: state.model
+        ? {
+            ...state.model,
+            decisionItems: [
+              {
+                id: "decision-a-base-2-gap-below-filler-minimum",
+                objectId: "a-base-2-gap",
+                wallId: "A",
+                severity: "blocking",
+                title: "Wall A gap below filler minimum",
+                body: "2″ cannot be filled with the approved 3″-6″ filler range."
+              }
+            ]
+          }
+        : null
+    };
+    const html = renderToStaticMarkup(
+      <DecisionRail state={withGap} dispatch={() => {}} />
+    );
+
+    expect(html).toContain("Fill with filler strips");
+    expect(html).toContain("Confirm as open space");
+  });
+
   test("shows the all-clear card when every decision is resolved", () => {
     const state = submittedState();
     const cleared: Round2PrototypeState = {

@@ -4,6 +4,19 @@ import type { Round2Model, WallSegment } from "../model/round2-model";
 import { DesignPlan } from "./design-plan";
 
 describe("DesignPlan", () => {
+  test("offsets the complete plan drawing away from the left and top edges", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [segment("top-base", 36, "cabinet", "B36")])
+      ])
+    );
+
+    const drawing = tagFor(html, "g", 'data-plan-drawing="true"');
+    expect(drawing).toContain('transform="translate(50 15)"');
+    expect(html).not.toContain("TOP VIEW · READ-ONLY PROJECTION");
+    expect(html).not.toContain(">BASE<");
+  });
+
   test("renders lazy Susan reservations as a connected right-angle footprint", () => {
     const html = render(
       modelWithSegments([
@@ -17,10 +30,11 @@ describe("DesignPlan", () => {
     const path = tagFor(html, "path", 'data-plan-corner-footprint="TL"');
 
     expect(path).toContain('data-plan-corner-walls="TOP,LEFT"');
-    expect(path).toContain("M 162 132");
-    expect(path).toContain("L 298.8 132");
-    expect(path).toContain("L 214 231.3");
+    expect(path).toContain("M 162 157");
+    expect(path).toContain("L 298.8 157");
+    expect(path).toContain("L 214 256.3");
     expect(html).toContain('data-plan-corner-glyph="TL"');
+    expect(html).not.toContain('data-plan-corner-dimension="TL"');
     expect(html).toContain('data-segment-id="top-lazy-susan"');
     expect(html).not.toContain('data-segment-id="left-lazy-return"');
   });
@@ -62,43 +76,82 @@ describe("DesignPlan", () => {
 
     const pentagon = tagFor(html, "path", 'data-plan-upper-corner="TL"');
     // 24″ along each wall at 12″ upper depth with a chamfered front:
-    // (162,132) → +91.2 → depth 26 → chamfer → close.
-    expect(pentagon).toContain("M 162 132");
-    expect(pentagon).toContain("L 253.2 132");
-    expect(pentagon).toContain("L 253.2 158");
-    expect(pentagon).toContain("L 188 198.2");
+    // (162,157) → +91.2 → depth 26 → chamfer → close.
+    expect(pentagon).toContain("M 162 157");
+    expect(pentagon).toContain("L 253.2 157");
+    expect(pentagon).toContain("L 253.2 183");
+    expect(pentagon).toContain("L 188 223.2");
     expect(pentagon).toContain('stroke-dasharray="5 3"');
+    expect(html).toContain('data-plan-corner-dimension="TL"');
+    expect(html).toContain('data-plan-corner-dimension-horizontal="TL"');
+    expect(html).toContain('data-plan-corner-dimension-vertical="TL"');
     // The diagonal cabinet must not double-draw as a straight dashed rect.
     const overlays = html.match(/data-plan-upper="cabinet"/g) ?? [];
     expect(overlays).toHaveLength(1);
   });
 
-  test("annotates base and upper cabinet depth per wall", () => {
+  test("keeps cabinet-depth callouts on elevations rather than repeating them in plan", () => {
     const html = render(
       modelWithSegments([
         wall("A", "TOP", [segment("top-base", 36, "cabinet", "B36")])
       ])
     );
 
-    const depth = tagFor(html, "g", 'data-plan-depth-wall="A"');
-    expect(depth).toContain('stroke="#079ca5"');
-    expect(html).toContain('data-plan-depth-base="A"');
-    expect(html).toContain('data-plan-depth-upper="A"');
-    // Base 24″ and upper 12″ read from the standards.
-    const base = tagFor(html, "text", 'data-plan-depth-base="A"');
-    expect(html.slice(html.indexOf(base))).toContain("24″");
-    const upper = tagFor(html, "text", 'data-plan-depth-upper="A"');
-    expect(html.slice(html.indexOf(upper))).toContain("12″");
+    expect(html).not.toContain('data-plan-depth-wall="A"');
+    expect(html).not.toContain('data-plan-depth-base="A"');
+    expect(html).not.toContain('data-plan-depth-upper="A"');
   });
 
-  test("omits the depth callout on a wall with no base cabinets", () => {
+  test("dimensions each diagonal upper-corner leg with short extension lines", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [
+          upperSegment("top-upper-corner", 24, "cabinet", "WDC24")
+        ]),
+        wall("B", "LEFT", [
+          upperSegment("left-upper-corner", 24, "gap", "WDC24 return")
+        ])
+      ])
+    );
+
+    const horizontal = tagFor(
+      html,
+      "line",
+      'data-plan-corner-dimension-horizontal="TL"'
+    );
+    const vertical = tagFor(
+      html,
+      "line",
+      'data-plan-corner-dimension-vertical="TL"'
+    );
+    const extension = tagFor(
+      html,
+      "line",
+      'data-plan-corner-extension="TL-horizontal-start"'
+    );
+
+    expect(numberAttribute(horizontal, "y1")).toBe(120);
+    expect(numberAttribute(vertical, "x1")).toBe(115);
+    expect(
+      numberAttribute(horizontal, "x2") - numberAttribute(horizontal, "x1")
+    ).toBeCloseTo(91.2);
+    expect(
+      numberAttribute(vertical, "y2") - numberAttribute(vertical, "y1")
+    ).toBeCloseTo(66.2);
+    expect(Math.abs(numberAttribute(extension, "y2") - numberAttribute(extension, "y1"))).toBe(
+      10
+    );
+    expect(extension).toContain('stroke-width="1.8"');
+  });
+
+  test("omits corner dimensions when no corner cabinet is present", () => {
     const html = render(
       modelWithSegments([
         wall("A", "TOP", [segment("top-opening", 30, "opening", "Window")])
       ])
     );
 
-    expect(html).not.toContain('data-plan-depth-wall="A"');
+    expect(html).not.toContain("data-plan-corner-dimension");
   });
 
   test("keeps upper fillers visible in the dashed projection", () => {
@@ -114,7 +167,43 @@ describe("DesignPlan", () => {
     expect(html).toContain('data-plan-upper="filler"');
   });
 
-  test("annotates segments with dimension chains instead of code labels", () => {
+  test("renders upper finished panels in the dashed projection", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [
+          upperSegment("top-upper-panel", 24, "panel", "Fridge top panel")
+        ])
+      ])
+    );
+
+    expect(html).toContain('data-plan-upper="panel"');
+  });
+
+  test("keeps an unmeasured diagonal upper corner at its actual run length", () => {
+    const html = render({
+      ceilingHeightSixteenths: 96 * 16,
+      decisionItems: [],
+      walls: [
+        {
+          ...wall("A", "TOP", [
+            upperSegment("top-corner", 24, "cabinet", "WDC24")
+          ]),
+          lengthSixteenths: null
+        },
+        {
+          ...wall("B", "LEFT", [
+            upperSegment("left-corner", 24, "gap", "WDC24 return")
+          ]),
+          lengthSixteenths: null
+        }
+      ]
+    });
+
+    const pentagon = tagFor(html, "path", 'data-plan-upper-corner="TL"');
+    expect(pentagon).toContain("L 618 157");
+  });
+
+  test("annotates segments and the wall total with dimension chains", () => {
     const html = render(
       modelWithSegments([
         wall("A", "TOP", [segment("top-blind-base", 45, "cabinet", "BB45")])
@@ -123,8 +212,8 @@ describe("DesignPlan", () => {
 
     const label = tagFor(html, "text", 'data-chain-label="top-blind-base"');
     expect(html.slice(html.indexOf(label))).toContain("45″");
-    const overall = tagFor(html, "text", 'data-plan-overall-label="A"');
-    expect(html.slice(html.indexOf(overall))).toContain("A · 120″");
+    expect(html).toContain('data-plan-overall-label="A"');
+    expect(html).toContain("A · 120″");
     expect(html).not.toContain("data-display-label");
     // Codes survive only as hover tooltips, never as drawn text.
     expect(html).toContain("<title>BB45</title>");
@@ -175,6 +264,12 @@ function tagFor(
   );
   expect(match).not.toBeNull();
   return match?.[0] ?? "";
+}
+
+function numberAttribute(tag: string, attribute: string): number {
+  const match = tag.match(new RegExp(`${attribute}="([^"]+)"`));
+  expect(match).not.toBeNull();
+  return Number(match?.[1]);
 }
 
 function escapeRegExp(value: string): string {
