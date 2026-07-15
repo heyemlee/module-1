@@ -1,7 +1,7 @@
 # Round 2 Fast Customer Design Flow
 
 **Date:** 2026-07-15  
-**Status:** Approved direction; pending written-spec review
+**Status:** Approved direction with panel/filler amendment; pending written-spec review
 
 ## 1. Objective
 
@@ -28,6 +28,8 @@ The customer package is a detailed design proposal. It is not an installation dr
 4. The designer edits an appliance or cabinet directly from the plan or elevation. The drawing editor and Field Measurement edit the same underlying value.
 5. A draft proposal may exist with default appliance sizes. Publishing a customer proposal invokes a small, explicit preflight gate.
 6. Deterministic geometry generates the plan, elevations, dimensions, and cabinet schedule. AI may help extract inputs or render materials, but it does not invent dimensions or cabinet geometry.
+7. Filler and finished panels are separate parts with separate responsibilities: filler closes a small cabinet-to-wall remainder; a finished panel covers an exposed cabinet side or forms the specified appliance surround.
+8. Sink cabinets have no automatic side panels. Dishwashers, refrigerators, and ranges receive left and right finished panels by default, and each panel can be removed or restored independently by the designer.
 
 ## 3. Measurement and Value Authority
 
@@ -76,6 +78,51 @@ Defaults are starting values, not site facts. The UI displays a compact `Default
 
 Width is sufficient to begin the first draft for ordinary freestanding appliances. Height must be confirmed before customer publication when it controls surrounding cabinetry, including refrigerator-overhead cabinets, wall-oven towers, microwave/oven combinations, and other built-ins. Depth and manufacturer clearances can remain pending in a customer proposal, but must be confirmed before ordering or installation documentation.
 
+## 4.1 Filler and Finished-Panel Rules
+
+### Filler
+
+A filler fills the small remaining distance between cabinetry and a wall. It is not decorative side cladding and must not be generated merely because a run has an exposed end.
+
+The ordinary cabinet-to-wall sequence is:
+
+```text
+cabinet -> filler -> wall
+```
+
+An ordinary base or wall cabinet that approaches a wall receives only the required wall filler. It does not also receive a finished panel on that wall side.
+
+### Finished panel
+
+A finished panel covers an exposed cabinet side or forms part of an appliance surround. The ordinary exposed-end sequence is:
+
+```text
+cabinet -> finished panel -> open room
+```
+
+When a panel-wrapped appliance approaches a wall, both parts may be present because they solve different conditions:
+
+```text
+appliance -> finished panel -> filler -> wall
+```
+
+The panel surrounds the appliance; the filler closes the remaining wall distance.
+
+### Appliance defaults
+
+| Unit | Left finished panel | Right finished panel | Designer control |
+|---|---|---|---|
+| Sink cabinet | none | none | not applicable |
+| Dishwasher | present by default | present by default | remove/restore each side |
+| Refrigerator | present by default | present by default | remove/restore each side |
+| Range | present by default | present by default | remove/restore each side |
+
+Each appliance-side panel is an independent 3/4-inch model segment with a stable ID and side (`LEFT` or `RIGHT`). Removing one side must not remove the other.
+
+### Invalid fixed reservations and upper projections
+
+Fixed appliances and their dependent upper elements are never clipped to fit. A 30-inch range always reserves 30 inches, and its cabinet-insert hood zone remains the full 30 inches. If the range conflicts with a corner, window, opening, or available wall span, the solver returns a blocking issue and retains the last valid drawing. It must not emit a 4-inch hood fragment, undersized appliance, or misleading completed elevation.
+
 ## 5. Simplified User Flow
 
 ### 5.1 Enter Round 2
@@ -115,6 +162,8 @@ Selecting an appliance opens a small contextual editor with:
 - `Confirm from field measurement` and `Confirm from appliance spec` actions.
 
 Selecting a cabinet presents only valid standard cabinet widths and relevant cabinet options. Free-form cabinet widths are not the default interaction.
+
+Selecting an appliance-side finished panel presents `Remove panel`. A removed panel remains a stored per-side design choice and presents `Restore panel` from the owning appliance editor or drawing selection. The drawing must make the selected side explicit.
 
 When an appliance or cabinet changes, the solver recalculates the affected wall only. The UI previews which adjacent cabinets or fillers changed and preserves unaffected walls.
 
@@ -163,6 +212,14 @@ corner reservations
 = usable wall span
 ```
 
+Filler placement also obeys these invariants:
+
+- wall fillers sit at cabinet-to-wall boundaries;
+- a filler is not inserted at an open run end in place of a finished panel;
+- an ordinary cabinet against a wall does not receive both filler and finished panel;
+- an appliance with a required/default panel may use `appliance -> panel -> filler -> wall`;
+- no filler or finished panel may be silently omitted from the dimension chain.
+
 The drawing renderer scales the view to fit the sheet. It never rescales individual cabinets or changes their numeric dimensions to fit the canvas. Every dimension label is computed from model geometry, and dimension-chain totals must equal the overall wall dimension.
 
 Photorealistic or material renderings may use the same model as references, but they cannot become the source of dimensions, cabinet counts, or schedules.
@@ -178,7 +235,27 @@ Photorealistic or material renderings may use the same model as references, but 
 5. Absorb residual space with valid filler/panel rules.
 6. Update plan, elevation, schedules, and publish status together.
 
-### 7.2 Unresolved edit
+### 7.2 Removing or restoring an appliance panel
+
+Removing a panel releases its 3/4-inch width and triggers a deterministic reflow of the affected wall:
+
+1. Record the owning appliance ID, side, and `REMOVED` choice.
+2. Remove that panel's 3/4-inch reservation.
+3. Move the adjacent cabinet/appliance boundary to close the removed panel position.
+4. Add the released width to the nearest valid cabinet-to-wall filler.
+5. If no wall filler can accept it, try a valid standard-cabinet repartition.
+6. If neither operation closes the wall, retain the last valid drawing and create one blocking design decision; never leave an unexplained 3/4-inch gap.
+
+Restoring a panel performs the inverse operation:
+
+1. Reserve 3/4 inch on the selected appliance side.
+2. Take that width from the nearest valid wall filler.
+3. If the filler is insufficient, try a valid standard-cabinet repartition.
+4. If the wall cannot accommodate the panel, reject the restore action, retain the last valid drawing, and report the exact shortage.
+
+The filler dimension shown in the plan, elevation, and schedule is always its recalculated installed width, including non-standard cut widths produced by this absorption rule.
+
+### 7.3 Unresolved edit
 
 If the wall cannot be solved, the system does not create an undersized cabinet or hide the overflow. It keeps the last valid geometry, shows the proposed change, and gives one focused reason, for example:
 
@@ -188,7 +265,7 @@ Wall A is 2 1/2 in short after changing the refrigerator to 42 in.
 
 The designer can choose a valid adjacent cabinet width, reduce a filler, change the appliance, or request a field remeasurement.
 
-### 7.3 Changed field measurement
+### 7.4 Changed field measurement
 
 When a field measurement changes after a proposal exists:
 
@@ -205,6 +282,7 @@ To keep the workflow fast, the first implementation should contain only:
 - common appliance defaults and presets;
 - direct appliance editing from plan/elevation;
 - direct standard-width cabinet editing from elevation;
+- per-side removal/restoration of dishwasher, refrigerator, and range panels;
 - affected-wall recalculation;
 - a compact publish preflight;
 - deterministic customer drawing output.
@@ -224,6 +302,13 @@ It should not add a separate appliance-management module, a complex approval wor
 
 - A width change recalculates only affected wall geometry.
 - Fixed openings and confirmed appliance dimensions are never silently resized.
+- Range and hood widths remain equal; neither is clipped by a corner or wall boundary.
+- Wall-adjacent ordinary cabinets use filler without an additional finished panel.
+- Open ordinary cabinet sides use a finished panel without an automatic open-end filler.
+- Sink cabinets have no automatic side panels.
+- Dishwashers, refrigerators, and ranges begin with independent left/right 3/4-inch panels.
+- Removing one appliance panel preserves the other and transfers the released 3/4 inch to the nearest wall filler or a valid repartition.
+- Restoring a panel consumes wall-filler/repartition capacity or fails without changing the last valid drawing.
 - Every solved wall exactly balances to its usable span.
 - Unsolvable edits produce a blocking decision and retain the last valid drawing.
 - Plan, elevation, dimension chains, and schedules show identical dimensions.
@@ -238,4 +323,3 @@ It should not add a separate appliance-management module, a complex approval wor
 ### 9.4 Success measure
 
 A designer can enter Round 2, correct field measurements, adjust key appliance or cabinet sizes directly in the drawing, and produce a coherent customer proposal without duplicate entry or manual reconciliation between the plan and elevations.
-
