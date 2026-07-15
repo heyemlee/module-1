@@ -229,8 +229,8 @@ export function Round1InlineRenderPreview({
   const arrow =
     "absolute top-1/2 z-[5] flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(20,20,22,0.14)] bg-white/80 text-[16px] text-[#222225] shadow-[0_14px_34px_-20px_rgba(20,20,26,0.6)] backdrop-blur-sm transition hover:bg-white disabled:opacity-30";
   // Keep the outer frame aligned with the light drawing canvas. The content
-  // layer is rounded; a dark outer background would otherwise show through at
-  // all four corners as an unintended black border.
+  // Keep the outer frame aligned with the rendered image. The preview must not
+  // introduce a rounded viewport when the generated image has square corners.
   const frameBackground = "#f0f0f0";
   const frameStyle = fitViewport
     ? {
@@ -251,7 +251,7 @@ export function Round1InlineRenderPreview({
       )}
       style={frameStyle}
     >
-      <div className="absolute inset-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]">
+      <div className="absolute inset-0 overflow-hidden shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]">
         {busy ? (
           <div className="cmx">
           <div className="cmx-space">

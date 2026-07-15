@@ -714,6 +714,7 @@ describe("Round1InlineRenderPreview", () => {
 
     expect(html).toContain("background:#f0f0f0");
     expect(html).not.toContain("linear-gradient(162deg,#3a3a3e,#101012)");
+    expect(html).not.toContain("rounded-[16px]");
   });
 
   test("sizes the viewport preview frame from the rendering aspect ratio", () => {
