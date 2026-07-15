@@ -702,6 +702,20 @@ describe("Round1InlineRenderPreview", () => {
     expect(html).not.toContain("Close preview");
   });
 
+  test("keeps the preview frame corners aligned with the light canvas", () => {
+    const html = renderToStaticMarkup(
+      <Round1InlineRenderPreview
+        busy={true}
+        error={null}
+        renderings={[]}
+        {...baseProps}
+      />
+    );
+
+    expect(html).toContain("background:#f0f0f0");
+    expect(html).not.toContain("linear-gradient(162deg,#3a3a3e,#101012)");
+  });
+
   test("sizes the viewport preview frame from the rendering aspect ratio", () => {
     const html = renderToStaticMarkup(
       <Round1InlineRenderPreview
