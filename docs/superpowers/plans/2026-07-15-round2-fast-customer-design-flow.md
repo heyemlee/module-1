@@ -17,6 +17,9 @@
 - Deterministic code owns dimensions and cabinet geometry; AI does not invent either.
 - Draft proposals may use defaults; customer publication must pass the preflight defined in the approved spec.
 - Direct drawing edits and Field Measurement must update the same value and provenance record.
+- An ordinary base/wall cabinet meeting a wall uses filler only; it does not receive an automatic finished panel on that wall side.
+- Sink cabinets have no automatic side panels. Dishwashers, refrigerators, and ranges default to independent left/right 3/4-inch panels that the designer can remove or restore.
+- A range and its hood projection always remain the same full width; neither may be clipped to fit.
 - Do not add a separate appliance-management module, external catalog dependency, or email-delivery integration.
 - Preserve sixteenths of an inch as the internal dimension unit.
 
@@ -29,6 +32,7 @@
 - `src/features/round2/model/measurement-provenance.ts` — source/status types, metadata initialization, and confirmation helpers.
 - `src/features/round2/handoff/round1-prefill.ts` — converts a Round 1 snapshot into Round 2 reference measurements and appliance defaults.
 - `src/features/round2/model/publish-preflight.ts` — pure blocking/advisory validation for customer publication.
+- `src/features/round2/model/panel-rules.ts` — filler/finished-panel semantics and per-appliance side-panel defaults.
 - `src/features/round2/proposal/appliance-editor.tsx` — focused contextual editor for appliance dimensions and provenance.
 - `src/features/round2/drawings/proposal-notes.tsx` — concise advisory notes derived from preflight.
 
@@ -340,7 +344,7 @@ return {
 };
 ```
 
-Keep the first task as Field Measurement, but allow navigation to Design Proposal as soon as segments exist. Drawings remain gated by blocking geometry decisions; publication gets its own stricter gate in Task 6.
+Keep the first task as Field Measurement, but allow navigation to Design Proposal as soon as segments exist. Drawings remain gated by blocking geometry decisions; publication gets its own stricter gate in Task 7.
 
 - [ ] **Step 4: Update measurement and proposal copy**
 
@@ -470,7 +474,185 @@ git commit -m "feat(round2): edit appliance dimensions in proposal"
 
 ---
 
-### Task 5: Preserve unaffected walls and retain the last valid drawing on failed edits
+### Task 5: Correct filler, finished-panel, and hood projection rules
+
+**Files:**
+- Create: `src/features/round2/model/panel-rules.ts`
+- Create: `src/features/round2/model/panel-rules.test.ts`
+- Modify: `src/features/round2/model/design-intent.ts`
+- Modify: `src/features/round2/model/design-intent.test.ts`
+- Modify: `src/features/round2/model/autofill.ts`
+- Modify: `src/features/round2/model/autofill.test.ts`
+- Modify: `src/features/round2/model/adjustments.ts`
+- Modify: `src/features/round2/model/adjustments.test.ts`
+- Modify: `src/features/round2/proposal/wall-elevation.tsx`
+- Modify: `src/features/round2/proposal/wall-elevation.test.tsx`
+- Modify: `src/features/round2/round2-state.ts`
+- Modify: `src/features/round2/round2-state.test.ts`
+
+**Interfaces:**
+- Produces: `AppliancePanelSide`, `AppliancePanelChoice`, `appliancePanelIntentKey()`, `defaultAppliancePanelChoice()`, and `resolveApplianceSidePanels()`.
+- Extends: `DesignIntentValue` with `"present" | "removed"` for per-side appliance panels.
+- Consumes: existing `SET_DESIGN_INTENT` action so panel choices remain deterministic and persist with the proposal.
+
+- [ ] **Step 1: Write failing panel-semantics tests**
+
+```ts
+test("distinguishes wall filler from a finished panel", () => {
+  expect(defaultAppliancePanelChoice("sink", "left")).toBe("removed");
+  expect(defaultAppliancePanelChoice("dishwasher", "left")).toBe("present");
+  expect(defaultAppliancePanelChoice("fridge", "right")).toBe("present");
+  expect(defaultAppliancePanelChoice("range", "left")).toBe("present");
+});
+
+test("uses filler without a finished panel where an ordinary cabinet meets a wall", () => {
+  const filled = autofillRound2Model(modelWithWall(wallWithLength(121 * 16)));
+  for (const tier of ["base", "upper"] as const) {
+    const run = filled.walls[0].segments.filter((segment) => segment.tier === tier);
+    expect(run.some((segment) => segment.id.includes("endpanel"))).toBe(false);
+    expect(run[run.length - 1]?.kind).toBe("filler");
+  }
+});
+
+test("adds no panels to a sink and two independent panels to dishwasher fridge and range", () => {
+  expect(panelSides(filledWall("sink"))).toEqual([]);
+  expect(panelSides(filledWall("dishwasher"))).toEqual(["left", "right"]);
+  expect(panelSides(filledWall("fridge"))).toEqual(["left", "right"]);
+  expect(panelSides(filledWall("range"))).toEqual(["left", "right"]);
+});
+```
+
+- [ ] **Step 2: Run panel/autofill tests and verify RED**
+
+Run: `npm test -- src/features/round2/model/panel-rules.test.ts src/features/round2/model/autofill.test.ts`
+
+Expected: FAIL because ordinary wall ends currently get panels, range gets none, dishwasher is hard-coded, and sink/panel semantics are not centralized.
+
+- [ ] **Step 3: Implement the centralized panel rules**
+
+```ts
+export type AppliancePanelSide = "left" | "right";
+export type AppliancePanelChoice = "present" | "removed";
+
+export function appliancePanelIntentKey(
+  fixedPointId: string,
+  side: AppliancePanelSide
+): string {
+  return `appliance.${fixedPointId}.panel.${side}`;
+}
+
+export function defaultAppliancePanelChoice(
+  symbol: string | undefined,
+  _side: AppliancePanelSide
+): AppliancePanelChoice {
+  return symbol === "dishwasher" || symbol === "fridge" || symbol === "range"
+    ? "present"
+    : "removed";
+}
+```
+
+`resolveApplianceSidePanels(point, intent)` returns 12 sixteenths (3/4 inch) for each side whose explicit/default choice is `present`, otherwise zero. Remove `dishwasherSidePanels()` and replace `tallSidePanels()` with this one resolver. Oven/microwave tower appliances do not receive extra automatic appliance-side panels under this rule; their containing tall cabinet is modeled separately.
+
+- [ ] **Step 4: Remove automatic ordinary wall-end panels**
+
+Delete the `baseEndPanelSides()` reservation path and the matching automatic upper `startPanel`/`endPanel` path. Full-wall cabinet runs close to the wall with `fillSpan()` output; the terminal remainder remains a `filler`, not `panel`. Explicit appliance panels remain real segments and may be followed by a wall filler:
+
+```text
+appliance -> panel -> filler -> wall
+```
+
+Do not change corner cabinet reservations; a true corner is neither an open end nor a wall filler.
+
+- [ ] **Step 5: Write and verify per-side removal tests**
+
+```ts
+test("removes only the selected dishwasher panel", () => {
+  const intent = intentWith({
+    [appliancePanelIntentKey("top-appliance-dishwasher", "left")]: "removed"
+  });
+  const wall = filledWall("dishwasher", intent);
+  expect(panelSides(wall)).toEqual(["right"]);
+});
+
+test("restores one range panel without changing the opposite choice", () => {
+  const removed = intentWith({
+    [appliancePanelIntentKey("top-appliance-range", "left")]: "removed",
+    [appliancePanelIntentKey("top-appliance-range", "right")]: "removed"
+  });
+  const restored = setDesignIntentAnswer(
+    removed,
+    appliancePanelIntentKey("top-appliance-range", "right"),
+    "present"
+  );
+  expect(panelSides(filledWall("range", restored))).toEqual(["right"]);
+});
+```
+
+Run: `npm test -- src/features/round2/model/panel-rules.test.ts src/features/round2/model/design-intent.test.ts src/features/round2/model/autofill.test.ts`
+
+Expected: PASS; each side is independently deterministic.
+
+- [ ] **Step 6: Add panel controls to the drawing**
+
+When a panel segment with `sourceFixedPointId` is selected, show:
+
+```tsx
+<button
+  type="button"
+  onClick={() => dispatch({
+    type: "SET_DESIGN_INTENT",
+    key: appliancePanelIntentKey(segment.sourceFixedPointId!, panelSide(segment)),
+    value: "removed"
+  })}
+>
+  Remove panel
+</button>
+```
+
+The owning appliance editor lists both sides and shows `Restore left panel` or `Restore right panel` for removed sides. The selected side must be visible in the editor title and accessible name. Do not reuse `REMOVE_FILLER`; filler removal and appliance-panel removal remain different actions.
+
+- [ ] **Step 7: Prevent clipped range/hood projections**
+
+Add failing coverage first:
+
+```ts
+test("never emits a clipped hood when a 30-inch range conflicts with a corner", () => {
+  const filled = autofillRound2Model(rangeConflictingWithCorner());
+  const range = applianceSegment(filled, "range");
+  const hood = hoodSegment(filled);
+  expect(range.widthSixteenths).toBe(30 * 16);
+  expect(hood).toBeNull();
+  expect(filled.decisionItems).toEqual(
+    expect.arrayContaining([expect.objectContaining({ severity: "blocking" })])
+  );
+});
+
+test("keeps a valid cabinet-insert hood exactly equal to range width", () => {
+  const filled = autofillRound2Model(validRangeModel());
+  expect(hoodSegment(filled)?.widthSixteenths).toBe(
+    applianceSegment(filled, "range").widthSixteenths
+  );
+});
+```
+
+Change upper projection so it emits the complete hood only when the complete range interval lies inside the valid run. An invalid fixed reservation creates a blocking decision and no hood projection; it never becomes a narrow cabinet segment. The last-valid drawing behavior is completed in Task 6.
+
+- [ ] **Step 8: Verify panel UI, autofill, and adjustment behavior**
+
+Run: `npm test -- src/features/round2/model/panel-rules.test.ts src/features/round2/model/design-intent.test.ts src/features/round2/model/autofill.test.ts src/features/round2/model/adjustments.test.ts src/features/round2/proposal/wall-elevation.test.tsx src/features/round2/round2-state.test.ts`
+
+Expected: PASS; no ordinary wall-end panels, correct appliance defaults, independent delete/restore controls, and no clipped hood fragment.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/features/round2/model/panel-rules.ts src/features/round2/model/panel-rules.test.ts src/features/round2/model/design-intent.ts src/features/round2/model/design-intent.test.ts src/features/round2/model/autofill.ts src/features/round2/model/autofill.test.ts src/features/round2/model/adjustments.ts src/features/round2/model/adjustments.test.ts src/features/round2/proposal/wall-elevation.tsx src/features/round2/proposal/wall-elevation.test.tsx src/features/round2/round2-state.ts src/features/round2/round2-state.test.ts
+git commit -m "fix(round2): separate filler and appliance panel rules"
+```
+
+---
+
+### Task 6: Preserve unaffected walls and retain the last valid drawing on failed edits
 
 **Files:**
 - Create: `src/features/round2/model/reflow.ts`
@@ -483,6 +665,7 @@ git commit -m "feat(round2): edit appliance dimensions in proposal"
 **Interfaces:**
 - Produces: `reflowForMeasurement(previousModel, measurements, intent, changedKey): ReflowResult`.
 - `ReflowResult = { model: Round2Model; changedWallIds: WallId[]; rejectedChange?: { field; message } }`.
+- Consumes: per-side panel intent keys from Task 5; a panel edit identifies the owning appliance wall as the affected wall.
 
 - [ ] **Step 1: Write failing local-reflow tests**
 
@@ -502,6 +685,30 @@ test("retains last valid geometry when an edited wall cannot fit", () => {
   expect(result.model.walls[0].segments).toEqual(before.walls[0].segments);
   expect(result.rejectedChange?.message).toContain("short");
 });
+
+test("absorbs a removed panel into the nearest wall filler", () => {
+  const before = filledWallWithRangeAndWallFiller();
+  const result = reflowForIntent(
+    before,
+    intentWithLeftRangePanelRemoved(),
+    appliancePanelIntentKey("top-appliance-range", "left")
+  );
+  expect(panelSides(result.model.walls[0])).toEqual(["right"]);
+  expect(wallFillerWidth(result.model.walls[0])).toBe(
+    wallFillerWidth(before.walls[0]) + 12
+  );
+});
+
+test("rejects panel restore when no filler or standard repartition can provide 3/4 inch", () => {
+  const before = validWallWithRemovedPanelAndNoCapacity();
+  const result = reflowForIntent(
+    before,
+    intentWithPanelRestored(),
+    appliancePanelIntentKey("top-appliance-range", "left")
+  );
+  expect(result.model.walls[0].segments).toEqual(before.walls[0].segments);
+  expect(result.rejectedChange?.message).toContain("3/4");
+});
 ```
 
 - [ ] **Step 2: Run tests and verify RED**
@@ -512,13 +719,15 @@ Expected: FAIL because reflow currently regenerates the complete model and has n
 
 - [ ] **Step 3: Implement deterministic affected-wall merging**
 
-`reflowForMeasurement()` must:
+`reflowForMeasurement()` and the parallel `reflowForIntent()` must:
 
 1. Parse the changed measurement key to find its wall/fixed point.
 2. Run the existing deterministic autofill against an updated model.
 3. Detect blocking overflow/overlap decisions for the affected wall.
 4. On success, merge only affected wall objects plus global height profile/decisions.
 5. On failure, retain the previous wall segments and add one blocking decision whose message states the shortage in formatted inches.
+
+For appliance-panel intent edits, the solver must first transfer the released/required 12 sixteenths to/from the nearest valid wall filler. If that cannot close the wall, attempt standard-cabinet repartition. If neither works, reject the edit and retain the previous wall. It must not create an unexplained 3/4-inch gap.
 
 Ceiling-height edits may update every elevation vertically. Cabinet-width actions continue using the existing targeted adjustment logic.
 
@@ -546,7 +755,7 @@ git commit -m "feat(round2): reflow only affected proposal walls"
 
 ---
 
-### Task 6: Add customer-publication preflight and concise drawing advisories
+### Task 7: Add customer-publication preflight and concise drawing advisories
 
 **Files:**
 - Create: `src/features/round2/model/publish-preflight.ts`
@@ -602,6 +811,10 @@ Blocking checks:
 - no metadata is `CONFLICT`;
 - no model decision has severity `blocking`;
 - every tier segment total is within the wall span and the base/full chain balances exactly;
+- ordinary wall ends do not contain finished panels; wall-adjacent remainder is classified as filler;
+- sink cabinets have no appliance-side panels;
+- range and hood widths are equal whenever the hood is present;
+- no fixed appliance or dependent projection is clipped;
 - built-in appliance height is confirmed when surrounding cabinetry depends on it.
 
 Advisory checks:
@@ -642,7 +855,7 @@ git commit -m "feat(round2): gate customer proposal publication"
 
 ---
 
-### Task 7: Prove cross-view dimension consistency and complete the integrated workflow
+### Task 8: Prove cross-view dimension consistency and complete the integrated workflow
 
 **Files:**
 - Modify: `src/features/round2/round2-visual-prototype.test.tsx`
@@ -653,7 +866,7 @@ git commit -m "feat(round2): gate customer proposal publication"
 - Modify: `src/features/round2/measurement/measured-plan.test.tsx`
 
 **Interfaces:**
-- Consumes: shared measurements, appliance editing, local reflow, and publish preflight from Tasks 1–6.
+- Consumes: shared measurements, appliance editing, panel/filler rules, local reflow, and publish preflight from Tasks 1–7.
 - Produces: end-to-end regression coverage only; no new production abstraction.
 
 - [ ] **Step 1: Add the integrated workflow test**
@@ -667,7 +880,11 @@ test("prefills, edits, confirms, and publishes one coherent customer proposal", 
   expect(measurementValue(resized, fridgeWidthKey)).toBe(42 * 16);
   expect(segmentWidth(resized.model, "fridge")).toBe(42 * 16);
 
-  const confirmed = confirmRequiredGeometryAndFridge(resized);
+  const panelRemoved = removeAppliancePanel(resized, "fridge", "left");
+  expect(panelSides(findApplianceWall(panelRemoved.model, "fridge"))).toEqual(["right"]);
+  expect(allWallChainsBalance(panelRemoved.model)).toBe(true);
+
+  const confirmed = confirmRequiredGeometryAndFridge(panelRemoved);
   const preflight = buildPublishPreflight(preflightInput(confirmed));
   expect(preflight.blocking).toEqual([]);
 

@@ -1,7 +1,7 @@
 # Round 2 Fast Customer Design Flow
 
 **Date:** 2026-07-15  
-**Status:** Approved direction with panel/filler amendment; pending written-spec review
+**Status:** Approved
 
 ## 1. Objective
 
