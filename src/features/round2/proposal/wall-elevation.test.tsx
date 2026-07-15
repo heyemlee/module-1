@@ -949,7 +949,7 @@ describe("WallElevation", () => {
     );
   });
 
-  test("draws a counter surface line without thickness and dimensions the 36 inch cabinet", () => {
+  test("draws the counter slab and dimensions the 34 1/2 inch cabinet body", () => {
     const html = render(elevationModel());
 
     expect(html).toContain('data-elevation-layer="countertop"');
@@ -957,9 +957,77 @@ describe("WallElevation", () => {
     expect(tagFor(html, "line", 'data-countertop-band="0"')).toContain(
       'stroke-width="2"'
     );
-    expect(html).not.toContain('data-countertop-band="0"><rect');
+    // The 1 1/2″ slab is drawn as an undimensioned band over the base run —
+    // the height chain reads the 34 1/2″ cabinet body, never the slab.
+    expect(html).toContain('data-countertop-band="0"><rect');
     const counter = tagFor(html, "text", 'data-height-label="counter"');
-    expect(html.slice(html.indexOf(counter))).toContain("36″");
+    expect(html.slice(html.indexOf(counter))).toContain("34 1/2″");
+  });
+
+  test("draws tier panels at their tier height and full panels floor to cabinet top", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("a-base-endpanel-start", 12, "panel"),
+        label: "Panel",
+        panelSpan: "tier"
+      },
+      cabinet("a-base-1", 36 * 16),
+      { ...cabinet("a-tall-side-panel", 12, "panel"), label: "Panel" }
+    ]);
+    const html = render(model);
+    const base = rectForSegment(html, "a-base-1");
+
+    // The run-end panel matches the base body; the tall-flank panel runs to
+    // the cabinet top like the tall unit it closes.
+    expect(rectForSegment(html, "a-base-endpanel-start").y).toBe(base.y);
+    expect(rectForSegment(html, "a-tall-side-panel").y).toBeLessThan(base.y);
+  });
+
+  test("hangs the windowless sink upper shorter with its own height dimension", () => {
+    const model = elevationModel([
+      cabinet("a-base-left", 30 * 16),
+      {
+        ...cabinet("a-base-sink", 36 * 16, "appliance"),
+        cabinetKind: "sink",
+        label: "SB36",
+        sourceFixedPointId: "top-appliance-sink"
+      },
+      cabinet("a-base-right", 30 * 16),
+      { ...cabinet("a-upper-left", 30 * 16), tier: "upper" },
+      {
+        ...cabinet("a-upper-sink", 36 * 16),
+        tier: "upper",
+        cabinetKind: "upper",
+        label: "W36",
+        sourceFixedPointId: "top-appliance-sink"
+      },
+      { ...cabinet("a-upper-right", 30 * 16), tier: "upper" }
+    ]);
+    model.walls[0].fixedPoints = [
+      {
+        id: "top-appliance-sink",
+        type: "appliance",
+        symbol: "sink",
+        label: "sink",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.4
+      }
+    ];
+    const html = render(model);
+    const ordinary = boxForSegment(html, "a-upper-left");
+    const sinkUpper = boxForSegment(html, "a-upper-sink");
+
+    // Top-aligned with the run, shorter body: the 24″ counter clearance eats
+    // the difference below.
+    expect(sinkUpper.y).toBe(ordinary.y);
+    expect(sinkUpper.height).toBeLessThan(ordinary.height);
+    const heightLabel = tagFor(
+      html,
+      "text",
+      'data-sink-upper-height="a-upper-sink"'
+    );
+    expect(html.slice(html.indexOf(heightLabel))).toContain("30″");
   });
 
   test("breaks the countertop at a freestanding range", () => {
@@ -1107,6 +1175,20 @@ function rectForSegment(
     x: Number(match?.[1]),
     y: Number(match?.[2])
   };
+}
+
+function boxForSegment(
+  html: string,
+  segmentId: string
+): { y: number; height: number } {
+  const groupStart = html.indexOf(`data-segment-id="${segmentId}"`);
+  expect(groupStart).toBeGreaterThan(-1);
+  const segmentHtml = html.slice(groupStart);
+  const match = segmentHtml.match(
+    /<rect x="[^"]+" y="([^"]+)" width="[^"]+" height="([^"]+)"/
+  );
+  expect(match).not.toBeNull();
+  return { y: Number(match?.[1]), height: Number(match?.[2]) };
 }
 
 function chainLabelY(html: string, segmentId: string): number {

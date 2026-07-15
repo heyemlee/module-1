@@ -144,11 +144,18 @@ describe("Round 2 autofill", () => {
       sourceCornerId: "TL"
     });
     // The wall over the base corner body beyond the diagonal unit is ordinary
-    // upper space, not a 36″ clearance copied from the base tier: the whole
-    // 96″ run repartitions as its own standard-width run.
-    expect(leftUpper[1]).toMatchObject({
+    // upper space, not a 36″ clearance copied from the base tier: the run
+    // repartitions as its own standard-width run (behind its corner filler).
+    expect(
+      leftUpper.find((segment) => segment.kind === "cabinet")
+    ).toMatchObject({
       kind: "cabinet",
       widthSixteenths: 36 * 16
+    });
+    // The exposed far end of the upper run closes with a finished end panel.
+    expect(leftUpper[leftUpper.length - 1]).toMatchObject({
+      kind: "panel",
+      panelSpan: "tier"
     });
     expect(
       filled.walls
@@ -196,8 +203,13 @@ describe("Round 2 autofill", () => {
     const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
     const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
 
-    // No corner unit: the primary run reaches the wall end as ordinary uppers.
+    // No corner unit: the primary run reaches the wall end as ordinary uppers,
+    // and the cabinet side facing the open corner closes with an end panel.
     expect(upperTier(top)[0]).toMatchObject({
+      kind: "panel",
+      panelSpan: "tier"
+    });
+    expect(upperTier(top)[1]).toMatchObject({
       kind: "cabinet",
       cabinetKind: "upper"
     });
@@ -347,10 +359,17 @@ describe("Round 2 autofill", () => {
     const sink = segmentWithStart(base, (segment) => segment.cabinetKind === "sink");
     const dishwasher = segmentWithStart(
       base,
-      (segment) => segment.sourceFixedPointId === "top-appliance-dishwasher"
+      (segment) =>
+        segment.kind === "appliance" &&
+        segment.sourceFixedPointId === "top-appliance-dishwasher"
     );
 
-    expect(dishwasher.start + dishwasher.segment.widthSixteenths).toBe(sink.start);
+    // The dishwasher's finished side panel sits between it and the sink base.
+    expect(
+      dishwasher.start +
+        dishwasher.segment.widthSixteenths +
+        CABINET_STANDARDS.finishedPanel.sideWidthSixteenths
+    ).toBe(sink.start);
   });
 
   test("keeps a far-away dishwasher at its Round 1 spot when the intent says so", () => {
@@ -378,20 +397,28 @@ describe("Round 2 autofill", () => {
     );
     const keptDishwasher = segmentWithStart(
       keptBase,
-      (segment) => segment.sourceFixedPointId === "top-appliance-dishwasher"
+      (segment) =>
+        segment.kind === "appliance" &&
+        segment.sourceFixedPointId === "top-appliance-dishwasher"
     );
 
     expect(
       keptDishwasher.start + keptDishwasher.segment.widthSixteenths
     ).not.toBe(keptSink.start);
-    expect(keptDishwasher.start).toBe(Math.round(0.1 * (200 - 24) * 16));
+    // The Round 1 ratio positions the panel-flanked block; the dishwasher
+    // itself sits one panel inside it.
+    const panel = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
+    expect(keptDishwasher.start).toBe(
+      Math.round(0.1 * (200 * 16 - 24 * 16 - panel * 2)) + panel
+    );
     expectTiersClosed(kept);
   });
 
   test("nudges the range within tolerance so both neighboring runs close", () => {
-    // 99″ wall: the ratio-placed range leaves 34 1/2″ on each side (two 4 1/2″
-    // fillers); sliding it 1 1/2″ left closes both runs exactly (33″ + 36″).
-    const wall = wallWithLength(99 * 16);
+    // 100 1/2″ wall: after the two 3/4″ end panels the ratio-placed range
+    // leaves 34 1/2″ on each side (two 4 1/2″ fillers); sliding it 1 1/2″ left
+    // closes both runs exactly (33″ + 36″).
+    const wall = wallWithLength(100 * 16 + 8);
     wall.fixedPoints = [
       fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
     ];
@@ -403,14 +430,16 @@ describe("Round 2 autofill", () => {
       (segment) => segment.sourceFixedPointId === "top-appliance-range"
     );
 
-    expect(range.start).toBe(33 * 16);
+    expect(range.start).toBe(
+      33 * 16 + CABINET_STANDARDS.finishedPanel.sideWidthSixteenths
+    );
     expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
     expect(filled.decisionItems).toHaveLength(0);
     expectTiersClosed(filled);
   });
 
   test("flags a range nudged off its gas mark as a warning", () => {
-    const wall = wallWithLength(99 * 16);
+    const wall = wallWithLength(100 * 16 + 8);
     wall.fixedPoints = [
       fixedPoint({
         id: "top-marker-gas",
@@ -436,8 +465,9 @@ describe("Round 2 autofill", () => {
   });
 
   test("leaves the range on its mark when no nudge improves the runs", () => {
-    // 96″ wall: 33″ on each side of the range already partitions exactly.
-    const wall = wallWithLength(96 * 16);
+    // 97 1/2″ wall: behind the two 3/4″ end panels, 33″ on each side of the
+    // range already partitions exactly.
+    const wall = wallWithLength(97 * 16 + 8);
     wall.fixedPoints = [
       fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
     ];
@@ -448,7 +478,9 @@ describe("Round 2 autofill", () => {
       (segment) => segment.sourceFixedPointId === "top-appliance-range"
     );
 
-    expect(range.start).toBe(33 * 16);
+    expect(range.start).toBe(
+      33 * 16 + CABINET_STANDARDS.finishedPanel.sideWidthSixteenths
+    );
     expect(filled.decisionItems).toHaveLength(0);
     expectTiersClosed(filled);
   });
@@ -466,14 +498,18 @@ describe("Round 2 autofill", () => {
         const right = run[index + 1];
         expect(left?.kind === "cabinet" && right?.kind === "cabinet").toBe(false);
       }
-      expect(run[run.length - 1].kind).toBe("filler");
+      // The remainder sits at the run end, inside the finished end panel.
+      expect(run[run.length - 1].kind).toBe("panel");
+      expect(run[run.length - 2].kind).toBe("filler");
     }
   });
 
   test("steps a cabinet down a width tier to lift a sliver filler", () => {
-    // 100″ greedy fill would leave a 1″ remainder; one 36→33 step turns it
-    // into a 4″ filler at the wall end.
-    const filled = autofillRound2Model(modelWithWall(wallWithLength(100 * 16)));
+    // 101 1/2″ wall = 100″ behind the end panels: greedy fill would leave a
+    // 1″ remainder; one 36→33 step turns it into a 4″ filler at the run end.
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithLength(101 * 16 + 8))
+    );
     const base = baseTier(filled.walls[0]);
     const filler = base.find((segment) => segment.kind === "filler");
 
@@ -484,7 +520,10 @@ describe("Round 2 autofill", () => {
   });
 
   test("partitions a 42-inch ordinary base span without a filler", () => {
-    const filled = autofillRound2Model(modelWithWall(wallWithLength(42 * 16)));
+    // 43 1/2″ wall = 42″ behind the two 3/4″ end panels.
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithLength(43 * 16 + 8))
+    );
     const base = baseTier(filled.walls[0]);
 
     expect(
@@ -498,7 +537,10 @@ describe("Round 2 autofill", () => {
   });
 
   test("repartitions a seven-inch residual into one valid filler", () => {
-    const filled = autofillRound2Model(modelWithWall(wallWithLength(43 * 16)));
+    // 44 1/2″ wall = 43″ behind the two 3/4″ end panels.
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithLength(44 * 16 + 8))
+    );
     const base = baseTier(filled.walls[0]);
 
     expect(base.filter((segment) => segment.kind === "filler")).toEqual([
@@ -685,9 +727,9 @@ describe("Round 2 autofill", () => {
       (segment) => segment.tier === "upper"
     );
 
-    // The run left of the window (60″) closes exactly on standard widths; the
-    // run right of it (116″) keeps one approved filler at the wall end instead
-    // of a sliver against the window and an unexplained blank.
+    // Each run beside the window keeps one approved filler pushed to the run
+    // edge (behind the finished end panels) instead of a sliver against the
+    // window and an unexplained blank.
     expect(
       uppers.some(
         (segment) =>
@@ -696,9 +738,11 @@ describe("Round 2 autofill", () => {
     ).toBe(false);
     expect(uppers.filter((segment) => segment.kind === "gap")).toHaveLength(0);
     expect(uppers.filter((segment) => segment.kind === "filler")).toEqual([
-      expect.objectContaining({ widthSixteenths: 5 * 16 })
+      expect.objectContaining({ widthSixteenths: 5 * 16 + 4 }),
+      expect.objectContaining({ widthSixteenths: 4 * 16 + 4 })
     ]);
-    expect(uppers[uppers.length - 1].kind).toBe("filler");
+    expect(uppers[uppers.length - 1].kind).toBe("panel");
+    expect(uppers[uppers.length - 2].kind).toBe("filler");
     expectTiersClosed(filled);
   });
 
@@ -711,10 +755,15 @@ describe("Round 2 autofill", () => {
     const base = baseTier(filled.walls[0]);
     const fridge = segmentWithStart(
       base,
-      (segment) => segment.sourceFixedPointId === "top-appliance-fridge"
+      (segment) =>
+        segment.kind === "appliance" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
     );
 
-    expect(fridge.start + fridge.segment.widthSixteenths).toBe(200 * 16);
+    // The fridge's own full-height side panel closes the run at the wall end.
+    expect(fridge.start + fridge.segment.widthSixteenths).toBe(
+      200 * 16 - CABINET_STANDARDS.finishedPanel.sideWidthSixteenths
+    );
     // No separate deep upper: the fridge is a single full-height unit, so the
     // upper tier leaves a gap over it (never a WR cabinet).
     expect(
@@ -788,6 +837,7 @@ describe("Round 2 autofill", () => {
     const dishwasher = segmentWithStart(
       base,
       (segment) =>
+        segment.kind === "appliance" &&
         segment.sourceFixedPointId === "top-appliance-dishwasher"
     );
     const sink = segmentWithStart(
@@ -813,13 +863,13 @@ describe("Round 2 autofill", () => {
       80 * 16 + (30 * 16) / 2
     );
     // The range nudge closes both of its flanking spans exactly; only the
-    // wall-start filler beyond the dishwasher (out of the range's reach)
-    // remains.
+    // run-edge fillers behind the finished end panels (out of the range's
+    // reach) remain.
     expect(
       base.filter((segment) => segment.kind === "filler").map(
         (segment) => segment.widthSixteenths
       )
-    ).toEqual([5 * 16]);
+    ).toEqual([5 * 16 + 12, 5 * 16 + 4]);
     expectTiersClosed(filled);
 
     const adjacentCabinet = base[base.indexOf(sink.segment) + 1]!;
@@ -837,6 +887,7 @@ describe("Round 2 autofill", () => {
     const adjustedBase = baseTier(adjustedWall);
     const adjustedDishwasher = adjustedBase.find(
       (segment) =>
+        segment.kind === "appliance" &&
         segment.sourceFixedPointId === "top-appliance-dishwasher"
     )!;
     const adjustedSink = adjustedBase.find(
@@ -1072,16 +1123,38 @@ describe("Round 2 fridge surround", () => {
   const FRIDGE_WIDTH = 36 * 16;
   const PANEL_WIDTH = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
 
-  test("defaults to an empty gap above the fridge and no side panels", () => {
+  test("defaults to an empty gap above the fridge and panels on both sides", () => {
     const filled = autofillRound2Model(modelWithWall(fridgeWall()));
     const wall = filled.walls[0];
-    const fridge = baseTier(wall).find(
-      (segment) => segment.sourceFixedPointId === "top-appliance-fridge"
+    const base = baseTier(wall);
+    const fridgeIndex = base.findIndex(
+      (segment) =>
+        segment.kind === "appliance" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
     );
+    const fridge = base[fridgeIndex];
 
     expect(fridge?.kind).toBe("appliance");
     expect(fridge?.widthSixteenths).toBe(FRIDGE_WIDTH);
-    expect(wall.segments.some((segment) => segment.kind === "panel")).toBe(false);
+    // 见光板: both exposed fridge sides carry a full-height finished panel by
+    // default, and the space above stays an open gap.
+    expect(base[fridgeIndex - 1]).toMatchObject({
+      kind: "panel",
+      widthSixteenths: PANEL_WIDTH,
+      sourceFixedPointId: "top-appliance-fridge"
+    });
+    expect(base[fridgeIndex + 1]).toMatchObject({
+      kind: "panel",
+      widthSixteenths: PANEL_WIDTH,
+      sourceFixedPointId: "top-appliance-fridge"
+    });
+    expect(base[fridgeIndex - 1]?.panelSpan).not.toBe("tier");
+    const aboveFridge = wall.segments.find(
+      (segment) =>
+        segment.tier === "upper" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
+    );
+    expect(aboveFridge?.kind).toBe("gap");
     expectTiersClosed(filled);
   });
 
@@ -1125,7 +1198,11 @@ describe("Round 2 fridge surround", () => {
       intentWith({ "fridge.top-appliance-fridge.sides": "both" })
     );
     const base = baseTier(filled.walls[0]);
-    const panels = base.filter((segment) => segment.kind === "panel");
+    const panels = base.filter(
+      (segment) =>
+        segment.kind === "panel" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
+    );
     const fridge = base.find(
       (segment) =>
         segment.kind === "appliance" &&
@@ -1154,12 +1231,175 @@ describe("Round 2 fridge surround", () => {
         segment.kind === "appliance" &&
         segment.sourceFixedPointId === "top-appliance-fridge"
     );
-    const panels = base.filter((segment) => segment.kind === "panel");
+    const panels = base.filter(
+      (segment) =>
+        segment.kind === "panel" &&
+        segment.sourceFixedPointId === "top-appliance-fridge"
+    );
 
     expect(panels).toHaveLength(1);
     // The panel sits immediately before the fridge (start side).
     expect(base[fridgeIndex - 1]?.kind).toBe("panel");
     expectTiersClosed(filled);
+  });
+});
+
+describe("Round 2 finished end panels", () => {
+  const PANEL = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
+
+  test("closes both exposed run ends with tier-height panels on both tiers", () => {
+    const filled = autofillRound2Model(modelWithWall(wallWithLength(120 * 16)));
+    const wall = filled.walls[0];
+
+    for (const tier of ["base", "upper"] as const) {
+      const run = wall.segments.filter((segment) => segment.tier === tier);
+      expect(run[0]).toMatchObject({
+        kind: "panel",
+        panelSpan: "tier",
+        widthSixteenths: PANEL
+      });
+      expect(run[run.length - 1]).toMatchObject({
+        kind: "panel",
+        panelSpan: "tier",
+        widthSixteenths: PANEL
+      });
+    }
+    expectTiersClosed(filled);
+  });
+
+  test("skips the end panel where a corner reservation closes the run", () => {
+    const filled = autofillRound2Model(uShapeModel());
+    const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+    const topBase = baseTier(top);
+
+    // Both TOP ends land in corners — no end panels anywhere on that wall.
+    expect(topBase.some((segment) => segment.kind === "panel")).toBe(false);
+  });
+
+  test("skips the end panel where a door opening reaches the wall end", () => {
+    const wall = wallWithLength(120 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "fixed-door",
+        type: "door",
+        label: "Door",
+        positionRatio: 0,
+        offsetSixteenths: 0,
+        widthSixteenths: 30 * 16
+      })
+    ];
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const base = baseTier(filled.walls[0]);
+
+    expect(base[0].kind).toBe("opening");
+    expect(base[base.length - 1]).toMatchObject({
+      kind: "panel",
+      panelSpan: "tier"
+    });
+    expectTiersClosed(filled);
+  });
+
+  test("flanks the dishwasher with base-height panels on both sides", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithAppliance("dishwasher"))
+    );
+    const base = baseTier(filled.walls[0]);
+    const dishwasherIndex = base.findIndex(
+      (segment) => segment.kind === "appliance"
+    );
+
+    for (const neighbor of [
+      base[dishwasherIndex - 1],
+      base[dishwasherIndex + 1]
+    ]) {
+      expect(neighbor).toMatchObject({
+        kind: "panel",
+        panelSpan: "tier",
+        widthSixteenths: PANEL,
+        sourceFixedPointId: "fixed-dishwasher"
+      });
+    }
+    // Base-height panels carry ordinary uppers above them, so the upper run
+    // stays continuous over the dishwasher column.
+    expect(
+      filled.walls[0].segments.some(
+        (segment) => segment.tier === "upper" && segment.kind === "gap"
+      )
+    ).toBe(false);
+    expectTiersClosed(filled);
+  });
+
+  test("flanks a customer-sized oven tower with full-height panels", () => {
+    const filled = autofillRound2Model(
+      modelWithWall(wallWithAppliance("oven", 30 * 16))
+    );
+    const base = baseTier(filled.walls[0]);
+    const ovenIndex = base.findIndex(
+      (segment) => segment.kind === "appliance"
+    );
+
+    expect(base[ovenIndex]).toMatchObject({ cabinetKind: "tall" });
+    for (const neighbor of [base[ovenIndex - 1], base[ovenIndex + 1]]) {
+      expect(neighbor).toMatchObject({
+        kind: "panel",
+        widthSixteenths: PANEL,
+        sourceFixedPointId: "fixed-oven"
+      });
+      expect(neighbor?.panelSpan).not.toBe("tier");
+    }
+    expectTiersClosed(filled);
+  });
+});
+
+describe("Round 2 windowless sink upper", () => {
+  test("gives a windowless sink its own upper module, centered on the sink", () => {
+    const wall = wallWithLength(200 * 16);
+    wall.fixedPoints = [
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.4 })
+    ];
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const result = filled.walls[0];
+    const sink = segmentWithStart(
+      baseTier(result),
+      (segment) => segment.cabinetKind === "sink"
+    );
+    const sinkUpper = segmentWithStart(
+      upperTier(result),
+      (segment) =>
+        segment.kind === "cabinet" &&
+        segment.sourceFixedPointId === "top-appliance-sink"
+    );
+
+    // Same width, same column — horizontally centered on the sink by
+    // construction, like a single sink-plus-upper module.
+    expect(sinkUpper.segment.widthSixteenths).toBe(
+      sink.segment.widthSixteenths
+    );
+    expect(sinkUpper.start).toBe(sink.start);
+    expectTiersClosed(filled);
+  });
+
+  test("keeps ordinary uppers over a sink centered under a window", () => {
+    const wall = wallWithLength(200 * 16);
+    wall.fixedPoints = [
+      fixedPoint({
+        id: "top-window",
+        type: "window",
+        positionRatio: 0.4,
+        widthSixteenths: 30 * 16,
+        offsetSixteenths: 80 * 16
+      }),
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.4 })
+    ];
+    const filled = autofillRound2Model(modelWithWall(wall));
+
+    expect(
+      upperTier(filled.walls[0]).some(
+        (segment) =>
+          segment.kind === "cabinet" &&
+          segment.sourceFixedPointId === "top-appliance-sink"
+      )
+    ).toBe(false);
   });
 });
 

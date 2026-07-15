@@ -80,6 +80,13 @@ export type WallSegment = {
   anchored?: boolean;
   /** User explicitly kept this former filler as open space. */
   intentionalGap?: boolean;
+  /**
+   * Vertical span of a finished panel (见光板). "full" runs floor to cabinet
+   * top beside a tall unit; "tier" matches its own tier's cabinet height (the
+   * base body under the counter, or the upper run). Absent means "full" so
+   * drafts saved before run-end panels keep their tall-flank rendering.
+   */
+  panelSpan?: "full" | "tier";
 };
 
 export type Round2Wall = {

@@ -61,13 +61,18 @@ type PlacedReservation = {
   requestedWindowCenter?: number;
   anchored?: boolean;
   /**
-   * Finished side-panel widths bundled into a fridge reservation. When set, the
-   * placed reservation width already includes them, and fillBaseTier splits the
-   * block into [left panel, fridge, right panel] so the panels consume real
-   * wall width and shift neighbours like any other reservation.
+   * Finished side-panel widths bundled into an appliance reservation (fridge,
+   * dishwasher, tall oven/pantry towers). When set, the placed reservation
+   * width already includes them, and fillBaseTier splits the block into
+   * [left panel, unit, right panel] so the panels consume real wall width and
+   * shift neighbours like any other reservation. `span` is the panels'
+   * vertical extent: full height beside a tall unit, base height beside an
+   * under-counter dishwasher.
    */
-  fridgePanels?: { left: number; right: number };
+  sidePanels?: SidePanels;
 };
+
+type SidePanels = { left: number; right: number; span: "full" | "tier" };
 
 type Reservation = Omit<PlacedReservation, "start" | "anchored"> & {
   desiredStart: number;
@@ -452,24 +457,33 @@ function pickCornerWidth(
     : options[0];
 }
 
-/** A full-height finished side panel (见光板) flanking a tall unit. */
+/** A finished panel (见光板) closing an exposed cabinet side. */
 const FINISHED_PANEL_LABEL = "Panel";
+const PANEL_WIDTH_SIXTEENTHS =
+  CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
+// End panels flank cabinets: a run too short to host even the smallest
+// cabinet next to both panels (a degenerate scribe-only span) gets none.
+const MIN_RUN_FOR_END_PANELS_SIXTEENTHS =
+  PANEL_WIDTH_SIXTEENTHS * 2 + MIN_CABINET_WIDTH_SIXTEENTHS;
 
 function finishedPanelSegment(
   id: string,
   wallId: WallId,
+  tier: FillTier,
   width: number,
-  sourceFixedPointId: string
+  span: "full" | "tier",
+  sourceFixedPointId?: string
 ): WallSegment {
   return {
     id,
     wallId,
-    tier: "base",
+    tier,
     kind: "panel",
     widthSixteenths: width,
     label: FINISHED_PANEL_LABEL,
     standardWidthSixteenths: width,
-    sourceFixedPointId
+    sourceFixedPointId,
+    panelSpan: span
   };
 }
 
@@ -500,6 +514,21 @@ function fillBaseTier(
     // corner and report their own overflow if they cannot fit either.
     fillEnd = fillStart;
   }
+
+  // Rule 1b — an exposed run end (no corner geometry) closes with a finished
+  // end panel the height of its tier. A door landing on the wall end, or a
+  // tall unit whose own full-height side panel already closes the run, leaves
+  // no exposed cabinet side there, so no extra panel is reserved.
+  const endPanels = baseEndPanelSides(
+    wall,
+    fillStart,
+    fillEnd,
+    startInsets.length > 0,
+    endInsets.length > 0,
+    intent
+  );
+  if (endPanels.start) fillStart += PANEL_WIDTH_SIXTEENTHS;
+  if (endPanels.end) fillEnd -= PANEL_WIDTH_SIXTEENTHS;
 
   const reservations = nudgeRangeToCloseRuns(
     packReservations(
@@ -533,7 +562,19 @@ function fillBaseTier(
     });
   }
 
+  const wallPrefix = wall.id.toLowerCase();
   const segments: WallSegment[] = [...startInsets];
+  if (endPanels.start) {
+    segments.push(
+      finishedPanelSegment(
+        `${wallPrefix}-base-endpanel-start`,
+        wall.id,
+        "base",
+        PANEL_WIDTH_SIXTEENTHS,
+        "tier"
+      )
+    );
+  }
   let cursor = fillStart;
   let sequence = 1;
   const hasStartCorner = startInsets.length > 0;
@@ -567,8 +608,7 @@ function fillBaseTier(
 
   for (const item of reservations) {
     pushSpan(cursor, item.start);
-    const wallPrefix = wall.id.toLowerCase();
-    const panels = item.fridgePanels;
+    const panels = item.sidePanels;
     const applianceWidth = panels
       ? item.width - panels.left - panels.right
       : item.width;
@@ -577,7 +617,9 @@ function fillBaseTier(
         finishedPanelSegment(
           `${wallPrefix}-base-${sequence}-panel-left-${item.fixedPoint.id}`,
           wall.id,
+          "base",
           panels.left,
+          panels.span,
           item.fixedPoint.id
         )
       );
@@ -599,7 +641,9 @@ function fillBaseTier(
         finishedPanelSegment(
           `${wallPrefix}-base-${sequence}-panel-right-${item.fixedPoint.id}`,
           wall.id,
+          "base",
           panels.right,
+          panels.span,
           item.fixedPoint.id
         )
       );
@@ -608,9 +652,79 @@ function fillBaseTier(
     cursor = item.start + item.width;
   }
   pushSpan(cursor, fillEnd);
+  if (endPanels.end) {
+    segments.push(
+      finishedPanelSegment(
+        `${wallPrefix}-base-endpanel-end`,
+        wall.id,
+        "base",
+        PANEL_WIDTH_SIXTEENTHS,
+        "tier"
+      )
+    );
+  }
   segments.push(...endInsets);
 
   return tagFunctionalNeighbors(segments, intent);
+}
+
+/**
+ * Which run ends need a finished end panel, decided before packing from the
+ * fixed-point geometry: a corner reservation, a door whose opening reaches the
+ * wall end, or a fridge/tall unit that hugs the end with its own full-height
+ * side panel all close the run without one.
+ */
+function baseEndPanelSides(
+  wall: Round2Wall,
+  fillStart: number,
+  fillEnd: number,
+  hasStartCorner: boolean,
+  hasEndCorner: boolean,
+  intent: Round2DesignIntent | undefined
+): { start: boolean; end: boolean } {
+  const length = wall.lengthSixteenths ?? 0;
+  if (fillEnd - fillStart < MIN_RUN_FOR_END_PANELS_SIXTEENTHS) {
+    return { start: false, end: false };
+  }
+  let start = !hasStartCorner;
+  let end = !hasEndCorner;
+
+  for (const point of wall.fixedPoints) {
+    if (point.type === "door") {
+      const width = Math.max(0, point.widthSixteenths ?? 0);
+      if (width === 0) continue;
+      const desired =
+        point.offsetSixteenths ??
+        Math.round(point.positionRatio * Math.max(0, length - width));
+      if (desired <= fillStart + 1) start = false;
+      if (desired + width >= fillEnd - 1) end = false;
+      continue;
+    }
+    if (point.type !== "appliance") continue;
+    if (
+      point.symbol !== "fridge" &&
+      point.symbol !== "oven" &&
+      point.symbol !== "microwave"
+    ) {
+      continue;
+    }
+    const panels = tallSidePanels(point, intent);
+    if (!panels) continue;
+    // The fridge deterministically hugs a run end (see baseReservations); the
+    // other towers hug one only when their Round 1 spot sits there.
+    const hugsStart =
+      point.symbol === "fridge"
+        ? point.positionRatio < 0.5
+        : point.positionRatio <= 0.05;
+    const hugsEnd =
+      point.symbol === "fridge"
+        ? point.positionRatio >= 0.5
+        : point.positionRatio >= 0.95;
+    if (hugsStart && panels.left > 0) start = false;
+    if (hugsEnd && panels.right > 0) end = false;
+  }
+
+  return { start, end };
 }
 
 /** Whether a dishwasher docks against the sink or keeps its Round 1 spot. */
@@ -632,22 +746,36 @@ function fridgeAboveStrategy(
 }
 
 /**
- * Finished side-panel widths flanking a fridge, from the per-fridge sides
- * intent. Returns null (no panels) for the default so autofill reproduces the
- * original single-segment fridge exactly.
+ * Finished side-panel widths flanking a tall unit (fridge, oven/pantry
+ * tower). Both sides carry a panel by default; a fridge can be dialed back
+ * per side through the per-fridge sides intent.
  */
-function fridgeSidePanels(
+function tallSidePanels(
   point: Round2FixedPoint,
   intent: Round2DesignIntent | undefined
-): { left: number; right: number } | null {
-  const value = intent?.answers[fridgeSidesIntentKey(point.id)] as
-    | FridgeSideStrategy
-    | undefined;
-  if (value == null || value === "none") return null;
-  const panel = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
+): SidePanels | null {
+  const value =
+    point.symbol === "fridge"
+      ? ((intent?.answers[fridgeSidesIntentKey(point.id)] as
+          | FridgeSideStrategy
+          | undefined) ?? "both")
+      : "both";
+  if (value === "none") return null;
   return {
-    left: value === "left" || value === "both" ? panel : 0,
-    right: value === "right" || value === "both" ? panel : 0
+    left:
+      value === "left" || value === "both" ? PANEL_WIDTH_SIXTEENTHS : 0,
+    right:
+      value === "right" || value === "both" ? PANEL_WIDTH_SIXTEENTHS : 0,
+    span: "full"
+  };
+}
+
+/** An under-counter dishwasher always carries base-height panels both sides. */
+function dishwasherSidePanels(): SidePanels {
+  return {
+    left: PANEL_WIDTH_SIXTEENTHS,
+    right: PANEL_WIDTH_SIXTEENTHS,
+    span: "tier"
   };
 }
 
@@ -726,12 +854,18 @@ function baseReservations(
     const standard = applianceStandard(point);
     if (!standard) continue;
     const applianceWidth = standard.widthSixteenths;
-    const fridgePanels =
-      point.symbol === "fridge" ? fridgeSidePanels(point, intent) : null;
-    // The reservation block spans the fridge plus any bundled side panels, so
+    const sidePanels =
+      point.symbol === "fridge" ||
+      point.symbol === "oven" ||
+      point.symbol === "microwave"
+        ? tallSidePanels(point, intent)
+        : point.symbol === "dishwasher"
+          ? dishwasherSidePanels()
+          : null;
+    // The reservation block spans the unit plus any bundled side panels, so
     // packing and overflow checks treat the finished sides as consumed width.
     const width =
-      applianceWidth + (fridgePanels?.left ?? 0) + (fridgePanels?.right ?? 0);
+      applianceWidth + (sidePanels?.left ?? 0) + (sidePanels?.right ?? 0);
     let desiredStart = Math.round(
       point.positionRatio * Math.max(0, length - width)
     );
@@ -767,7 +901,7 @@ function baseReservations(
         point.symbol === "microwave"
           ? "tall"
           : undefined,
-      fridgePanels: fridgePanels ?? undefined
+      sidePanels: sidePanels ?? undefined
     });
   }
 
@@ -1374,7 +1508,40 @@ function deriveUpperTier(
     openings.push({ point, start, end: start + width });
   }
 
-  const cuts = new Set<number>([fillStart, fillEnd]);
+  // Rule 1b (upper tier) — an exposed upper-run end closes with an
+  // upper-height finished end panel. An end already closed by corner
+  // geometry, an opening, or a full-height tall column/side panel stays as
+  // is; a base-height end panel below means the upper panel stacks directly
+  // above it in the same column.
+  const startPanel =
+    startInsets.length === 0 &&
+    fillEnd - fillStart >= MIN_RUN_FOR_END_PANELS_SIXTEENTHS &&
+    upperEndExposed(basePlaced, openings, fillStart);
+  const endPanel =
+    endInsets.length === 0 &&
+    fillEnd - fillStart >= MIN_RUN_FOR_END_PANELS_SIXTEENTHS &&
+    upperEndExposed(basePlaced, openings, fillEnd - 1);
+  const runStart = fillStart + (startPanel ? PANEL_WIDTH_SIXTEENTHS : 0);
+  const runEnd = Math.max(
+    fillEnd - (endPanel ? PANEL_WIDTH_SIXTEENTHS : 0),
+    runStart
+  );
+
+  // A sink with no window over its column carries its own upper module —
+  // same width, same column (see model/sink-upper.ts for its height rule).
+  const windowlessSinks = new Set<string>();
+  for (const placed of basePlaced) {
+    if (placed.segment.cabinetKind !== "sink") continue;
+    const windowed = openings.some(
+      (opening) =>
+        opening.point.type === "window" &&
+        opening.start < placed.end &&
+        opening.end > placed.start
+    );
+    if (!windowed) windowlessSinks.add(placed.segment.id);
+  }
+
+  const cuts = new Set<number>([runStart, runEnd]);
   for (const placed of basePlaced) {
     cuts.add(placed.start);
     cuts.add(placed.end);
@@ -1384,7 +1551,7 @@ function deriveUpperTier(
     cuts.add(Math.min(length, opening.end));
   }
   const bounds = [...cuts]
-    .filter((value) => value >= fillStart && value <= fillEnd)
+    .filter((value) => value >= runStart && value <= runEnd)
     .sort((a, b) => a - b);
 
   const pieces: UpperPiece[] = [];
@@ -1410,6 +1577,7 @@ function deriveUpperTier(
           wall,
           basePlaced.find((item) => item.start <= from && to <= item.end),
           width,
+          windowlessSinks,
           intent
         );
 
@@ -1428,7 +1596,7 @@ function deriveUpperTier(
   const hasStartCorner = startInsets.length > 0;
   const hasEndCorner = endInsets.length > 0;
   const derived: WallSegment[] = [];
-  let cursor = fillStart;
+  let cursor = runStart;
 
   pieces.forEach((piece, index) => {
     const from = cursor;
@@ -1446,8 +1614,8 @@ function deriveUpperTier(
           fillerSideForSpan(
             from,
             to,
-            fillStart,
-            fillEnd,
+            runStart,
+            runEnd,
             hasStartCorner,
             hasEndCorner,
             length
@@ -1514,7 +1682,62 @@ function deriveUpperTier(
     });
   });
 
-  return [...startInsets, ...derived, ...endInsets];
+  const wallPrefix = wall.id.toLowerCase();
+  return [
+    ...startInsets,
+    ...(startPanel
+      ? [
+          finishedPanelSegment(
+            `${wallPrefix}-upper-endpanel-start`,
+            wall.id,
+            "upper",
+            PANEL_WIDTH_SIXTEENTHS,
+            "tier"
+          )
+        ]
+      : []),
+    ...derived,
+    ...(endPanel
+      ? [
+          finishedPanelSegment(
+            `${wallPrefix}-upper-endpanel-end`,
+            wall.id,
+            "upper",
+            PANEL_WIDTH_SIXTEENTHS,
+            "tier"
+          )
+        ]
+      : []),
+    ...endInsets
+  ];
+}
+
+/**
+ * Whether the upper run at this wall position ends on an exposed cabinet side
+ * that needs an end panel. Openings, unresolved/corner gaps, tall columns and
+ * their full-height side panels already terminate the run.
+ */
+function upperEndExposed(
+  basePlaced: readonly { segment: WallSegment; start: number; end: number }[],
+  openings: readonly { start: number; end: number }[],
+  position: number
+): boolean {
+  if (
+    openings.some(
+      (opening) => opening.start <= position && position < opening.end
+    )
+  ) {
+    return false;
+  }
+  const placed = basePlaced.find(
+    (item) => item.start <= position && position < item.end
+  );
+  if (!placed) return true;
+  const base = placed.segment;
+  if (base.kind === "opening" || base.kind === "gap") return false;
+  if (base.cabinetKind === "tall") return false;
+  if (base.kind === "panel" && base.panelSpan !== "tier") return false;
+  return true;
 }
 
 // Classifies the wall area above one base piece. Openings, the hood, tall
@@ -1526,13 +1749,18 @@ function mapBaseToUpperPiece(
   wall: Round2Wall,
   placed: { segment: WallSegment } | undefined,
   width: number,
+  windowlessSinks: ReadonlySet<string>,
   intent?: Round2DesignIntent
 ): UpperPiece {
   if (!placed) return { type: "fill", ref: "open-wall", label: "", width };
   const base = placed.segment;
 
-  // A finished side panel is full height, so nothing stacks above it.
+  // A full-height side panel lets nothing stack above it; a tier-height panel
+  // (run end, dishwasher side) is ordinary upper space.
   if (base.kind === "panel") {
+    if (base.panelSpan === "tier") {
+      return { type: "fill", ref: base.id, label: "", width };
+    }
     return { type: "gap", ref: base.id, label: base.label, width };
   }
 
@@ -1592,8 +1820,21 @@ function mapBaseToUpperPiece(
         sourceFixedPointId: base.sourceFixedPointId
       };
     }
-    // Sink and dishwasher columns carry ordinary uppers; they merge into the
-    // surrounding run so window cuts repartition instead of leaving slivers.
+    // A windowless sink carries its own upper module: the sink cabinet's
+    // exact width and column, so it stays horizontally centered on the sink.
+    // Its raised bottom is a rendering rule (see model/sink-upper.ts).
+    if (base.cabinetKind === "sink" && windowlessSinks.has(base.id)) {
+      return {
+        type: "cabinet",
+        ref: base.id,
+        label: "",
+        width,
+        sourceFixedPointId: base.sourceFixedPointId
+      };
+    }
+    // Sink-under-window and dishwasher columns carry ordinary uppers; they
+    // merge into the surrounding run so window cuts repartition instead of
+    // leaving slivers.
     return { type: "fill", ref: base.id, label: "", width };
   }
 

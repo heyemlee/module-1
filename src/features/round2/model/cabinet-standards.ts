@@ -76,6 +76,16 @@ export const cabinetStandardsSchema = z
         sideWidthSixteenths: dimensionSchema
       })
       .strict(),
+    sinkUpper: z
+      .object({
+        // Counter-to-cabinet clearance band for the dedicated upper cabinet
+        // over a windowless sink. Its bottom is raised to the preferred
+        // clearance; the top stays aligned with the rest of the upper run.
+        clearanceMinSixteenths: dimensionSchema,
+        clearancePreferredSixteenths: dimensionSchema,
+        clearanceMaxSixteenths: dimensionSchema
+      })
+      .strict(),
     corner: z
       .object({
         lazySusan: z
@@ -149,6 +159,18 @@ export const cabinetStandardsSchema = z
           path: ["appliances", key, "defaultWidthSixteenths"]
         });
       }
+    }
+
+    const sinkUpper = standards.sinkUpper;
+    if (
+      sinkUpper.clearanceMinSixteenths > sinkUpper.clearancePreferredSixteenths ||
+      sinkUpper.clearancePreferredSixteenths > sinkUpper.clearanceMaxSixteenths
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Sink upper clearance must satisfy min <= preferred <= max",
+        path: ["sinkUpper"]
+      });
     }
 
     const moulding = standards.vertical.flatMoulding;
@@ -241,6 +263,11 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
     },
     finishedPanel: {
       sideWidthSixteenths: 12
+    },
+    sinkUpper: {
+      clearanceMinSixteenths: 24 * 16,
+      clearancePreferredSixteenths: 24 * 16,
+      clearanceMaxSixteenths: 30 * 16
     },
     corner: {
       lazySusan: {

@@ -108,7 +108,8 @@ function scheduleRows(model: Round2Model | null): {
         (segment) =>
           segment.kind === "cabinet" ||
           segment.kind === "appliance" ||
-          segment.kind === "filler"
+          segment.kind === "filler" ||
+          segment.kind === "panel"
       )
       .map((segment) => ({ wall, segment }))
   );
@@ -116,6 +117,11 @@ function scheduleRows(model: Round2Model | null): {
 
 function heightForSegment(segment: WallSegment): string {
   if (segment.cabinetKind === "tall" || segment.kind === "appliance") {
+    return "84″";
+  }
+  // A full-height finished panel flanks a tall unit; a tier-height panel
+  // matches its own tier below.
+  if (segment.kind === "panel" && segment.panelSpan !== "tier") {
     return "84″";
   }
   return HEIGHT_BY_TIER[segment.tier] ?? "34 1/2″";
@@ -127,6 +133,7 @@ function depthForSegment(segment: WallSegment): string {
 }
 
 function noteForSegment(segment: WallSegment): string {
+  if (segment.kind === "panel") return "Finished end panel";
   if (segment.kind === "filler") return "Filler panel / scribe";
   if (segment.cabinetKind === "corner") {
     return "Corner strategy from design intent";
