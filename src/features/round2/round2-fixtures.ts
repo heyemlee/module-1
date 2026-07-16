@@ -39,6 +39,10 @@ export const ROUND1_REFERENCE_FIXTURE: Round1ReferenceSource = {
     dims: [],
     confirmationCount: 2,
     layoutPreference: "U_SHAPE",
-    scaleNote: "Round 1 rough layout"
+    scaleNote: "Round 1 rough layout",
+    // 3.75 px/in matches the fixture's B30 base (112px ≈ 30″); lets Round 2
+    // pre-fill wall lengths and the window opening from this demo geometry.
+    pxPerInch: 3.75,
+    ceilingHeightSixteenths: 96 * 16
   }
 };

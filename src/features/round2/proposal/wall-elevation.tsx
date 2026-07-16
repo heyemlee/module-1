@@ -1796,6 +1796,22 @@ export function accessoryOptionsForSegment(
     : [...STANDARD_ACCESSORY_OPTIONS];
 }
 
+/** Standard width chips for an editable appliance; empty for unknown symbols. */
+function applianceWidthOptions(symbol: string | undefined): number[] {
+  const appliances = CABINET_STANDARDS.appliances;
+  const definition =
+    symbol === "fridge"
+      ? appliances.refrigerator
+      : symbol === "range"
+        ? appliances.range
+        : symbol === "sink"
+          ? appliances.sinkBase
+          : symbol === "dishwasher"
+            ? appliances.dishwasher
+            : null;
+  return definition ? [...definition.widthOptionsSixteenths] : [];
+}
+
 function CardSectionLabel({ children }: { children: string }) {
   return (
     <span className="mt-2.5 block font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
@@ -1831,6 +1847,16 @@ function SegmentEditorCard({
     segment.sourceCornerId == null;
   const canAdjustWidth = isOrdinaryCabinet;
   const canSlide = isOrdinaryCabinet;
+  const applianceSymbol =
+    segment.kind === "appliance" &&
+    segment.tier === "base" &&
+    segment.sourceFixedPointId != null
+      ? wall.fixedPoints.find(
+          (point) => point.id === segment.sourceFixedPointId
+        )?.symbol
+      : undefined;
+  const canAdjustApplianceWidth =
+    applianceSymbol != null && applianceSymbol !== "hood";
   const isFiller = segment.kind === "filler";
   const isIntentionalGap = segment.kind === "gap" && segment.intentionalGap;
   const isPanel = segment.kind === "panel";
@@ -1928,6 +1954,46 @@ function SegmentEditorCard({
               }
             }}
             ariaLabel="Custom width"
+          />
+        </>
+      )}
+
+      {canAdjustApplianceWidth && (
+        <>
+          <CardSectionLabel>APPLIANCE WIDTH</CardSectionLabel>
+          {applianceWidthOptions(applianceSymbol).length > 0 && (
+            <div className="mt-1.5 grid grid-cols-5 gap-1">
+              {applianceWidthOptions(applianceSymbol).map((width) => (
+                <button
+                  key={width}
+                  type="button"
+                  aria-pressed={segment.widthSixteenths === width}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_APPLIANCE_WIDTH",
+                      objectId: segment.id,
+                      widthSixteenths: width
+                    })
+                  }
+                  className={CARD_CHIP_CLASS}
+                >
+                  {width / 16}″
+                </button>
+              ))}
+            </div>
+          )}
+          <InchField
+            value={segment.widthSixteenths}
+            onChange={(value) => {
+              if (value != null) {
+                dispatch({
+                  type: "SET_APPLIANCE_WIDTH",
+                  objectId: segment.id,
+                  widthSixteenths: value
+                });
+              }
+            }}
+            ariaLabel="Custom appliance width"
           />
         </>
       )}

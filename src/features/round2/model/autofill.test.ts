@@ -1009,6 +1009,60 @@ describe("Round 2 autofill", () => {
     );
   });
 
+  test("scales crowded appliances down so the base run closes on the wall", () => {
+    // 36 + 24 + 30 + 36 = 126″ of appliances on a 120″ wall — a modest overflow
+    // the run auto-fits instead of drawing the bases past the wall end.
+    const wall = wallWithLength(120 * 16);
+    wall.fixedPoints = [
+      fixedPoint({ id: "top-appliance-fridge", symbol: "fridge", positionRatio: 0.02 }),
+      fixedPoint({ id: "top-appliance-dishwasher", symbol: "dishwasher", positionRatio: 0.35 }),
+      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.55 }),
+      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.8 })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+    const base = baseTier(filled.walls[0]);
+    const total = base.reduce((sum, s) => sum + s.widthSixteenths, 0);
+
+    // The run closes exactly on the wall and nothing overflows.
+    expect(total).toBe(120 * 16);
+    expect(
+      filled.decisionItems.some((item) => item.severity === "blocking")
+    ).toBe(false);
+    // Each fixed appliance was scaled below its standard width.
+    const sink = base.find((s) => s.cabinetKind === "sink");
+    expect(sink!.widthSixteenths).toBeLessThan(36 * 16);
+    expect(filled.decisionItems).toContainEqual(
+      expect.objectContaining({
+        id: "decision-A-appliance-autofit",
+        severity: "warning",
+        title: "Wall A appliances scaled to fit"
+      })
+    );
+  });
+
+  test("still blocks a gross appliance overflow instead of faking a fit", () => {
+    // 30″ range on a 24″ wall is a 25% overflow — a measurement error, not a
+    // crowded wall, so it stays blocking rather than shrinking to fit.
+    const wall = wallWithLength(24 * 16);
+    wall.fixedPoints = [
+      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
+    ];
+
+    const filled = autofillRound2Model(modelWithWall(wall));
+
+    expect(
+      filled.decisionItems.some(
+        (item) =>
+          item.severity === "blocking" &&
+          item.title === "Fixed reservation exceeds available wall space"
+      )
+    ).toBe(true);
+    expect(
+      filled.decisionItems.some((item) => item.id === "decision-A-appliance-autofit")
+    ).toBe(false);
+  });
+
   test("reports an aligned sink conflict when fixed reservations displace it", () => {
     const wall = wallWithLength(30 * 16);
     wall.fixedPoints = [

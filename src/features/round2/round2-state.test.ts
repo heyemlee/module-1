@@ -5,7 +5,10 @@ import {
   reduceRound2Prototype
 } from "./round2-state";
 import { ROUND1_REFERENCE_FIXTURE } from "./round2-fixtures";
-import { hasBlockingDecisions } from "./model/round2-model";
+import {
+  hasBlockingDecisions,
+  initializeMeasurements
+} from "./model/round2-model";
 import type {
   Round1ReferenceSource,
   Round2PrototypeState
@@ -95,7 +98,15 @@ describe("Round 2 prototype state", () => {
 
   test("requires complete dynamic measurements before submit autofills proposal model", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
-    const blocked = reduceRound2Prototype(locked, {
+    // The layout pre-fills every field, so clear a required one to recreate the
+    // incomplete state the submit gate must reject.
+    const clearedKey = Object.keys(locked.measurements)[0];
+    const incomplete = reduceRound2Prototype(locked, {
+      type: "EDIT_MEASUREMENT",
+      field: clearedKey,
+      value: null
+    });
+    const blocked = reduceRound2Prototype(incomplete, {
       type: "SUBMIT_MEASUREMENT"
     });
 
@@ -298,9 +309,113 @@ describe("Round 2 prototype state", () => {
     expect(replaced.measurementStatus).toBe("DRAFT");
     expect(replaced.proposalStatus).toBe("STALE");
     expect(replaced.drawingStatus).toBe("STALE");
-    expect(Object.values(replaced.measurements).every((value) => value == null)).toBe(
-      true
+    // Measurements re-initialize from the newly adopted reference: field
+    // measurement opens pre-filled with the Round 1 layout presets (wall
+    // lengths, opening sizes) rather than blank.
+    expect(replaced.measurements).toEqual(
+      initializeMeasurements(replaced.model!)
     );
+    expect(
+      Object.values(replaced.measurements).some((value) => value != null)
+    ).toBe(true);
+  });
+
+  test("hand-adjusts an appliance width, reflows the run, and re-derives its column", () => {
+    // Seed a fridge and generate its wall-cabinet surround so there is an upper
+    // column aligned to the fridge to re-derive.
+    const seeded = reduceRound2Prototype(
+      withFridgeFixedPoint(
+        submitComplete(createRound2PrototypeState("DESIGNER"))
+      ),
+      {
+        type: "SET_DESIGN_INTENT",
+        key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
+        value: "wallCabinet"
+      }
+    );
+    const fridge = seeded.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )!;
+    expect(fridge.widthSixteenths).toBe(36 * 16);
+    expect(hasUpperCabinetAboveFridge(seeded)).toBe(true);
+
+    const adjusted = reduceRound2Prototype(seeded, {
+      type: "SET_APPLIANCE_WIDTH",
+      objectId: fridge.id,
+      widthSixteenths: 33 * 16
+    });
+
+    const resized = adjusted.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )!;
+
+    // The fridge takes the new width and its upper column re-derives with it,
+    // keeping the wall-cabinet surround above the (now narrower) fridge.
+    expect(resized.widthSixteenths).toBe(33 * 16);
+    expect(resized.label).toBe("REF33");
+    expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
+    // Both tiers still close exactly on every measured wall.
+    for (const wall of adjusted.model!.walls) {
+      if (wall.lengthSixteenths == null) continue;
+      for (const tier of ["upper", "base"] as const) {
+        const total = wall.segments
+          .filter((segment) => segment.tier === tier)
+          .reduce((sum, segment) => sum + segment.widthSixteenths, 0);
+        expect(total).toBe(wall.lengthSixteenths);
+      }
+    }
+    // Selection stays on the fridge and the drawings go stale.
+    expect(adjusted.selectedObjectId).toBe(resized.id);
+    expect(adjusted.drawingStatus).toBe("STALE");
+    expect(adjusted.proposalVersion).toBe(seeded.proposalVersion + 1);
+  });
+
+  test("ignores appliance width edits from a non-designer or on a cabinet", () => {
+    const seeded = reduceRound2Prototype(
+      withFridgeFixedPoint(
+        submitComplete(createRound2PrototypeState("DESIGNER"))
+      ),
+      {
+        type: "SET_DESIGN_INTENT",
+        key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
+        value: "wallCabinet"
+      }
+    );
+    const fridge = seeded.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )!;
+
+    // A sales viewer cannot resize appliances.
+    const salesState: Round2PrototypeState = { ...seeded, role: "SALES" };
+    const asSales = reduceRound2Prototype(salesState, {
+      type: "SET_APPLIANCE_WIDTH",
+      objectId: fridge.id,
+      widthSixteenths: 30 * 16
+    });
+    expect(asSales).toBe(salesState);
+
+    // A cabinet id is not an appliance, so the action is a no-op.
+    const cabinet = seeded.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find((segment) => segment.kind === "cabinet")!;
+    const noop = reduceRound2Prototype(seeded, {
+      type: "SET_APPLIANCE_WIDTH",
+      objectId: cabinet.id,
+      widthSixteenths: 30 * 16
+    });
+    expect(noop).toBe(seeded);
   });
 
   test("stores a front exception and marks the drawings stale", () => {

@@ -18,9 +18,46 @@ describe("deriveWallsFromRound1", () => {
 
     expect(model.walls.map((wall) => wall.sourceWall)).toEqual(sourceWalls);
     expect(model.walls.map((wall) => wall.label)).toEqual(labels);
+    // The demo floor plan carries a real scale, so every wall opens pre-filled
+    // with the length recovered from the room rectangle.
+    expect(model.walls.every((wall) => wall.lengthSixteenths != null)).toBe(
+      true
+    );
+  });
+
+  test("recovers preset lengths, openings, and ceiling from the plan scale", () => {
+    const model = deriveWallsFromRound1(ROUND1_REFERENCE_FIXTURE.floorPlan);
+    const { pxPerInch, room, window: win } =
+      ROUND1_REFERENCE_FIXTURE.floorPlan;
+    const toSixteenths = (px: number) =>
+      Math.round((px / (pxPerInch as number)) * 16);
+
+    const wallA = model.walls.find((wall) => wall.sourceWall === "TOP");
+    expect(wallA?.lengthSixteenths).toBe(toSixteenths(room.w));
+    expect(model.ceilingHeightSixteenths).toBe(96 * 16);
+
+    const windowPoint = wallA?.fixedPoints.find(
+      (point) => point.type === "window"
+    );
+    expect(windowPoint?.widthSixteenths).toBe(toSixteenths(win!.w));
+    expect(windowPoint?.offsetSixteenths).toBe(toSixteenths(win!.x - room.x));
+  });
+
+  test("leaves measurements blank when the plan has no real scale", () => {
+    const model = deriveWallsFromRound1({
+      ...ROUND1_REFERENCE_FIXTURE.floorPlan,
+      pxPerInch: null,
+      ceilingHeightSixteenths: null
+    });
+
     expect(model.walls.every((wall) => wall.lengthSixteenths == null)).toBe(
       true
     );
+    expect(model.ceilingHeightSixteenths).toBeNull();
+    const windowPoint = model.walls
+      .flatMap((wall) => wall.fixedPoints)
+      .find((point) => point.type === "window");
+    expect(windowPoint?.widthSixteenths ?? null).toBeNull();
   });
 
   test("keeps fixed openings on their owning wall by relative order", () => {

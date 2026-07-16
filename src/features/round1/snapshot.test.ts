@@ -11,8 +11,10 @@ import {
 import {
   ROUND1_SNAPSHOT_SCHEMA_VERSION,
   buildRound1Snapshot,
+  floorPlanWithMeasurementPresets,
   summarizeRound1Snapshot
 } from "./snapshot";
+import type { Round1FormInput } from "@/domain/round1";
 
 const FIXED_NOW = new Date("2026-06-17T12:00:00.000Z");
 
@@ -118,6 +120,87 @@ describe("buildRound1Snapshot", () => {
       cabinetStyle: "AMERICAN_FRAMED",
       doorColorId: "painted-white"
     });
+  });
+});
+
+describe("floorPlanWithMeasurementPresets", () => {
+  function snapshotForRoom(
+    room: Partial<Round1FormInput["room"]>
+  ) {
+    const base = createDefaultShowroomForm();
+    const form: Round1FormInput = {
+      ...base,
+      room: { ...base.room, ...room }
+    };
+    const result = normalizeRound1Form(form);
+    const estimate = generatePreliminaryCabinetList(
+      createDefaultCabinetRuns(form)
+    );
+    return buildRound1Snapshot({
+      showroomForm: form,
+      normalized: result.normalized,
+      positionOverrides: {},
+      preliminaryCabinets: estimate,
+      confirmationItems: [],
+      readiness: result.readiness,
+      now: () => FIXED_NOW
+    });
+  }
+
+  test("recovers pxPerInch and ceiling for a snapshot serialized without them", () => {
+    const snapshot = snapshotForRoom({
+      length: 120,
+      width: 108,
+      dimensionsKnown: true,
+      ceilingHeight: 96
+    });
+    // Emulate a snapshot stored before the plan carried these fields.
+    const legacy = {
+      ...snapshot,
+      floorPlan: {
+        ...snapshot.floorPlan,
+        pxPerInch: null,
+        ceilingHeightSixteenths: null
+      }
+    };
+
+    const recovered = floorPlanWithMeasurementPresets(legacy);
+
+    expect(recovered.pxPerInch).toBeCloseTo(snapshot.floorPlan.room.w / 120, 5);
+    expect(recovered.ceilingHeightSixteenths).toBe(96 * 16);
+  });
+
+  test("keeps a plan that already carries the presets untouched", () => {
+    const snapshot = snapshotForRoom({
+      length: 120,
+      width: 108,
+      dimensionsKnown: true,
+      ceilingHeight: 96
+    });
+    expect(snapshot.floorPlan.pxPerInch).toBeGreaterThan(0);
+    expect(floorPlanWithMeasurementPresets(snapshot)).toBe(snapshot.floorPlan);
+  });
+
+  test("leaves the scale null when room dimensions are unknown, still recovering a known ceiling", () => {
+    const snapshot = snapshotForRoom({
+      length: null,
+      width: null,
+      dimensionsKnown: false,
+      ceilingHeight: 96
+    });
+    const legacy = {
+      ...snapshot,
+      floorPlan: {
+        ...snapshot.floorPlan,
+        pxPerInch: null,
+        ceilingHeightSixteenths: null
+      }
+    };
+
+    const recovered = floorPlanWithMeasurementPresets(legacy);
+
+    expect(recovered.pxPerInch).toBeNull();
+    expect(recovered.ceilingHeightSixteenths).toBe(96 * 16);
   });
 });
 

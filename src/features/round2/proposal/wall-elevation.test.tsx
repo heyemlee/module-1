@@ -593,29 +593,37 @@ describe("WallElevation", () => {
     }
   });
 
-  test("keeps appliance reservations out of the width editor while retaining cabinet width controls", () => {
+  test("offers an appliance width editor for a fixed appliance and cabinet controls for cabinets", () => {
+    const applianceModel = elevationModel([
+      {
+        ...cabinet("range", 30 * 16, "appliance"),
+        code: "RNG30",
+        label: "RNG30",
+        sourceFixedPointId: "top-appliance-range"
+      },
+      {
+        ...cabinet("corner-return", 12 * 16, "gap"),
+        code: "#1",
+        label: "#1",
+        sourceCornerId: "TL"
+      },
+      cabinet("base-cabinet", 30 * 16)
+    ]);
+    applianceModel.walls[0].fixedPoints = [
+      {
+        id: "top-appliance-range",
+        type: "appliance",
+        label: "range",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.2,
+        symbol: "range"
+      }
+    ];
     const applianceHtml = renderToStaticMarkup(
       <WallElevation
         wallId="A"
-        model={elevationModel([
-          {
-            ...cabinet("range", 30 * 16, "appliance"),
-            code: "RNG30",
-            label: "RNG30"
-          },
-          {
-            ...cabinet("dishwasher", 24 * 16, "appliance"),
-            code: "DW24",
-            label: "DW24"
-          },
-          {
-            ...cabinet("corner-return", 12 * 16, "gap"),
-            code: "#1",
-            label: "#1",
-            sourceCornerId: "TL"
-          },
-          cabinet("base-cabinet", 30 * 16)
-        ])}
+        model={applianceModel}
         selectedObjectId="range"
         canEdit={true}
         dispatch={() => {}}
@@ -639,14 +647,17 @@ describe("WallElevation", () => {
       cabinetHtml.indexOf('<div data-testid="segment-editor-card"')
     );
 
-    expect(applianceEditor).toContain('data-testid="segment-editor-card"');
-    expect(applianceEditor).not.toContain("WIDTH");
+    // The appliance now exposes its own width editor — but not the cabinet's
+    // 9″-minimum "STEP_CABINET_WIDTH" control (a distinct aria-label).
+    expect(applianceEditor).toContain("APPLIANCE WIDTH");
+    expect(applianceEditor).toContain('aria-label="Custom appliance width"');
     expect(applianceEditor).not.toContain('aria-label="Custom width"');
-    for (const code of ["#1", "RNG30", "DW24"]) {
+    for (const code of ["#1", "RNG30"]) {
       expect(applianceEditor).not.toContain(code);
     }
-    expect(cabinetEditor).toContain("WIDTH");
+    // A cabinet keeps its standard-width controls and no appliance section.
     expect(cabinetEditor).toContain('aria-label="Custom width"');
+    expect(cabinetEditor).not.toContain("APPLIANCE WIDTH");
   });
 
   test("keeps immutable corner cabinets out of width and nudge controls", () => {

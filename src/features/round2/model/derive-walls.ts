@@ -29,6 +29,27 @@ const WALLS_BY_LAYOUT: Record<string, Round1Wall[]> = {
   NO_PREFERENCE: ["TOP"]
 };
 
+/** Real inches → sixteenths for a plan pixel length at the given scale. */
+function pxToSixteenths(px: number, pxPerInch: number): number {
+  return Math.max(0, Math.round((px / pxPerInch) * 16));
+}
+
+/**
+ * Preset overall length for a wall, recovered from the room rectangle so Round 2
+ * field measurement opens pre-filled with the Round 1 layout dimension instead
+ * of a blank field. Null when the plan carries no real scale.
+ */
+function wallLengthSixteenths(
+  floorPlan: FloorPlan,
+  wall: Round1Wall
+): number | null {
+  const pxPerInch = floorPlan.pxPerInch;
+  if (pxPerInch == null) return null;
+  const along =
+    wall === "TOP" || wall === "BOTTOM" ? floorPlan.room.w : floorPlan.room.h;
+  return pxToSixteenths(along, pxPerInch);
+}
+
 export function deriveWallsFromRound1(floorPlan: FloorPlan): Round2Model {
   const occupiedWalls = new Set<Round1Wall>();
   for (const cabinet of [
@@ -53,7 +74,7 @@ export function deriveWallsFromRound1(floorPlan: FloorPlan): Round2Model {
     id: String.fromCharCode(65 + index),
     label: String.fromCharCode(65 + index),
     sourceWall,
-    lengthSixteenths: null,
+    lengthSixteenths: wallLengthSixteenths(floorPlan, sourceWall),
     fixedPoints: fixedPointsForWall(floorPlan, sourceWall),
     segments: [],
     notes: notesForWall(floorPlan, sourceWall)
@@ -61,7 +82,7 @@ export function deriveWallsFromRound1(floorPlan: FloorPlan): Round2Model {
 
   return {
     walls,
-    ceilingHeightSixteenths: null,
+    ceilingHeightSixteenths: floorPlan.ceilingHeightSixteenths ?? null,
     decisionItems: []
   };
 }
@@ -129,7 +150,8 @@ function openingPoint(
     label: "Window",
     sourceWall: wall,
     order,
-    positionRatio: order
+    positionRatio: order,
+    ...openingPresets(floorPlan, shape, wall)
   };
 }
 
@@ -145,7 +167,32 @@ function doorPoint(
     label: shape.kind === "OPEN_PASSAGE" ? "Opening" : "Door",
     sourceWall: wall,
     order,
-    positionRatio: order
+    positionRatio: order,
+    ...openingPresets(floorPlan, shape.breakRect, wall)
+  };
+}
+
+/**
+ * Recovers an opening's preset width and start offset (from the wall start, in
+ * the same left→right / top→bottom frame as {@link orderPointAlongWall}) from
+ * its plan rectangle, so field measurement opens pre-filled. Empty when the
+ * plan has no real scale.
+ */
+function openingPresets(
+  floorPlan: FloorPlan,
+  rect: PlanRect,
+  wall: Round1Wall
+): { widthSixteenths: number; offsetSixteenths: number } | Record<string, never> {
+  const pxPerInch = floorPlan.pxPerInch;
+  if (pxPerInch == null) return {};
+  const horizontal = wall === "TOP" || wall === "BOTTOM";
+  const widthPx = horizontal ? rect.w : rect.h;
+  const offsetPx = horizontal
+    ? rect.x - floorPlan.room.x
+    : rect.y - floorPlan.room.y;
+  return {
+    widthSixteenths: pxToSixteenths(widthPx, pxPerInch),
+    offsetSixteenths: pxToSixteenths(offsetPx, pxPerInch)
   };
 }
 

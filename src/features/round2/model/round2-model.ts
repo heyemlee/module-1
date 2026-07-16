@@ -254,8 +254,43 @@ export function initializeMeasurements(
   model: Round2Model
 ): Record<MeasurementKey, number | null> {
   return Object.fromEntries(
-    buildMeasurementFields(model).map((field) => [field.key, null])
+    buildMeasurementFields(model).map((field) => [
+      field.key,
+      presetMeasurementValue(model, field)
+    ])
   );
+}
+
+/**
+ * The preset value that pre-fills a field from the Round 1 layout: the derived
+ * wall length, opening width/offset, or ceiling height. Null when the layout
+ * did not carry that dimension, leaving the field blank to capture on site.
+ */
+function presetMeasurementValue(
+  model: Round2Model,
+  field: MeasurementField
+): number | null {
+  switch (field.kind) {
+    case "ceiling":
+      return model.ceilingHeightSixteenths ?? null;
+    case "wall-length":
+      return findWall(model, field.wallId ?? null)?.lengthSixteenths ?? null;
+    case "opening-width":
+    case "opening-offset": {
+      const wall = findWall(model, field.wallId ?? null);
+      const point = wall?.fixedPoints.find(
+        (item) => item.id === field.fixedPointId
+      );
+      if (!point) return null;
+      return (
+        (field.kind === "opening-width"
+          ? point.widthSixteenths
+          : point.offsetSixteenths) ?? null
+      );
+    }
+    default:
+      return null;
+  }
 }
 
 export function requiredMeasurementKeys(model: Round2Model | null): string[] {
