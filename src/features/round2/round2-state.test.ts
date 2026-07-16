@@ -602,6 +602,12 @@ describe("Round 2 prototype state", () => {
     });
 
     expect(hasBlockingDecisions(overflowed.model)).toBe(true);
+    expect(overflowed.model!.decisionItems).toContainEqual(
+      expect.objectContaining({
+        severity: "blocking",
+        title: "Wall A filler overdrawn"
+      })
+    );
     expect(overflowed.proposalStatus).toBe("NEEDS_DECISION");
 
     // "Resolve decision" cannot acknowledge a blocking geometry error.
