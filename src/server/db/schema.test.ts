@@ -35,6 +35,7 @@ describe("Postgres schema", () => {
     expect(schema).toContain("prompt_description TEXT NOT NULL");
     expect(schema).toContain("based_on_cabinet_style TEXT");
     expect(schema).toContain("based_on_door_color_id UUID");
+    expect(schema).not.toContain("image_base64 TEXT NOT NULL");
   });
 
   test("migrates rendering preference metadata onto existing tables", () => {
@@ -46,6 +47,18 @@ describe("Postgres schema", () => {
     );
     expect(schema).toContain(
       "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ"
+    );
+  });
+
+  test("stores rendering images in object storage metadata", () => {
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_object_key TEXT"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_content_type TEXT"
+    );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_bytes INTEGER"
     );
   });
 

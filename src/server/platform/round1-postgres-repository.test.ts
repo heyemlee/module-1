@@ -9,12 +9,28 @@ import {
   saveRenderingHistory
 } from "./round1-postgres-repository";
 
+const { bucketStorage } = vi.hoisted(() => ({
+  bucketStorage: {
+    uploadObject: vi.fn(),
+    getObject: vi.fn(),
+    deleteObject: vi.fn()
+  }
+}));
+
 vi.mock("@/server/db/client", () => ({
   query: vi.fn()
 }));
 
+vi.mock("@/server/storage/bucket", () => ({
+  buildObjectKey: (...parts: string[]) => parts.join("/"),
+  createBucketStorageFromEnv: vi.fn(() => bucketStorage)
+}));
+
 afterEach(() => {
   vi.mocked(query).mockReset();
+  bucketStorage.uploadObject.mockReset();
+  bucketStorage.getObject.mockReset();
+  bucketStorage.deleteObject.mockReset();
 });
 
 describe("round1 postgres mappers", () => {
@@ -125,22 +141,26 @@ describe("round1 postgres mappers", () => {
       }
     });
 
-    expect(vi.mocked(query).mock.calls[0][0]).toContain(
-      "based_on_cabinet_style"
+    expect(bucketStorage.uploadObject).toHaveBeenCalledWith(
+      expect.stringMatching(/^renderings\/project-1\/.+\.png$/),
+      Buffer.from("rendered", "base64"),
+      "image/png"
     );
-    expect(vi.mocked(query).mock.calls[0][1]).toEqual([
-      "project-1",
-      "snapshot-1",
-      "gpt-image-test",
-      "rendered",
-      "concept prompt",
-      "1536x1024",
-      "2026-06-18T00:00:00.000Z",
-      "EUROPEAN_FRAMELESS",
-      "eu-oak",
-      "2026-06-19T00:00:00.000Z",
-      "user-1"
-    ]);
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("image_object_key");
+    expect(vi.mocked(query).mock.calls[0][0]).not.toContain("image_base64");
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(
+      expect.arrayContaining([
+        "project-1",
+        "snapshot-1",
+        "gpt-image-test",
+        "concept prompt",
+        "1536x1024",
+        "EUROPEAN_FRAMELESS",
+        "eu-oak",
+        "2026-06-19T00:00:00.000Z",
+        "user-1"
+      ])
+    );
   });
 });
 
@@ -174,15 +194,22 @@ describe("rendering gallery payload", () => {
     expect(rows[0].id).toBe("r1");
   });
 
-  test("getRenderingImage returns decoded PNG bytes scoped to the project", async () => {
-    const base64 = Buffer.from("png-bytes").toString("base64");
-    vi.mocked(query).mockResolvedValue({ rows: [{ image_base64: base64 }] } as never);
+  test("getRenderingImage resolves the stored object key scoped to the project", async () => {
+    vi.mocked(query).mockResolvedValue({
+      rows: [{ image_object_key: "renderings/project-1/rendering-1.png" }]
+    } as never);
+    bucketStorage.getObject.mockResolvedValue({
+      body: Buffer.from("png-bytes"),
+      contentType: "image/png"
+    });
 
-    const image = await getRenderingImage("project-1", "rendering-1");
+    await expect(getRenderingImage("project-1", "rendering-1")).resolves.toEqual(
+      Buffer.from("png-bytes")
+    );
 
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("image_object_key");
+    expect(vi.mocked(query).mock.calls[0][0]).not.toContain("image_base64");
     expect(vi.mocked(query).mock.calls[0][1]).toEqual(["rendering-1", "project-1"]);
-    expect(image).toBeInstanceOf(Buffer);
-    expect(image?.toString()).toBe("png-bytes");
   });
 
   test("getRenderingImage returns null when the rendering is not found", async () => {

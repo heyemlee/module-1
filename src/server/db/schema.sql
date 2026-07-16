@@ -101,7 +101,9 @@ CREATE TABLE IF NOT EXISTS renderings (
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   round1_snapshot_id UUID NOT NULL REFERENCES round1_snapshots(id) ON DELETE CASCADE,
   model TEXT NOT NULL,
-  image_base64 TEXT NOT NULL,
+  image_object_key TEXT,
+  image_content_type TEXT,
+  image_bytes INTEGER,
   prompt TEXT NOT NULL,
   size TEXT NOT NULL,
   based_on_snapshot_generated_at TIMESTAMPTZ NOT NULL,
@@ -118,6 +120,9 @@ CREATE TABLE IF NOT EXISTS renderings (
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'));
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_object_key TEXT;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_content_type TEXT;
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_bytes INTEGER;
 
 CREATE TABLE IF NOT EXISTS cabinet_colors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
