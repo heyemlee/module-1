@@ -650,7 +650,9 @@ describe("WallElevation", () => {
     // The appliance now exposes its own width editor — but not the cabinet's
     // 9″-minimum "STEP_CABINET_WIDTH" control (a distinct aria-label).
     expect(applianceEditor).toContain("APPLIANCE WIDTH");
-    expect(applianceEditor).toContain('aria-label="Custom appliance width"');
+    expect(applianceEditor).toContain('aria-pressed="true"');
+    expect(applianceEditor).toContain("33″");
+    expect(applianceEditor).not.toContain('aria-label="Custom appliance width"');
     expect(applianceEditor).not.toContain('aria-label="Custom width"');
     for (const code of ["#1", "RNG30"]) {
       expect(applianceEditor).not.toContain(code);

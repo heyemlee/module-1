@@ -1982,19 +1982,6 @@ function SegmentEditorCard({
               ))}
             </div>
           )}
-          <InchField
-            value={segment.widthSixteenths}
-            onChange={(value) => {
-              if (value != null) {
-                dispatch({
-                  type: "SET_APPLIANCE_WIDTH",
-                  objectId: segment.id,
-                  widthSixteenths: value
-                });
-              }
-            }}
-            ariaLabel="Custom appliance width"
-          />
         </>
       )}
 

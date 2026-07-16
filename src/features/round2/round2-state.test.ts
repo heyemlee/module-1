@@ -320,9 +320,7 @@ describe("Round 2 prototype state", () => {
     ).toBe(true);
   });
 
-  test("hand-adjusts an appliance width, reflows the run, and re-derives its column", () => {
-    // Seed a fridge and generate its wall-cabinet surround so there is an upper
-    // column aligned to the fridge to re-derive.
+  test("rejects a non-standard appliance width", () => {
     const seeded = reduceRound2Prototype(
       withFridgeFixedPoint(
         submitComplete(createRound2PrototypeState("DESIGNER"))
@@ -340,42 +338,14 @@ describe("Round 2 prototype state", () => {
           segment.kind === "appliance" &&
           segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
       )!;
-    expect(fridge.widthSixteenths).toBe(36 * 16);
-    expect(hasUpperCabinetAboveFridge(seeded)).toBe(true);
 
-    const adjusted = reduceRound2Prototype(seeded, {
+    const invalid = reduceRound2Prototype(seeded, {
       type: "SET_APPLIANCE_WIDTH",
       objectId: fridge.id,
       widthSixteenths: 33 * 16
     });
 
-    const resized = adjusted.model!.walls
-      .flatMap((wall) => wall.segments)
-      .find(
-        (segment) =>
-          segment.kind === "appliance" &&
-          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
-      )!;
-
-    // The fridge takes the new width and its upper column re-derives with it,
-    // keeping the wall-cabinet surround above the (now narrower) fridge.
-    expect(resized.widthSixteenths).toBe(33 * 16);
-    expect(resized.label).toBe("REF33");
-    expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
-    // Both tiers still close exactly on every measured wall.
-    for (const wall of adjusted.model!.walls) {
-      if (wall.lengthSixteenths == null) continue;
-      for (const tier of ["upper", "base"] as const) {
-        const total = wall.segments
-          .filter((segment) => segment.tier === tier)
-          .reduce((sum, segment) => sum + segment.widthSixteenths, 0);
-        expect(total).toBe(wall.lengthSixteenths);
-      }
-    }
-    // Selection stays on the fridge and the drawings go stale.
-    expect(adjusted.selectedObjectId).toBe(resized.id);
-    expect(adjusted.drawingStatus).toBe("STALE");
-    expect(adjusted.proposalVersion).toBe(seeded.proposalVersion + 1);
+    expect(invalid).toBe(seeded);
   });
 
   test("ignores appliance width edits from a non-designer or on a cabinet", () => {

@@ -11,6 +11,7 @@ import {
   stepCabinetWidth
 } from "./model/adjustments";
 import { deriveWallsFromRound1 } from "./model/derive-walls";
+import { CABINET_STANDARDS } from "./model/cabinet-standards";
 import {
   buildIntentConfirmationDecisions,
   initializeDesignIntent,
@@ -454,9 +455,6 @@ function regenerateProposalFromIntent(
   };
 }
 
-const MIN_APPLIANCE_WIDTH_SIXTEENTHS = 12 * 16;
-const MAX_APPLIANCE_WIDTH_SIXTEENTHS = 60 * 16;
-
 /**
  * Hand-adjusts one appliance's width. Because an appliance's size lives on its
  * fixed point (autofill reads it via the customer-provided width), setting it
@@ -473,13 +471,12 @@ function setApplianceWidth(
   const located = locateApplianceFixedPoint(state.model, segmentId);
   if (!located) return state;
   if (!Number.isFinite(widthSixteenths)) return state;
-
-  const clamped = Math.round(
-    Math.min(
-      MAX_APPLIANCE_WIDTH_SIXTEENTHS,
-      Math.max(MIN_APPLIANCE_WIDTH_SIXTEENTHS, widthSixteenths)
-    )
-  );
+  const fixedPoint = state.model.walls
+    .find((wall) => wall.id === located.wallId)
+    ?.fixedPoints.find((point) => point.id === located.fixedPointId);
+  if (!fixedPoint || !isAllowedApplianceWidth(fixedPoint.symbol, widthSixteenths)) {
+    return state;
+  }
 
   const retyped: Round2Model = {
     ...state.model,
@@ -489,7 +486,7 @@ function setApplianceWidth(
             ...wall,
             fixedPoints: wall.fixedPoints.map((point) =>
               point.id === located.fixedPointId
-                ? { ...point, widthSixteenths: clamped }
+                ? { ...point, widthSixteenths }
                 : point
             )
           }
@@ -520,6 +517,24 @@ function setApplianceWidth(
     lastAbsorbed: null,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
   };
+}
+
+function isAllowedApplianceWidth(
+  symbol: string | undefined,
+  widthSixteenths: number
+): boolean {
+  const appliances = CABINET_STANDARDS.appliances;
+  const definition =
+    symbol === "fridge"
+      ? appliances.refrigerator
+      : symbol === "range"
+        ? appliances.range
+        : symbol === "sink"
+          ? appliances.sinkBase
+          : symbol === "dishwasher"
+            ? appliances.dishwasher
+            : null;
+  return definition?.widthOptionsSixteenths.includes(widthSixteenths) ?? false;
 }
 
 function locateApplianceFixedPoint(
