@@ -267,6 +267,7 @@ export function WallElevation({
   const cornerEnds = insideCornerEnds(model, wall);
   const cornerHostSides = buildCornerHostSides(model, wall);
   const hatchPatternId = `${useId().replaceAll(":", "")}-corner-hatch`;
+  const overflowHatchPatternId = `${useId().replaceAll(":", "")}-overflow-hatch`;
   const openEditor = (segment: WallSegment) => {
     onSelect(segment.id, wall?.id ?? "");
     if (!canEdit || !dispatch) return;
@@ -356,6 +357,16 @@ export function WallElevation({
               strokeOpacity="0.65"
             />
           </pattern>
+          <pattern
+            id={overflowHatchPatternId}
+            width="8"
+            height="8"
+            patternTransform="rotate(45)"
+            patternUnits="userSpaceOnUse"
+          >
+            <rect width="8" height="8" fill="#fff0ef" />
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#d52228" strokeWidth="1.2" strokeOpacity="0.55" />
+          </pattern>
         </defs>
         <line x1="70" y1={FLOOR_Y} x2="570" y2={FLOOR_Y} stroke="#292929" strokeWidth="2" />
         <line
@@ -419,6 +430,30 @@ export function WallElevation({
               fridgeAboveHeights={fridgeAboveHeights}
               onActivate={openEditor}
             />
+            {canEdit && (
+              <>
+                <WallOverflowWarning
+                  tier="upper"
+                  segments={upper}
+                  wallLengthSixteenths={wall.lengthSixteenths}
+                  total={total}
+                  mirrored={mirrored}
+                  y={layout.upperTop}
+                  height={layout.upperBottom - layout.upperTop}
+                  hatchPatternId={overflowHatchPatternId}
+                />
+                <WallOverflowWarning
+                  tier="base"
+                  segments={base}
+                  wallLengthSixteenths={wall.lengthSixteenths}
+                  total={total}
+                  mirrored={mirrored}
+                  y={layout.baseTop}
+                  height={FLOOR_Y - layout.baseTop}
+                  hatchPatternId={overflowHatchPatternId}
+                />
+              </>
+            )}
             <CounterBand
               fixedPoints={wall.fixedPoints}
               base={base}
@@ -488,6 +523,69 @@ export function WallElevation({
         />
       )}
     </div>
+  );
+}
+
+function resolveRunOverflow(
+  segments: readonly WallSegment[],
+  wallLengthSixteenths: number | null | undefined
+): number {
+  if (wallLengthSixteenths == null) return 0;
+  return Math.max(
+    0,
+    segments.reduce((sum, segment) => sum + segment.widthSixteenths, 0) -
+      wallLengthSixteenths
+  );
+}
+
+function WallOverflowWarning({
+  tier,
+  segments,
+  wallLengthSixteenths,
+  total,
+  mirrored,
+  y,
+  height,
+  hatchPatternId
+}: {
+  tier: "upper" | "base";
+  segments: readonly WallSegment[];
+  wallLengthSixteenths: number | null | undefined;
+  total: number;
+  mirrored: boolean;
+  y: number;
+  height: number;
+  hatchPatternId: string;
+}) {
+  const overflowSixteenths = resolveRunOverflow(segments, wallLengthSixteenths);
+  if (overflowSixteenths === 0) return null;
+
+  const overflowPx = (overflowSixteenths / total) * RUN_WIDTH;
+  const wallEndX = mirrored ? RUN_LEFT : RUN_LEFT + RUN_WIDTH;
+  const hatchX = mirrored ? wallEndX - overflowPx : wallEndX;
+  const labelX = mirrored ? hatchX : wallEndX + overflowPx;
+
+  return (
+    <g
+      data-elevation-layer="wall-overflow"
+      data-overflow-tier={tier}
+      data-overflow-sixteenths={overflowSixteenths}
+      pointerEvents="none"
+    >
+      <rect x={hatchX} y={y} width={overflowPx} height={height} fill={`url(#${hatchPatternId})`} />
+      <line x1={wallEndX} y1={y - 8} x2={wallEndX} y2={y + height + 8} stroke="#d52228" strokeWidth="2" strokeDasharray="5 4" />
+      <text
+        x={labelX}
+        y={y + height / 2}
+        textAnchor={mirrored ? "start" : "end"}
+        fontFamily="var(--studio-mono)"
+        fontSize="10"
+        fontWeight="bold"
+        fill="#b21f25"
+      >
+        {`OVER WALL BY +${formatSixteenths(overflowSixteenths)}`}
+      </text>
+    </g>
   );
 }
 

@@ -21,6 +21,30 @@ describe("WallElevation", () => {
     expect(html).not.toContain(">1:30<");
   });
 
+  test("marks only the proposal run beyond its measured wall with a hatched overflow", () => {
+    const html = render(
+      elevationModel(
+        [cabinet("base-1", 72 * 16), cabinet("base-2", 54 * 16)],
+        36 * 16,
+        96 * 16,
+        120 * 16
+      ),
+      true
+    );
+
+    expect(html).toContain('data-elevation-layer="wall-overflow"');
+    expect(html).toContain('data-overflow-tier="base"');
+    expect(html).toContain('data-overflow-sixteenths="96"');
+    expect(html).toContain("OVER WALL BY +6″");
+    expect(html).toContain('stroke-dasharray="5 4"');
+  });
+
+  test("keeps the proposal elevation clear when every tier closes at the wall", () => {
+    expect(render(elevationModel())).not.toContain(
+      'data-elevation-layer="wall-overflow"'
+    );
+  });
+
   test("renders fronts from the resolved configuration", () => {
     const html = render(elevationModel());
 
@@ -1080,12 +1104,13 @@ describe("WallElevation", () => {
   });
 });
 
-function render(model: Round2Model): string {
+function render(model: Round2Model, canEdit = false): string {
   return renderToStaticMarkup(
     <WallElevation
       wallId="A"
       model={model}
       selectedObjectId={null}
+      canEdit={canEdit}
       onSelect={() => {}}
     />
   );
@@ -1300,7 +1325,8 @@ function escapeRegExp(value: string): string {
 function elevationModel(
   segments?: WallSegment[],
   upperHeightSixteenths = 36 * 16,
-  ceilingHeightSixteenths = 96 * 16
+  ceilingHeightSixteenths = 96 * 16,
+  wallLengthSixteenths?: number
 ): Round2Model {
   const base = segments ?? [
     cabinet("a-base-1", 30 * 16),
@@ -1308,7 +1334,7 @@ function elevationModel(
     { ...cabinet("a-base-3", 18 * 16), label: "DB18" },
     cabinet("a-base-4", 54 * 16, "filler")
   ];
-  const length = base.reduce(
+  const length = wallLengthSixteenths ?? base.reduce(
     (sum, segment) => sum + segment.widthSixteenths,
     0
   );
