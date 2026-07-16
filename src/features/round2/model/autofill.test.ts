@@ -1009,44 +1009,73 @@ describe("Round 2 autofill", () => {
     );
   });
 
-  test("scales crowded appliances down so the base run closes on the wall", () => {
-    // 36 + 24 + 30 + 36 = 126″ of appliances on a 120″ wall — a modest overflow
-    // the run auto-fits instead of drawing the bases past the wall end.
-    const wall = wallWithLength(120 * 16);
+  test("reduces sink widths by configured tiers before reducing ranges", () => {
+    // Including panels, this run starts at 135″. The sink alone can step from
+    // 39″ → 36″ → 33″ → 30″ before the range needs any reduction.
+    const wall = wallWithLength(127 * 16 + 8);
     wall.fixedPoints = [
       fixedPoint({ id: "top-appliance-fridge", symbol: "fridge", positionRatio: 0.02 }),
       fixedPoint({ id: "top-appliance-dishwasher", symbol: "dishwasher", positionRatio: 0.35 }),
-      fixedPoint({ id: "top-appliance-sink", symbol: "sink", positionRatio: 0.55 }),
-      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.8 })
+      fixedPoint({
+        id: "top-appliance-sink",
+        symbol: "sink",
+        positionRatio: 0.55,
+        widthSixteenths: 39 * 16
+      }),
+      fixedPoint({
+        id: "top-appliance-range",
+        symbol: "range",
+        positionRatio: 0.8,
+        widthSixteenths: 33 * 16
+      })
     ];
 
     const filled = autofillRound2Model(modelWithWall(wall));
     const base = baseTier(filled.walls[0]);
     const total = base.reduce((sum, s) => sum + s.widthSixteenths, 0);
 
-    // The run closes exactly on the wall and nothing overflows.
-    expect(total).toBe(120 * 16);
-    expect(
-      filled.decisionItems.some((item) => item.severity === "blocking")
-    ).toBe(false);
-    // Each fixed appliance was scaled below its standard width.
+    expect(total).toBe(127 * 16 + 8);
+    expect(filled.decisionItems).not.toContainEqual(
+      expect.objectContaining({
+        title: "Fixed reservation exceeds available wall space"
+      })
+    );
     const sink = base.find((s) => s.cabinetKind === "sink");
-    expect(sink!.widthSixteenths).toBeLessThan(36 * 16);
+    const range = base.find((s) => s.label.startsWith("RNG"));
+    expect(sink!.widthSixteenths).toBe(30 * 16);
+    expect(range!.widthSixteenths).toBe(33 * 16);
+    expect(CABINET_STANDARDS.appliances.sinkBase.widthOptionsSixteenths).toContain(
+      sink!.widthSixteenths
+    );
+    expect(CABINET_STANDARDS.appliances.range.widthOptionsSixteenths).toContain(
+      range!.widthSixteenths
+    );
     expect(filled.decisionItems).toContainEqual(
       expect.objectContaining({
         id: "decision-A-appliance-autofit",
         severity: "warning",
-        title: "Wall A appliances scaled to fit"
+        title: "Wall A appliances reduced to fit"
       })
     );
   });
 
-  test("still blocks a gross appliance overflow instead of faking a fit", () => {
-    // 30″ range on a 24″ wall is a 25% overflow — a measurement error, not a
-    // crowded wall, so it stays blocking rather than shrinking to fit.
-    const wall = wallWithLength(24 * 16);
+  test("blocks an appliance overflow that remains after the smallest tiers", () => {
+    const wall = wallWithLength(105 * 16);
     wall.fixedPoints = [
-      fixedPoint({ id: "top-appliance-range", symbol: "range", positionRatio: 0.5 })
+      fixedPoint({ id: "top-appliance-fridge", symbol: "fridge", positionRatio: 0.02 }),
+      fixedPoint({ id: "top-appliance-dishwasher", symbol: "dishwasher", positionRatio: 0.35 }),
+      fixedPoint({
+        id: "top-appliance-sink",
+        symbol: "sink",
+        positionRatio: 0.55,
+        widthSixteenths: 30 * 16
+      }),
+      fixedPoint({
+        id: "top-appliance-range",
+        symbol: "range",
+        positionRatio: 0.8,
+        widthSixteenths: 30 * 16
+      })
     ];
 
     const filled = autofillRound2Model(modelWithWall(wall));

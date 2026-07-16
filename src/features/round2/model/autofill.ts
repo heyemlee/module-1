@@ -785,24 +785,12 @@ function dishwasherSidePanels(): SidePanels {
   };
 }
 
-// How far the fixed appliances may collectively exceed the fillable base run
-// before auto-fitting gives up. A modest overflow (a wall packed with full-size
-// appliances) is scaled down to fit; a gross one signals a measurement/layout
-// error and is left to block instead of silently faking a fit.
-const APPLIANCE_AUTOFIT_TOLERANCE = 0.2;
-
 /**
- * Rule 2b — keep the base run inside the wall. When the fixed appliances
- * (fridge, range, sink, dishwasher) total more than the fillable span, their
- * widths — like Round 1's fit factor — are scaled down proportionally so the
- * run closes on the wall instead of drawing base cabinets past its end. The
- * uppers never had this problem because they repartition freely; the bases
- * carry the immovable appliance blocks, so they are the ones that overflowed.
- *
- * Only appliances flex — measured door openings keep their width, so a wall
- * that carries a door falls through to the normal (blocking) overflow path.
- * The scaled units abut across the run and each carries a confirm-the-actual-
- * width warning; the designer then fine-tunes any single unit by hand.
+ * Rule 2b — keep the base run inside the wall using only appliance widths the
+ * proposal already offers. When fixed appliances overflow, sink bases step
+ * down through their standard widths before ranges do. Measured openings,
+ * refrigerators, and dishwashers never flex. An overflow that cannot close
+ * with those tiers falls through to the normal blocking path.
  */
 function fitAppliancesToSpan(
   reservations: Reservation[],
@@ -817,49 +805,27 @@ function fitAppliancesToSpan(
   const total = reservations.reduce((sum, item) => sum + item.width, 0);
   if (total <= span) return reservations;
 
-  const hasDoor = reservations.some((item) => item.kind === "opening");
-  const applianceTotal = reservations
-    .filter((item) => item.kind === "appliance")
-    .reduce((sum, item) => sum + item.width, 0);
-  // Doors don't flex, and an appliance-free overflow has nothing to scale.
-  if (hasDoor || applianceTotal <= 0) return reservations;
-  if (total - span > span * APPLIANCE_AUTOFIT_TOLERANCE) return reservations;
+  const reduced = reservations.map((item) => ({ ...item }));
+  for (const symbol of ["sink", "range"] as const) {
+    while (reservationWidth(reduced) > span) {
+      const candidate = reduced.find(
+        (item) =>
+          item.kind === "appliance" &&
+          item.fixedPoint.symbol === symbol &&
+          nextSmallerApplianceWidth(item) != null
+      );
+      if (!candidate) break;
 
-  const factor = span / applianceTotal;
-  const scaled: Reservation[] = reservations.map((item) => {
-    if (item.kind !== "appliance") return item;
-    const sidePanels = item.sidePanels
-      ? {
-          ...item.sidePanels,
-          left: Math.round(item.sidePanels.left * factor),
-          right: Math.round(item.sidePanels.right * factor)
-        }
-      : undefined;
-    const width = Math.round(item.width * factor);
-    return {
-      ...item,
-      width,
-      sidePanels,
-      // Positions are re-derived below, and a scaled sink can no longer claim
-      // an exact window center, so drop the alignment request.
-      requestedWindowCenter: undefined,
-      label: relabelScaledAppliance(item, width, sidePanels)
-    };
-  });
-
-  // Absorb any rounding drift into the widest appliance so the run tiles the
-  // span exactly, then lay the units out abutting from the run start.
-  const drift =
-    span - scaled.reduce((sum, item) => sum + item.width, 0);
-  if (drift !== 0) {
-    const widest = scaled
-      .filter((item) => item.kind === "appliance")
-      .reduce((a, b) => (b.width > a.width ? b : a));
-    widest.width += drift;
-    widest.label = relabelScaledAppliance(widest, widest.width, widest.sidePanels);
+      const nextWidth = nextSmallerApplianceWidth(candidate)!;
+      candidate.width = nextWidth + reservationPanelWidth(candidate);
+      candidate.label = applianceLabel(candidate.fixedPoint.symbol, nextWidth);
+      candidate.requestedWindowCenter = undefined;
+    }
   }
 
-  const ordered = [...scaled].sort(
+  if (reservationWidth(reduced) > span) return reservations;
+
+  const ordered = [...reduced].sort(
     (a, b) =>
       a.desiredStart - b.desiredStart ||
       a.fixedPoint.id.localeCompare(b.fixedPoint.id)
@@ -870,7 +836,7 @@ function fitAppliancesToSpan(
     cursor += item.width;
   }
 
-  const scaledNames = ordered
+  const adjustedNames = ordered
     .filter((item) => item.kind === "appliance")
     .map((item) => item.label)
     .join(", ");
@@ -879,22 +845,44 @@ function fitAppliancesToSpan(
     objectId: wall.id,
     wallId: wall.id,
     severity: "warning",
-    title: `Wall ${wall.label} appliances scaled to fit`,
-    body: `The fixed appliances totaled more than the ${formatSixteenths(span)} run, so ${scaledNames} were scaled down to close the wall. Confirm the actual appliance widths or adjust each unit.`
+    title: `Wall ${wall.label} appliances reduced to fit`,
+    body: `The fixed appliances totaled more than the ${formatSixteenths(span)} run, so ${adjustedNames} were stepped down through their available appliance widths to close the wall.`
   });
 
   return ordered;
 }
 
-/** Re-labels a scaled appliance from its finished body width (panels excluded). */
-function relabelScaledAppliance(
-  item: Reservation,
-  width: number,
-  sidePanels: SidePanels | undefined
-): string {
-  const body = width - (sidePanels?.left ?? 0) - (sidePanels?.right ?? 0);
-  const inches = Math.max(0, Math.round(body / 16));
-  return item.label.replace(/\d+(?:\.\d+)?$/, String(inches));
+function reservationWidth(reservations: readonly Reservation[]): number {
+  return reservations.reduce((sum, item) => sum + item.width, 0);
+}
+
+function reservationPanelWidth(reservation: Reservation): number {
+  return (reservation.sidePanels?.left ?? 0) + (reservation.sidePanels?.right ?? 0);
+}
+
+function nextSmallerApplianceWidth(reservation: Reservation): number | null {
+  const options = applianceWidthOptions(reservation.fixedPoint.symbol);
+  if (!options) return null;
+  const bodyWidth = reservation.width - reservationPanelWidth(reservation);
+  return options.filter((option) => option < bodyWidth).at(-1) ?? null;
+}
+
+function applianceWidthOptions(symbol: string | undefined): readonly number[] | null {
+  const appliances = CABINET_STANDARDS.appliances;
+  if (symbol === "sink") return appliances.sinkBase.widthOptionsSixteenths;
+  if (symbol === "range") return appliances.range.widthOptionsSixteenths;
+  return null;
+}
+
+function applianceLabel(symbol: string | undefined, widthSixteenths: number): string {
+  const appliances = CABINET_STANDARDS.appliances;
+  const prefix =
+    symbol === "sink"
+      ? appliances.sinkBase.labelPrefix
+      : symbol === "range"
+        ? appliances.range.labelPrefix
+        : null;
+  return prefix ? `${prefix}${widthSixteenths / 16}` : "Appliance";
 }
 
 // Rule 2 — fixed points become anchors: the sink centers on the window, the
