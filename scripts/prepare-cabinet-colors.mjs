@@ -1,6 +1,7 @@
 // Phase A — Prepare swatch assets + colors manifest (local, no DB writes).
 //
-//   node scripts/prepare-cabinet-colors.mjs ["<path-to.pdf>"]
+//   node scripts/prepare-cabinet-colors.mjs "<path-to.pdf>"
+//   npm run db:prepare-cabinet-colors -- "<path-to.pdf>"
 //
 // 1. Rasterize each PDF page to JPEG with pdftoppm.
 // 2. Center-crop the largest centered square (drops the bottom-corner name label) and
@@ -9,16 +10,28 @@
 // 4. Emit 300px review thumbnails under /tmp/abc-swatches/thumbs for a contact sheet.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { CABINET_COLORS_EU } from "./cabinet-colors-eu.data.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 
-const DEFAULT_PDF = "/Users/yitianwu/Desktop/有现货的板材颜色 2026.01.06..pdf";
-const pdfPath = process.argv[2] || DEFAULT_PDF;
+const pdfArg = process.argv[2];
+if (!pdfArg) {
+  console.error(
+    'Usage: node scripts/prepare-cabinet-colors.mjs "<path-to.pdf>"\n' +
+      '   or: npm run db:prepare-cabinet-colors -- "<path-to.pdf>"'
+  );
+  process.exit(1);
+}
+
+const pdfPath = resolve(pdfArg);
+if (!existsSync(pdfPath)) {
+  console.error(`PDF not found: ${pdfPath}`);
+  process.exit(1);
+}
 
 const workDir = "/tmp/abc-swatches";
 const thumbDir = join(workDir, "thumbs");

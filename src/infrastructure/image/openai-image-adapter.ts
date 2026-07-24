@@ -1,15 +1,5 @@
 export type ImageGenerationSize = "1024x1024" | "1536x1024" | "1024x1536";
 
-export type GenerateLayoutBackgroundInput = {
-  prompt: string;
-  size: ImageGenerationSize;
-};
-
-export type GenerateLayoutBackgroundResult = {
-  model: string;
-  imageBase64: string;
-};
-
 export type GenerateConceptRenderingInput = {
   prompt: string;
   size: ImageGenerationSize;
@@ -28,12 +18,6 @@ export type GenerateConceptRenderingResult = {
 
 export type ImageClient = {
   images: {
-    generate(input: {
-      model: string;
-      prompt: string;
-      size: ImageGenerationSize;
-      response_format: "b64_json";
-    }): Promise<{ data?: Array<{ b64_json?: string }> }>;
     /**
      * Image+text edit. Used for the customer concept rendering, where the
      * deterministic floor plan is supplied as the spatial reference image and
@@ -49,9 +33,6 @@ export type ImageClient = {
 };
 
 export type OpenAIImageAdapter = {
-  generateLayoutBackground(
-    input: GenerateLayoutBackgroundInput
-  ): Promise<GenerateLayoutBackgroundResult>;
   /**
    * Generates a customer-facing concept rendering from BOTH the deterministic
    * floor plan reference image and a JSON-derived prompt. The result is a
@@ -75,23 +56,6 @@ export function createOpenAIImageAdapter(input: {
   const env = input.env ?? process.env;
 
   return {
-    async generateLayoutBackground(request) {
-      const model = getOpenAIImageModel(env);
-      const response = await input.client.images.generate({
-        model,
-        prompt: request.prompt,
-        size: request.size,
-        response_format: "b64_json"
-      });
-      const imageBase64 = response.data?.[0]?.b64_json;
-
-      if (!imageBase64) {
-        throw new Error("OpenAI image generation did not return image data");
-      }
-
-      return { model, imageBase64 };
-    },
-
     async generateConceptRendering(request) {
       const model = getOpenAIImageModel(env);
       const response = await input.client.images.edit({

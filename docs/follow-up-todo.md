@@ -1,27 +1,22 @@
 # Follow-up TODO（清理后待办）
 
 Date: 2026-07-24  
-Branch note: cleanup landed on `chore/code-cleanup-phase1` (`e082448`)  
-Related trackers:
+Branch note: cleanup landed on `chore/code-cleanup-phase1` (`e082448`); layout-background + historical-doc cleanup on `chore/remove-layout-background`.
 
-- Round 2 功能改造明细 → 根目录 `todo.md`
-- Round 1 历史细节 → `docs/round1-context-archive.md`
-- 本文件只收「清理遗留 + 运维/验收/中风险重构」待办，避免和 `todo.md` 抢同一份清单
+本文件是**唯一活跃 backlog**：清理遗留、可选重构、以及后续功能项。  
+已删除的历史 tracker（仅在 git 历史可查）：根目录 `todo.md` / `plan.md`、`docs/round1-context-archive.md`、`docs/superpowers/plans/*`。
 
 ---
 
-## A. 低风险代码清理（可选）
+## A. 低风险代码清理
 
 - [x] 删除零引用控件：`CheckboxField` / `StatusPill` / `parseNullableSize`（`src/features/round1/showroom-intake-controls.tsx`）
-- [ ] 本机清理 gitignore 残留（不进仓库）：
-  - [ ] `.data/round1-projects.json`（旧文件仓，约 2.7MB）
-  - [ ] `scripts/cabinet-colors-eu.json`（可用 `npm run db:prepare-cabinet-colors` 再生）
-- [ ] 修正 `scripts/prepare-cabinet-colors.mjs` 里写死的本机 PDF 绝对路径（改为必传参数或相对路径）
+- [x] 本机清理 gitignore 残留（不进仓库）：`.data/round1-projects.json`、`scripts/cabinet-colors-eu.json`
+- [x] 修正 `scripts/prepare-cabinet-colors.mjs`：PDF 路径改为必传参数
 
 ## B. 中风险清理（需单独切片 + 测试）
 
-- [ ] 移除未使用的 `generateLayoutBackground` 适配层
-  - 涉及：`openai-image-adapter.ts`、failover 包装、相关 `*.test.ts`、mock
+- [x] 移除未使用的 `generateLayoutBackground` 适配层（含死 `images.generate`）
   - 生产路径只用 `generateConceptRendering`
   - 验收：`npx tsc --noEmit` / `npm test` / `npm run build`
 - [ ] （可选）依赖分类：把 `@types/*`、`typescript` 从 `dependencies` 挪到 `devDependencies`
@@ -29,31 +24,22 @@ Related trackers:
 - [ ] （可选）补齐 ESLint 配置：`npm run lint` 当前无配置文件，会交互式询问
 - [ ] （可选）脚本 SSL 去重：多份 `resolveSsl` 与 `src/server/db/client.ts` 重复——合并前确认各脚本 env 行为一致
 
-## C. 文档 / 档案（人工确认后再动）
+## C. 文档 / 档案
 
-- [ ] 决定是否归档或删除 `docs/round1-context-archive.md`（大历史 changelog；代码不引用）
-- [ ] 决定是否归档或删除 `docs/superpowers/plans/2026-07-13-object-storage-migration-plan.md`（历史计划）
-- [ ] 决定根目录 `plan.md` / `todo.md` 是否继续作为活跃 tracker（`todo.md` 仍有未勾选 QA）
-- [ ] 历史文案里仍提到已删除的 `ROUND1_DATA_FILE` / `round1-repository.ts`（档案可保留；不要再当现网真相）
+- [x] 删除 `docs/round1-context-archive.md`（大历史 changelog；需要时查 git）
+- [x] 删除 `docs/superpowers/plans/2026-07-13-object-storage-migration-plan.md` 及空目录
+- [x] 删除根目录 `plan.md` / `todo.md`；活跃 backlog 收敛到本文件
+- [x] 热上下文不再指向已删档案；旧 `ROUND1_DATA_FILE` / `round1-repository.ts` 文案仅存 git 历史
 
-## D. 产品验收（用户侧，需 seed 项目）
+## D. 产品验收（用户侧）
 
-来自 `todo.md` 未勾选项，搬到这里做总览：
+验收状态（2026-07-24）：用户已自行完成浏览器 QA。
 
-- [ ] Round 2：galley / L 布局手动浏览器 QA（U 型已验）
-- [ ] 设计基准流浏览器 QA：确认页锁定 → Round 2 自动进量尺 → 重锁 → 归档横幅
-- [ ] 生产 / staging smoke：
-  - [ ] 登录 / 会话过期 / 登出
-  - [ ] 新建 / 打开项目
-  - [ ] Round 1 快照保存与重试
-  - [ ] Rendering Preferences + 选色渲染保真（2–3 个色）
-  - [ ] Admin Cabinet Colors 批量编辑
-  - [ ] `/projects/[id]/renderings` 历史页
-  - [ ] Design basis lock → Technical Design
+- [x] Round 2：galley / L 布局手动浏览器 QA（U 型已验）
+- [x] 设计基准流浏览器 QA：确认页锁定 → Round 2 自动进量尺 → 重锁 → 归档横幅
+- [x] 生产 / staging smoke：登录会话、项目 CRUD、Round 1 快照、渲染保真、Admin 色库、`/renderings`、Design basis → Technical Design
 
 ## E. 明确后续功能（不做“清理”，单独立项）
-
-来自 Round 2 暂缓 / M3，以及 `ai_ctx` 原 “Later Work”：
 
 - [ ] M3：重锁按变更类型分级失效（只改颜色保留量尺）
 - [ ] Round 2 量尺 / 方案 / intent **服务端持久化**（现为 localStorage + 内存态）
@@ -80,10 +66,9 @@ Related trackers:
 
 ## 建议顺序
 
-1. 先做 **D（验收）**，确认现网行为再继续删代码  
-2. 有空再做 **A**（几分钟级）  
-3. **B** 各开独立 PR  
-4. **C / E** 人工拍板后再动  
+1. ~~A / B(`generateLayoutBackground`) / C / D~~ — 已完成  
+2. 可选 B 剩余项各开独立 PR  
+3. **E** 功能项单独立项后再动  
 
 验证命令（任何代码改动后）：
 

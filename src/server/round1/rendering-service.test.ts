@@ -74,9 +74,6 @@ describe("generateRound1Rendering", () => {
         .toBuffer()
     ).toString("base64");
     const adapter: OpenAIImageAdapter = {
-      async generateLayoutBackground() {
-        throw new Error("not used in this test");
-      },
       async generateConceptRendering(input) {
         calls.push(input);
         return { model: "gpt-image-test", imageBase64: sourceImageBase64 };

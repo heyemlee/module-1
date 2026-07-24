@@ -2,12 +2,11 @@
 
 Date: 2026-07-24  
 Scope: Internal cabinet platform — Round 1 concept intake + concept renderings; Round 2 technical design (measure → proposal → drawings).  
-Status: Round 1 MVP and Round 2 model-driven workspace are in active use. Cleanup branch `chore/code-cleanup-phase1` removed dead demos/assets/orphaned UI. Follow-ups live in `docs/follow-up-todo.md`.
+Status: Round 1 MVP and Round 2 model-driven workspace are in active use. Dead demos/assets/orphaned UI and unused layout-background image path removed. Active backlog: `docs/follow-up-todo.md`.
 
 This is the **hot context** for normal AI sessions.  
-Deep history / JSON examples / superseded approaches → `docs/round1-context-archive.md` (only when needed).  
-Round 2 feature tracker → root `todo.md`.  
-Post-cleanup backlog → `docs/follow-up-todo.md`.
+Do not revive deleted historical trackers (`todo.md`, `plan.md`, `docs/round1-context-archive.md`, old planning files under `docs/superpowers/`). Look them up in git history only when explicitly needed.  
+Post-cleanup + deferred feature backlog → `docs/follow-up-todo.md`.
 
 ---
 
@@ -199,11 +198,9 @@ Latest automated baseline after cleanup (2026-07-24): `tsc` clean, `npm test` **
 
 | Need | File |
 |------|------|
-| Cleanup leftovers & optional refactors | `docs/follow-up-todo.md` |
-| Round 2 unfinished QA / M3 / deferred features | `todo.md` |
+| Cleanup leftovers, deferred features, optional refactors | `docs/follow-up-todo.md` |
 | Deploy / Railway env notes | `docs/deployment/railway-internal-platform.md` |
 | Manual launch test plan | `docs/launch-manual-test-plan.md` |
 | Agent dialogue scenarios | `docs/test-dialogues.md` |
-| Old Round 1 implementation diary | `docs/round1-context-archive.md` |
 
-Do not let archive or historical plan files override this hot context unless the user explicitly says the archive is newer.
+Do not let deleted archive or historical plan files (git history only) override this hot context unless the user explicitly says that history is newer.

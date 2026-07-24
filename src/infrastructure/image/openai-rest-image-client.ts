@@ -57,48 +57,6 @@ export function createOpenAIRestImageClient(input: {
 
   return {
     images: {
-      async generate(request) {
-        const body: Record<string, unknown> = {
-          model: request.model,
-          prompt: request.prompt,
-          size: request.size,
-          n: 1
-        };
-
-        // gpt-image-* models always return base64 and reject `response_format`.
-        // Only forward it for legacy models (e.g. dall-e-3) that require it.
-        if (!request.model.startsWith("gpt-image")) {
-          body.response_format = request.response_format;
-        }
-
-        const response = await fetchWithTimeout(
-          fetchImpl,
-          `${baseUrl}/images/generations`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${input.apiKey}`
-            },
-            body: JSON.stringify(body)
-          },
-          "OpenAI image request"
-        );
-
-        if (!response.ok) {
-          const detail = await safeReadError(response);
-          throw new Error(
-            `OpenAI image request failed with status ${response.status}${
-              detail ? `: ${detail}` : ""
-            }`
-          );
-        }
-
-        return (await response.json()) as {
-          data?: Array<{ b64_json?: string }>;
-        };
-      },
-
       async edit(request) {
         // Image+text edit uses multipart/form-data. The deterministic floor
         // plan PNG is the spatial reference; the prompt carries semantics.
@@ -224,12 +182,6 @@ function createFailoverOpenAIImageAdapter(
   adapters: Array<{ slot: OpenAIApiKeySlot; adapter: OpenAIImageAdapter }>
 ): OpenAIImageAdapter {
   return {
-    generateLayoutBackground(input) {
-      return runWithApiKeyFallback(adapters, (adapter) =>
-        adapter.generateLayoutBackground(input)
-      );
-    },
-
     generateConceptRendering(input) {
       return runWithApiKeyFallback(adapters, (adapter) =>
         adapter.generateConceptRendering(input)

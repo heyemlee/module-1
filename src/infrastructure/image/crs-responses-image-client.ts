@@ -102,9 +102,9 @@ async function runImageResponse(
 
 /**
  * Builds an `ImageClient` that generates images through the CRS relay's
- * Responses API. `generate` sends a text-only prompt; `edit` attaches the
- * deterministic reference views as `input_image` parts so the model uses them
- * as spatial references — the image+text edit equivalent on this wire.
+ * Responses API. `edit` attaches the deterministic reference views as
+ * `input_image` parts so the model uses them as spatial references — the
+ * image+text edit equivalent on this wire.
  */
 export function createCrsResponsesImageClient(input: {
   apiKey: string;
@@ -123,13 +123,6 @@ export function createCrsResponsesImageClient(input: {
     images: {
       // The Responses driver model comes from cfg, not `request.model` (that is
       // the REST-only "gpt-image-2" name, meaningless as a driver agent).
-      generate(request) {
-        return runImageResponse(
-          cfg,
-          [{ type: "input_text", text: request.prompt }],
-          request.size
-        );
-      },
       edit(request) {
         const content: Array<Record<string, unknown>> = [
           { type: "input_text", text: request.prompt }

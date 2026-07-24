@@ -33,7 +33,7 @@ describe("extractImageB64", () => {
 });
 
 describe("createCrsResponsesImageClient", () => {
-  test("generate posts a streaming Responses request with the image tool", async () => {
+  test("edit posts a streaming Responses request with the image tool", async () => {
     const fetchImpl = okFetch(sse("FINALIMAGE"));
     const client = createCrsResponsesImageClient({
       apiKey: "cr_test",
@@ -42,11 +42,11 @@ describe("createCrsResponsesImageClient", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch
     });
 
-    const result = await client.images.generate({
+    const result = await client.images.edit({
       model: "gpt-image-2",
       prompt: "a bright kitchen",
       size: "1024x1536",
-      response_format: "b64_json"
+      referenceImagesBase64: []
     });
 
     expect(result.data?.[0]?.b64_json).toBe("FINALIMAGE");
@@ -105,11 +105,11 @@ describe("createCrsResponsesImageClient", () => {
     });
 
     await expect(
-      client.images.generate({
+      client.images.edit({
         model: "gpt-image-2",
         prompt: "x",
         size: "1024x1024",
-        response_format: "b64_json"
+        referenceImagesBase64: []
       })
     ).rejects.toThrow(/status 400/);
   });
