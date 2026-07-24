@@ -72,7 +72,7 @@ e.g. `DATABASE_URL=... npm run db:migrate`.
 
 - Do not set `NODE_ENV=production` manually in Railway: it makes `npm install`
   skip devDependencies, and the type-checked `next build` needs them.
-- Production uses `DATABASE_URL`, not `ROUND1_DATA_FILE`.
+- Production uses `DATABASE_URL`.
 - AI keys stay in Railway Variables for this release.
 - Sales users do not enter API keys.
 - Round 1 remains sales-estimate-only and not for production.

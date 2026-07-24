@@ -220,12 +220,6 @@ export function createOpenAIImageAdapterFromEnv(
   return createFailoverOpenAIImageAdapter(adapters);
 }
 
-export function hasOpenAIImageApiKey(
-  env: Record<string, string | undefined> = process.env
-): boolean {
-  return getConfiguredOpenAIApiKeys(env).length > 0;
-}
-
 function createFailoverOpenAIImageAdapter(
   adapters: Array<{ slot: OpenAIApiKeySlot; adapter: OpenAIImageAdapter }>
 ): OpenAIImageAdapter {

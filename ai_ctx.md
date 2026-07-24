@@ -116,8 +116,6 @@ Deterministic code must own:
   - Owns preview state, MEP toggle, SVG printing, pointer handling, and drag override updates.
 - `src/features/round1/layout-preview-shapes.tsx`
   - Stateless SVG shape components used by the layout preview, such as walls, islands, corners, markers, legend, and stamp placeholders.
-- `src/features/round1/perspective-preview.tsx`
-  - 3D perspective SVG preview component for structure reference in rendering.
 - `src/features/round1/elevations/elevation-scene.ts`
   - Builder for wall-level elevation SVG previews.
 - `src/features/round1/showroom-intake-app.tsx`
@@ -137,13 +135,13 @@ Deterministic code must own:
 - `src/components/ui/button.tsx` / `src/app/globals.css` / `tailwind.config.ts`
   - Shared UI theme and button styling. The app shell is currently black/white/neutral, not blue/white.
 - `src/features/round1/showroom-intake-controls.tsx`
-  - Shared intake UI primitives such as `Step`, `Panel`, `NumberField`, `SelectField`, `StatusPill`, and `parseNullableSize`.
+  - Shared intake UI primitives such as `Step`, `Panel`, `NumberField`, `StatusPill`, and `parseNullableSize`.
 - `src/features/round1/showroom-intake-data.ts`
   - Form defaults and `createDefaultCabinetRuns(form)`.
 - `src/domain/round1/cabinets.ts`
   - Cabinet dimensions, cabinet codes, standard width matching, and preliminary split rules.
-- `src/server/round1/round1-repository.ts`
-  - Repository abstraction; currently MVP storage, later persistent implementation.
+- `src/server/platform/round1-postgres-repository.ts`
+  - Postgres-backed Round 1 state, snapshot, and rendering persistence.
 - `src/infrastructure/image/openai-rest-image-client.ts`
   - Existing optional OpenAI image client; not authoritative for plan data.
 - `src/server/platform/api-errors.ts`

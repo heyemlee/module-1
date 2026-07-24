@@ -7,7 +7,6 @@ import {
 } from "./floorplan/plan-geometry";
 import {
   NumberField,
-  SelectField,
   Step
 } from "./showroom-intake-controls";
 
@@ -227,38 +226,6 @@ export function OpeningsStep({
               {item.on ? "✓" : ""}
             </span>
           </button>
-        ))}
-      </div>
-    </Step>
-  );
-}
-
-export function MepStep({
-  form,
-  setForm
-}: {
-  form: Round1FormInput;
-  setForm: (form: Round1FormInput) => void;
-}) {
-  return (
-    <Step>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {(["water", "gas", "electric", "vent"] as const).map((key) => (
-          <SelectField
-            key={key}
-            label={`${key} movable?`}
-            value={form.mep[key].movable}
-            options={["UNKNOWN", "YES", "NO"]}
-            onChange={(value) =>
-              setForm({
-                ...form,
-                mep: {
-                  ...form.mep,
-                  [key]: { ...form.mep[key], movable: value as "YES" | "NO" | "UNKNOWN" }
-                }
-              })
-            }
-          />
         ))}
       </div>
     </Step>

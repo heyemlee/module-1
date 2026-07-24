@@ -1,14 +1,6 @@
 import type { ReactNode } from "react";
-import { ChevronDownIcon } from "@radix-ui/react-icons";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
 
 export function Step({ title, children }: { title?: string; children: ReactNode }) {
   return (
@@ -50,61 +42,6 @@ export function NumberField({
         }
         className="h-auto rounded-[11px] px-[13px] py-3 font-mono text-[15px]"
       />
-    </label>
-  );
-}
-
-export function SelectField<T extends string>({
-  label,
-  value,
-  options,
-  onChange
-}: {
-  label: string;
-  value: T;
-  options: readonly T[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="studio-eyebrow mb-1.5 block">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as T)}
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden="true"
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            className="h-[42px] w-full justify-between rounded-[11px] font-mono text-[14px]"
-          >
-            {value}
-            <ChevronDownIcon
-              className="-me-1 ms-2 opacity-60"
-              aria-hidden="true"
-            />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="min-w-[--radix-dropdown-menu-trigger-width]">
-          {options.map((option) => (
-            <DropdownMenuItem
-              key={option}
-              onSelect={() => onChange(option)}
-            >
-              {option}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
     </label>
   );
 }
