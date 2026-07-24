@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 
 export function Step({ title, children }: { title?: string; children: ReactNode }) {
   return (
@@ -44,55 +43,4 @@ export function NumberField({
       />
     </label>
   );
-}
-
-export function CheckboxField({
-  label,
-  checked,
-  onChange,
-  help
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  help?: string;
-}) {
-  return (
-    <label className="flex items-start gap-3">
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(value) => onChange(value === true)}
-        className="mt-0.5"
-      />
-      <span>
-        <span className="block text-[13px] font-medium text-studio-ink">
-          {label}
-        </span>
-        {help && (
-          <span className="mt-1 block text-[11px] leading-4 text-studio-muted">
-            {help}
-          </span>
-        )}
-      </span>
-    </label>
-  );
-}
-
-export function StatusPill({
-  label,
-  tone
-}: {
-  label: string;
-  tone: "red" | "amber" | "green";
-}) {
-  const classes = {
-    red: "bg-studio-danger/15 text-studio-danger-ink",
-    amber: "bg-studio-warning/25 text-studio-warning-ink",
-    green: "bg-studio-action/30 text-studio-action-ink"
-  };
-  return <span className={`rounded-full px-2.5 py-1 ${classes[tone]}`}>{label}</span>;
-}
-
-export function parseNullableSize(value: string) {
-  return value === "UNKNOWN" ? null : Number(value);
 }
