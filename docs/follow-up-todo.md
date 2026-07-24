@@ -5,6 +5,7 @@ Branch note: cleanup landed on `chore/code-cleanup-phase1` (`e082448`); layout-b
 
 本文件是**唯一活跃 backlog**：清理遗留、可选重构、以及后续功能项。  
 已删除的历史 tracker（仅在 git 历史可查）：根目录 `todo.md` / `plan.md`、`docs/round1-context-archive.md`、`docs/superpowers/plans/*`。
+性能优化前后对比与量化记录在 `performance-changelog.md`（每次优化追加）。
 
 ---
 

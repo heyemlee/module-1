@@ -38,6 +38,9 @@ export function round2DraftStorageKey(projectId: string): string {
   return `abcabinet.round2.draft.${encodeURIComponent(projectId)}.v1`;
 }
 
+/** Coalesce measurement keystrokes before JSON.stringify + localStorage write. */
+export const ROUND2_DRAFT_SAVE_DEBOUNCE_MS = 400;
+
 export function round2DraftArchiveKey(
   projectId: string,
   basisVersion: number

@@ -289,12 +289,7 @@ export function conceptRenderingFromTaskResult(
 
   return {
     id: result.id,
-    url:
-      typeof result.imageBase64 === "string"
-        ? `data:image/png;base64,${result.imageBase64}`
-        : projectId
-          ? renderingImageUrl(projectId, result.id)
-          : "",
+    url: projectId ? renderingImageUrl(projectId, result.id) : "",
     doorColorId: preferences?.doorColorId ?? null,
     basedOnSnapshotGeneratedAt:
       typeof result.basedOnSnapshotGeneratedAt === "string"
@@ -940,16 +935,13 @@ export function ShowroomIntakeApp({
         if (rJson.renderings && Array.isArray(rJson.renderings)) {
           type RenderingApiItem = {
             id: string;
-            imageBase64?: string;
             basedOnSnapshotGeneratedAt?: string | null;
             basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
           };
           setRenderings(
             (rJson.renderings as RenderingApiItem[]).map((r) => ({
               id: r.id,
-              url: r.imageBase64
-                ? `data:image/png;base64,${r.imageBase64}`
-                : renderingImageUrl(projectId, r.id),
+              url: renderingImageUrl(projectId, r.id),
               doorColorId: r.basedOnRenderingPreferences?.doorColorId || null,
               basedOnSnapshotGeneratedAt: r.basedOnSnapshotGeneratedAt ?? null,
               basedOnRenderingPreferences: r.basedOnRenderingPreferences ?? null

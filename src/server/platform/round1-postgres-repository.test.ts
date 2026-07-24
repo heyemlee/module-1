@@ -162,6 +162,57 @@ describe("round1 postgres mappers", () => {
       ])
     );
   });
+
+  test("saveRenderingHistory response omits imageBase64 for the API payload", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "rendering-1",
+            created_at: new Date("2026-06-20T00:00:00.000Z")
+          }
+        ]
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never);
+
+    const saved = await saveRenderingHistory({
+      projectId: "project-1",
+      snapshotId: "snapshot-1",
+      user: {
+        id: "user-1",
+        companyId: "company-1",
+        account: "ada",
+        email: "ada@example.com",
+        name: "Ada",
+        role: "SALES",
+        disabledAt: null,
+        monthlyRenderQuota: 50
+      },
+      rendering: {
+        model: "gpt-image-test",
+        imageBase64: "rendered-megabytes",
+        prompt: "concept prompt",
+        size: "1536x1024",
+        basedOnSnapshotGeneratedAt: "2026-06-18T00:00:00.000Z",
+        basedOnRenderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-oak",
+          colorUpdatedAt: "2026-06-19T00:00:00.000Z"
+        },
+        salesEstimateOnly: true,
+        notForProduction: true,
+        dimensionConfidence: "ROUGH"
+      }
+    });
+
+    expect(saved).not.toHaveProperty("imageBase64");
+    expect(saved).toMatchObject({
+      id: "rendering-1",
+      model: "gpt-image-test",
+      prompt: "concept prompt",
+      size: "1536x1024"
+    });
+  });
 });
 
 describe("rendering gallery payload", () => {

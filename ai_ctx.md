@@ -199,6 +199,7 @@ Latest automated baseline after cleanup (2026-07-24): `tsc` clean, `npm test` **
 | Need | File |
 |------|------|
 | Cleanup leftovers, deferred features, optional refactors | `docs/follow-up-todo.md` |
+| **Performance before/after log (append each optimization)** | `performance-changelog.md` |
 | Deploy / Railway env notes | `docs/deployment/railway-internal-platform.md` |
 | Manual launch test plan | `docs/launch-manual-test-plan.md` |
 | Agent dialogue scenarios | `docs/test-dialogues.md` |

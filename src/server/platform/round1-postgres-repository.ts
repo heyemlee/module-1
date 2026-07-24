@@ -297,8 +297,12 @@ export async function saveRenderingHistory(input: {
      WHERE id = $1 AND status NOT IN ('ROUND2_MEASURING', 'ARCHIVED')`,
     [input.projectId]
   );
+  // Omit imageBase64 from the API payload — the PNG lives in object storage and
+  // is streamed via the rendering image route. Returning multi-MB base64 here
+  // stalls the client main thread on every successful generate.
+  const { imageBase64: _imageBase64, ...renderingWithoutImage } = input.rendering;
   return {
-    ...input.rendering,
+    ...renderingWithoutImage,
     id: result.rows[0].id,
     createdAt: result.rows[0].created_at.toISOString()
   };

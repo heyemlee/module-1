@@ -4,6 +4,7 @@ import {
   archiveRound2Draft,
   loadRound2Draft,
   reconcileDraftWithBasis,
+  ROUND2_DRAFT_SAVE_DEBOUNCE_MS,
   round2DraftArchiveKey,
   round2DraftStorageKey,
   saveRound2Draft
@@ -11,6 +12,10 @@ import {
 import type { Round2PrototypeState } from "./round2-types";
 
 describe("Round 2 draft storage", () => {
+  test("debounces local draft writes long enough to coalesce keystrokes", () => {
+    expect(ROUND2_DRAFT_SAVE_DEBOUNCE_MS).toBeGreaterThanOrEqual(250);
+    expect(ROUND2_DRAFT_SAVE_DEBOUNCE_MS).toBeLessThanOrEqual(1000);
+  });
   test("saves and restores the project-specific prototype state", () => {
     const storage = new MemoryStorage();
     const state: Round2PrototypeState = {

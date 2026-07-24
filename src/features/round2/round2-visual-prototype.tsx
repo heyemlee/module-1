@@ -20,6 +20,7 @@ import {
   browserRound2DraftStorage,
   loadRound2Draft,
   reconcileDraftWithBasis,
+  ROUND2_DRAFT_SAVE_DEBOUNCE_MS,
   saveRound2Draft
 } from "./round2-draft-storage";
 import { Round2TaskNavigation } from "./round2-task-navigation";
@@ -67,6 +68,8 @@ export function Round2VisualPrototype({
   } | null>(null);
   const draftLoadedRef = useRef(false);
   const skipNextSaveRef = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     const storage = browserRound2DraftStorage();
@@ -107,6 +110,8 @@ export function Round2VisualPrototype({
     dispatch({ type: "ADOPT_BASIS", reference, version: basis.version });
   }, [projectId, basis, reference]);
 
+  // Debounce local draft writes so measurement keystrokes don't stringify the
+  // full model on every dispatch. Flush on leave so a pending edit isn't lost.
   useEffect(() => {
     if (!draftLoadedRef.current) return;
     if (skipNextSaveRef.current) {
@@ -117,8 +122,31 @@ export function Round2VisualPrototype({
     const storage = browserRound2DraftStorage();
     if (!storage) return;
 
-    saveRound2Draft(storage, projectId, state);
+    const timeout = setTimeout(() => {
+      saveRound2Draft(storage, projectId, stateRef.current);
+    }, ROUND2_DRAFT_SAVE_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
   }, [projectId, state]);
+
+  useEffect(() => {
+    const flushDraft = () => {
+      if (!draftLoadedRef.current) return;
+      const storage = browserRound2DraftStorage();
+      if (!storage) return;
+      saveRound2Draft(storage, projectId, stateRef.current);
+    };
+    const flushIfHidden = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
+    window.addEventListener("pagehide", flushDraft);
+    window.addEventListener("visibilitychange", flushIfHidden);
+    return () => {
+      flushDraft();
+      window.removeEventListener("pagehide", flushDraft);
+      window.removeEventListener("visibilitychange", flushIfHidden);
+    };
+  }, [projectId]);
 
   const workspace = !state.referenceLocked ? (
     <BasisGate

@@ -600,16 +600,16 @@ describe("ShowroomIntakeApp", () => {
     const result = conceptRenderingFromTaskResult(
       {
         id: "render-1",
-        imageBase64: "png",
         basedOnSnapshotGeneratedAt: snapshot.generatedAt,
         basedOnRenderingPreferences: null
       },
-      snapshot
+      snapshot,
+      "project-1"
     );
 
     expect(result).toMatchObject({
       id: "render-1",
-      url: "data:image/png;base64,png",
+      url: "/api/projects/project-1/round1/renderings/render-1/image?px=1536x1024",
       basedOnSnapshotFingerprint: snapshotRenderingFingerprint(snapshot)
     });
   });
