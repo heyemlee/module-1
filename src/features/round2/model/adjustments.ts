@@ -530,14 +530,16 @@ function ensureAbsorberFiller(
 
 /**
  * True where width redistribution must stop: fixed appliances, openings,
- * corner gaps, and anchored segments. Appliances are reservation geometry, so
- * a cabinet edit cannot transfer filler through an appliance and move it.
+ * finished panels, corner gaps, and anchored segments. Appliances and panels
+ * are reservation geometry, so a cabinet edit cannot transfer filler through
+ * them or push a filler outside a run-end panel.
  */
 function isZoneBoundary(segment: WallSegment): boolean {
   return (
     segment.kind === "appliance" ||
     segment.kind === "opening" ||
     segment.kind === "gap" ||
+    segment.kind === "panel" ||
     segment.cabinetKind === "corner" ||
     segment.anchored === true
   );

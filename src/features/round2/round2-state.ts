@@ -11,6 +11,7 @@ import {
   stepCabinetWidth
 } from "./model/adjustments";
 import { deriveWallsFromRound1 } from "./model/derive-walls";
+import { CABINET_STANDARDS } from "./model/cabinet-standards";
 import {
   buildIntentConfirmationDecisions,
   initializeDesignIntent,
@@ -190,6 +191,8 @@ export function reduceRound2Prototype(
           : null
       };
     }
+    case "SET_APPLIANCE_WIDTH":
+      return setApplianceWidth(state, action.objectId, action.widthSixteenths);
     case "NUDGE_GROUP":
       return applyProposalAdjustment(
         state,
@@ -450,6 +453,121 @@ function regenerateProposalFromIntent(
     lastAbsorbed: null,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
   };
+}
+
+/**
+ * Hand-adjusts one appliance's width. Because an appliance's size lives on its
+ * fixed point (autofill reads it via the customer-provided width), setting it
+ * there and re-running autofill reflows the base run around it and re-derives
+ * the upper tier — the fridge surround, hood, and windowless-sink module all
+ * realign to the new column instead of drifting off it.
+ */
+function setApplianceWidth(
+  state: Round2PrototypeState,
+  segmentId: string,
+  widthSixteenths: number
+): Round2PrototypeState {
+  if (!state.model || state.role !== "DESIGNER") return state;
+  const located = locateApplianceFixedPoint(state.model, segmentId);
+  if (!located) return state;
+  if (!Number.isFinite(widthSixteenths)) return state;
+  const fixedPoint = state.model.walls
+    .find((wall) => wall.id === located.wallId)
+    ?.fixedPoints.find((point) => point.id === located.fixedPointId);
+  if (!fixedPoint || !isAllowedApplianceWidth(fixedPoint.symbol, widthSixteenths)) {
+    return state;
+  }
+
+  const retyped: Round2Model = {
+    ...state.model,
+    walls: state.model.walls.map((wall) =>
+      wall.id === located.wallId
+        ? {
+            ...wall,
+            fixedPoints: wall.fixedPoints.map((point) =>
+              point.id === located.fixedPointId
+                ? { ...point, widthSixteenths }
+                : point
+            )
+          }
+        : wall
+    )
+  };
+  if (retyped === state.model) return state;
+
+  const model = autofillRound2Model(
+    retyped,
+    state.measurements,
+    state.designIntent
+  );
+  const selected =
+    firstSegmentForFixedPoint(model, located.fixedPointId) ??
+    firstSelectableSegment(model);
+  const proposalStatus =
+    model.decisionItems.length > 0 ? "NEEDS_DECISION" : "READY";
+
+  return {
+    ...state,
+    model,
+    proposalVersion: state.proposalVersion + 1,
+    proposalStatus,
+    drawingStatus: "STALE",
+    selectedWall: selected?.wallId ?? state.selectedWall,
+    selectedObjectId: selected?.id ?? state.selectedObjectId,
+    lastAbsorbed: null,
+    issueObjectId: model.decisionItems[0]?.objectId ?? null
+  };
+}
+
+function isAllowedApplianceWidth(
+  symbol: string | undefined,
+  widthSixteenths: number
+): boolean {
+  const appliances = CABINET_STANDARDS.appliances;
+  const definition =
+    symbol === "fridge"
+      ? appliances.refrigerator
+      : symbol === "range"
+        ? appliances.range
+        : symbol === "sink"
+          ? appliances.sinkBase
+          : symbol === "dishwasher"
+            ? appliances.dishwasher
+            : null;
+  return definition?.widthOptionsSixteenths.includes(widthSixteenths) ?? false;
+}
+
+function locateApplianceFixedPoint(
+  model: Round2Model,
+  segmentId: string
+): { wallId: WallId; fixedPointId: string } | null {
+  for (const wall of model.walls) {
+    const segment = wall.segments.find((item) => item.id === segmentId);
+    if (!segment) continue;
+    if (
+      segment.kind !== "appliance" ||
+      segment.tier !== "base" ||
+      !segment.sourceFixedPointId
+    ) {
+      return null;
+    }
+    return { wallId: wall.id, fixedPointId: segment.sourceFixedPointId };
+  }
+  return null;
+}
+
+function firstSegmentForFixedPoint(
+  model: Round2Model,
+  fixedPointId: string
+): { id: string; wallId: WallId } | null {
+  for (const wall of model.walls) {
+    const appliance = wall.segments.find(
+      (item) =>
+        item.sourceFixedPointId === fixedPointId && item.kind === "appliance"
+    );
+    if (appliance) return { id: appliance.id, wallId: wall.id };
+  }
+  return null;
 }
 
 function firstSelectableSegment(

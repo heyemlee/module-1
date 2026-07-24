@@ -35,6 +35,7 @@ describe("Postgres schema", () => {
     expect(schema).toContain("prompt_description TEXT NOT NULL");
     expect(schema).toContain("based_on_cabinet_style TEXT");
     expect(schema).toContain("based_on_door_color_id UUID");
+    expect(schema).not.toContain("image_base64 TEXT NOT NULL");
   });
 
   test("migrates rendering preference metadata onto existing tables", () => {

@@ -23,6 +23,7 @@ import {
   isFridgeAboveUnit,
   resolveFridgeAboveHeights
 } from "../model/fridge-surround";
+import { resolveSinkUpperHeights } from "../model/sink-upper";
 import type { DrawingSheetId } from "../round2-types";
 
 const COLORS = {
@@ -322,6 +323,11 @@ function ElevationSheet({
     intent,
     layout.profile
   );
+  const sinkUpperHeights = resolveSinkUpperHeights(
+    segments,
+    wall?.fixedPoints ?? [],
+    layout.profile
+  );
 
   return (
     <g>
@@ -365,6 +371,7 @@ function ElevationSheet({
           wall={wall}
           mirrored={mirrored}
           fridgeAboveHeights={fridgeAboveHeights}
+          sinkUpperHeights={sinkUpperHeights}
         />
         <ElevationRun
           segments={base}
@@ -393,7 +400,8 @@ function ElevationSheet({
           const box = elevationBox(
             segment,
             layout,
-            fridgeAboveHeights
+            fridgeAboveHeights,
+            sinkUpperHeights
           );
           const role = resolveSegmentRole(segment, wall);
           const mainLabel = segment.code ?? segment.label;
@@ -493,6 +501,28 @@ function ElevationSheet({
         {/* Tall units (refrigerator, oven/pantry towers) run floor-to-cabinet-top
             and have no counter/upper split, so they get their own overall
             height dimension inside the column. */}
+        {/* The sink upper module hangs shorter than the run, so it carries its
+            own height dimension inside its column. */}
+        <g data-drawing-layer="sink-upper-height">
+          {elevationPlacements(upper, total, mirrored)
+            .filter(({ segment }) => sinkUpperHeights.has(segment.id))
+            .map(({ segment, x, width }) => {
+              const heightSixteenths = sinkUpperHeights.get(segment.id)!;
+              return (
+                <g
+                  key={`sink-upper-height-${segment.id}`}
+                  data-sink-upper-height={formatSixteenths(heightSixteenths)}
+                >
+                  <DimensionVertical
+                    x={x + Math.min(16, width / 2)}
+                    y1={layout.upperTop}
+                    y2={layout.upperTop + heightSixteenths * layout.scale}
+                    label={formatSixteenths(heightSixteenths)}
+                  />
+                </g>
+              );
+            })}
+        </g>
         <g data-drawing-layer="tall-height">
           {elevationPlacements(base, total, mirrored)
             .filter(({ segment }) => segment.cabinetKind === "tall")
@@ -692,7 +722,8 @@ function ElevationRun({
   intent,
   wall,
   mirrored,
-  fridgeAboveHeights
+  fridgeAboveHeights,
+  sinkUpperHeights
 }: {
   segments: WallSegment[];
   total: number;
@@ -701,6 +732,7 @@ function ElevationRun({
   wall: Round2Wall | null;
   mirrored: boolean;
   fridgeAboveHeights?: ReadonlyMap<string, number>;
+  sinkUpperHeights?: ReadonlyMap<string, number>;
 }) {
   return (
     <g>
@@ -708,7 +740,8 @@ function ElevationRun({
         const { y, height } = elevationBox(
           segment,
           layout,
-          fridgeAboveHeights
+          fridgeAboveHeights,
+          sinkUpperHeights
         );
         if (segment.kind === "gap") return null;
         const front = resolveSegmentFront(segment, intent);
@@ -1028,7 +1061,9 @@ function baseBodyHeightSixteenths(profile: Round2HeightProfile): number {
 function hasCountertop(segment: WallSegment, wall: Round2Wall | null): boolean {
   if (segment.tier !== "base") return false;
   if (segment.cabinetKind === "tall") return false;
-  if (segment.kind === "panel") return false;
+  // A full-height side panel beside a tall unit breaks the counter; a
+  // tier-height panel (run end, dishwasher side) sits under it like a cabinet.
+  if (segment.kind === "panel") return segment.panelSpan === "tier";
   if (segment.kind === "opening" || segment.kind === "gap") return false;
   return resolveSegmentRole(segment, wall) !== "range";
 }
@@ -1049,7 +1084,8 @@ function tallUnitHeightSixteenths(profile: Round2HeightProfile): number {
 function elevationBox(
   segment: WallSegment,
   layout: SheetVerticalLayout,
-  fridgeAboveHeights: ReadonlyMap<string, number> = EMPTY_ABOVE_HEIGHTS
+  fridgeAboveHeights: ReadonlyMap<string, number> = EMPTY_ABOVE_HEIGHTS,
+  sinkUpperHeights: ReadonlyMap<string, number> = EMPTY_ABOVE_HEIGHTS
 ): { y: number; height: number } {
   const aboveHeight = fridgeAboveHeightForSegment(segment, fridgeAboveHeights);
   if (aboveHeight != null) {
@@ -1061,16 +1097,24 @@ function elevationBox(
       return { y: top, height: ELEVATION.floor - top };
     }
   }
+  // The module over a windowless sink stays top-aligned with the upper run
+  // and hangs at its own shorter height (24–30″ counter clearance below).
+  const sinkUpperHeight = sinkUpperHeights.get(segment.id);
+  if (sinkUpperHeight != null) {
+    return { y: layout.upperTop, height: sinkUpperHeight * layout.scale };
+  }
   if (segment.tier === "upper") {
     return {
       y: layout.upperTop,
       height: layout.upperBottom - layout.upperTop
     };
   }
+  // A full-height panel flanks a tall unit; a tier-height panel matches the
+  // base body under the counter.
   if (
     segment.tier === "full" ||
     segment.cabinetKind === "tall" ||
-    segment.kind === "panel"
+    (segment.kind === "panel" && segment.panelSpan !== "tier")
   ) {
     return { y: layout.upperTop, height: ELEVATION.floor - layout.upperTop };
   }

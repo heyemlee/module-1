@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { query } from "@/server/db/client";
+import {
+  buildObjectKey,
+  createBucketStorageFromEnv
+} from "@/server/storage/bucket";
 import { round1FormSchema, type Round1FormInput } from "@/domain/round1";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
 import type { Round1RenderingPreferenceStamp } from "@/server/round1/rendering-service";
 import type { AuthUser } from "./types";
-import {
-  buildObjectKey,
-  createBucketStorageFromEnv
-} from "@/server/storage/bucket";
 
 /**
  * Non-authoritative concept rendering stored alongside a project. Customer-facing
@@ -55,7 +55,7 @@ type Round1StateRow = {
 type RenderingHistoryRow = {
   id: string;
   model: string;
-  image_base64: string | null;
+  image_base64: string;
   prompt: string;
   size: string;
   based_on_snapshot_generated_at: Date;
@@ -128,7 +128,7 @@ export function mapRenderingHistoryRow(
   return {
     id: row.id,
     model: row.model,
-    imageBase64: row.image_base64 ?? "",
+    imageBase64: row.image_base64,
     prompt: row.prompt,
     size: row.size,
     basedOnSnapshotGeneratedAt: row.based_on_snapshot_generated_at.toISOString(),
@@ -253,15 +253,17 @@ export async function saveRenderingHistory(input: {
   }
 
   const storage = createBucketStorageFromEnv(process.env);
+  if (!storage) {
+    throw new Error("Bucket storage is required for rendering persistence");
+  }
   const renderingId = randomUUID();
   const imageBuffer = Buffer.from(input.rendering.imageBase64, "base64");
-  const imageObjectKey = storage
-    ? buildObjectKey("renderings", input.projectId, `${renderingId}.png`)
-    : null;
-
-  if (storage && imageObjectKey) {
-    await storage.uploadObject(imageObjectKey, imageBuffer, "image/png");
-  }
+  const imageObjectKey = buildObjectKey(
+    "renderings",
+    input.projectId,
+    `${renderingId}.png`
+  );
+  await storage.uploadObject(imageObjectKey, imageBuffer, "image/png");
 
   const result = await query<{ id: string; created_at: Date }>(
     `INSERT INTO renderings (
@@ -279,8 +281,8 @@ export async function saveRenderingHistory(input: {
       input.snapshotId,
       input.rendering.model,
       imageObjectKey,
-      storage ? "image/png" : null,
-      storage ? imageBuffer.length : null,
+      "image/png",
+      imageBuffer.length,
       input.rendering.prompt,
       input.rendering.size,
       input.rendering.basedOnSnapshotGeneratedAt,
@@ -345,19 +347,15 @@ export async function getRenderingImage(projectId: string, renderingId: string) 
     [renderingId, projectId]
   );
   const row = result.rows[0];
-  if (!row) return null;
+  if (!row?.image_object_key) return null;
 
-  if (row.image_object_key) {
-    const storage = createBucketStorageFromEnv(process.env);
-    if (storage) {
-      try {
-        return (await storage.getObject(row.image_object_key)).body;
-      } catch {
-        return null;
-      }
-    }
+  const storage = createBucketStorageFromEnv(process.env);
+  if (!storage) return null;
+  try {
+    return (await storage.getObject(row.image_object_key)).body;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function getRenderCountForCurrentMonth(userId: string): Promise<number> {

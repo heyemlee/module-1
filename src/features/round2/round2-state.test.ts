@@ -5,7 +5,10 @@ import {
   reduceRound2Prototype
 } from "./round2-state";
 import { ROUND1_REFERENCE_FIXTURE } from "./round2-fixtures";
-import { hasBlockingDecisions } from "./model/round2-model";
+import {
+  hasBlockingDecisions,
+  initializeMeasurements
+} from "./model/round2-model";
 import type {
   Round1ReferenceSource,
   Round2PrototypeState
@@ -95,7 +98,15 @@ describe("Round 2 prototype state", () => {
 
   test("requires complete dynamic measurements before submit autofills proposal model", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
-    const blocked = reduceRound2Prototype(locked, {
+    // The layout pre-fills every field, so clear a required one to recreate the
+    // incomplete state the submit gate must reject.
+    const clearedKey = Object.keys(locked.measurements)[0];
+    const incomplete = reduceRound2Prototype(locked, {
+      type: "EDIT_MEASUREMENT",
+      field: clearedKey,
+      value: null
+    });
+    const blocked = reduceRound2Prototype(incomplete, {
       type: "SUBMIT_MEASUREMENT"
     });
 
@@ -298,9 +309,83 @@ describe("Round 2 prototype state", () => {
     expect(replaced.measurementStatus).toBe("DRAFT");
     expect(replaced.proposalStatus).toBe("STALE");
     expect(replaced.drawingStatus).toBe("STALE");
-    expect(Object.values(replaced.measurements).every((value) => value == null)).toBe(
-      true
+    // Measurements re-initialize from the newly adopted reference: field
+    // measurement opens pre-filled with the Round 1 layout presets (wall
+    // lengths, opening sizes) rather than blank.
+    expect(replaced.measurements).toEqual(
+      initializeMeasurements(replaced.model!)
     );
+    expect(
+      Object.values(replaced.measurements).some((value) => value != null)
+    ).toBe(true);
+  });
+
+  test("rejects a non-standard appliance width", () => {
+    const seeded = reduceRound2Prototype(
+      withFridgeFixedPoint(
+        submitComplete(createRound2PrototypeState("DESIGNER"))
+      ),
+      {
+        type: "SET_DESIGN_INTENT",
+        key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
+        value: "wallCabinet"
+      }
+    );
+    const fridge = seeded.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )!;
+
+    const invalid = reduceRound2Prototype(seeded, {
+      type: "SET_APPLIANCE_WIDTH",
+      objectId: fridge.id,
+      widthSixteenths: 33 * 16
+    });
+
+    expect(invalid).toBe(seeded);
+  });
+
+  test("ignores appliance width edits from a non-designer or on a cabinet", () => {
+    const seeded = reduceRound2Prototype(
+      withFridgeFixedPoint(
+        submitComplete(createRound2PrototypeState("DESIGNER"))
+      ),
+      {
+        type: "SET_DESIGN_INTENT",
+        key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
+        value: "wallCabinet"
+      }
+    );
+    const fridge = seeded.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find(
+        (segment) =>
+          segment.kind === "appliance" &&
+          segment.sourceFixedPointId === FRIDGE_FIXED_POINT_ID
+      )!;
+
+    // A sales viewer cannot resize appliances.
+    const salesState: Round2PrototypeState = { ...seeded, role: "SALES" };
+    const asSales = reduceRound2Prototype(salesState, {
+      type: "SET_APPLIANCE_WIDTH",
+      objectId: fridge.id,
+      widthSixteenths: 30 * 16
+    });
+    expect(asSales).toBe(salesState);
+
+    // A cabinet id is not an appliance, so the action is a no-op.
+    const cabinet = seeded.model!.walls
+      .flatMap((wall) => wall.segments)
+      .find((segment) => segment.kind === "cabinet")!;
+    const noop = reduceRound2Prototype(seeded, {
+      type: "SET_APPLIANCE_WIDTH",
+      objectId: cabinet.id,
+      widthSixteenths: 30 * 16
+    });
+    expect(noop).toBe(seeded);
   });
 
   test("stores a front exception and marks the drawings stale", () => {
@@ -517,6 +602,12 @@ describe("Round 2 prototype state", () => {
     });
 
     expect(hasBlockingDecisions(overflowed.model)).toBe(true);
+    expect(overflowed.model!.decisionItems).toContainEqual(
+      expect.objectContaining({
+        severity: "blocking",
+        title: "Wall A filler overdrawn"
+      })
+    );
     expect(overflowed.proposalStatus).toBe("NEEDS_DECISION");
 
     // "Resolve decision" cannot acknowledge a blocking geometry error.

@@ -80,6 +80,13 @@ export type WallSegment = {
   anchored?: boolean;
   /** User explicitly kept this former filler as open space. */
   intentionalGap?: boolean;
+  /**
+   * Vertical span of a finished panel (见光板). "full" runs floor to cabinet
+   * top beside a tall unit; "tier" matches its own tier's cabinet height (the
+   * base body under the counter, or the upper run). Absent means "full" so
+   * drafts saved before run-end panels keep their tall-flank rendering.
+   */
+  panelSpan?: "full" | "tier";
 };
 
 export type Round2Wall = {
@@ -247,8 +254,43 @@ export function initializeMeasurements(
   model: Round2Model
 ): Record<MeasurementKey, number | null> {
   return Object.fromEntries(
-    buildMeasurementFields(model).map((field) => [field.key, null])
+    buildMeasurementFields(model).map((field) => [
+      field.key,
+      presetMeasurementValue(model, field)
+    ])
   );
+}
+
+/**
+ * The preset value that pre-fills a field from the Round 1 layout: the derived
+ * wall length, opening width/offset, or ceiling height. Null when the layout
+ * did not carry that dimension, leaving the field blank to capture on site.
+ */
+function presetMeasurementValue(
+  model: Round2Model,
+  field: MeasurementField
+): number | null {
+  switch (field.kind) {
+    case "ceiling":
+      return model.ceilingHeightSixteenths ?? null;
+    case "wall-length":
+      return findWall(model, field.wallId ?? null)?.lengthSixteenths ?? null;
+    case "opening-width":
+    case "opening-offset": {
+      const wall = findWall(model, field.wallId ?? null);
+      const point = wall?.fixedPoints.find(
+        (item) => item.id === field.fixedPointId
+      );
+      if (!point) return null;
+      return (
+        (field.kind === "opening-width"
+          ? point.widthSixteenths
+          : point.offsetSixteenths) ?? null
+      );
+    }
+    default:
+      return null;
+  }
 }
 
 export function requiredMeasurementKeys(model: Round2Model | null): string[] {

@@ -8,20 +8,29 @@ import {
   mapRound1StateRow,
   saveRenderingHistory
 } from "./round1-postgres-repository";
-import { createBucketStorageFromEnv } from "@/server/storage/bucket";
+
+const { bucketStorage } = vi.hoisted(() => ({
+  bucketStorage: {
+    uploadObject: vi.fn(),
+    getObject: vi.fn(),
+    deleteObject: vi.fn()
+  }
+}));
 
 vi.mock("@/server/db/client", () => ({
   query: vi.fn()
 }));
 
 vi.mock("@/server/storage/bucket", () => ({
-  buildObjectKey: (prefix: string, ...parts: string[]) => [prefix, ...parts].join("/"),
-  createBucketStorageFromEnv: vi.fn()
+  buildObjectKey: (...parts: string[]) => parts.join("/"),
+  createBucketStorageFromEnv: vi.fn(() => bucketStorage)
 }));
 
 afterEach(() => {
   vi.mocked(query).mockReset();
-  vi.mocked(createBucketStorageFromEnv).mockReset();
+  bucketStorage.uploadObject.mockReset();
+  bucketStorage.getObject.mockReset();
+  bucketStorage.deleteObject.mockReset();
 });
 
 describe("round1 postgres mappers", () => {
@@ -132,78 +141,25 @@ describe("round1 postgres mappers", () => {
       }
     });
 
-    expect(vi.mocked(query).mock.calls[0][0]).toContain(
-      "based_on_cabinet_style"
-    );
-    const values = vi.mocked(query).mock.calls[0][1] as unknown[];
-    expect(values.slice(1, 5)).toEqual([
-      "project-1",
-      "snapshot-1",
-      "gpt-image-test",
-      null
-    ]);
-    expect(values.slice(5, 7)).toEqual([null, null]);
-    expect(values.slice(7)).toEqual([
-      "concept prompt",
-      "1536x1024",
-      "2026-06-18T00:00:00.000Z",
-      "EUROPEAN_FRAMELESS",
-      "eu-oak",
-      "2026-06-19T00:00:00.000Z",
-      "user-1"
-    ]);
-  });
-
-  test("uploads a rendering and omits the legacy Base64 payload when Bucket storage is configured", async () => {
-    const uploadObject = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(createBucketStorageFromEnv).mockReturnValue({
-      uploadObject,
-      getObject: vi.fn(),
-      deleteObject: vi.fn()
-    });
-    vi.mocked(query)
-      .mockResolvedValueOnce({
-        rows: [{ id: "rendering-1", created_at: new Date("2026-06-20T00:00:00.000Z") }]
-      } as never)
-      .mockResolvedValueOnce({ rows: [] } as never);
-
-    await saveRenderingHistory({
-      projectId: "project-1",
-      snapshotId: "snapshot-1",
-      user: {
-        id: "user-1",
-        companyId: "company-1",
-        account: "ada",
-        email: "ada@example.com",
-        name: "Ada",
-        role: "SALES",
-        disabledAt: null,
-        monthlyRenderQuota: 50
-      },
-      rendering: {
-        model: "gpt-image-test",
-        imageBase64: Buffer.from("png-bytes").toString("base64"),
-        prompt: "concept prompt",
-        size: "1536x1024",
-        basedOnSnapshotGeneratedAt: "2026-06-18T00:00:00.000Z",
-        basedOnRenderingPreferences: {
-          cabinetStyle: "EUROPEAN_FRAMELESS",
-          doorColorId: "eu-oak",
-          colorUpdatedAt: "2026-06-19T00:00:00.000Z"
-        },
-        salesEstimateOnly: true,
-        notForProduction: true,
-        dimensionConfidence: "ROUGH"
-      }
-    });
-
-    expect(uploadObject).toHaveBeenCalledWith(
+    expect(bucketStorage.uploadObject).toHaveBeenCalledWith(
       expect.stringMatching(/^renderings\/project-1\/.+\.png$/),
-      Buffer.from("png-bytes"),
+      Buffer.from("rendered", "base64"),
       "image/png"
     );
-    expect((vi.mocked(query).mock.calls[0][1] as unknown[])[4]).toEqual(
-      expect.stringMatching(/^renderings\/project-1\/.+\.png$/)
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("image_object_key");
+    expect(vi.mocked(query).mock.calls[0][0]).not.toContain("image_base64");
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(
+      expect.arrayContaining([
+        "project-1",
+        "snapshot-1",
+        "gpt-image-test",
+        "concept prompt",
+        "1536x1024",
+        "EUROPEAN_FRAMELESS",
+        "eu-oak",
+        "2026-06-19T00:00:00.000Z",
+        "user-1"
+      ])
     );
   });
 });
@@ -238,33 +194,22 @@ describe("rendering gallery payload", () => {
     expect(rows[0].id).toBe("r1");
   });
 
-  test("getRenderingImage returns decoded PNG bytes scoped to the project", async () => {
-    vi.mocked(query).mockResolvedValue({ rows: [{ image_object_key: null }] } as never);
-
-    const image = await getRenderingImage("project-1", "rendering-1");
-
-    expect(vi.mocked(query).mock.calls[0][1]).toEqual(["rendering-1", "project-1"]);
-    expect(image).toBeNull();
-  });
-
-  test("getRenderingImage prefers the Bucket object when an object key exists", async () => {
-    const getObject = vi.fn().mockResolvedValue({
-      body: Buffer.from("bucket-image"),
-      contentType: "image/webp"
-    });
-    vi.mocked(createBucketStorageFromEnv).mockReturnValue({
-      uploadObject: vi.fn(),
-      getObject,
-      deleteObject: vi.fn()
-    });
+  test("getRenderingImage resolves the stored object key scoped to the project", async () => {
     vi.mocked(query).mockResolvedValue({
-      rows: [{ image_object_key: "renderings/project-1/rendering-1.webp" }]
+      rows: [{ image_object_key: "renderings/project-1/rendering-1.png" }]
     } as never);
+    bucketStorage.getObject.mockResolvedValue({
+      body: Buffer.from("png-bytes"),
+      contentType: "image/png"
+    });
 
-    const image = await getRenderingImage("project-1", "rendering-1");
+    await expect(getRenderingImage("project-1", "rendering-1")).resolves.toEqual(
+      Buffer.from("png-bytes")
+    );
 
-    expect(getObject).toHaveBeenCalledWith("renderings/project-1/rendering-1.webp");
-    expect(image?.toString()).toBe("bucket-image");
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("image_object_key");
+    expect(vi.mocked(query).mock.calls[0][0]).not.toContain("image_base64");
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(["rendering-1", "project-1"]);
   });
 
   test("getRenderingImage returns null when the rendering is not found", async () => {

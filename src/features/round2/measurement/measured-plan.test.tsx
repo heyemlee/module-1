@@ -17,7 +17,13 @@ import { MeasuredPlan } from "./measured-plan";
 
 describe("MeasuredPlan", () => {
   test("renders derived U-shape walls with missing measurement placeholders", () => {
-    const model = deriveWallsFromRound1(ROUND1_REFERENCE_FIXTURE.floorPlan);
+    // A plan drawn without real dimensions carries no scale, so the fields stay
+    // blank and the plan shows the "待量" placeholders and dashed walls.
+    const model = deriveWallsFromRound1({
+      ...ROUND1_REFERENCE_FIXTURE.floorPlan,
+      pxPerInch: null,
+      ceilingHeightSixteenths: null
+    });
     const html = renderToStaticMarkup(
       <MeasuredPlan
         model={model}

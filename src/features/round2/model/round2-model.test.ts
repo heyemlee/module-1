@@ -32,11 +32,29 @@ describe("Round 2 model helpers", () => {
     expect(buildMeasurementFields(model).map((field) => field.key)).toContain(
       ceilingMeasurementKey()
     );
-    expect(measurements[wallLengthMeasurementKey("A")]).toBeNull();
+    // The demo layout carries a real scale, so the fields open pre-filled from
+    // the recovered wall lengths and opening geometry.
+    expect(measurements[wallLengthMeasurementKey("A")]).toBe(
+      model.walls[0].lengthSixteenths
+    );
     expect(window).toBeDefined();
-    expect(measurements[openingWidthMeasurementKey(window!.id)]).toBeNull();
-    expect(measurements[openingOffsetMeasurementKey(window!.id)]).toBeNull();
-    expect(measurementsComplete(model, measurements)).toBe(false);
+    expect(measurements[openingWidthMeasurementKey(window!.id)]).toBe(
+      window!.widthSixteenths
+    );
+    expect(measurements[openingOffsetMeasurementKey(window!.id)]).toBe(
+      window!.offsetSixteenths
+    );
+    expect(measurementsComplete(model, measurements)).toBe(true);
+
+    // A layout with no real scale leaves the fields blank and incomplete.
+    const blankModel = deriveWallsFromRound1({
+      ...ROUND1_REFERENCE_FIXTURE.floorPlan,
+      pxPerInch: null,
+      ceilingHeightSixteenths: null
+    });
+    const blank = initializeMeasurements(blankModel);
+    expect(blank[wallLengthMeasurementKey("A")]).toBeNull();
+    expect(measurementsComplete(blankModel, blank)).toBe(false);
 
     const complete = Object.fromEntries(
       Object.keys(measurements).map((key) => [key, 480])

@@ -32,7 +32,7 @@ function NewtonsCradle({ label }: { label?: string }) {
         <div className="newtons-cradle__dot" />
       </div>
       {label && (
-        <p className="max-w-xs px-8 text-center text-[11.5px] leading-5 text-white/55">
+        <p className="max-w-xs px-8 text-center text-[11.5px] leading-5 text-studio-muted">
           {label}
         </p>
       )}
@@ -228,7 +228,10 @@ export function Round1InlineRenderPreview({
 
   const arrow =
     "absolute top-1/2 z-[5] flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(20,20,22,0.14)] bg-white/80 text-[16px] text-[#222225] shadow-[0_14px_34px_-20px_rgba(20,20,26,0.6)] backdrop-blur-sm transition hover:bg-white disabled:opacity-30";
-  const frameBackground = "linear-gradient(162deg,#3a3a3e,#101012)";
+  // Keep the outer frame aligned with the light drawing canvas. The content
+  // Keep the outer frame aligned with the rendered image. The preview must not
+  // introduce a rounded viewport when the generated image has square corners.
+  const frameBackground = "#f0f0f0";
   const frameStyle = fitViewport
     ? {
         background: frameBackground,
@@ -248,7 +251,7 @@ export function Round1InlineRenderPreview({
       )}
       style={frameStyle}
     >
-      <div className="absolute inset-0 overflow-hidden rounded-[16px] shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]">
+      <div className="absolute inset-0 overflow-hidden shadow-[0_22px_50px_-24px_rgba(20,20,26,0.5),0_1px_0_rgba(255,255,255,0.4)_inset]">
         {busy ? (
           <div className="cmx">
           <div className="cmx-space">
@@ -275,10 +278,10 @@ export function Round1InlineRenderPreview({
           </button>
         ) : !current ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
-            <p className="font-mono text-[10px] tracking-[0.14em] text-white/45">
+            <p className="font-mono text-[10px] tracking-[0.14em] text-studio-muted">
               CONCEPT RENDERING
             </p>
-            <p className="max-w-xs text-[12px] leading-5 text-white/45">
+            <p className="max-w-xs text-[12px] leading-5 text-studio-muted">
               Lock a cabinet finish, then generate to preview the concept here.
             </p>
           </div>

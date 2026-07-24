@@ -21,6 +21,30 @@ describe("WallElevation", () => {
     expect(html).not.toContain(">1:30<");
   });
 
+  test("marks only the proposal run beyond its measured wall with a hatched overflow", () => {
+    const html = render(
+      elevationModel(
+        [cabinet("base-1", 72 * 16), cabinet("base-2", 54 * 16)],
+        36 * 16,
+        96 * 16,
+        120 * 16
+      ),
+      true
+    );
+
+    expect(html).toContain('data-elevation-layer="wall-overflow"');
+    expect(html).toContain('data-overflow-tier="base"');
+    expect(html).toContain('data-overflow-sixteenths="96"');
+    expect(html).toContain("OVER WALL BY +6″");
+    expect(html).toContain('stroke-dasharray="5 4"');
+  });
+
+  test("keeps the proposal elevation clear when every tier closes at the wall", () => {
+    expect(render(elevationModel())).not.toContain(
+      'data-elevation-layer="wall-overflow"'
+    );
+  });
+
   test("renders fronts from the resolved configuration", () => {
     const html = render(elevationModel());
 
@@ -593,29 +617,37 @@ describe("WallElevation", () => {
     }
   });
 
-  test("keeps appliance reservations out of the width editor while retaining cabinet width controls", () => {
+  test("offers an appliance width editor for a fixed appliance and cabinet controls for cabinets", () => {
+    const applianceModel = elevationModel([
+      {
+        ...cabinet("range", 30 * 16, "appliance"),
+        code: "RNG30",
+        label: "RNG30",
+        sourceFixedPointId: "top-appliance-range"
+      },
+      {
+        ...cabinet("corner-return", 12 * 16, "gap"),
+        code: "#1",
+        label: "#1",
+        sourceCornerId: "TL"
+      },
+      cabinet("base-cabinet", 30 * 16)
+    ]);
+    applianceModel.walls[0].fixedPoints = [
+      {
+        id: "top-appliance-range",
+        type: "appliance",
+        label: "range",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.2,
+        symbol: "range"
+      }
+    ];
     const applianceHtml = renderToStaticMarkup(
       <WallElevation
         wallId="A"
-        model={elevationModel([
-          {
-            ...cabinet("range", 30 * 16, "appliance"),
-            code: "RNG30",
-            label: "RNG30"
-          },
-          {
-            ...cabinet("dishwasher", 24 * 16, "appliance"),
-            code: "DW24",
-            label: "DW24"
-          },
-          {
-            ...cabinet("corner-return", 12 * 16, "gap"),
-            code: "#1",
-            label: "#1",
-            sourceCornerId: "TL"
-          },
-          cabinet("base-cabinet", 30 * 16)
-        ])}
+        model={applianceModel}
         selectedObjectId="range"
         canEdit={true}
         dispatch={() => {}}
@@ -639,14 +671,19 @@ describe("WallElevation", () => {
       cabinetHtml.indexOf('<div data-testid="segment-editor-card"')
     );
 
-    expect(applianceEditor).toContain('data-testid="segment-editor-card"');
-    expect(applianceEditor).not.toContain("WIDTH");
+    // The appliance now exposes its own width editor — but not the cabinet's
+    // 9″-minimum "STEP_CABINET_WIDTH" control (a distinct aria-label).
+    expect(applianceEditor).toContain("APPLIANCE WIDTH");
+    expect(applianceEditor).toContain('aria-pressed="true"');
+    expect(applianceEditor).toContain("33″");
+    expect(applianceEditor).not.toContain('aria-label="Custom appliance width"');
     expect(applianceEditor).not.toContain('aria-label="Custom width"');
-    for (const code of ["#1", "RNG30", "DW24"]) {
+    for (const code of ["#1", "RNG30"]) {
       expect(applianceEditor).not.toContain(code);
     }
-    expect(cabinetEditor).toContain("WIDTH");
+    // A cabinet keeps its standard-width controls and no appliance section.
     expect(cabinetEditor).toContain('aria-label="Custom width"');
+    expect(cabinetEditor).not.toContain("APPLIANCE WIDTH");
   });
 
   test("keeps immutable corner cabinets out of width and nudge controls", () => {
@@ -949,7 +986,7 @@ describe("WallElevation", () => {
     );
   });
 
-  test("draws a counter surface line without thickness and dimensions the 36 inch cabinet", () => {
+  test("draws the counter slab and dimensions the 34 1/2 inch cabinet body", () => {
     const html = render(elevationModel());
 
     expect(html).toContain('data-elevation-layer="countertop"');
@@ -957,9 +994,77 @@ describe("WallElevation", () => {
     expect(tagFor(html, "line", 'data-countertop-band="0"')).toContain(
       'stroke-width="2"'
     );
-    expect(html).not.toContain('data-countertop-band="0"><rect');
+    // The 1 1/2″ slab is drawn as an undimensioned band over the base run —
+    // the height chain reads the 34 1/2″ cabinet body, never the slab.
+    expect(html).toContain('data-countertop-band="0"><rect');
     const counter = tagFor(html, "text", 'data-height-label="counter"');
-    expect(html.slice(html.indexOf(counter))).toContain("36″");
+    expect(html.slice(html.indexOf(counter))).toContain("34 1/2″");
+  });
+
+  test("draws tier panels at their tier height and full panels floor to cabinet top", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("a-base-endpanel-start", 12, "panel"),
+        label: "Panel",
+        panelSpan: "tier"
+      },
+      cabinet("a-base-1", 36 * 16),
+      { ...cabinet("a-tall-side-panel", 12, "panel"), label: "Panel" }
+    ]);
+    const html = render(model);
+    const base = rectForSegment(html, "a-base-1");
+
+    // The run-end panel matches the base body; the tall-flank panel runs to
+    // the cabinet top like the tall unit it closes.
+    expect(rectForSegment(html, "a-base-endpanel-start").y).toBe(base.y);
+    expect(rectForSegment(html, "a-tall-side-panel").y).toBeLessThan(base.y);
+  });
+
+  test("hangs the windowless sink upper shorter with its own height dimension", () => {
+    const model = elevationModel([
+      cabinet("a-base-left", 30 * 16),
+      {
+        ...cabinet("a-base-sink", 36 * 16, "appliance"),
+        cabinetKind: "sink",
+        label: "SB36",
+        sourceFixedPointId: "top-appliance-sink"
+      },
+      cabinet("a-base-right", 30 * 16),
+      { ...cabinet("a-upper-left", 30 * 16), tier: "upper" },
+      {
+        ...cabinet("a-upper-sink", 36 * 16),
+        tier: "upper",
+        cabinetKind: "upper",
+        label: "W36",
+        sourceFixedPointId: "top-appliance-sink"
+      },
+      { ...cabinet("a-upper-right", 30 * 16), tier: "upper" }
+    ]);
+    model.walls[0].fixedPoints = [
+      {
+        id: "top-appliance-sink",
+        type: "appliance",
+        symbol: "sink",
+        label: "sink",
+        sourceWall: "TOP",
+        order: 0,
+        positionRatio: 0.4
+      }
+    ];
+    const html = render(model);
+    const ordinary = boxForSegment(html, "a-upper-left");
+    const sinkUpper = boxForSegment(html, "a-upper-sink");
+
+    // Top-aligned with the run, shorter body: the 24″ counter clearance eats
+    // the difference below.
+    expect(sinkUpper.y).toBe(ordinary.y);
+    expect(sinkUpper.height).toBeLessThan(ordinary.height);
+    const heightLabel = tagFor(
+      html,
+      "text",
+      'data-sink-upper-height="a-upper-sink"'
+    );
+    expect(html.slice(html.indexOf(heightLabel))).toContain("30″");
   });
 
   test("breaks the countertop at a freestanding range", () => {
@@ -999,12 +1104,13 @@ describe("WallElevation", () => {
   });
 });
 
-function render(model: Round2Model): string {
+function render(model: Round2Model, canEdit = false): string {
   return renderToStaticMarkup(
     <WallElevation
       wallId="A"
       model={model}
       selectedObjectId={null}
+      canEdit={canEdit}
       onSelect={() => {}}
     />
   );
@@ -1109,6 +1215,20 @@ function rectForSegment(
   };
 }
 
+function boxForSegment(
+  html: string,
+  segmentId: string
+): { y: number; height: number } {
+  const groupStart = html.indexOf(`data-segment-id="${segmentId}"`);
+  expect(groupStart).toBeGreaterThan(-1);
+  const segmentHtml = html.slice(groupStart);
+  const match = segmentHtml.match(
+    /<rect x="[^"]+" y="([^"]+)" width="[^"]+" height="([^"]+)"/
+  );
+  expect(match).not.toBeNull();
+  return { y: Number(match?.[1]), height: Number(match?.[2]) };
+}
+
 function chainLabelY(html: string, segmentId: string): number {
   const tag = html.match(
     new RegExp(`<text(?=[^>]*data-chain-label="${segmentId}")[^>]*>`)
@@ -1205,7 +1325,8 @@ function escapeRegExp(value: string): string {
 function elevationModel(
   segments?: WallSegment[],
   upperHeightSixteenths = 36 * 16,
-  ceilingHeightSixteenths = 96 * 16
+  ceilingHeightSixteenths = 96 * 16,
+  wallLengthSixteenths?: number
 ): Round2Model {
   const base = segments ?? [
     cabinet("a-base-1", 30 * 16),
@@ -1213,7 +1334,7 @@ function elevationModel(
     { ...cabinet("a-base-3", 18 * 16), label: "DB18" },
     cabinet("a-base-4", 54 * 16, "filler")
   ];
-  const length = base.reduce(
+  const length = wallLengthSixteenths ?? base.reduce(
     (sum, segment) => sum + segment.widthSixteenths,
     0
   );

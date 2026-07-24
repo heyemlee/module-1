@@ -111,6 +111,44 @@ function copyJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Fills in the plan scale and ceiling that Round 2 field measurement pre-fills
+ * from, recovering them from the authoritative normalized dimensions when the
+ * stored floor plan predates those fields. Without this, an already-locked
+ * snapshot (serialized before the plan carried `pxPerInch`) opens Field
+ * Measurement blank even though its room length/width/ceiling are known.
+ *
+ * `pxPerInch` is a single uniform plan scale (`room.w === lengthIn * scale`),
+ * so it is recovered from either room axis.
+ */
+export function floorPlanWithMeasurementPresets(
+  snapshot: Round1Snapshot
+): FloorPlan {
+  const { floorPlan, normalized } = snapshot;
+  const lengthIn = normalized.room.length.value;
+  const widthIn = normalized.room.width.value;
+  const ceilingIn = normalized.room.ceilingHeight?.value ?? null;
+
+  const pxPerInch =
+    floorPlan.pxPerInch ??
+    (lengthIn && lengthIn > 0
+      ? floorPlan.room.w / lengthIn
+      : widthIn && widthIn > 0
+        ? floorPlan.room.h / widthIn
+        : null);
+  const ceilingHeightSixteenths =
+    floorPlan.ceilingHeightSixteenths ??
+    (ceilingIn != null ? Math.round(ceilingIn * 16) : null);
+
+  if (
+    pxPerInch === floorPlan.pxPerInch &&
+    ceilingHeightSixteenths === floorPlan.ceilingHeightSixteenths
+  ) {
+    return floorPlan;
+  }
+  return { ...floorPlan, pxPerInch, ceilingHeightSixteenths };
+}
+
 export type Round1SnapshotSummary = {
   totalCabinets: number;
   baseCabinets: number;

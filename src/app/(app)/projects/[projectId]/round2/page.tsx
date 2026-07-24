@@ -9,7 +9,10 @@ import {
 import { getCurrentDesignBasis } from "@/server/platform/design-basis-repository";
 import { listCabinetColorNames } from "@/server/platform/cabinet-color-repository";
 import type { Round1ReferenceSource } from "@/features/round2/round2-types";
-import type { Round1Snapshot } from "@/features/round1/snapshot";
+import {
+  floorPlanWithMeasurementPresets,
+  type Round1Snapshot
+} from "@/features/round1/snapshot";
 import { CABINET_STYLE_LABELS } from "@/features/round1/rendering-preferences";
 
 const LAYOUT_LABELS: Record<string, string> = {
@@ -77,7 +80,7 @@ export default async function ProjectRound2Page({
         colorLabel: color?.name ?? "Color not selected",
         appliances: applianceLabels(snapshot),
         confirmationCount: snapshot.confirmationItems.length,
-        floorPlan: snapshot.floorPlan
+        floorPlan: floorPlanWithMeasurementPresets(snapshot)
       };
     }
   }

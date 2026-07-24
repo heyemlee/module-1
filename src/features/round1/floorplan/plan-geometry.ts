@@ -68,6 +68,15 @@ export type FloorPlan = {
   confirmationCount: number;
   layoutPreference: string;
   scaleNote: string;
+  /**
+   * Plan pixels per real inch, so Round 2 can recover the preset field
+   * measurements (wall lengths, opening widths/offsets) from this geometry.
+   * Null when the room dimensions were unknown and the plan was drawn at a
+   * placeholder scale — there is no real inch value to prefill from.
+   */
+  pxPerInch: number | null;
+  /** Preset finished-ceiling height in sixteenths, or null if not captured. */
+  ceilingHeightSixteenths: number | null;
 };
 
 const CANVAS = { w: 760, h: 560 };
@@ -641,7 +650,14 @@ export function buildFloorPlan(
     layoutPreference: normalized.layoutPreference,
     scaleNote: dimsKnown
       ? `${lengthIn}" x ${widthIn}" rough`
-      : "rough dimensions to confirm"
+      : "rough dimensions to confirm",
+    // Only expose the scale when the plan was drawn from real dimensions; a
+    // placeholder-scaled plan would otherwise prefill fabricated inches.
+    pxPerInch: dimsKnown ? scale : null,
+    ceilingHeightSixteenths:
+      normalized.room.ceilingHeight?.value != null
+        ? Math.round(normalized.room.ceilingHeight.value * 16)
+        : null
   };
 }
 
