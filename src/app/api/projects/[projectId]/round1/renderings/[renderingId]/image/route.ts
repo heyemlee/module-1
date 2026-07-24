@@ -3,13 +3,15 @@ import { requireUser } from "@/server/platform/auth-service";
 import { authErrorResponse, serverError } from "@/server/platform/api-errors";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import { getRenderingImage } from "@/server/platform/round1-postgres-repository";
-import { normalizeRenderingImageBuffer } from "@/server/round1/rendering-image-normalization";
 
 /**
  * Streams a single saved concept rendering as PNG bytes. The gallery list only
  * carries metadata; each `<img>` loads its image here lazily so the page no
  * longer inlines tens of MB of base64. Images are content-immutable per id, so
  * they are cached aggressively (and privately — they are tenant data).
+ *
+ * Bytes are served as stored: write-path normalization already produced the
+ * canonical PNG, so re-running sharp on every GET would only add TTFB.
  */
 export async function GET(
   _request: Request,
@@ -23,9 +25,8 @@ export async function GET(
 
     const image = await getRenderingImage(projectId, renderingId);
     if (!image) return NextResponse.json({ error: "Rendering not found" }, { status: 404 });
-    const normalizedImage = await normalizeRenderingImageBuffer(image);
 
-    return new NextResponse(new Uint8Array(normalizedImage), {
+    return new NextResponse(new Uint8Array(image), {
       status: 200,
       headers: {
         "Content-Type": "image/png",

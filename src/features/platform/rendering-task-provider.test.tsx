@@ -15,7 +15,7 @@ describe("executeRenderingTask", () => {
       return new Response(
         url.endsWith("/state")
           ? null
-          : JSON.stringify({ id: "render-1", imageBase64: "png" }),
+          : JSON.stringify({ id: "render-1" }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" }
