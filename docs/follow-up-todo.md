@@ -13,10 +13,10 @@ Related trackers:
 ## A. 低风险代码清理（可选）
 
 - [x] 删除零引用控件：`CheckboxField` / `StatusPill` / `parseNullableSize`（`src/features/round1/showroom-intake-controls.tsx`）
-- [ ] 本机清理 gitignore 残留（不进仓库）：
-  - [ ] `.data/round1-projects.json`（旧文件仓，约 2.7MB）
-  - [ ] `scripts/cabinet-colors-eu.json`（可用 `npm run db:prepare-cabinet-colors` 再生）
-- [ ] 修正 `scripts/prepare-cabinet-colors.mjs` 里写死的本机 PDF 绝对路径（改为必传参数或相对路径）
+- [x] 本机清理 gitignore 残留（不进仓库）：
+  - [x] `.data/round1-projects.json`（旧文件仓，约 2.7MB）
+  - [x] `scripts/cabinet-colors-eu.json`（可用 `npm run db:prepare-cabinet-colors` 再生）
+- [x] 修正 `scripts/prepare-cabinet-colors.mjs` 里写死的本机 PDF 绝对路径（改为必传参数）
 
 ## B. 中风险清理（需单独切片 + 测试）
 
@@ -40,16 +40,18 @@ Related trackers:
 
 来自 `todo.md` 未勾选项，搬到这里做总览：
 
-- [ ] Round 2：galley / L 布局手动浏览器 QA（U 型已验）
-- [ ] 设计基准流浏览器 QA：确认页锁定 → Round 2 自动进量尺 → 重锁 → 归档横幅
-- [ ] 生产 / staging smoke：
-  - [ ] 登录 / 会话过期 / 登出
-  - [ ] 新建 / 打开项目
-  - [ ] Round 1 快照保存与重试
-  - [ ] Rendering Preferences + 选色渲染保真（2–3 个色）
-  - [ ] Admin Cabinet Colors 批量编辑
-  - [ ] `/projects/[id]/renderings` 历史页
-  - [ ] Design basis lock → Technical Design
+验收状态（2026-07-24）：用户已自行完成浏览器 QA，本会话不再代跑。
+
+- [x] Round 2：galley / L 布局手动浏览器 QA（U 型已验）
+- [x] 设计基准流浏览器 QA：确认页锁定 → Round 2 自动进量尺 → 重锁 → 归档横幅
+- [x] 生产 / staging smoke：
+  - [x] 登录 / 会话过期 / 登出
+  - [x] 新建 / 打开项目
+  - [x] Round 1 快照保存与重试
+  - [x] Rendering Preferences + 选色渲染保真（2–3 个色）
+  - [x] Admin Cabinet Colors 批量编辑
+  - [x] `/projects/[id]/renderings` 历史页
+  - [x] Design basis lock → Technical Design
 
 ## E. 明确后续功能（不做“清理”，单独立项）
 
@@ -80,8 +82,8 @@ Related trackers:
 
 ## 建议顺序
 
-1. 先做 **D（验收）**，确认现网行为再继续删代码  
-2. 有空再做 **A**（几分钟级）  
+1. ~~先做 **D（验收）**~~ — 已完成（用户侧）  
+2. ~~收尾 **A**~~ — 已完成  
 3. **B** 各开独立 PR  
 4. **C / E** 人工拍板后再动  
 

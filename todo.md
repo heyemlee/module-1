@@ -2,16 +2,16 @@
 
 Date: 2026-07-02(第一轮)/ 2026-07-06(第二轮规划)
 Branch: codex/round2-visual-prototype
-Status: 第一轮(阶段 0–5)代码完成,仅剩三布局手动浏览器 QA(需 seed 项目,用户侧验收);
-第二轮阶段 6(柜体标准表)、阶段 7(设计意向收集)、阶段 8(规则驱动 autofill)、
-阶段 9(立面优先编辑)已完成;阶段 10 代码验证(test/tsc/build)+ ai_ctx 已完成,
-仅剩浏览器 QA(需 seed 项目,用户侧验收)
+Status: 第一轮(阶段 0–5)与第二轮(阶段 6–10)代码完成;
+浏览器 QA(三布局 + 设计基准流)已由用户侧验收完成(2026-07-24)。
+剩余见 M3 / `docs/follow-up-todo.md`。
 
-Last updated: 2026-07-15
+Last updated: 2026-07-24
 Validation: `npm test` 通过(740 passed / 1 skipped)；`npx tsc --noEmit` 通过;
 `npm run build` 成功。已走通 lock → measurement → submit → drawings review,
 并验证 A1/A2/S1 模型驱动输出。死 fixture(`ROUND2_MEASUREMENT_FIXTURE` /
 `ROUND2_CABINET_FIXTURE` / `ROUND2_SHEETS`)与孤立类型 `Round2Cabinet` 已删除。
+浏览器 QA(用户侧,2026-07-24):galley / L / U 完整链路 + 设计基准锁定/重锁/归档横幅已验。
 
 2026-07-15 新增(用户柜体规则四条,已实现 + SSR 浏览器 QA):
 - 见光板:所有暴露的柜列两端(地柜层 + 吊柜层)自动加 3/4″ 端板
@@ -171,9 +171,9 @@ Validation: `npm test` 通过(740 passed / 1 skipped)；`npx tsc --noEmit` 通�
   - [x] `npm test` 全绿(489 passed / 1 skipped)
   - [x] `npx tsc --noEmit` 退出码 0
   - [x] `npm run build` 成功
-  - [ ] 浏览器 QA:分别用 galley、L 型、U 型三个项目走完整链路
+  - [x] 浏览器 QA:分别用 galley、L 型、U 型三个项目走完整链路
         (锁定 → 量尺 → 提交 → 微调 → 图纸 → 标记已审)+ role 切换只读校验
-        —— 需要已 seed 的三布局项目 + 登录,留作用户侧验收(模型输出已有单测覆盖)
+        —— 用户侧已验收(2026-07-24)
 - [x] 更新 `ai_ctx.md`:Round 2 状态、本次架构决定(单一模型、派生拓扑、约束式微调)
 
 ---
@@ -349,7 +349,8 @@ InchField + nudge + 挡板挪端)仅设计师角色且量尺已提交时可打�
       冰箱锚定 + 烟机对灶台 + 窗开洞派生正确;front 改 3 drawers 立面即渲染抽屉线并进
       S1 FRONT 列;A2 图纸与方案一致;console/server 全程零报错。**未走**从零的
       锁定→量尺→意向→提交(seed 已是提交态),"标记已审"因未确认 intent 决策而正确禁用
-- [ ] 补上第一轮遗留:galley / L 布局手动浏览器 QA(需对应 seed 项目;U 型已验)
+- [x] 补上第一轮遗留:galley / L 布局手动浏览器 QA(需对应 seed 项目;U 型已验)
+      —— 用户侧已验收(2026-07-24)
 - [x] 更新 `ai_ctx.md`:标准表、design intent、规则化 autofill、立面优先编辑、
       heightProfile 与 front 字段(2026-07-06)
 
@@ -399,7 +400,8 @@ InchField + nudge + 挡板挪端)仅设计师角色且量尺已提交时可打�
       不匹配的草稿归档到 `…archived.basis-v{N}` 键 + 可关横幅,不静默丢弃
 - [x] 验证:`npm test` 612 passed / 1 skipped;`npx tsc --noEmit`、`npm run build`
       通过;`npm run db:migrate` 已在本地库建表
-- [ ] 浏览器 QA(用户侧):确认页锁定 → Round 2 自动进量尺 → 重锁 → 归档横幅
+- [x] 浏览器 QA(用户侧):确认页锁定 → Round 2 自动进量尺 → 重锁 → 归档横幅
+      —— 用户侧已验收(2026-07-24)
 - [ ] M3(后续):重锁按变更类型分级失效(只改颜色保留量尺)、Round 2 状态入库、
       归档草稿查看入口
 
