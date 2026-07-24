@@ -6,6 +6,7 @@ Related trackers:
 
 - Round 2 功能改造明细 → 根目录 `todo.md`
 - Round 1 历史细节 → `docs/round1-context-archive.md`
+- 性能优化前后对比与量化 → `performance-changelog.md`（每次优化追加）
 - 本文件只收「清理遗留 + 运维/验收/中风险重构」待办，避免和 `todo.md` 抢同一份清单
 
 ---
