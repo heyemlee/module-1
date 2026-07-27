@@ -195,7 +195,7 @@ describe("Round 2 prototype state", () => {
     const adjusted = reduceRound2Prototype(submitted, {
       type: "STEP_CABINET_WIDTH",
       objectId: selected.id,
-      widthSixteenths: 33 * 16
+      widthSixteenths: 30 * 16
     });
 
     expect(
@@ -253,7 +253,7 @@ describe("Round 2 prototype state", () => {
     const adjusted = reduceRound2Prototype(submitted, {
       type: "STEP_CABINET_WIDTH",
       objectId: selected.id,
-      widthSixteenths: 33 * 16
+      widthSixteenths: 30 * 16
     });
     const segment = segmentById(adjusted, selected.id);
     const wall = adjusted.model!.walls.find((item) => item.id === selected.wallId)!;
@@ -261,7 +261,7 @@ describe("Round 2 prototype state", () => {
       .filter((item) => item.tier === selected.tier)
       .reduce((sum, item) => sum + item.widthSixteenths, 0);
 
-    expect(segment?.widthSixteenths).toBe(33 * 16);
+    expect(segment?.widthSixteenths).toBe(30 * 16);
     expect(baseTotal).toBe(wall.lengthSixteenths);
     expect(adjusted.proposalVersion).toBe(submitted.proposalVersion + 1);
   });

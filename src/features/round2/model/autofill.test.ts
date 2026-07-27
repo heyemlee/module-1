@@ -145,13 +145,13 @@ describe("Round 2 autofill", () => {
     });
     // The wall over the base corner body beyond the diagonal unit is ordinary
     // upper space, not a 36″ clearance copied from the base tier: the run
-    // repartitions as its own standard-width run (behind its corner filler).
+    // repartitions as its own standard-width run (behind its corner filler),
+    // led by the cabinet that squares the upper seams up with the base run.
     expect(
-      leftUpper.find((segment) => segment.kind === "cabinet")
-    ).toMatchObject({
-      kind: "cabinet",
-      widthSixteenths: 36 * 16
-    });
+      leftUpper
+        .filter((segment) => segment.kind === "cabinet")
+        .map((segment) => segment.widthSixteenths)
+    ).toEqual([12 * 16, 33 * 16, 36 * 16, 9 * 16]);
     // The exposed far end of the upper run closes with a finished end panel.
     expect(leftUpper[leftUpper.length - 1]).toMatchObject({
       kind: "panel",
@@ -533,6 +533,82 @@ describe("Round 2 autofill", () => {
     ).toEqual([33 * 16, 9 * 16]);
     expect(base.filter((segment) => segment.kind === "filler")).toHaveLength(0);
     expect(base.filter((segment) => segment.kind === "gap")).toHaveLength(0);
+    expectTiersClosed(filled);
+  });
+
+  test("stacks the upper run on the base seams and spreads widths from the middle", () => {
+    const filled = autofillRound2Model(uShapeModel());
+    const wall = filled.walls.find((item) => item.sourceWall === "LEFT")!;
+    const seams = (segments: WallSegment[]) => {
+      const cuts: number[] = [];
+      let cursor = 0;
+      for (const segment of segments) {
+        cursor += segment.widthSixteenths;
+        cuts.push(cursor);
+      }
+      return cuts;
+    };
+    // Base  LS36 return | F5 1/4 | B33 | B36 | B9 | Panel
+    // Upper WDC24 return | F5 1/4 | W12 | W33 | W36 | W9 | Panel
+    const baseSeams = new Set(seams(baseTier(wall)));
+    const upper = upperTier(wall);
+    const upperSeams = seams(upper);
+    const upperCabinets = upper.filter((segment) => segment.kind === "cabinet");
+
+    // Every seam between two neighbouring wall cabinets lands on a base seam,
+    // so the elevation reads as one straight line top to bottom.
+    upper.forEach((segment, index) => {
+      const next = upper[index + 1];
+      if (segment.kind !== "cabinet" || next?.kind !== "cabinet") return;
+      expect(baseSeams.has(upperSeams[index])).toBe(true);
+    });
+    // Widest in the middle, stepping down toward both ends.
+    const widths = upperCabinets.map((segment) => segment.widthSixteenths);
+    expect(widths.length).toBeGreaterThan(2);
+    expect(Math.max(...widths)).toBeGreaterThan(widths[0]);
+    expect(Math.max(...widths)).toBeGreaterThan(widths[widths.length - 1]);
+    expectTiersClosed(filled);
+  });
+
+  test("radiates each span from the appliance it flanks, filler at the free end", () => {
+    const filled = autofillRound2Model(
+      modelWithWall({
+        ...wallWithLength(150 * 16),
+        fixedPoints: [
+          fixedPoint({
+            id: "sink",
+            symbol: "sink",
+            label: "Sink",
+            positionRatio: 0.5,
+            widthSixteenths: 33 * 16
+          })
+        ]
+      })
+    );
+    const base = baseTier(filled.walls[0]);
+    const sinkIndex = base.findIndex(
+      (segment) => segment.cabinetKind === "sink"
+    );
+    const left = base.slice(0, sinkIndex);
+    const right = base.slice(sinkIndex + 1);
+    const width = (segment: WallSegment | undefined) =>
+      segment?.widthSixteenths ?? 0;
+    const cabinets = (segments: WallSegment[]) =>
+      segments.filter((segment) => segment.kind === "cabinet");
+
+    // The widest cabinet hugs the sink on both sides and the run steps down
+    // toward the walls, where the filler is parked.
+    expect(width(cabinets(left).at(-1))).toBe(
+      Math.max(...cabinets(left).map(width))
+    );
+    expect(width(cabinets(right)[0])).toBe(
+      Math.max(...cabinets(right).map(width))
+    );
+    expect(left.findIndex((segment) => segment.kind === "filler")).toBeLessThan(
+      left.findIndex((segment) => segment.kind === "cabinet")
+    );
+    expect(right.at(-1)).toMatchObject({ kind: "panel" });
+    expect(right.at(-2)).toMatchObject({ kind: "filler" });
     expectTiersClosed(filled);
   });
 
