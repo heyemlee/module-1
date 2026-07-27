@@ -173,6 +173,25 @@ export const cabinetStandardsSchema = z
       });
     }
 
+    // The autofill searches filler widths inside this range, so a preferred or
+    // common width outside it would emit strips the shop does not supply.
+    const filler = standards.filler;
+    if (
+      filler.minSixteenths > filler.preferredSixteenths ||
+      filler.preferredSixteenths > filler.maxSixteenths ||
+      filler.commonWidthsSixteenths.some(
+        (width) =>
+          width < filler.minSixteenths || width > filler.maxSixteenths
+      )
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Filler preferred and common widths must sit inside min..max",
+        path: ["filler"]
+      });
+    }
+
     const moulding = standards.vertical.flatMoulding;
     if (
       moulding.minSixteenths > moulding.preferredSixteenths ||
@@ -255,11 +274,15 @@ export const CABINET_STANDARDS: CabinetStandards = deepFreeze(
         maxSixteenths: 3 * 16
       }
     },
+    // Shop spec for a filler / scribe strip: 3/4″ to 3″, and 3/4″ is the one
+    // they reach for. A leftover narrower than 3/4″ is scribed away rather
+    // than supplied as a strip; anything wider than 3″ means the run should
+    // step to the next cabinet width, or close with two strips.
     filler: {
-      minSixteenths: 3 * 16,
-      preferredSixteenths: 3 * 16,
-      maxSixteenths: 6 * 16,
-      commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
+      minSixteenths: 12,
+      preferredSixteenths: 12,
+      maxSixteenths: 3 * 16,
+      commonWidthsSixteenths: [12, 16, 24, 32, 40, 48]
     },
     finishedPanel: {
       sideWidthSixteenths: 12

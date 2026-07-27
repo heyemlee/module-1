@@ -22,7 +22,11 @@ import {
 import { ApplianceGlyph, WindowGlyph } from "../appliance-glyphs";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
 import { standardWidthOptionsSixteenths } from "../model/adjustments";
-import { assignDimensionLanes } from "../model/dimension-lanes";
+import {
+  layoutDimensionLabels,
+  measureDimensionLabel,
+  type DimensionLabelPlacement
+} from "../model/dimension-lanes";
 import {
   ACCESSORY_LABELS,
   describeFront,
@@ -63,15 +67,41 @@ const FLOOR_Y = 346;
 const ELEVATION_VIEWBOX_TOP = -12;
 const ELEVATION_VIEWBOX_HEIGHT = 436;
 const CEILING_Y = 82;
-const MIN_LABEL_PX = 34;
 const LANE_STEP = 11;
+// A cramped dimension slides along its chain before it drops to a second row:
+// past roughly one label's width the leader gets harder to follow than the
+// extra row. Two rows have cleared every wall we draw; the placement never
+// drops a dimension, so a third row would only ever trade legibility for
+// vertical space the chain block does not have.
+const MAX_LABEL_SHIFT = 30;
+const CHAIN_LANES = 2;
 const DIMENSION_COLOR = "#079ca5";
 const DIMENSION_FONT_SIZE = 11;
 const DIMENSION_STROKE_WIDTH = 2;
+// Leaders run lighter than the chain rule so a label pointing back at its
+// segment never reads as another dimension line.
+const LEADER_STROKE_WIDTH = 1.1;
+// Hovering either a cabinet or its dimension lights up both, and a selected
+// cabinet keeps its dimension lit. A number that slid off its own segment can
+// then be paired with that segment without tracing the leader by eye. The
+// classes live on the chain because the label and the cabinet share one <g>.
+const PAIR_HIGHLIGHT_LINE =
+  "transition-[stroke,stroke-width] duration-100 group-hover:[stroke:#046a70] group-hover:[stroke-width:3] group-data-[selected=true]:[stroke:#046a70] group-data-[selected=true]:[stroke-width:3]";
+const PAIR_HIGHLIGHT_LEADER =
+  "transition-[stroke,stroke-width] duration-100 group-hover:[stroke:#046a70] group-hover:[stroke-width:2] group-data-[selected=true]:[stroke:#046a70] group-data-[selected=true]:[stroke-width:2]";
+const PAIR_HIGHLIGHT_TEXT =
+  "underline-offset-2 transition-[fill] duration-100 group-hover:underline group-hover:[fill:#046a70] group-data-[selected=true]:underline group-data-[selected=true]:[fill:#046a70]";
+// The cabinet body picks up the same accent so hovering the number marks the
+// box too. Selection keeps its own heavier teal outline, set on the element.
+const PAIR_HIGHLIGHT_BODY =
+  "transition-[stroke] duration-100 group-hover:[stroke:#046a70]";
 const WIDTH_CHAIN_EXTENSION_LENGTH = 8;
-const OVERALL_DIMENSION_LABEL_Y = 19;
-const OVERALL_DIMENSION_GUIDE_Y = 29;
-// Three upper dimension rows occupy y=19, 42, and 64. Keeping this row
+// The overall row sits high enough that the upper chain's second lane (y=31)
+// clears its rule. Without that headroom a spilled label would be drawn
+// straight through the overall dimension line.
+const OVERALL_DIMENSION_LABEL_Y = 11;
+const OVERALL_DIMENSION_GUIDE_Y = 21;
+// Three upper dimension rows occupy y=11, 42, and 64. Keeping this row
 // independent of the ceiling lets the full elevation sit lower without
 // pushing a dimension chain through the ceiling datum.
 const UPPER_CHAIN_LABEL_Y = 42;
@@ -85,10 +115,241 @@ const ROOM_HEIGHT_LABEL_X = 20;
 
 function widthChainLabelY(
   labelSide: "above" | "below",
+  tier: WallSegment["tier"],
+  lane = 0
+): number {
+  const row =
+    labelSide === "below"
+      ? FLOOR_Y + 22
+      : tier === "upper"
+        ? UPPER_CHAIN_LABEL_Y
+        : BASE_CHAIN_LABEL_Y;
+  // Extra rows stack away from the run: down under the floor chain, up toward
+  // the overall chain.
+  return labelSide === "below" ? row + lane * LANE_STEP : row - lane * LANE_STEP;
+}
+
+/** The chain rule itself never moves off its row, whatever the labels do. */
+function widthChainGuideY(
+  labelSide: "above" | "below",
   tier: WallSegment["tier"]
 ): number {
-  if (labelSide === "below") return FLOOR_Y + 22;
-  return tier === "upper" ? UPPER_CHAIN_LABEL_Y : BASE_CHAIN_LABEL_Y;
+  return labelSide === "below"
+    ? FLOOR_Y + 12
+    : widthChainLabelY(labelSide, tier) + 5;
+}
+
+/**
+ * Leader from the segment's midpoint on the chain rule to the near edge of a
+ * label that had to move. It lands on the text side facing the segment, so the
+ * eye runs tick → leader → number even when the number ends up sitting over a
+ * neighbouring segment.
+ */
+function chainLeaderPath(
+  segmentCenter: number,
+  labelCenter: number,
+  labelWidth: number,
+  guideY: number,
+  labelY: number,
+  labelSide: "above" | "below"
+): string {
+  const direction = Math.sign(segmentCenter - labelCenter) || 1;
+  const nearEdge =
+    labelCenter + direction * Math.max(0, labelWidth / 2 - 2);
+  const landing = labelSide === "below" ? labelY - 8 : labelY + 2;
+  return `M ${segmentCenter} ${guideY} L ${nearEdge} ${landing}`;
+}
+
+/**
+ * One width-chain number. It sits on its segment's midpoint when there is room
+ * and otherwise wherever the run's placement moved it, trailing a leader back
+ * to the midpoint so the number is never read against the wrong segment.
+ */
+function ChainWidthLabel({
+  segment,
+  segmentCenter,
+  placement,
+  labelSide
+}: {
+  segment: WallSegment;
+  segmentCenter: number;
+  placement: DimensionLabelPlacement | undefined;
+  labelSide: "above" | "below";
+}) {
+  const text = formatSixteenths(segment.widthSixteenths);
+  const lane = placement?.lane ?? 0;
+  const center = placement?.center ?? segmentCenter;
+  const labelY = widthChainLabelY(labelSide, segment.tier, lane);
+  const guideY = widthChainGuideY(labelSide, segment.tier);
+  const moved = lane > 0 || (placement?.shifted ?? false);
+
+  return (
+    <>
+      {moved && (
+        <path
+          data-chain-leader={segment.id}
+          d={chainLeaderPath(
+            segmentCenter,
+            center,
+            measureDimensionLabel(text, DIMENSION_FONT_SIZE),
+            guideY,
+            labelY,
+            labelSide
+          )}
+          stroke={DIMENSION_COLOR}
+          strokeWidth={LEADER_STROKE_WIDTH}
+          fill="none"
+          className={PAIR_HIGHLIGHT_LEADER}
+        />
+      )}
+      <text
+        data-chain-label={segment.id}
+        x={center}
+        y={labelY}
+        textAnchor="middle"
+        fontFamily="var(--studio-mono)"
+        fontSize={DIMENSION_FONT_SIZE}
+        fontWeight="bold"
+        stroke="none"
+        fill={DIMENSION_COLOR}
+        className={PAIR_HIGHLIGHT_TEXT}
+      >
+        {text}
+      </text>
+    </>
+  );
+}
+
+/** Midpoint of each segment along the run, following the mirrored draw order. */
+function runSegmentCenters(
+  widthsPx: readonly number[],
+  mirrored: boolean
+): number[] {
+  const centers: number[] = [];
+  let cursor = 0;
+  for (const width of widthsPx) {
+    const x = mirrored
+      ? RUN_LEFT + RUN_WIDTH - cursor - width
+      : RUN_LEFT + cursor;
+    centers.push(x + width / 2);
+    cursor += width;
+  }
+  return centers;
+}
+
+/** A gap standing in for the adjacent run's side profile crossing this wall. */
+function resolveCornerReturn(
+  segment: WallSegment,
+  index: number,
+  segmentCount: number,
+  cornerReturns?: Map<string, CornerReturnTarget>
+): CornerReturnTarget | null {
+  if (segment.kind !== "gap" || !segment.sourceCornerId) return null;
+  return (
+    cornerReturns?.get(segment.sourceCornerId) ??
+    fallbackCornerReturn(index, segmentCount)
+  );
+}
+
+/** This wall carries the corner cabinet itself, cut by the adjacent run. */
+function resolveHostedCornerEnd(
+  segment: WallSegment,
+  cornerHostSides?: Map<string, CornerEnd>
+): CornerEnd | null {
+  if (
+    segment.kind !== "cabinet" ||
+    segment.cabinetKind !== "corner" ||
+    !segment.sourceCornerId
+  ) {
+    return null;
+  }
+  return cornerHostSides?.get(segment.sourceCornerId) ?? null;
+}
+
+/** The upper unit sitting over a hosted corner picks up the same breakdown. */
+function resolveUpperCornerEnd(
+  segment: WallSegment,
+  index: number,
+  segmentCount: number,
+  cornerHostSides?: Map<string, CornerEnd>
+): CornerEnd | null {
+  if (segment.tier !== "upper" || segment.kind !== "cabinet") return null;
+  return (
+    [...(cornerHostSides?.values() ?? [])].find(
+      (end) =>
+        (end === "start" && index === 0) ||
+        (end === "end" && index === segmentCount - 1)
+    ) ?? null
+  );
+}
+
+/**
+ * Which side of a segment the adjacent run crosses, or null when the segment
+ * carries no breakdown chain. Both the placement pass and the render read this,
+ * so the row that gets packed is exactly the row that gets drawn.
+ */
+function cornerBreakdownSide(
+  segment: WallSegment,
+  index: number,
+  segmentCount: number,
+  mirrored: boolean,
+  cornerReturns?: Map<string, CornerReturnTarget>,
+  cornerHostSides?: Map<string, CornerEnd>
+): boolean | null {
+  const end =
+    resolveCornerReturn(segment, index, segmentCount, cornerReturns)?.side ??
+    resolveHostedCornerEnd(segment, cornerHostSides) ??
+    resolveUpperCornerEnd(segment, index, segmentCount, cornerHostSides);
+  if (end == null) return null;
+  return mirrored ? end === "end" : end === "start";
+}
+
+/** Gaps stay undimensioned unless they are a corner return or a wanted gap. */
+function carriesChainLabel(segment: WallSegment): boolean {
+  if (segment.kind !== "gap") return true;
+  return segment.sourceCornerId != null || segment.intentionalGap === true;
+}
+
+/**
+ * Chain labels for one run, placed as a whole. A cramped label clears itself by
+ * sliding past its neighbours, so placement cannot be decided segment by
+ * segment; labels are grouped by the row they belong to (the upper and base
+ * chains are separate lines) and each row is packed on its own.
+ */
+function placeRunChainLabels(
+  segments: readonly WallSegment[],
+  centers: readonly number[],
+  carries: readonly boolean[],
+  labelSide: "above" | "below"
+): Map<string, DimensionLabelPlacement> {
+  const rows = new Map<number, number[]>();
+  segments.forEach((segment, index) => {
+    if (!carries[index]) return;
+    const row = widthChainLabelY(labelSide, segment.tier);
+    const indices = rows.get(row);
+    if (indices) indices.push(index);
+    else rows.set(row, [index]);
+  });
+
+  const placed = new Map<string, DimensionLabelPlacement>();
+  for (const indices of rows.values()) {
+    const placements = layoutDimensionLabels(
+      indices.map((index) => ({
+        center: centers[index],
+        text: formatSixteenths(segments[index].widthSixteenths)
+      })),
+      {
+        fontSize: DIMENSION_FONT_SIZE,
+        bounds: [RUN_LEFT, RUN_LEFT + RUN_WIDTH],
+        maxShift: MAX_LABEL_SHIFT,
+        maxLanes: CHAIN_LANES
+      }
+    );
+    indices.forEach((index, position) => {
+      placed.set(segments[index].id, placements[position]);
+    });
+  }
+  return placed;
 }
 
 // Corner returns follow NKBA section conventions: sectioned side profile in
@@ -922,7 +1183,32 @@ function ElevationRun({
   const widthsPx = segments.map(
     (segment) => (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH
   );
-  const lanes = assignDimensionLanes(widthsPx, MIN_LABEL_PX);
+  const centers = runSegmentCenters(widthsPx, mirrored);
+  const chainPlacements = placeRunChainLabels(
+    segments,
+    centers,
+    segments.map(carriesChainLabel),
+    labelSide
+  );
+  const breakdownParts = segments.map((segment, index) => {
+    const atLeft = cornerBreakdownSide(
+      segment,
+      index,
+      segments.length,
+      mirrored,
+      cornerReturns,
+      cornerHostSides
+    );
+    if (atLeft == null) return null;
+    return cornerBreakdownParts(
+      centers[index] - widthsPx[index] / 2,
+      widthsPx[index],
+      segment.tier,
+      total,
+      atLeft
+    );
+  });
+  const breakdownPlacements = placeCornerBreakdownLabels(breakdownParts);
   const labelClipIdPrefix = useId().replaceAll(":", "");
   let cursor = 0;
 
@@ -941,17 +1227,14 @@ function ElevationRun({
           sinkUpperHeights
         );
         const selected = selectedObjectId === segment.id;
-        const cornerReturn =
-          segment.kind === "gap" && segment.sourceCornerId
-            ? cornerReturns?.get(segment.sourceCornerId) ??
-              fallbackCornerReturn(index, segments.length)
-            : null;
+        const cornerReturn = resolveCornerReturn(
+          segment,
+          index,
+          segments.length,
+          cornerReturns
+        );
         if (cornerReturn) {
-          const cornerAtLeft = mirrored
-            ? cornerReturn.side === "end"
-            : cornerReturn.side === "start";
-          const labelY = widthChainLabelY(labelSide, segment.tier);
-          const guideY = labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
+          const guideY = widthChainGuideY(labelSide, segment.tier);
           return (
             <g
               key={segment.id}
@@ -959,7 +1242,7 @@ function ElevationRun({
               data-cabinet-id={segment.id}
               data-selected={selected}
               onClick={() => onActivate(segment)}
-              className="cursor-pointer"
+              className="group cursor-pointer"
             >
               <CornerReturnSection
                 x={x}
@@ -969,7 +1252,11 @@ function ElevationRun({
                 tier={segment.tier}
                 layout={layout}
                 pxPerSixteenth={RUN_WIDTH / total}
-                cornerAtLeft={cornerAtLeft}
+                cornerAtLeft={
+                  mirrored
+                    ? cornerReturn.side === "end"
+                    : cornerReturn.side === "start"
+                }
                 selected={selected}
                 hatchPatternId={hatchPatternId}
               />
@@ -984,55 +1271,34 @@ function ElevationRun({
                   stroke={DIMENSION_COLOR}
                   strokeWidth={DIMENSION_STROKE_WIDTH}
                   fill="none"
+                  className={PAIR_HIGHLIGHT_LINE}
                 />
-                <text
-                  data-chain-label={segment.id}
-                  x={x + width / 2}
-                  y={labelY}
-                  textAnchor="middle"
-                  fontFamily="var(--studio-mono)"
-                  fontSize={DIMENSION_FONT_SIZE}
-                  fontWeight="bold"
-                  stroke="none"
-                  fill={DIMENSION_COLOR}
-                >
-                  {formatSixteenths(segment.widthSixteenths)}
-                </text>
+                <ChainWidthLabel
+                  segment={segment}
+                  segmentCenter={centers[index]}
+                  placement={chainPlacements.get(segment.id)}
+                  labelSide={labelSide}
+                />
               </g>
-              <CornerHostBreakdownDimensions
-                segmentId={segment.id}
-                x={x}
-                width={width}
-                tier={segment.tier}
-                total={total}
-                atLeft={cornerAtLeft}
-                labelSide={labelSide}
-              />
+              {breakdownParts[index] && (
+                <CornerHostBreakdownDimensions
+                  segmentId={segment.id}
+                  x={x}
+                  width={width}
+                  parts={breakdownParts[index]!}
+                  placements={breakdownPlacements[index]}
+                  labelSide={labelSide}
+                />
+              )}
             </g>
           );
         }
         // A hosted corner cabinet is partly covered by the adjacent run's
         // side profile; its face lives in the remaining visible zone.
-        const hostedCornerEnd =
-          segment.kind === "cabinet" &&
-          segment.cabinetKind === "corner" &&
-          segment.sourceCornerId
-            ? cornerHostSides?.get(segment.sourceCornerId) ?? null
-            : null;
-        const upperCornerEnd =
-          segment.tier === "upper" && segment.kind === "cabinet"
-            ? [...(cornerHostSides?.values() ?? [])].find(
-                (end) =>
-                  (end === "start" && index === 0) ||
-                  (end === "end" && index === segments.length - 1)
-              ) ?? null
-            : null;
-        const breakdownCornerEnd = hostedCornerEnd ?? upperCornerEnd;
-        const breakdownAtLeft =
-          breakdownCornerEnd != null &&
-          (mirrored
-            ? breakdownCornerEnd === "end"
-            : breakdownCornerEnd === "start");
+        const hostedCornerEnd = resolveHostedCornerEnd(segment, cornerHostSides);
+        const breakdownCornerEnd =
+          hostedCornerEnd ??
+          resolveUpperCornerEnd(segment, index, segments.length, cornerHostSides);
         const fillerLike = isFillerLikeSegment(segment);
         const intentionalGap = segment.kind === "gap" && segment.intentionalGap;
         const front =
@@ -1048,7 +1314,6 @@ function ElevationRun({
           segment.kind === "opening" &&
           fixedPoints.find((point) => point.id === segment.sourceFixedPointId)
             ?.type === "window";
-        const lane = 0;
         const clipId = `${labelClipIdPrefix}-${sanitizeSvgId(segment.id)}-label`;
         const hostedAtLeft =
           hostedCornerEnd != null &&
@@ -1060,12 +1325,7 @@ function ElevationRun({
                 CABINET_STANDARDS.depths.baseSixteenths * (RUN_WIDTH / total)
               )
             : 0;
-        const labelY =
-          labelSide === "below"
-            ? FLOOR_Y + 22 + lane * LANE_STEP
-            : widthChainLabelY(labelSide, segment.tier) - lane * LANE_STEP;
-        const guideY =
-          labelSide === "below" ? FLOOR_Y + 12 : labelY + 5;
+        const guideY = widthChainGuideY(labelSide, segment.tier);
         return (
           <g
             key={segment.id}
@@ -1073,7 +1333,7 @@ function ElevationRun({
             data-cabinet-id={segment.id}
             data-selected={selected}
             onClick={() => onActivate(segment)}
-            className="cursor-pointer"
+            className="group cursor-pointer"
           >
             <clipPath id={clipId}>
               <rect x={x} y={y} width={Math.max(8, width)} height={height} />
@@ -1095,6 +1355,7 @@ function ElevationRun({
               }
               strokeWidth={selected ? 3 : 1.5}
               strokeDasharray={intentionalGap ? "6 4" : undefined}
+              className={selected ? undefined : PAIR_HIGHLIGHT_BODY}
             />
             {segment.kind === "panel" && (
               <PanelHatch
@@ -1184,41 +1445,23 @@ function ElevationRun({
                   stroke={DIMENSION_COLOR}
                   strokeWidth={DIMENSION_STROKE_WIDTH}
                   fill="none"
+                  className={PAIR_HIGHLIGHT_LINE}
                 />
-                {lane > 0 && (
-                  <line
-                    x1={x + width / 2}
-                    y1={guideY}
-                    x2={x + width / 2}
-                    y2={labelY - (labelSide === "below" ? 8 : -3)}
-                    stroke={DIMENSION_COLOR}
-                    strokeWidth={DIMENSION_STROKE_WIDTH}
-                  />
-                )}
-                <text
-                  data-chain-label={segment.id}
-                  x={x + width / 2}
-                  y={labelY}
-                  textAnchor="middle"
-                  fontFamily="var(--studio-mono)"
-                  fontSize={DIMENSION_FONT_SIZE}
-                  fontWeight="bold"
-                  stroke="none"
-                  fill={DIMENSION_COLOR}
-                  className="underline-offset-2 hover:underline"
-                >
-                  {formatSixteenths(segment.widthSixteenths)}
-                </text>
+                <ChainWidthLabel
+                  segment={segment}
+                  segmentCenter={centers[index]}
+                  placement={chainPlacements.get(segment.id)}
+                  labelSide={labelSide}
+                />
               </g>
             )}
-            {breakdownCornerEnd != null && (
+            {breakdownParts[index] && (
               <CornerHostBreakdownDimensions
                 segmentId={segment.id}
                 x={x}
                 width={width}
-                tier={segment.tier}
-                total={total}
-                atLeft={breakdownAtLeft}
+                parts={breakdownParts[index]!}
+                placements={breakdownPlacements[index]}
                 labelSide={labelSide}
               />
             )}
@@ -1338,38 +1581,24 @@ function CornerHostBreakdownDimensions({
   segmentId,
   x,
   width,
-  tier,
-  total,
-  atLeft,
+  parts,
+  placements,
   labelSide
 }: {
   segmentId: string;
   x: number;
   width: number;
-  tier: WallSegment["tier"];
-  total: number;
-  atLeft: boolean;
+  parts: CornerBreakdownParts;
+  placements: CornerBreakdownPlacements;
   labelSide: "above" | "below";
 }) {
-  const depthSixteenths = cornerReferenceDepthSixteenths(tier);
-  const depthWidth = Math.min(
-    width,
-    (depthSixteenths / total) * RUN_WIDTH
-  );
-  const remainderWidth = Math.max(0, width - depthWidth);
-  const splitX = atLeft ? x + depthWidth : x + remainderWidth;
-  const firstWidth = splitX - x;
-  const secondWidth = x + width - splitX;
-  const firstDimension = atLeft
-    ? depthSixteenths
-    : Math.max(0, Math.round((remainderWidth / RUN_WIDTH) * total));
-  const secondDimension = atLeft
-    ? Math.max(0, Math.round((remainderWidth / RUN_WIDTH) * total))
-    : depthSixteenths;
-  const guideY =
-    labelSide === "above" ? UPPER_CHAIN_LABEL_Y + 27 : FLOOR_Y + 34;
-  const labelY = labelSide === "above" ? guideY - 5 : guideY + 10;
+  const guideY = cornerBreakdownGuideY(labelSide);
+  const labelY = cornerBreakdownLabelY(labelSide);
   const tickEndY = guideY + (labelSide === "above" ? WIDTH_CHAIN_EXTENSION_LENGTH : -WIDTH_CHAIN_EXTENSION_LENGTH);
+  const slots = [
+    { slot: "first" as const, part: parts.first, placement: placements.first },
+    { slot: "second" as const, part: parts.second, placement: placements.second }
+  ];
 
   return (
     <g
@@ -1381,38 +1610,150 @@ function CornerHostBreakdownDimensions({
     >
       <path
         data-corner-breakdown-guide={segmentId}
-        d={`M ${x} ${guideY} V ${tickEndY} M ${x} ${guideY} H ${splitX} M ${splitX} ${guideY} V ${tickEndY} M ${splitX} ${guideY} H ${x + width} M ${x + width} ${guideY} V ${tickEndY}`}
+        d={`M ${x} ${guideY} V ${tickEndY} M ${x} ${guideY} H ${parts.splitX} M ${parts.splitX} ${guideY} V ${tickEndY} M ${parts.splitX} ${guideY} H ${x + width} M ${x + width} ${guideY} V ${tickEndY}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
         fill="none"
+        className={PAIR_HIGHLIGHT_LINE}
       />
-      {firstWidth > 0 && (
-        <text
-          data-corner-breakdown-label="first"
-          x={x + firstWidth / 2}
-          y={labelY}
-          textAnchor="middle"
-          fontSize={DIMENSION_FONT_SIZE}
-          fontWeight="bold"
-          stroke="none"
-        >
-          {formatSixteenths(firstDimension)}
-        </text>
-      )}
-      {secondWidth > 0 && (
-        <text
-          data-corner-breakdown-label="second"
-          x={splitX + secondWidth / 2}
-          y={labelY}
-          textAnchor="middle"
-          fontSize={DIMENSION_FONT_SIZE}
-          fontWeight="bold"
-          stroke="none"
-        >
-          {formatSixteenths(secondDimension)}
-        </text>
-      )}
+      {slots.map(({ slot, part, placement }) => {
+        if (part.width <= 0 || !placement) return null;
+        const text = formatSixteenths(part.sixteenths);
+        return (
+          <g key={slot}>
+            {placement.shifted && (
+              <path
+                data-corner-breakdown-leader={slot}
+                d={chainLeaderPath(
+                  part.center,
+                  placement.center,
+                  measureDimensionLabel(text, DIMENSION_FONT_SIZE),
+                  guideY,
+                  labelY,
+                  labelSide
+                )}
+                strokeWidth={LEADER_STROKE_WIDTH}
+                fill="none"
+                className={PAIR_HIGHLIGHT_LEADER}
+              />
+            )}
+            <text
+              data-corner-breakdown-label={slot}
+              x={placement.center}
+              y={labelY}
+              textAnchor="middle"
+              fontSize={DIMENSION_FONT_SIZE}
+              fontWeight="bold"
+              stroke="none"
+              className={PAIR_HIGHLIGHT_TEXT}
+            >
+              {text}
+            </text>
+          </g>
+        );
+      })}
     </g>
   );
+}
+
+/** The sectional chain sits one row outside the width chain it belongs to. */
+function cornerBreakdownGuideY(labelSide: "above" | "below"): number {
+  return labelSide === "above" ? UPPER_CHAIN_LABEL_Y + 27 : FLOOR_Y + 34;
+}
+
+function cornerBreakdownLabelY(labelSide: "above" | "below"): number {
+  const guideY = cornerBreakdownGuideY(labelSide);
+  return labelSide === "above" ? guideY - 5 : guideY + 10;
+}
+
+type CornerBreakdownPart = {
+  /** Midpoint of this part of the split, before any placement. */
+  center: number;
+  width: number;
+  sixteenths: number;
+};
+
+type CornerBreakdownParts = {
+  splitX: number;
+  first: CornerBreakdownPart;
+  second: CornerBreakdownPart;
+};
+
+type CornerBreakdownPlacements = {
+  first?: DimensionLabelPlacement;
+  second?: DimensionLabelPlacement;
+};
+
+/** Where the adjacent wall cuts a hosted corner cabinet, and what each side reads. */
+function cornerBreakdownParts(
+  x: number,
+  width: number,
+  tier: WallSegment["tier"],
+  total: number,
+  atLeft: boolean
+): CornerBreakdownParts {
+  const depthSixteenths = cornerReferenceDepthSixteenths(tier);
+  const depthWidth = Math.min(width, (depthSixteenths / total) * RUN_WIDTH);
+  const remainderWidth = Math.max(0, width - depthWidth);
+  const remainderSixteenths = Math.max(
+    0,
+    Math.round((remainderWidth / RUN_WIDTH) * total)
+  );
+  const splitX = atLeft ? x + depthWidth : x + remainderWidth;
+  const firstWidth = splitX - x;
+  const secondWidth = x + width - splitX;
+  return {
+    splitX,
+    first: {
+      center: x + firstWidth / 2,
+      width: firstWidth,
+      sixteenths: atLeft ? depthSixteenths : remainderSixteenths
+    },
+    second: {
+      center: splitX + secondWidth / 2,
+      width: secondWidth,
+      sixteenths: atLeft ? remainderSixteenths : depthSixteenths
+    }
+  };
+}
+
+/**
+ * The breakdown row is packed as one row across the whole run: a wall can host
+ * a corner at each end, and a shallow remainder puts its number right on top of
+ * the depth number beside it. The row has no headroom for a second lane — the
+ * width chain sits directly against it — so labels only ever slide.
+ */
+function placeCornerBreakdownLabels(
+  parts: readonly (CornerBreakdownParts | null)[]
+): CornerBreakdownPlacements[] {
+  const slots: {
+    index: number;
+    slot: "first" | "second";
+    center: number;
+    text: string;
+  }[] = [];
+  parts.forEach((part, index) => {
+    if (!part) return;
+    for (const slot of ["first", "second"] as const) {
+      if (part[slot].width <= 0) continue;
+      slots.push({
+        index,
+        slot,
+        center: part[slot].center,
+        text: formatSixteenths(part[slot].sixteenths)
+      });
+    }
+  });
+
+  const placed = layoutDimensionLabels(slots, {
+    fontSize: DIMENSION_FONT_SIZE,
+    bounds: [RUN_LEFT, RUN_LEFT + RUN_WIDTH],
+    maxLanes: 1
+  });
+  const placements: CornerBreakdownPlacements[] = parts.map(() => ({}));
+  slots.forEach(({ index, slot }, position) => {
+    placements[index][slot] = placed[position];
+  });
+  return placements;
 }
 
 /** Corners hosted by this wall (it carries the corner cabinet itself). */
@@ -1698,12 +2039,17 @@ function PanelHatch({
   );
 }
 
+/**
+ * Whether to draw this segment as a strip rather than a cabinet front. The
+ * width test is the widest filler the shop supplies — not the preferred one,
+ * which is only the strip width they reach for first.
+ */
 function isFillerLikeSegment(segment: WallSegment): boolean {
   const label = (segment.code ?? segment.label).trim();
   return (
     segment.kind === "filler" ||
     /^F\d/i.test(label) ||
-    segment.widthSixteenths <= CABINET_STANDARDS.filler.preferredSixteenths
+    segment.widthSixteenths <= CABINET_STANDARDS.filler.maxSixteenths
   );
 }
 

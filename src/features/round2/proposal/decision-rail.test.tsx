@@ -54,7 +54,7 @@ describe("DecisionRail", () => {
                 wallId: "A",
                 severity: "blocking",
                 title: "Wall A gap below filler minimum",
-                body: "2″ cannot be filled with the approved 3″-6″ filler range."
+                body: "1/2″ cannot be filled with the approved 3/4″-3″ filler range."
               }
             ]
           }

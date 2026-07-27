@@ -9,7 +9,7 @@ import {
   type WallSegment
 } from "../model/round2-model";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
-import { assignDimensionLanes } from "../model/dimension-lanes";
+import { layoutDimensionLabels } from "../model/dimension-lanes";
 import { resolveSegmentFront, type ResolvedFront } from "../model/front";
 import {
   resolveSegmentRole,
@@ -37,6 +37,14 @@ const COLORS = {
 } as const;
 
 const PLAN = { left: 170, top: 128, right: 830, bottom: 540 };
+
+// The elevation chain rule and the span its labels have to stay inside.
+const CHAIN_LEFT = 110;
+const CHAIN_RIGHT = 890;
+const CHAIN_FONT_SIZE = 10;
+// The sheet is wider than the on-screen elevation, so a label can slide a
+// little further before a second row reads better than a long leader.
+const CHAIN_MAX_LABEL_SHIFT = 40;
 
 export type DrawingSheetDefinition = {
   id: DrawingSheetId;
@@ -660,8 +668,10 @@ function SheetCounterBand({
 }
 
 /**
- * Per-segment dimension chain with staggered lanes so narrow neighbors never
- * run their labels together.
+ * Per-segment dimension chain. Every segment keeps its number: a cramped label
+ * slides along the chain until it clears its neighbours and trails a leader
+ * back to its own midpoint, and only spills to a second row when the sliding
+ * would carry it too far to read.
  */
 function SegmentChainDimensions({
   segments,
@@ -676,31 +686,48 @@ function SegmentChainDimensions({
   baselineY: number;
   direction: 1 | -1;
 }) {
-  const placements = elevationPlacements(segments, total, mirrored);
-  const lanes = assignDimensionLanes(
-    placements.map(({ width }) => width),
-    52
+  const dimensioned = elevationPlacements(segments, total, mirrored).filter(
+    ({ segment }) => segment.kind !== "gap"
+  );
+  const labels = layoutDimensionLabels(
+    dimensioned.map(({ segment, x, width }) => ({
+      center: x + width / 2,
+      text: formatSixteenths(segment.widthSixteenths)
+    })),
+    {
+      fontSize: CHAIN_FONT_SIZE,
+      bounds: [CHAIN_LEFT, CHAIN_RIGHT],
+      maxShift: CHAIN_MAX_LABEL_SHIFT,
+      maxLanes: 2
+    }
   );
   return (
     <g data-drawing-layer="segment-chain">
-      <line x1={110} y1={baselineY} x2={890} y2={baselineY} strokeWidth="0.75" />
-      {placements.map(({ segment, x, width }, index) => {
-        if (segment.kind === "gap") return null;
-        const labelY = baselineY + direction * (4 + lanes[index] * 14);
+      <line
+        x1={CHAIN_LEFT}
+        y1={baselineY}
+        x2={CHAIN_RIGHT}
+        y2={baselineY}
+        strokeWidth="0.75"
+      />
+      {dimensioned.map(({ segment, x, width }, index) => {
+        const label = labels[index];
+        const center = x + width / 2;
+        const labelY = baselineY + direction * (4 + label.lane * 14);
         return (
           <g key={segment.id}>
             <line x1={x} y1={baselineY - 5} x2={x} y2={baselineY + 5} strokeWidth="0.75" />
-            {lanes[index] > 0 && (
+            {(label.shifted || label.lane > 0) && (
               <line
-                x1={x + width / 2}
+                x1={center}
                 y1={baselineY}
-                x2={x + width / 2}
-                y2={labelY - direction * 4}
+                x2={label.center}
+                y2={labelY - direction * 2}
                 strokeWidth="0.5"
               />
             )}
             <text
-              x={x + width / 2}
+              x={label.center}
               y={labelY + (direction === 1 ? 8 : 0)}
               textAnchor="middle"
               stroke="none"
@@ -710,7 +737,13 @@ function SegmentChainDimensions({
           </g>
         );
       })}
-      <line x1={890} y1={baselineY - 5} x2={890} y2={baselineY + 5} strokeWidth="0.75" />
+      <line
+        x1={CHAIN_RIGHT}
+        y1={baselineY - 5}
+        x2={CHAIN_RIGHT}
+        y2={baselineY + 5}
+        strokeWidth="0.75"
+      />
     </g>
   );
 }

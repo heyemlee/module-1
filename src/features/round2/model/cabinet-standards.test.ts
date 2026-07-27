@@ -44,10 +44,10 @@ describe("Round 2 cabinet standards", () => {
       }
     });
     expect(CABINET_STANDARDS.filler).toEqual({
-      minSixteenths: 3 * 16,
-      preferredSixteenths: 3 * 16,
-      maxSixteenths: 6 * 16,
-      commonWidthsSixteenths: [3, 4, 5, 6].map((value) => value * 16)
+      minSixteenths: 12,
+      preferredSixteenths: 12,
+      maxSixteenths: 3 * 16,
+      commonWidthsSixteenths: [12, 16, 24, 32, 40, 48]
     });
     expect(CABINET_STANDARDS.depths).toEqual({
       baseSixteenths: 24 * 16,

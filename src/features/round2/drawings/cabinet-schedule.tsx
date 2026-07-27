@@ -133,7 +133,14 @@ function depthForSegment(segment: WallSegment): string {
 }
 
 function noteForSegment(segment: WallSegment): string {
-  if (segment.kind === "panel") return "Finished end panel";
+  // A panel bound to a fixed point closes that unit's side — a fridge or oven
+  // tower flank, or the dishwasher column repeated at upper height to keep the
+  // wall run on the appliance's seams. A free one closes an exposed run end.
+  if (segment.kind === "panel") {
+    return segment.sourceFixedPointId != null
+      ? "Finished side panel"
+      : "Finished end panel";
+  }
   if (segment.kind === "filler") return "Filler panel / scribe";
   if (segment.cabinetKind === "corner") {
     return "Corner strategy from design intent";

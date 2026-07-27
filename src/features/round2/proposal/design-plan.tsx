@@ -8,7 +8,7 @@ import {
   type WallSegment
 } from "../model/round2-model";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
-import { assignDimensionLanes } from "../model/dimension-lanes";
+import { layoutDimensionLabels } from "../model/dimension-lanes";
 import { resolveSegmentRole, type SegmentRole } from "../model/segment-role";
 
 // Read-only top-view projection drawn to the same sheet conventions as the
@@ -30,8 +30,10 @@ const DIMENSION_COLOR = "#079ca5";
 const DIMENSION_STROKE_WIDTH = 1.8;
 const DIMENSION_FONT_SIZE = 10;
 const TICK = 5;
-const MIN_LABEL_PX = 30;
 const LANE_STEP = 10;
+// A cramped dimension slides along its chain before it drops to an outer lane;
+// past roughly one label's width the leader gets harder to follow.
+const MAX_LABEL_SHIFT = 28;
 // Offsets are measured outward from the wall centerline: opening tags hug the
 // wall, the segment chain sits clear of them, staggered lanes for narrow
 // segments step further out, and the wall total is the outermost line.
@@ -1025,7 +1027,6 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
   const widths = base.map(
     (segment) => (Math.max(0, segment.widthSixteenths) / total) * available
   );
-  const lanes = assignDimensionLanes(widths, MIN_LABEL_PX);
   const runEnd = widths.reduce((sum, width) => sum + width, 0);
   const horizontal = isHorizontalWall(wall);
   const textPad = wall.sourceWall === "BOTTOM" ? 14 : horizontal ? 6 : 4;
@@ -1041,6 +1042,21 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
     cursor += width;
     boundaries.push(cursor);
   }
+
+  // Labels are placed in run-length coordinates, then mapped onto the wall by
+  // runPoint, so the same policy holds however the wall is oriented.
+  const labels = layoutDimensionLabels(
+    base.map((segment, index) => ({
+      center: boundaries[index] + widths[index] / 2,
+      text: formatSixteenths(segment.widthSixteenths)
+    })),
+    {
+      fontSize: DIMENSION_FONT_SIZE,
+      bounds: [0, runEnd],
+      maxShift: MAX_LABEL_SHIFT,
+      maxLanes: 2
+    }
+  );
 
   const chainA = runPoint(wall, 0, chainOffset);
   const chainB = runPoint(wall, runEnd, chainOffset);
@@ -1122,21 +1138,20 @@ function DimensionChains({ wall }: { wall: Round2Wall }) {
       {base.map((segment, index) => {
         const width = widths[index];
         mid = boundaries[index] + width / 2;
-        if (width <= 2) return null;
-        const lane = lanes[index];
+        const { center, lane, shifted } = labels[index];
         const labelOffset = chainOffset + textPad + lane * LANE_STEP;
-        const pos = runPoint(wall, mid, labelOffset);
+        const pos = runPoint(wall, center, labelOffset);
         const rotate = horizontal
           ? undefined
           : `rotate(${wall.sourceWall === "RIGHT" ? 90 : -90} ${pos.x} ${pos.y})`;
         return (
           <g key={segment.id}>
-            {lane > 0 && (
+            {(shifted || lane > 0) && (
               <line
                 x1={runPoint(wall, mid, chainOffset).x}
                 y1={runPoint(wall, mid, chainOffset).y}
-                x2={runPoint(wall, mid, labelOffset - 3).x}
-                y2={runPoint(wall, mid, labelOffset - 3).y}
+                x2={runPoint(wall, center, labelOffset - 3).x}
+                y2={runPoint(wall, center, labelOffset - 3).y}
                 strokeWidth="0.8"
               />
             )}

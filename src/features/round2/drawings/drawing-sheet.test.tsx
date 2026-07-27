@@ -9,6 +9,7 @@ import { ROUND1_REFERENCE_FIXTURE } from "../round2-fixtures";
 import { autofillRound2Model } from "../model/autofill";
 import { deriveWallsFromRound1 } from "../model/derive-walls";
 import { initializeMeasurements } from "../model/round2-model";
+import { measureDimensionLabel } from "../model/dimension-lanes";
 import { CabinetSchedule } from "./cabinet-schedule";
 import { DrawingSheet, drawingSheetsForModel } from "./drawing-sheet";
 
@@ -297,7 +298,88 @@ describe("Round 2 drawing sheets", () => {
     expect(html).toContain("Filler panel / scribe");
     expect(html).not.toContain("Fixture proposal");
   });
+
+  test("keeps every elevation chain number readable on the sheet", () => {
+    const model = simpleWallModel("TOP");
+    const crowded: Round2Model = {
+      ...model,
+      walls: [
+        {
+          ...model.walls[0],
+          segments: [
+            ...model.walls[0].segments,
+            {
+              id: "strip-1",
+              wallId: model.walls[0].id,
+              tier: "base",
+              kind: "filler",
+              widthSixteenths: 12,
+              label: "F1",
+              code: "F1"
+            },
+            {
+              id: "strip-2",
+              wallId: model.walls[0].id,
+              tier: "base",
+              kind: "filler",
+              widthSixteenths: 24,
+              label: "F2",
+              code: "F2"
+            }
+          ]
+        }
+      ]
+    };
+    const html = renderToStaticMarkup(
+      <DrawingSheet
+        sheet={drawingSheetsForModel(crowded).find((item) => item.id === "A2")!}
+        model={crowded}
+        measurementVersion={1}
+        proposalVersion={1}
+        customerName="Test"
+        projectName="Kitchen"
+      />
+    );
+
+    const numbers = chainLabelBoxes(html).map((box) => box.text);
+    expect(numbers).toContain("3/4″");
+    expect(numbers).toContain("1 1/2″");
+    expect(overlappingChainLabels(html)).toEqual([]);
+  });
 });
+
+/**
+ * Chain numbers on the sheet, as the boxes their text occupies. The sheet has
+ * to carry every dimension, so this is the check that none of them is hidden
+ * under another.
+ */
+function chainLabelBoxes(html: string) {
+  const chain = html.slice(html.indexOf('data-drawing-layer="segment-chain"'));
+  const pattern = /<text x="([^"]+)" y="([^"]+)"[^>]*>([^<]*)<\/text>/g;
+  return [...chain.matchAll(pattern)].map(([, x, y, text]) => {
+    const width = measureDimensionLabel(text, 10);
+    return {
+      text,
+      y: Number(y),
+      left: Number(x) - width / 2,
+      right: Number(x) + width / 2
+    };
+  });
+}
+
+function overlappingChainLabels(html: string): string[] {
+  const boxes = chainLabelBoxes(html);
+  const collisions: string[] = [];
+  for (let a = 0; a < boxes.length; a += 1) {
+    for (let b = a + 1; b < boxes.length; b += 1) {
+      if (boxes[a].y !== boxes[b].y) continue;
+      if (boxes[a].left < boxes[b].right && boxes[b].left < boxes[a].right) {
+        collisions.push(`${boxes[a].text}/${boxes[b].text}`);
+      }
+    }
+  }
+  return collisions;
+}
 
 function submittedModel(
   floorPlan: FloorPlan = ROUND1_REFERENCE_FIXTURE.floorPlan,

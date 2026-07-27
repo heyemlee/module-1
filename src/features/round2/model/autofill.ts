@@ -1236,7 +1236,7 @@ function placeReservation(
 
 // Rule 3 + 4 — zones between anchors are packed as an exact partition of
 // standard cabinet widths. A filler is allowed only when the partition leaves
-// one approved 3–6″ remainder; otherwise the span stays visibly unresolved
+// an approved 3/4″–3″ remainder; otherwise the span stays visibly unresolved
 // until the designer picks a gap resolution.
 function fillSpan(
   wall: Round2Wall,
@@ -1248,7 +1248,8 @@ function fillSpan(
   intent: Round2DesignIntent | undefined,
   decisionItems: Round2DecisionItem[],
   focus: SpanFocus = NO_FOCUS,
-  alignSeams: readonly number[] = []
+  alignSeams: readonly number[] = [],
+  alignFillers: readonly FillerColumn[] = []
 ): WallSegment[] {
   const span = spanEnd - spanStart;
   if (span <= 0) return [];
@@ -1257,29 +1258,6 @@ function fillSpan(
   if (!partition) {
     return blockingGapSegments(wall, tier, sequence, span, intent, decisionItems);
   }
-
-  // The filler sits on `fillerSide`, so the cabinets start past it there.
-  const cabinetStart =
-    fillerSide === "start" ? spanStart + partition.fillerWidth : spanStart;
-  const widths = layoutWidths(
-    cabinetStart,
-    cabinetStart + span - partition.fillerWidth,
-    partition.widths,
-    alignSeams,
-    focus
-  );
-
-  const prefix = tier === "upper" ? "W" : "B";
-  const cabinets = widths.map((width, local) => ({
-    id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local + 1}-cabinet`,
-    wallId: wall.id,
-    tier,
-    kind: "cabinet" as const,
-    widthSixteenths: width,
-    label: `${prefix}${width / 16}`,
-    cabinetKind: tier === "upper" ? ("upper" as const) : ("base" as const),
-    standardWidthSixteenths: width
-  }));
 
   const filler = residualSegments(
     wall,
@@ -1290,7 +1268,104 @@ function fillSpan(
     decisionItems
   );
 
+  // Rule 5c (上下对缝) — a filler column the base run already opened inside
+  // this span wins over the span's own edge, so the strip stacks directly
+  // above the one below it instead of floating in its own column. Corner
+  // returns differ by tier, so the two runs otherwise park their strips at
+  // different offsets even when both are the same width.
+  const alignedStart = alignedFillerStart(
+    spanStart,
+    spanEnd,
+    partition.fillerWidth,
+    alignFillers
+  );
+  if (alignedStart != null) {
+    const leftWidths = layoutWidths(
+      spanStart,
+      alignedStart,
+      exactBaseCabinetPartition(alignedStart - spanStart) ?? [],
+      alignSeams,
+      { start: focus.start, end: false }
+    );
+    const afterFiller = alignedStart + partition.fillerWidth;
+    const rightWidths = layoutWidths(
+      afterFiller,
+      spanEnd,
+      exactBaseCabinetPartition(spanEnd - afterFiller) ?? [],
+      alignSeams,
+      { start: false, end: focus.end }
+    );
+    const cabinets = cabinetSegments(wall, tier, sequence, [
+      ...leftWidths,
+      ...rightWidths
+    ]);
+    return [
+      ...cabinets.slice(0, leftWidths.length),
+      ...filler,
+      ...cabinets.slice(leftWidths.length)
+    ];
+  }
+
+  // The filler sits on `fillerSide`, so the cabinets start past it there.
+  const cabinetStart =
+    fillerSide === "start" ? spanStart + partition.fillerWidth : spanStart;
+  const cabinets = cabinetSegments(
+    wall,
+    tier,
+    sequence,
+    layoutWidths(
+      cabinetStart,
+      cabinetStart + span - partition.fillerWidth,
+      partition.widths,
+      alignSeams,
+      focus
+    )
+  );
+
   return fillerSide === "start" ? [...filler, ...cabinets] : [...cabinets, ...filler];
+}
+
+/** A stretch of one tier already given over to filler, as [start, +width). */
+type FillerColumn = { start: number; width: number };
+
+/**
+ * Where inside this span a filler of `width` can stack on a column the other
+ * tier already opened, or null when no column lines up on standard widths.
+ */
+function alignedFillerStart(
+  spanStart: number,
+  spanEnd: number,
+  width: number,
+  columns: readonly FillerColumn[]
+): number | null {
+  if (width <= 0) return null;
+  for (const column of columns) {
+    if (column.width !== width) continue;
+    if (column.start < spanStart || column.start + width > spanEnd) continue;
+    if (!exactBaseCabinetPartition(column.start - spanStart)) continue;
+    if (!exactBaseCabinetPartition(spanEnd - column.start - width)) continue;
+    return column.start;
+  }
+  return null;
+}
+
+function cabinetSegments(
+  wall: Round2Wall,
+  tier: FillTier,
+  sequence: number,
+  widths: readonly number[]
+): WallSegment[] {
+  const prefix = tier === "upper" ? "W" : "B";
+  return widths.map((width, local) => ({
+    id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local + 1}-cabinet`,
+    wallId: wall.id,
+    tier,
+    kind: "cabinet" as const,
+    widthSixteenths: width,
+    label: `${prefix}${width / 16}`,
+    cabinetKind: tier === "upper" ? ("upper" as const) : ("base" as const),
+    standardWidthSixteenths: width
+  }));
 }
 
 type BaseSpanPartition = {
@@ -1299,41 +1374,43 @@ type BaseSpanPartition = {
 };
 
 /**
- * Finds the standard-width cabinet total that leaves no filler or one approved
- * filler. The filler order is intentional: 0 closes a span exactly, then the
- * preferred 3″ filler wins before the wider approved options.
+ * Rule 4 (最小填条) — finds the standard-width cabinet total that leaves no
+ * filler, or the narrowest filler the shop can supply.
+ *
+ * Cabinet widths step in 3″, so a span closes exactly when what is left over
+ * lands inside the approved filler range. Searching the narrowest leftover
+ * first keeps the cabinets as wide as they can be and lands on the preferred
+ * 3/4″ strip whenever it fits: a 17¼″ span is a 15″ cabinet plus a 2¼″ filler,
+ * not a 12″ cabinet plus a 5¼″ one.
+ *
+ * A leftover narrower than the minimum strip cannot be supplied on its own, so
+ * the search runs past the maximum too — `splitFillerWidths` turns those totals
+ * into two in-range strips rather than leaving the span unresolved.
  */
 function partitionBaseSpan(span: number): BaseSpanPartition | null {
-  const preferredFillers = [
-    0,
-    ...[...CABINET_STANDARDS.filler.commonWidthsSixteenths].sort(
-      (a, b) =>
-        Math.abs(a - CABINET_STANDARDS.filler.preferredSixteenths) -
-          Math.abs(b - CABINET_STANDARDS.filler.preferredSixteenths) ||
-        a - b
-    )
-  ];
-  const customFillers = Array.from(
-    {
-      length: FILLER_MAX_SIXTEENTHS - FILLER_MIN_SIXTEENTHS + 1
-    },
-    (_, index) => FILLER_MIN_SIXTEENTHS + index
-  )
-    .filter((width) => !preferredFillers.includes(width))
-    .sort(
-      (a, b) =>
-        Math.abs(a - CABINET_STANDARDS.filler.preferredSixteenths) -
-          Math.abs(b - CABINET_STANDARDS.filler.preferredSixteenths) ||
-        a - b
-    );
-
-  for (const fillerWidth of [...preferredFillers, ...customFillers]) {
+  for (const fillerWidth of FILLER_WIDTH_SEARCH_ORDER) {
     const widths = exactBaseCabinetPartition(span - fillerWidth);
     if (widths) return { widths, fillerWidth };
   }
 
   return null;
 }
+
+/**
+ * Filler totals to try, narrowest first: an exact close, then the stock strip
+ * widths, then any 1/16 cut. The range reaches twice the maximum so a total
+ * that has to become two strips is still found (see splitFillerWidths).
+ */
+const FILLER_WIDTH_SEARCH_ORDER: number[] = (() => {
+  const stock = [...CABINET_STANDARDS.filler.commonWidthsSixteenths].sort(
+    (a, b) => a - b
+  );
+  const cuts = Array.from(
+    { length: FILLER_MAX_SIXTEENTHS * 2 - FILLER_MIN_SIXTEENTHS + 1 },
+    (_, index) => FILLER_MIN_SIXTEENTHS + index
+  ).filter((width) => !stock.includes(width));
+  return [0, ...stock, ...cuts];
+})();
 
 /**
  * Finds one exact standard-width partition. It first minimizes cabinet count,
@@ -1656,6 +1733,7 @@ type UpperPiece = {
   width: number;
   sourceFixedPointId?: string;
   sourceCornerId?: string;
+  panelSpan?: "full" | "tier";
 };
 
 // Rule 5 — the upper tier shares the base tier's anchors, and lines up on its
@@ -1754,6 +1832,23 @@ function deriveUpperTier(
     if (!windowed) windowlessSinks.add(placed.segment.id);
   }
 
+  // Filler columns the base run opened, adjacent strips merged into the one
+  // column they read as. The upper run stacks its own filler here when the
+  // widths allow it (Rule 5c, applied inside fillSpan).
+  const baseFillerColumns: FillerColumn[] = [];
+  for (const placed of basePlaced) {
+    if (placed.segment.kind !== "filler") continue;
+    const previous = baseFillerColumns[baseFillerColumns.length - 1];
+    if (previous && previous.start + previous.width === placed.start) {
+      previous.width += placed.segment.widthSixteenths;
+      continue;
+    }
+    baseFillerColumns.push({
+      start: placed.start,
+      width: placed.segment.widthSixteenths
+    });
+  }
+
   const cuts = new Set<number>([runStart, runEnd]);
   for (const placed of basePlaced) {
     cuts.add(placed.start);
@@ -1845,7 +1940,8 @@ function deriveUpperTier(
           intent,
           decisionItems,
           focus,
-          basePlaced.map((placed) => placed.end)
+          basePlaced.map((placed) => placed.end),
+          baseFillerColumns
         )
       );
       return;
@@ -1885,7 +1981,8 @@ function deriveUpperTier(
         kind: "panel",
         widthSixteenths: piece.width,
         label: piece.label,
-        sourceFixedPointId: piece.sourceFixedPointId
+        sourceFixedPointId: piece.sourceFixedPointId,
+        ...(piece.panelSpan ? { panelSpan: piece.panelSpan } : {})
       });
       return;
     }
@@ -1979,11 +2076,23 @@ function mapBaseToUpperPiece(
   if (!placed) return { type: "fill", ref: "open-wall", label: "", width };
   const base = placed.segment;
 
-  // A full-height side panel lets nothing stack above it; a tier-height panel
-  // (run end, dishwasher side) is ordinary upper space.
+  // Rule 5b (上下对缝) — a base-height side panel beside an under-counter
+  // appliance is an alignment anchor, not fillable space. The upper run stacks
+  // a matching tier-height panel in the same column, so the appliance keeps its
+  // own seams on both tiers: the wall cabinet over a 24″ dishwasher is a W24 on
+  // the dishwasher's edges instead of a wider cabinet straddling them with the
+  // 1½″ of panel width pushed out as a leftover strip. A full-height side panel
+  // beside a tall unit still lets nothing stack above it.
   if (base.kind === "panel") {
     if (base.panelSpan === "tier") {
-      return { type: "fill", ref: base.id, label: "", width };
+      return {
+        type: "panel",
+        ref: base.id,
+        label: base.label,
+        width,
+        panelSpan: "tier",
+        sourceFixedPointId: base.sourceFixedPointId
+      };
     }
     return { type: "gap", ref: base.id, label: base.label, width };
   }

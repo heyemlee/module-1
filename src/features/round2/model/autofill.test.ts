@@ -151,7 +151,7 @@ describe("Round 2 autofill", () => {
       leftUpper
         .filter((segment) => segment.kind === "cabinet")
         .map((segment) => segment.widthSixteenths)
-    ).toEqual([12 * 16, 33 * 16, 36 * 16, 9 * 16]);
+    ).toEqual([12 * 16, 36 * 16, 36 * 16, 9 * 16]);
     // The exposed far end of the upper run closes with a finished end panel.
     expect(leftUpper[leftUpper.length - 1]).toMatchObject({
       kind: "panel",
@@ -504,19 +504,51 @@ describe("Round 2 autofill", () => {
     }
   });
 
-  test("steps a cabinet down a width tier to lift a sliver filler", () => {
-    // 101 1/2″ wall = 100″ behind the end panels: greedy fill would leave a
-    // 1″ remainder; one 36→33 step turns it into a 4″ filler at the run end.
+  test("keeps the widest cabinets when the remainder is a supply-able strip", () => {
+    // 101 1/2″ wall = 100″ behind the end panels. The 1″ remainder is inside
+    // the 3/4″–3″ filler range, so the run keeps 36+36+27 rather than stepping
+    // a cabinet down to manufacture a wider filler.
     const filled = autofillRound2Model(
       modelWithWall(wallWithLength(101 * 16 + 8))
     );
     const base = baseTier(filled.walls[0]);
-    const filler = base.find((segment) => segment.kind === "filler");
 
-    expect(filler?.widthSixteenths).toBe(4 * 16);
+    expect(
+      base
+        .filter((segment) => segment.kind === "cabinet")
+        .map((segment) => segment.widthSixteenths)
+    ).toEqual([36 * 16, 36 * 16, 27 * 16]);
+    expect(
+      base
+        .filter((segment) => segment.kind === "filler")
+        .map((segment) => segment.widthSixteenths)
+    ).toEqual([16]);
     expect(
       filled.decisionItems.filter((item) => item.title.includes("filler"))
     ).toHaveLength(0);
+  });
+
+  test("closes a sub-minimum remainder with two in-range strips", () => {
+    // 101″ wall = 99 1/2″ behind the end panels. The 1/2″ remainder is below
+    // the 3/4″ minimum strip, so the run gives up one 3″ cabinet step and
+    // splits the resulting 3 1/2″ into two strips the shop can supply.
+    const filled = autofillRound2Model(modelWithWall(wallWithLength(101 * 16)));
+    const base = baseTier(filled.walls[0]);
+    const fillers = base.filter((segment) => segment.kind === "filler");
+
+    expect(fillers.map((segment) => segment.widthSixteenths)).toEqual([12, 44]);
+    for (const filler of fillers) {
+      expect(filler.widthSixteenths).toBeGreaterThanOrEqual(
+        CABINET_STANDARDS.filler.minSixteenths
+      );
+      expect(filler.widthSixteenths).toBeLessThanOrEqual(
+        CABINET_STANDARDS.filler.maxSixteenths
+      );
+    }
+    expect(
+      filled.decisionItems.filter((item) => item.severity === "blocking")
+    ).toHaveLength(0);
+    expectTiersClosed(filled);
   });
 
   test("partitions a 42-inch ordinary base span without a filler", () => {
@@ -536,6 +568,28 @@ describe("Round 2 autofill", () => {
     expectTiersClosed(filled);
   });
 
+  // Rule 5c (上下对缝) — the corner returns differ by tier (a 36″ lazy-Susan
+  // return below, a 24″ diagonal return above), so each run would otherwise
+  // park its filler right behind its own corner and leave two strips in
+  // different columns.
+  test("stacks the upper filler in the same column as the base filler", () => {
+    const filled = autofillRound2Model(uShapeModel());
+    const wall = filled.walls.find((item) => item.sourceWall === "LEFT")!;
+    const column = (segments: WallSegment[]) => {
+      let cursor = 0;
+      for (const segment of segments) {
+        if (segment.kind === "filler") {
+          return { start: cursor, width: segment.widthSixteenths };
+        }
+        cursor += segment.widthSixteenths;
+      }
+      throw new Error("no filler on this run");
+    };
+
+    expect(column(upperTier(wall))).toEqual(column(baseTier(wall)));
+    expectTiersClosed(filled);
+  });
+
   test("stacks the upper run on the base seams and spreads widths from the middle", () => {
     const filled = autofillRound2Model(uShapeModel());
     const wall = filled.walls.find((item) => item.sourceWall === "LEFT")!;
@@ -548,8 +602,8 @@ describe("Round 2 autofill", () => {
       }
       return cuts;
     };
-    // Base  LS36 return | F5 1/4 | B33 | B36 | B9 | Panel
-    // Upper WDC24 return | F5 1/4 | W12 | W33 | W36 | W9 | Panel
+    // Base  LS36 return | F2 1/4 | B36 | B36 | B9 | Panel
+    // Upper WDC24 return | W12 | F2 1/4 | W36 | W36 | W9 | Panel
     const baseSeams = new Set(seams(baseTier(wall)));
     const upper = upperTier(wall);
     const upperSeams = seams(upper);
@@ -612,26 +666,28 @@ describe("Round 2 autofill", () => {
     expectTiersClosed(filled);
   });
 
-  test("repartitions a seven-inch residual into one valid filler", () => {
-    // 44 1/2″ wall = 43″ behind the two 3/4″ end panels.
+  test("repartitions a four-inch residual into one valid filler", () => {
+    // 44 1/2″ wall = 43″ behind the two 3/4″ end panels: 42″ of cabinets and
+    // the narrowest strip that closes the run.
     const filled = autofillRound2Model(
       modelWithWall(wallWithLength(44 * 16 + 8))
     );
     const base = baseTier(filled.walls[0]);
 
     expect(base.filter((segment) => segment.kind === "filler")).toEqual([
-      expect.objectContaining({ widthSixteenths: 4 * 16 })
+      expect.objectContaining({ widthSixteenths: 16 })
     ]);
     expect(
       base
         .filter((segment) => segment.kind === "cabinet")
         .map((segment) => segment.widthSixteenths)
-    ).toEqual([30 * 16, 9 * 16]);
+    ).toEqual([33 * 16, 9 * 16]);
     expectTiersClosed(filled);
   });
 
   test("emits a blocking gap when no valid cabinet-plus-filler partition exists", () => {
-    // 9 1/16″ cannot leave an exact cabinet total or an approved 3–6″ filler.
+    // 9 1/16″ cannot leave an exact cabinet total, and the 1/16″ left over by a
+    // 9″ cabinet is below the 3/4″ minimum strip.
     const filled = autofillRound2Model(modelWithWall(wallWithLength(9 * 16 + 1)));
     const base = baseTier(filled.walls[0]);
 
@@ -650,7 +706,8 @@ describe("Round 2 autofill", () => {
 
   test("fills an unresolvable span with confirmed filler strips", () => {
     // 9 1/16″ has no cabinet partition; the recorded resolution turns the base
-    // span into approved strips (6″ + 3 1/16″) and clears the blocking gap.
+    // span into approved strips, none wider than the 3″ maximum, and clears
+    // the blocking gap.
     const filled = autofillRound2Model(
       modelWithWall(wallWithLength(9 * 16 + 1)),
       {},
@@ -666,7 +723,7 @@ describe("Round 2 autofill", () => {
       base
         .filter((segment) => segment.kind === "filler")
         .map((segment) => segment.widthSixteenths)
-    ).toEqual([6 * 16, 3 * 16 + 1]);
+    ).toEqual([3 * 16, 3 * 16, 12, 2 * 16 + 5]);
     expect(
       filled.decisionItems.filter((item) => item.severity === "blocking")
     ).toHaveLength(0);
@@ -814,8 +871,8 @@ describe("Round 2 autofill", () => {
     ).toBe(false);
     expect(uppers.filter((segment) => segment.kind === "gap")).toHaveLength(0);
     expect(uppers.filter((segment) => segment.kind === "filler")).toEqual([
-      expect.objectContaining({ widthSixteenths: 5 * 16 + 4 }),
-      expect.objectContaining({ widthSixteenths: 4 * 16 + 4 })
+      expect.objectContaining({ widthSixteenths: 2 * 16 + 4 }),
+      expect.objectContaining({ widthSixteenths: 16 + 4 })
     ]);
     expect(uppers[uppers.length - 1].kind).toBe("panel");
     expect(uppers[uppers.length - 2].kind).toBe("filler");
@@ -945,7 +1002,7 @@ describe("Round 2 autofill", () => {
       base.filter((segment) => segment.kind === "filler").map(
         (segment) => segment.widthSixteenths
       )
-    ).toEqual([5 * 16 + 12, 5 * 16 + 4]);
+    ).toEqual([2 * 16 + 12, 2 * 16 + 4]);
     expectTiersClosed(filled);
 
     const adjacentCabinet = base[base.indexOf(sink.segment) + 1]!;
@@ -1478,14 +1535,56 @@ describe("Round 2 finished end panels", () => {
         sourceFixedPointId: "fixed-dishwasher"
       });
     }
-    // Base-height panels carry ordinary uppers above them, so the upper run
-    // stays continuous over the dishwasher column.
+    // Base-height panels stack matching upper panels, so the upper run closes
+    // on the dishwasher's own seams without leaving a gap over its column.
     expect(
       filled.walls[0].segments.some(
         (segment) => segment.tier === "upper" && segment.kind === "gap"
       )
     ).toBe(false);
     expectTiersClosed(filled);
+  });
+
+  // Rule 5b (上下对缝) — the dishwasher column is 24″ between two ¾″ panels, a
+  // width no standard upper closes on its own. Repeating the panels at upper
+  // height keeps the wall cabinet on the dishwasher's edges instead of letting
+  // a wider cabinet straddle them and push the 1½″ out as a leftover strip.
+  test("stacks the upper run on the dishwasher column's own seams", () => {
+    for (const length of [96, 120, 156, 180]) {
+      const wall = wallWithAppliance("dishwasher");
+      wall.lengthSixteenths = length * 16;
+      const filled = autofillRound2Model(modelWithWall(wall));
+      const result = filled.walls[0];
+      const dishwasher = segmentWithStart(
+        baseTier(result),
+        (segment) => segment.kind === "appliance"
+      );
+
+      expect(
+        segmentAtOffset(upperTier(result), dishwasher.start)
+      ).toMatchObject({
+        kind: "cabinet",
+        cabinetKind: "upper",
+        widthSixteenths: dishwasher.segment.widthSixteenths
+      });
+      for (const offset of [
+        dishwasher.start - PANEL,
+        dishwasher.start + dishwasher.segment.widthSixteenths
+      ]) {
+        expect(segmentAtOffset(upperTier(result), offset)).toMatchObject({
+          kind: "panel",
+          panelSpan: "tier",
+          widthSixteenths: PANEL,
+          sourceFixedPointId: "fixed-dishwasher"
+        });
+      }
+      // Nothing else on the wall competes for width, so both tiers break on
+      // exactly the same seams.
+      expect(tierSeams(upperTier(result))).toEqual(
+        tierSeams(baseTier(result))
+      );
+      expectTiersClosed(filled);
+    }
   });
 
   test("flanks a customer-sized oven tower with full-height panels", () => {
@@ -1580,6 +1679,29 @@ function baseTier(wall: Round2Wall): WallSegment[] {
 
 function upperTier(wall: Round2Wall): WallSegment[] {
   return wall.segments.filter((segment) => segment.tier === "upper");
+}
+
+/** Running offsets of a tier's segment breaks, for comparing tier to tier. */
+function tierSeams(segments: WallSegment[]): number[] {
+  const seams: number[] = [];
+  let cursor = 0;
+  for (const segment of segments) {
+    cursor += segment.widthSixteenths;
+    seams.push(cursor);
+  }
+  return seams;
+}
+
+function segmentAtOffset(
+  segments: WallSegment[],
+  offset: number
+): WallSegment | undefined {
+  let cursor = 0;
+  for (const segment of segments) {
+    if (cursor === offset) return segment;
+    cursor += segment.widthSixteenths;
+  }
+  return undefined;
 }
 
 function segmentWithStart(

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import type { Round2Model, WallSegment } from "../model/round2-model";
+import { measureDimensionLabel } from "../model/dimension-lanes";
 import {
   accessoryOptionsForSegment,
   canOpenSegmentEditor,
@@ -9,6 +10,9 @@ import {
   KIND_OPTIONS,
   WallElevation
 } from "./wall-elevation";
+
+/** Ink above the baseline of an 11px dimension number. */
+const DIMENSION_CAP_HEIGHT = 8;
 
 describe("WallElevation", () => {
   test("keeps the editor header on a solid background above the grid", () => {
@@ -63,21 +67,92 @@ describe("WallElevation", () => {
     }
   });
 
-  test("staggers narrow chain labels onto leader lanes", () => {
+  test("clears cramped chain labels off each other instead of overprinting", () => {
+    // The failing case from the 180″ wall: 3/4″ and 1 1/2″ strips between wide
+    // runs put "3/4″1 1/2″" on the drawing as one unreadable blob.
     const model = elevationModel([
-      cabinet("wide-1", 60 * 16),
-      cabinet("narrow-1", 2 * 16, "filler"),
-      cabinet("narrow-2", 2 * 16, "filler"),
-      cabinet("wide-2", 56 * 16)
+      cabinet("wide-1", 36 * 16),
+      cabinet("strip-1", 12, "filler"),
+      cabinet("wide-2", 24 * 16),
+      cabinet("strip-2", 12, "filler"),
+      cabinet("strip-3", 24, "filler"),
+      cabinet("wide-3", 24 * 16)
     ]);
     const html = render(model);
 
-    // Two adjacent narrow fillers land on different lanes → leader lines.
-    expect(html).toContain('data-elevation-layer="width-chain"');
-    const labelYs = [...html.matchAll(/data-chain-label="[^"]+" x="[^"]+" y="([\d.]+)"/g)].map(
-      (match) => Number(match[1])
+    for (const segment of model.walls[0].segments) {
+      expect(html).toContain(`data-chain-label="${segment.id}"`);
+    }
+    expect(overlappingChainLabels(html)).toEqual([]);
+  });
+
+  test("leads a moved chain label back to the segment it dimensions", () => {
+    const model = elevationModel([
+      cabinet("wide-1", 36 * 16),
+      cabinet("strip-1", 12, "filler"),
+      cabinet("strip-2", 24, "filler"),
+      cabinet("wide-2", 36 * 16)
+    ]);
+    const html = render(model);
+
+    // A label that left its midpoint carries a leader; one that never moved
+    // stays bare, so leaders only appear where they are earning their ink.
+    expect(html).toContain('data-chain-leader="strip-1"');
+    expect(html).toContain('data-chain-leader="strip-2"');
+    expect(html).not.toContain('data-chain-leader="wide-1"');
+
+    const leader = tagFor(html, "path", 'data-chain-leader="strip-1"');
+    const from = leader.match(/d="M ([\d.]+) /);
+    expect(Number(from?.[1])).toBeCloseTo(chainGuideMidX(html, "strip-1"), 1);
+  });
+
+  test("keeps every dimension on the drawing when a run is crowded", () => {
+    // Twelve 1 1/2″ strips cannot fit on one row at any placement; they spill
+    // to a second row rather than losing a number.
+    const model = elevationModel([
+      cabinet("wide-1", 60 * 16),
+      ...Array.from({ length: 12 }, (_, index) =>
+        cabinet(`strip-${index}`, 24, "filler")
+      ),
+      cabinet("wide-2", 60 * 16)
+    ]);
+    const html = render(model);
+
+    for (const segment of model.walls[0].segments) {
+      expect(html).toContain(`data-chain-label="${segment.id}"`);
+    }
+    expect(overlappingChainLabels(html)).toEqual([]);
+
+    const rows = [...new Set(chainLabelBoxes(html).map((box) => box.y))].sort(
+      (a, b) => a - b
     );
-    expect(new Set(labelYs).size).toBeGreaterThan(1);
+    expect(rows).toHaveLength(2);
+    // The spill row stacks toward the overall chain, so it has to clear that
+    // rule — otherwise the numbers are legible but struck through.
+    const overallRule = tagFor(html, "path", 'data-chain-guide="overall"');
+    const rule = Number(overallRule.match(/M [\d.]+ ([\d.]+) H/)?.[1]);
+    expect(rows[0] - DIMENSION_CAP_HEIGHT).toBeGreaterThan(rule);
+  });
+
+  test("pairs a dimension with its cabinet on hover and on selection", () => {
+    // A number that slid off its segment is only unambiguous if hovering
+    // either half lights up both, so the label has to stay inside the
+    // cabinet's own group and react to that group, not to itself.
+    const html = render(elevationModel());
+    const markup = segmentMarkup(html, "a-base-1");
+
+    expect(tagFor(html, "g", 'data-segment-id="a-base-1"')).toContain(
+      'class="group cursor-pointer"'
+    );
+    expect(markup).toContain('data-chain-label="a-base-1"');
+
+    const label = tagFor(markup, "text", 'data-chain-label="a-base-1"');
+    expect(label).toContain("group-hover:underline");
+    expect(label).toContain("group-data-[selected=true]:underline");
+
+    const guide = tagFor(markup, "path", 'data-chain-guide="a-base-1"');
+    expect(guide).toContain("group-hover:[stroke-width:3]");
+    expect(guide).toContain("group-data-[selected=true]:[stroke-width:3]");
   });
 
   test("keeps upper cabinet width-chain labels above the cabinet box", () => {
@@ -198,7 +273,7 @@ describe("WallElevation", () => {
   test("extends every horizontal dimension guide endpoint by eight SVG units", () => {
     const html = renderCornerModel("A", { includeUpperCorner: true });
 
-    expect(tagFor(html, "path", 'data-chain-guide="overall"')).toContain("V 37");
+    expect(tagFor(html, "path", 'data-chain-guide="overall"')).toContain("V 29");
     expect(tagFor(html, "path", 'data-chain-guide="a-upper-corner-ls"')).toMatch(/V 55/);
     expect(tagFor(html, "path", 'data-chain-guide="a-corner-ls"')).toMatch(/V 350/);
     expect(tagFor(html, "path", 'data-corner-breakdown-guide="a-upper-corner-ls"')).toMatch(/V 77/);
@@ -493,6 +568,40 @@ describe("WallElevation", () => {
     expect(cornerHtml).not.toContain('data-face="');
     expect(cornerHtml).toContain(">12″</text>");
     expect(cornerHtml).toContain(">24″</text>");
+  });
+
+  test("clears the corner breakdown numbers when the remainder is a sliver", () => {
+    // A 25 1/2″ corner on a long wall leaves 1 1/2″ past the 24″ depth. The two
+    // numbers are centred ~27px apart but need ~35px, so unplaced they print
+    // "24″1 1/2″" as one blob.
+    const html = renderCornerModel("A", {
+      cornerWidthSixteenths: 25 * 16 + 8,
+      wallLengthSixteenths: 240 * 16
+    });
+    const boxes = cornerBreakdownBoxes(html);
+
+    expect(boxes.map((box) => box.text).sort()).toEqual(["1 1/2″", "24″"]);
+
+    // On their own midpoints the two numbers would print over each other —
+    // this is the case placement exists for, so assert the crowding is real.
+    const midpoints = cornerBreakdownPartCenters(html, "a-corner-ls");
+    const needed =
+      (measureDimensionLabel("24″", 11) +
+        measureDimensionLabel("1 1/2″", 11)) /
+      2;
+    expect(midpoints[1] - midpoints[0]).toBeLessThan(needed);
+
+    expect(boxes[0].right).toBeLessThan(boxes[1].left);
+    // Numbers that moved off their part carry a leader back to it.
+    expect(html).toContain("data-corner-breakdown-leader=");
+  });
+
+  test("keeps the corner breakdown numbers put when they already clear", () => {
+    const html = renderCornerModel("A");
+    const boxes = cornerBreakdownBoxes(html);
+
+    expect(boxes[0].right).toBeLessThan(boxes[1].left);
+    expect(html).not.toContain("data-corner-breakdown-leader=");
   });
 
   test("does not offer dead corner as a corner setup strategy", () => {
@@ -1119,11 +1228,19 @@ function render(model: Round2Model, canEdit = false): string {
 /** L-shape: Wall A (TOP) hosts the lazy Susan, Wall B (LEFT) its return. */
 function renderCornerModel(
   wallId: string,
-  { includeUpperCorner = false }: { includeUpperCorner?: boolean } = {}
+  {
+    includeUpperCorner = false,
+    cornerWidthSixteenths = 36 * 16,
+    wallLengthSixteenths = 66 * 16
+  }: {
+    includeUpperCorner?: boolean;
+    cornerWidthSixteenths?: number;
+    wallLengthSixteenths?: number;
+  } = {}
 ): string {
   const primaryBase = [
     {
-      ...cabinet("a-corner-ls", 36 * 16),
+      ...cabinet("a-corner-ls", cornerWidthSixteenths),
       cabinetKind: "corner" as const,
       label: "LS36",
       sourceCornerId: "TL"
@@ -1155,7 +1272,7 @@ function renderCornerModel(
     walls: [
       {
         ...elevationModel(primary).walls[0],
-        lengthSixteenths: 66 * 16
+        lengthSixteenths: wallLengthSixteenths
       },
       {
         id: "B",
@@ -1227,6 +1344,90 @@ function boxForSegment(
   );
   expect(match).not.toBeNull();
   return { y: Number(match?.[1]), height: Number(match?.[2]) };
+}
+
+type ChainLabelBox = {
+  id: string;
+  x: number;
+  y: number;
+  left: number;
+  right: number;
+};
+
+/** Every per-segment chain label as the box its text actually occupies. */
+function chainLabelBoxes(html: string): ChainLabelBox[] {
+  const pattern =
+    /<text data-chain-label="([^"]+)" x="([^"]+)" y="([^"]+)"[^>]*>([^<]*)<\/text>/g;
+  return [...html.matchAll(pattern)]
+    .filter(([, id]) => id !== "overall")
+    .map(([, id, x, y, text]) => {
+      const width = measureDimensionLabel(text, 11);
+      return {
+        id,
+        x: Number(x),
+        y: Number(y),
+        left: Number(x) - width / 2,
+        right: Number(x) + width / 2
+      };
+    });
+}
+
+/** Pairs of labels sharing a row whose text runs together. */
+function overlappingChainLabels(html: string): string[] {
+  const boxes = chainLabelBoxes(html);
+  const collisions: string[] = [];
+  for (let a = 0; a < boxes.length; a += 1) {
+    for (let b = a + 1; b < boxes.length; b += 1) {
+      if (boxes[a].y !== boxes[b].y) continue;
+      if (boxes[a].left < boxes[b].right && boxes[b].left < boxes[a].right) {
+        collisions.push(`${boxes[a].id}/${boxes[b].id}`);
+      }
+    }
+  }
+  return collisions;
+}
+
+/** The corner breakdown's two numbers, left to right, as the boxes they fill. */
+function cornerBreakdownBoxes(html: string) {
+  const pattern =
+    /<text data-corner-breakdown-label="[^"]+" x="([^"]+)" y="([^"]+)"[^>]*>([^<]*)<\/text>/g;
+  return [...html.matchAll(pattern)]
+    .map(([, x, y, text]) => {
+      const width = measureDimensionLabel(text, 11);
+      return {
+        text,
+        y: Number(y),
+        left: Number(x) - width / 2,
+        right: Number(x) + width / 2
+      };
+    })
+    .sort((a, b) => a.left - b.left);
+}
+
+/** Midpoints of the breakdown's two parts — where the numbers would sit unplaced. */
+function cornerBreakdownPartCenters(
+  html: string,
+  segmentId: string
+): [number, number] {
+  const tag = tagFor(html, "path", `data-corner-breakdown-guide="${segmentId}"`);
+  const span = tag.match(
+    /d="M ([\d.]+) [\d.]+ V [\d.]+ M [\d.]+ [\d.]+ H ([\d.]+) M [\d.]+ [\d.]+ V [\d.]+ M [\d.]+ [\d.]+ H ([\d.]+)/
+  );
+  expect(span).not.toBeNull();
+  const [start, split, end] = [
+    Number(span?.[1]),
+    Number(span?.[2]),
+    Number(span?.[3])
+  ];
+  return [(start + split) / 2, (split + end) / 2];
+}
+
+/** Midpoint of a segment's chain rule — where its leader has to start. */
+function chainGuideMidX(html: string, segmentId: string): number {
+  const tag = tagFor(html, "path", `data-chain-guide="${segmentId}"`);
+  const span = tag.match(/d="M ([\d.]+) [\d.]+ V [\d.]+ M [\d.]+ [\d.]+ H ([\d.]+)/);
+  expect(span).not.toBeNull();
+  return (Number(span?.[1]) + Number(span?.[2])) / 2;
 }
 
 function chainLabelY(html: string, segmentId: string): number {

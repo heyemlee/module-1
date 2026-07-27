@@ -9,7 +9,7 @@ import type { Round2PrototypeState } from "../round2-types";
 import { ProposalWorkspace } from "./proposal-workspace";
 
 describe("ProposalWorkspace", () => {
-  test("keeps the top view below the elevation at the same surface size", () => {
+  test("keeps the top view below a larger desktop elevation surface", () => {
     const html = renderToStaticMarkup(
       <ProposalWorkspace state={submittedState()} dispatch={() => {}} />
     );
@@ -20,7 +20,7 @@ describe("ProposalWorkspace", () => {
     expect(elevationIndex).toBeGreaterThan(-1);
     expect(planIndex).toBeGreaterThan(elevationIndex);
     expect(html).toContain(
-      'data-testid="proposal-elevation-panel" class="h-[440px] min-h-[440px] w-full shrink-0"'
+      'data-testid="proposal-elevation-panel" class="h-[440px] min-h-[440px] w-full shrink-0 md:h-[520px] md:min-h-[520px]"'
     );
     expect(html).toContain(
       'data-testid="proposal-plan-panel" class="h-[440px] min-h-[440px] w-full shrink-0"'
