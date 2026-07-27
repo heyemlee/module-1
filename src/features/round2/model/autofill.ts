@@ -38,6 +38,15 @@ const FILLER_MAX_SIXTEENTHS = CABINET_STANDARDS.filler.maxSixteenths;
 type FillTier = Extract<SegmentTier, "upper" | "base">;
 type FillerSide = "start" | "end";
 
+/**
+ * Which ends of a fillable span sit against a fixed point the composition
+ * radiates from — an appliance on the base tier, a window/hood/tall column on
+ * the upper tier. Doors and bare wall ends are obstructions, not focal points.
+ */
+type SpanFocus = { start: boolean; end: boolean };
+
+const NO_FOCUS: SpanFocus = { start: false, end: false };
+
 /** Corner segments for one wall, ordered outward from the corner. */
 type TierInsets = { start: WallSegment[]; end: WallSegment[] };
 
@@ -586,16 +595,27 @@ function fillBaseTier(
   const hasStartCorner = startInsets.length > 0;
   const hasEndCorner = endInsets.length > 0;
 
-  const pushSpan = (spanStart: number, spanEnd: number) => {
+  // Rule 3b — the run is composed around the fixed appliances, so a span
+  // records which of its ends abuts one. Doors are obstructions, not centers.
+  let previousIsAppliance = false;
+  const pushSpan = (
+    spanStart: number,
+    spanEnd: number,
+    endsAtAppliance: boolean
+  ) => {
     if (spanEnd <= spanStart) return;
-    const side = fillerSideForSpan(
-      spanStart,
-      spanEnd,
-      fillStart,
-      fillEnd,
-      hasStartCorner,
-      hasEndCorner,
-      length
+    const focus = { start: previousIsAppliance, end: endsAtAppliance };
+    const side = fillerSideForFocus(
+      focus,
+      fillerSideForSpan(
+        spanStart,
+        spanEnd,
+        fillStart,
+        fillEnd,
+        hasStartCorner,
+        hasEndCorner,
+        length
+      )
     );
     segments.push(
       ...fillSpan(
@@ -606,14 +626,15 @@ function fillBaseTier(
         sequence,
         side,
         intent,
-        decisionItems
+        decisionItems,
+        focus
       )
     );
     sequence += 1;
   };
 
   for (const item of reservations) {
-    pushSpan(cursor, item.start);
+    pushSpan(cursor, item.start, item.kind === "appliance");
     const panels = item.sidePanels;
     const applianceWidth = panels
       ? item.width - panels.left - panels.right
@@ -655,9 +676,10 @@ function fillBaseTier(
       );
     }
     sequence += 1;
+    previousIsAppliance = item.kind === "appliance";
     cursor = item.start + item.width;
   }
-  pushSpan(cursor, fillEnd);
+  pushSpan(cursor, fillEnd, false);
   if (endPanels.end) {
     segments.push(
       finishedPanelSegment(
@@ -1224,7 +1246,9 @@ function fillSpan(
   sequence: number,
   fillerSide: FillerSide,
   intent: Round2DesignIntent | undefined,
-  decisionItems: Round2DecisionItem[]
+  decisionItems: Round2DecisionItem[],
+  focus: SpanFocus = NO_FOCUS,
+  alignSeams: readonly number[] = []
 ): WallSegment[] {
   const span = spanEnd - spanStart;
   if (span <= 0) return [];
@@ -1234,8 +1258,19 @@ function fillSpan(
     return blockingGapSegments(wall, tier, sequence, span, intent, decisionItems);
   }
 
+  // The filler sits on `fillerSide`, so the cabinets start past it there.
+  const cabinetStart =
+    fillerSide === "start" ? spanStart + partition.fillerWidth : spanStart;
+  const widths = layoutWidths(
+    cabinetStart,
+    cabinetStart + span - partition.fillerWidth,
+    partition.widths,
+    alignSeams,
+    focus
+  );
+
   const prefix = tier === "upper" ? "W" : "B";
-  const cabinets = partition.widths.map((width, local) => ({
+  const cabinets = widths.map((width, local) => ({
     id: `${wall.id.toLowerCase()}-${tier}-${sequence}-${local + 1}-cabinet`,
     wallId: wall.id,
     tier,
@@ -1337,6 +1372,77 @@ function exactBaseCabinetPartition(total: number): number[] | null {
   };
 
   return solve(total, 0);
+}
+
+/**
+ * Orders the cabinets inside a span. Seams handed in by the caller (the base
+ * run's cabinet edges) are honored wherever both sides still close on standard
+ * widths, so uppers stack in line with the bases below; inside each resulting
+ * stretch the widths radiate from the span's fixed points.
+ */
+function layoutWidths(
+  start: number,
+  end: number,
+  fallback: number[],
+  seams: readonly number[],
+  focus: SpanFocus
+): number[] {
+  const widths: number[] = [];
+  let cursor = start;
+  for (const seam of [...seams].sort((a, b) => a - b)) {
+    if (seam <= cursor || seam >= end) continue;
+    const left = exactBaseCabinetPartition(seam - cursor);
+    // Only cut where the remainder can still close, so honoring a seam never
+    // turns a fillable span into a blocking one.
+    if (!left || !exactBaseCabinetPartition(end - seam)) continue;
+    widths.push(...radiate(left, focus));
+    cursor = seam;
+  }
+  const tail =
+    cursor === start ? fallback : exactBaseCabinetPartition(end - cursor);
+  return [...widths, ...radiate(tail ?? fallback, focus)];
+}
+
+/**
+ * Rule 3b (居中扩散) — a span's composition radiates from the fixed points it
+ * touches: the widest cabinets sit against the appliance, or in the middle when
+ * the span is anchored at neither end, and step down toward the free ends.
+ * Widths arrive descending from the partition.
+ */
+function radiate(widths: readonly number[], focus: SpanFocus): number[] {
+  if (focus.start && focus.end) {
+    // Anchored at both ends: the widest cabinet flanks each appliance.
+    const left: number[] = [];
+    const right: number[] = [];
+    widths.forEach((width, index) =>
+      (index % 2 === 0 ? left : right).push(width)
+    );
+    return [...left, ...right.reverse()];
+  }
+  if (focus.start) return [...widths];
+  if (focus.end) return [...widths].reverse();
+  return centerOut(widths);
+}
+
+/** Descending widths dealt outward from the middle: widest center, narrow ends. */
+function centerOut(widths: readonly number[]): number[] {
+  // Under three cabinets there is no middle to spread from — leave the order.
+  if (widths.length < 3) return [...widths];
+  const left: number[] = [];
+  const right: number[] = [];
+  widths.forEach((width, index) =>
+    (index % 2 === 0 ? right : left).push(width)
+  );
+  return [...left.reverse(), ...right];
+}
+
+/** A span parks its filler at the free end, away from the fixed point. */
+function fillerSideForFocus(
+  focus: SpanFocus,
+  fallback: FillerSide
+): FillerSide {
+  if (focus.start === focus.end) return fallback;
+  return focus.start ? "end" : "start";
 }
 
 function prefersCabinetPartition(candidate: number[], current: number[]): boolean {
@@ -1552,11 +1658,12 @@ type UpperPiece = {
   sourceCornerId?: string;
 };
 
-// Rule 5 — the upper tier shares the base tier's anchors, not its seams:
-// window/door openings are carved out, the hood follows the range, tall units
-// and finished panels reserve their columns, and every remaining continuous
-// run is repartitioned into standard widths with at most one approved filler
-// pushed to the run's edge (Rules 3 + 4 applied to the upper tier).
+// Rule 5 — the upper tier shares the base tier's anchors, and lines up on its
+// seams wherever both sides still close on standard widths: window/door
+// openings are carved out, the hood follows the range, tall units and finished
+// panels reserve their columns, and every remaining continuous run is
+// repartitioned into standard widths with at most one approved filler pushed to
+// the run's edge (Rules 3 + 4 applied to the upper tier).
 function deriveUpperTier(
   wall: Round2Wall,
   baseSegments: WallSegment[],
@@ -1710,6 +1817,12 @@ function deriveUpperTier(
     cursor = to;
 
     if (piece.type === "fill") {
+      // Adjacent fills are already merged, so any neighbour is a fixed piece:
+      // a window, the hood, a tall column — what the upper run composes around.
+      const focus = {
+        start: index > 0,
+        end: index < pieces.length - 1
+      };
       derived.push(
         ...fillSpan(
           wall,
@@ -1717,17 +1830,22 @@ function deriveUpperTier(
           from,
           to,
           index + 1,
-          fillerSideForSpan(
-            from,
-            to,
-            runStart,
-            runEnd,
-            hasStartCorner,
-            hasEndCorner,
-            length
+          fillerSideForFocus(
+            focus,
+            fillerSideForSpan(
+              from,
+              to,
+              runStart,
+              runEnd,
+              hasStartCorner,
+              hasEndCorner,
+              length
+            )
           ),
           intent,
-          decisionItems
+          decisionItems,
+          focus,
+          basePlaced.map((placed) => placed.end)
         )
       );
       return;
