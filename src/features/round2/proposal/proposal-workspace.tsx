@@ -10,8 +10,7 @@ import { DesignPlan } from "./design-plan";
 import { DecisionRail } from "./decision-rail";
 import { WallElevation } from "./wall-elevation";
 
-const ELEVATION_SURFACE_CLASS =
-  "h-[440px] min-h-[440px] w-full shrink-0 md:h-[520px] md:min-h-[520px]";
+const ELEVATION_SURFACE_CLASS = "h-[680px] min-h-[680px] w-full shrink-0";
 const PLAN_SURFACE_CLASS = "h-[440px] min-h-[440px] w-full shrink-0";
 
 export function ProposalWorkspace({
@@ -29,8 +28,8 @@ export function ProposalWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col bg-studio-canvas">
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,.45fr)] lg:overflow-hidden">
-        {/* The elevation remains the primary editor and receives the larger
-            desktop surface; the top view is a read-only reference below it. */}
+        {/* The full-size elevation remains the primary editor; the plan stays
+            available as a read-only reference directly underneath it. */}
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
           <div
             data-testid="proposal-elevation-panel"

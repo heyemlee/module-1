@@ -181,8 +181,8 @@ describe("WallElevation", () => {
     );
 
     expect(chainLabelY(html, "upper-row")).toBe(42);
-    expect(chainLabelY(html, "base-row")).toBe(368);
-    expect(chainLabelY(html, "full-row")).toBe(368);
+    expect(chainLabelY(html, "base-row")).toBe(416);
+    expect(chainLabelY(html, "full-row")).toBe(416);
   });
 
   test("keeps overall and upper dimensions above the ceiling line", () => {
@@ -205,7 +205,7 @@ describe("WallElevation", () => {
     const html = renderCornerModel("A", { includeUpperCorner: true });
     const elevation = tagFor(html, "svg", 'role="img"');
 
-    expect(elevation).toContain('viewBox="0 -12 640 436"');
+    expect(elevation).toContain('viewBox="-35 -36 690 502"');
   });
 
   test("keeps all three upper corner dimension rows above the ceiling line", () => {
@@ -275,7 +275,7 @@ describe("WallElevation", () => {
 
     expect(tagFor(html, "path", 'data-chain-guide="overall"')).toContain("V 29");
     expect(tagFor(html, "path", 'data-chain-guide="a-upper-corner-ls"')).toMatch(/V 55/);
-    expect(tagFor(html, "path", 'data-chain-guide="a-corner-ls"')).toMatch(/V 350/);
+    expect(tagFor(html, "path", 'data-chain-guide="a-corner-ls"')).toMatch(/V 398/);
     expect(tagFor(html, "path", 'data-corner-breakdown-guide="a-upper-corner-ls"')).toMatch(/V 77/);
   });
 
@@ -375,9 +375,9 @@ describe("WallElevation", () => {
 
     expect(faceHtml).not.toContain('stroke="#e12821"');
     expect(faceHtml).toContain('stroke="#1d1d1b"');
-    expect(faceHtml).toContain("M 318 250 L 73 296.5 L 318 343");
-    expect(faceHtml).toContain("M 322 250 L 567 296.5 L 322 343");
-    expect(faceHtml).not.toContain("M 73 250 L 318 296.5 L 73 343");
+    expect(faceHtml).toContain("M 318 280 L 43 335.5 L 318 391");
+    expect(faceHtml).toContain("M 322 280 L 597 335.5 L 322 391");
+    expect(faceHtml).not.toContain("M 43 280 L 318 335.5 L 43 391");
   });
 
   test("does not render door swing lines on a corner cabinet", () => {
@@ -472,7 +472,7 @@ describe("WallElevation", () => {
       'data-corner-breakdown-guide="upper-return"'
     );
 
-    expect(referenceGuideSpan(guide)).toBe(50);
+    expect(referenceGuideSpan(guide)).toBeCloseTo(56);
   });
 
   test("splits the mirrored base return chain before its 24 inch depth", () => {
@@ -482,7 +482,7 @@ describe("WallElevation", () => {
       'data-corner-breakdown-guide="b-ls-return"'
     );
 
-    expect(referenceGuideSpan(guide)).toBe(100);
+    expect(referenceGuideSpan(guide)).toBeCloseTo(112);
   });
 
   test("draws the corner return without a cross-wall text tag", () => {
@@ -1456,14 +1456,14 @@ function overallLabelY(html: string): number {
 
 function overallGuideY(html: string): number {
   const tag = tagFor(html, "path", 'data-chain-guide="overall"');
-  const y = tag.match(/M 70 ([\d.]+) H 570/);
+  const y = tag.match(/M 40 ([\d.]+) H 600/);
   expect(y).not.toBeNull();
   return Number(y?.[1]);
 }
 
 function ceilingLineY(html: string): number {
   const match = html.match(
-    /<line x1="70" y1="([\d.]+)" x2="570" y2="\1"[^>]*stroke-dasharray="7 5"/
+    /<line x1="40" y1="([\d.]+)" x2="600" y2="\1"[^>]*stroke-dasharray="7 5"/
   );
   expect(match).not.toBeNull();
   return Number(match?.[1]);

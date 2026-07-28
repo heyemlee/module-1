@@ -59,13 +59,17 @@ import { InchField } from "../measurement/inch-field";
 
 // Elevation canvas: the floor line and the ceiling span are fixed in pixels;
 // everything vertical in between scales from the model height profile.
-const RUN_LEFT = 70;
-const RUN_WIDTH = 500;
-const FLOOR_Y = 346;
+// Use more of the taller sheet while preserving the outer height-chain and
+// label gutters, so the drawing grows with the proposal surface.
+const RUN_LEFT = 40;
+const RUN_WIDTH = 560;
+const FLOOR_Y = 394;
 // Keep the dimension chains inside the viewport with clear breathing room at
 // both edges; the lower corner breakdown row otherwise sits too close to crop.
-const ELEVATION_VIEWBOX_TOP = -12;
-const ELEVATION_VIEWBOX_HEIGHT = 436;
+const ELEVATION_VIEWBOX_LEFT = -35;
+const ELEVATION_VIEWBOX_TOP = -36;
+const ELEVATION_VIEWBOX_WIDTH = 690;
+const ELEVATION_VIEWBOX_HEIGHT = 502;
 const CEILING_Y = 82;
 const LANE_STEP = 11;
 // A cramped dimension slides along its chain before it drops to a second row:
@@ -537,7 +541,7 @@ export function WallElevation({
   };
 
   return (
-    <div className="relative h-full min-h-[440px] overflow-hidden rounded-[18px] border border-studio-line bg-white shadow-[0_18px_42px_-30px_rgba(20,20,26,0.28)]">
+    <div className="relative flex h-full min-h-[440px] flex-col overflow-hidden rounded-[18px] border border-studio-line bg-white shadow-[0_18px_42px_-30px_rgba(20,20,26,0.28)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[68px] opacity-100 [background-image:linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px)] [background-size:28px_28px]" />
       <div
         data-elevation-layer="header"
@@ -572,16 +576,16 @@ export function WallElevation({
       </div>
 
       <svg
-        viewBox={`0 ${ELEVATION_VIEWBOX_TOP} 640 ${ELEVATION_VIEWBOX_HEIGHT}`}
-        preserveAspectRatio="xMidYMin meet"
+        viewBox={`${ELEVATION_VIEWBOX_LEFT} ${ELEVATION_VIEWBOX_TOP} ${ELEVATION_VIEWBOX_WIDTH} ${ELEVATION_VIEWBOX_HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label={wall ? `Wall ${wall.label} cabinet elevation` : "Cabinet elevation"}
-        className="relative z-10 h-[calc(100%-68px)] min-h-[360px] w-full"
+        className="relative z-10 min-h-0 w-full flex-1"
       >
         <g data-elevation-layer="dimensions" stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
           <path
             data-chain-guide="overall"
-            d={`M 70 ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M 570 ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M 70 ${OVERALL_DIMENSION_GUIDE_Y} H 570`}
+            d={`M ${RUN_LEFT} ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M ${RUN_LEFT + RUN_WIDTH} ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M ${RUN_LEFT} ${OVERALL_DIMENSION_GUIDE_Y} H ${RUN_LEFT + RUN_WIDTH}`}
             strokeWidth={DIMENSION_STROKE_WIDTH}
           />
           <text
@@ -629,11 +633,11 @@ export function WallElevation({
             <line x1="0" y1="0" x2="0" y2="8" stroke="#d52228" strokeWidth="1.2" strokeOpacity="0.55" />
           </pattern>
         </defs>
-        <line x1="70" y1={FLOOR_Y} x2="570" y2={FLOOR_Y} stroke="#292929" strokeWidth="2" />
+        <line x1={RUN_LEFT} y1={FLOOR_Y} x2={RUN_LEFT + RUN_WIDTH} y2={FLOOR_Y} stroke="#292929" strokeWidth="2" />
         <line
-          x1="70"
+          x1={RUN_LEFT}
           y1={CEILING_Y}
-          x2="570"
+          x2={RUN_LEFT + RUN_WIDTH}
           y2={CEILING_Y}
           stroke="#292929"
           strokeWidth="1"

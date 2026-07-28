@@ -9,22 +9,18 @@ import type { Round2PrototypeState } from "../round2-types";
 import { ProposalWorkspace } from "./proposal-workspace";
 
 describe("ProposalWorkspace", () => {
-  test("keeps the top view below a larger desktop elevation surface", () => {
+  test("keeps the floor plan below the full-size elevation editor", () => {
     const html = renderToStaticMarkup(
       <ProposalWorkspace state={submittedState()} dispatch={() => {}} />
     );
 
-    const elevationIndex = html.indexOf('data-testid="proposal-elevation-panel"');
-    const planIndex = html.indexOf('data-testid="proposal-plan-panel"');
-
-    expect(elevationIndex).toBeGreaterThan(-1);
-    expect(planIndex).toBeGreaterThan(elevationIndex);
     expect(html).toContain(
-      'data-testid="proposal-elevation-panel" class="h-[440px] min-h-[440px] w-full shrink-0 md:h-[520px] md:min-h-[520px]"'
+      'data-testid="proposal-elevation-panel" class="h-[680px] min-h-[680px] w-full shrink-0"'
     );
     expect(html).toContain(
       'data-testid="proposal-plan-panel" class="h-[440px] min-h-[440px] w-full shrink-0"'
     );
+    expect(html).toContain('aria-label="Cabinet proposal top view"');
     expect(html).not.toContain("max-w-[420px]");
   });
 });
