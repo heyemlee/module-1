@@ -105,5 +105,10 @@ function submittedState(): Round2PrototypeState {
       ])
     )
   };
-  return reduceRound2Prototype(completed, { type: "SUBMIT_MEASUREMENT" });
+  // Submitting only opens the design-intent stage; the proposal the rail renders
+  // comes from that stage's generate step.
+  const submitted = reduceRound2Prototype(completed, {
+    type: "SUBMIT_MEASUREMENT"
+  });
+  return reduceRound2Prototype(submitted, { type: "GENERATE_PROPOSAL" });
 }

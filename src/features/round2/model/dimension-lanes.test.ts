@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   layoutDimensionLabels,
   measureDimensionLabel,
+  stackAnchoredLabels,
   type DimensionLabel
 } from "./dimension-lanes";
 
@@ -129,6 +130,22 @@ describe("dimension label placement", () => {
     expect(placements.some((placement) => placement.lane === 1)).toBe(true);
   });
 
+  test("reserves an outer row for a label that cannot fit its segment", () => {
+    const labels = [
+      { center: 120, text: "36″" },
+      { center: 150, text: "3/4″", minimumLane: 1 },
+      { center: 180, text: "36″" }
+    ];
+    const placements = layoutDimensionLabels(labels, {
+      fontSize: FONT_SIZE,
+      bounds: [70, 570],
+      maxLanes: 2
+    });
+
+    expect(placements.map((placement) => placement.lane)).toEqual([0, 1, 0]);
+    expect(placements[1].center).toBe(150);
+  });
+
   test("holds every label inside the bounds when the row has room", () => {
     const labels = [
       { center: 72, text: "1 1/2″" },
@@ -144,6 +161,60 @@ describe("dimension label placement", () => {
       expect(box.left).toBeGreaterThanOrEqual(70 - 0.01);
       expect(box.right).toBeLessThanOrEqual(570 + 0.01);
     }
+  });
+
+  test("uses a label's own width when the glyphs are narrower than the text", () => {
+    // A stacked fraction draws far narrower than "1 1/2″" measures, so it must
+    // not shoulder its neighbour aside for room it never uses.
+    const labels = [
+      { center: 100, text: "1 1/2″", width: 21 },
+      { center: 130, text: "36″" }
+    ];
+    const placements = layoutDimensionLabels(labels, {
+      fontSize: FONT_SIZE,
+      bounds: [70, 570]
+    });
+
+    expect(placements.map((placement) => placement.center)).toEqual([100, 130]);
+  });
+
+  describe("anchored rows", () => {
+    test("leaves labels on row 0 when their centrelines already clear", () => {
+      const rows = stackAnchoredLabels([
+        { center: 100, width: 18 },
+        { center: 140, width: 18 },
+        { center: 180, width: 18 }
+      ]);
+
+      expect(rows).toEqual([0, 0, 0]);
+    });
+
+    test("steps a clashing label out a row rather than moving it", () => {
+      // Three boards back to back, each far narrower than its own number.
+      const rows = stackAnchoredLabels(
+        [
+          { center: 300, width: 18 },
+          { center: 306, width: 18 },
+          { center: 312, width: 18 }
+        ],
+        4
+      );
+
+      expect(rows).toEqual([0, 1, 2]);
+    });
+
+    test("reuses the innermost row that has come clear again", () => {
+      const rows = stackAnchoredLabels(
+        [
+          { center: 300, width: 18 },
+          { center: 306, width: 18 },
+          { center: 330, width: 18 }
+        ],
+        4
+      );
+
+      expect(rows).toEqual([0, 1, 0]);
+    });
   });
 
   test("never drops a label, however tight the row", () => {

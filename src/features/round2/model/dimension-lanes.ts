@@ -1,10 +1,10 @@
 // Dimension-chain labels collide when neighbouring segments are narrow: a 3/4″
 // filler is ~2px wide on the elevation but its label is ~30px, so "3/4″" and
 // "1 1/2″" run together. Every dimension has to stay on the drawing, so labels
-// are never dropped or merged. Instead each label slides along its chain until
-// it clears its neighbours — the drafting convention of setting a cramped
-// dimension off to the side on a leader — and only spills onto a second row
-// when sliding alone cannot open up enough room.
+// are never dropped or merged. Two placement policies live here: labels that
+// may slide along their chain until they clear their neighbours
+// (layoutDimensionLabels), and labels pinned to a centreline that stack onto
+// further rows instead of moving (stackAnchoredLabels).
 //
 // Used by the proposal elevation and the A-series drawing sheets, which share
 // this placement policy so the same wall dimensions the same way on screen and
@@ -14,6 +14,10 @@ export type DimensionLabel = {
   /** Preferred centre: the midpoint of the segment being dimensioned. */
   center: number;
   text: string;
+  /** Drawn width, when the glyphs are narrower than the plain text measures. */
+  width?: number;
+  /** Earliest dimension row this label may occupy. */
+  minimumLane?: number;
 };
 
 export type DimensionLabelPlacement = {
@@ -21,7 +25,7 @@ export type DimensionLabelPlacement = {
   center: number;
   /** Row index away from the chain; 0 is the chain's own row. */
   lane: number;
-  /** Label left its segment midpoint, so it needs a leader line back. */
+  /** Label left its segment midpoint while resolving a collision. */
   shifted: boolean;
 };
 
@@ -55,8 +59,8 @@ export function layoutDimensionLabels(
   const gap = options.gap ?? 4;
   const maxLanes = Math.max(1, options.maxLanes ?? 2);
   const maxShift = options.maxShift ?? Number.POSITIVE_INFINITY;
-  const widths = labels.map((label) =>
-    measureDimensionLabel(label.text, options.fontSize)
+  const widths = labels.map(
+    (label) => label.width ?? measureDimensionLabel(label.text, options.fontSize)
   );
   const placements: DimensionLabelPlacement[] = labels.map((label) => ({
     center: label.center,
@@ -67,12 +71,17 @@ export function layoutDimensionLabels(
   let pending = labels.map((_, index) => index);
   for (let lane = 0; lane < maxLanes && pending.length > 0; lane += 1) {
     const lastLane = lane === maxLanes - 1;
-    const packed = packRow(pending, labels, widths, gap, options.bounds);
+    const ready = pending.filter(
+      (index) => Math.min(labels[index].minimumLane ?? 0, maxLanes - 1) <= lane
+    );
+    const deferred = pending.filter((index) => !ready.includes(index));
+    if (ready.length === 0) continue;
+    const packed = packRow(ready, labels, widths, gap, options.bounds);
     // Alternate crowded labels down instead of sending the whole cluster, so
     // the two rows share the load rather than one staying empty.
     const crowded = lastLane
       ? []
-      : pending
+      : ready
           .filter(
             (index) => Math.abs(packed[index] - labels[index].center) > maxShift
           )
@@ -83,8 +92,8 @@ export function layoutDimensionLabels(
     // the survivors can be repacked once and committed.
     const kept =
       demoted.length === 0
-        ? pending
-        : pending.filter((index) => !demoted.includes(index));
+        ? ready
+        : ready.filter((index) => !demoted.includes(index));
     const settled =
       demoted.length === 0
         ? packed
@@ -97,10 +106,54 @@ export function layoutDimensionLabels(
         shifted: Math.abs(settled[index] - labels[index].center) > 0.5
       };
     }
-    pending = demoted;
+    pending = [...deferred, ...demoted];
   }
 
   return placements;
+}
+
+export type AnchoredLabel = {
+  /** Centreline the label may not leave — the midpoint of its own part. */
+  center: number;
+  /** Room the label needs across the chain. */
+  width: number;
+};
+
+/**
+ * Rows for labels that may not slide at all: a number turned on end under a
+ * part too narrow to hold it flat has to stay on that part's centreline, so two
+ * parts closer together than the label needs cannot share a row and the later
+ * one steps out to the next. Returns each label's row, 0 being the innermost.
+ */
+export function stackAnchoredLabels(
+  labels: readonly AnchoredLabel[],
+  gap = 4
+): number[] {
+  const rows: { left: number; right: number }[][] = [];
+  const assigned = labels.map(() => 0);
+  const ordered = labels
+    .map((_, index) => index)
+    .sort((a, b) => labels[a].center - labels[b].center);
+
+  for (const index of ordered) {
+    const half = labels[index].width / 2 + gap / 2;
+    const box = {
+      left: labels[index].center - half,
+      right: labels[index].center + half
+    };
+    let row = 0;
+    while (
+      (rows[row] ?? []).some(
+        (taken) => taken.left < box.right && box.left < taken.right
+      )
+    ) {
+      row += 1;
+    }
+    if (!rows[row]) rows[row] = [];
+    rows[row].push(box);
+    assigned[index] = row;
+  }
+  return assigned;
 }
 
 /**

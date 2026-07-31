@@ -141,7 +141,7 @@ describe("DesignPlan", () => {
     expect(Math.abs(numberAttribute(extension, "y2") - numberAttribute(extension, "y1"))).toBe(
       10
     );
-    expect(extension).toContain('stroke-width="1.8"');
+    expect(extension).toContain('stroke-width="2"');
   });
 
   test("omits corner dimensions when no corner cabinet is present", () => {
@@ -213,11 +213,101 @@ describe("DesignPlan", () => {
     const label = tagFor(html, "text", 'data-chain-label="top-blind-base"');
     expect(html.slice(html.indexOf(label))).toContain("45″");
     expect(html).toContain('data-plan-overall-label="A"');
-    expect(html).toContain("A · 120″");
+    expect(html).toContain('data-dimension-value="120″"');
+    expect(html).not.toContain("A · 120″");
     expect(html).not.toContain("data-display-label");
     // Codes survive only as hover tooltips, never as drawn text.
     expect(html).toContain("<title>BB45</title>");
     expect(html).not.toContain("BB45</text>");
+  });
+
+  test("uses the elevation drafting style for floor-plan fractions", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [
+          segment("fractional-panel", 20.25, "panel", "P20.25"),
+          segment("remainder", 99.75, "cabinet", "B99.75")
+        ])
+      ])
+    );
+    const attributeStart = html.indexOf('data-chain-label="fractional-panel"');
+    const labelStart = html.lastIndexOf("<text", attributeStart);
+    const label = html.slice(
+      labelStart,
+      html.indexOf("</text>", attributeStart) + 7
+    );
+
+    expect(label).toContain('data-dimension-value="20 1/4″"');
+    expect(label).toContain('data-dimension-numerator="true"');
+    expect(label).toContain('data-dimension-denominator="true"');
+    expect(html).toContain('data-dimension-fraction-bar="true"');
+    expect(label).not.toContain(">20 1/4″</text>");
+  });
+
+  test("centres horizontal and vertical values directly on their plan rules", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [segment("top-base", 36, "cabinet", "B36")]),
+        wall("B", "LEFT", [segment("left-base", 36, "cabinet", "B36")])
+      ])
+    );
+    const topLine = tagFor(
+      html,
+      "line",
+      'data-plan-segment-line="top-base"'
+    );
+    const topLabel = tagFor(html, "text", 'data-chain-label="top-base"');
+    const leftLine = tagFor(
+      html,
+      "line",
+      'data-plan-segment-line="left-base"'
+    );
+    const leftLabel = tagFor(html, "text", 'data-chain-label="left-base"');
+
+    expect(numberAttribute(topLabel, "y")).toBe(numberAttribute(topLine, "y1"));
+    expect(numberAttribute(leftLabel, "x")).toBe(numberAttribute(leftLine, "x1"));
+    expect(leftLabel).toContain("rotate(-90");
+    expect(topLine).toContain('stroke-width="2"');
+    expect(html).toContain('data-dimension-label-backdrop="true"');
+  });
+
+  test("keeps narrow floor-plan values plumb over their own segments", () => {
+    const html = render(
+      modelWithSegments([
+        wall("A", "TOP", [
+          segment("wide", 36, "cabinet", "B36"),
+          segment("narrow-quarter", 2.25, "filler", "F2.25"),
+          segment("narrow-panel", 0.75, "panel", "P0.75"),
+          segment("remainder", 81, "cabinet", "B81")
+        ])
+      ])
+    );
+    const label = tagFor(
+      html,
+      "text",
+      'data-chain-label="narrow-quarter"'
+    );
+    const line = tagFor(
+      html,
+      "line",
+      'data-plan-segment-line="narrow-quarter"'
+    );
+    const leader = tagFor(
+      html,
+      "line",
+      'data-plan-chain-leader="narrow-quarter"'
+    );
+    const segmentMid =
+      (numberAttribute(line, "x1") + numberAttribute(line, "x2")) / 2;
+
+    expect(numberAttribute(label, "x")).toBeCloseTo(segmentMid);
+    expect(numberAttribute(leader, "x1")).toBeCloseTo(segmentMid);
+    expect(numberAttribute(leader, "x2")).toBeCloseTo(segmentMid);
+    expect(numberAttribute(label, "y")).toBeLessThan(numberAttribute(line, "y1"));
+    const overall = tagFor(html, "line", 'data-plan-overall-line="A"');
+    expect(numberAttribute(overall, "y1")).toBeLessThan(
+      numberAttribute(label, "y")
+    );
   });
 
   test("draws bottom wall runs from left to right like the measured model", () => {

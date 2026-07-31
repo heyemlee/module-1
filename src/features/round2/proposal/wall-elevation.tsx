@@ -24,9 +24,16 @@ import { CABINET_STANDARDS } from "../model/cabinet-standards";
 import { standardWidthOptionsSixteenths } from "../model/adjustments";
 import {
   layoutDimensionLabels,
-  measureDimensionLabel,
+  stackAnchoredLabels,
   type DimensionLabelPlacement
 } from "../model/dimension-lanes";
+import {
+  dimensionBackdropBand,
+  dimensionLabelSpan,
+  dimensionLabelWidth,
+  dimensionParts,
+  DraftDimensionValue as DimensionValue
+} from "./drafting-dimension";
 import {
   ACCESSORY_LABELS,
   describeFront,
@@ -66,33 +73,31 @@ const RUN_WIDTH = 560;
 const FLOOR_Y = 394;
 // Keep the dimension chains inside the viewport with clear breathing room at
 // both edges; the lower corner breakdown row otherwise sits too close to crop.
-const ELEVATION_VIEWBOX_LEFT = -35;
+const ELEVATION_VIEWBOX_LEFT = -125;
 const ELEVATION_VIEWBOX_TOP = -36;
-const ELEVATION_VIEWBOX_WIDTH = 690;
-const ELEVATION_VIEWBOX_HEIGHT = 502;
+const ELEVATION_VIEWBOX_WIDTH = 780;
+// Four rows of stacked narrow-board dimensions need 30px more lower gutter
+// than the original sheet; otherwise the last row is forced sideways.
+const ELEVATION_VIEWBOX_HEIGHT = 560;
 const CEILING_Y = 82;
-const LANE_STEP = 11;
-// A cramped dimension slides along its chain before it drops to a second row:
-// past roughly one label's width the leader gets harder to follow than the
-// extra row. Two rows have cleared every wall we draw; the placement never
-// drops a dimension, so a third row would only ever trade legibility for
-// vertical space the chain block does not have.
-const MAX_LABEL_SHIFT = 30;
-const CHAIN_LANES = 2;
+// Keep every value horizontally locked to the board it measures. A number its
+// own board cannot hold steps straight out onto its own row, upright and plumb
+// over that board, rather than sliding along the chain past its neighbours.
+// The clearance has to cover the padding each number's white backdrop adds
+// around its glyphs, so a stacked number never rubs out the one beside it.
+const STACKED_LABEL_GAP = 4;
+// Clear of the numbers sitting on the chain rule itself.
+const STACKED_LABEL_LEAD = 10;
+const DIMENSION_LABEL_FIT_PADDING = 6;
+const RUN_CHAIN_LABEL_OVERHANG = 28;
 const DIMENSION_COLOR = "#079ca5";
 const DIMENSION_FONT_SIZE = 11;
 const DIMENSION_STROKE_WIDTH = 2;
-// Leaders run lighter than the chain rule so a label pointing back at its
-// segment never reads as another dimension line.
-const LEADER_STROKE_WIDTH = 1.1;
 // Hovering either a cabinet or its dimension lights up both, and a selected
-// cabinet keeps its dimension lit. A number that slid off its own segment can
-// then be paired with that segment without tracing the leader by eye. The
-// classes live on the chain because the label and the cabinet share one <g>.
+// cabinet keeps its dimension lit. The classes live on the chain because the
+// label and the cabinet share one <g>.
 const PAIR_HIGHLIGHT_LINE =
   "transition-[stroke,stroke-width] duration-100 group-hover:[stroke:#046a70] group-hover:[stroke-width:3] group-data-[selected=true]:[stroke:#046a70] group-data-[selected=true]:[stroke-width:3]";
-const PAIR_HIGHLIGHT_LEADER =
-  "transition-[stroke,stroke-width] duration-100 group-hover:[stroke:#046a70] group-hover:[stroke-width:2] group-data-[selected=true]:[stroke:#046a70] group-data-[selected=true]:[stroke-width:2]";
 const PAIR_HIGHLIGHT_TEXT =
   "underline-offset-2 transition-[fill] duration-100 group-hover:underline group-hover:[fill:#046a70] group-data-[selected=true]:underline group-data-[selected=true]:[fill:#046a70]";
 // The cabinet body picks up the same accent so hovering the number marks the
@@ -100,11 +105,11 @@ const PAIR_HIGHLIGHT_TEXT =
 const PAIR_HIGHLIGHT_BODY =
   "transition-[stroke] duration-100 group-hover:[stroke:#046a70]";
 const WIDTH_CHAIN_EXTENSION_LENGTH = 8;
-// The overall row sits high enough that the upper chain's second lane (y=31)
-// clears its rule. Without that headroom a spilled label would be drawn
-// straight through the overall dimension line.
-const OVERALL_DIMENSION_LABEL_Y = 11;
-const OVERALL_DIMENSION_GUIDE_Y = 21;
+// In an ordinary run the overall row stays close to the sectional chain. When
+// narrow-board labels need extra stacked rows, it moves outward just enough to
+// preserve their clearance instead of leaving the large gap on every sheet.
+const COMPACT_OVERALL_DIMENSION_GUIDE_Y = 12;
+const OVERALL_LABEL_CLEARANCE = 10;
 // Three upper dimension rows occupy y=11, 42, and 64. Keeping this row
 // independent of the ceiling lets the full elevation sit lower without
 // pushing a dimension chain through the ceiling datum.
@@ -112,62 +117,81 @@ const UPPER_CHAIN_LABEL_Y = 42;
 const BASE_CHAIN_LABEL_Y = 64;
 const CABINET_FILL = "#ffffff";
 const CABINET_FACE_STROKE = "#1d1d1b";
-const TALL_HEIGHT_CHAIN_X = 32;
-const TALL_HEIGHT_LABEL_X = 20;
-const ROOM_HEIGHT_CHAIN_X = 32;
-const ROOM_HEIGHT_LABEL_X = 20;
+// Keep every vertical dimension outside the cabinet run. The room overall
+// height is always the outermost left lane; tall-unit and profile dimensions
+// step inward toward the drawing.
+const PROFILE_HEIGHT_CHAIN_X = 4;
+const TALL_HEIGHT_CHAIN_X = -12;
+const ROOM_HEIGHT_CHAIN_X = -24;
+const TALL_HEIGHT_LANE_STEP = 18;
+
+function roomHeightChainX(tallUnitCount: number): number {
+  // Tall dimensions fan outward when a wall contains more than one tower.
+  // Move the room total farther out by the same spacing so it remains the
+  // leftmost vertical dimension in every configuration.
+  return Math.min(
+    ROOM_HEIGHT_CHAIN_X,
+    TALL_HEIGHT_CHAIN_X - tallUnitCount * TALL_HEIGHT_LANE_STEP - 6
+  );
+}
 
 function widthChainLabelY(
   labelSide: "above" | "below",
-  tier: WallSegment["tier"],
-  lane = 0
+  tier: WallSegment["tier"]
 ): number {
-  const row =
-    labelSide === "below"
-      ? FLOOR_Y + 22
-      : tier === "upper"
-        ? UPPER_CHAIN_LABEL_Y
-        : BASE_CHAIN_LABEL_Y;
-  // Extra rows stack away from the run: down under the floor chain, up toward
-  // the overall chain.
-  return labelSide === "below" ? row + lane * LANE_STEP : row - lane * LANE_STEP;
+  return widthChainGuideY(labelSide, tier);
 }
 
-/** The chain rule itself never moves off its row, whatever the labels do. */
+/** The rule a tier's width chain is drawn on, with its numbers centred on it. */
 function widthChainGuideY(
   labelSide: "above" | "below",
   tier: WallSegment["tier"]
 ): number {
   return labelSide === "below"
     ? FLOOR_Y + 12
-    : widthChainLabelY(labelSide, tier) + 5;
+    : tier === "upper"
+      ? UPPER_CHAIN_LABEL_Y + 5
+      : BASE_CHAIN_LABEL_Y + 5;
 }
 
 /**
- * Leader from the segment's midpoint on the chain rule to the near edge of a
- * label that had to move. It lands on the text side facing the segment, so the
- * eye runs tick → leader → number even when the number ends up sitting over a
- * neighbouring segment.
+ * A stacked number stands upright outside the numbers on the chain rule, still
+ * centred on its own board. `offset` is the clear distance from the rule to the
+ * near edge of the number, so rows already standing between it and the chain
+ * push it further out without ever moving it sideways.
  */
-function chainLeaderPath(
-  segmentCenter: number,
-  labelCenter: number,
-  labelWidth: number,
-  guideY: number,
-  labelY: number,
-  labelSide: "above" | "below"
+function stackedChainLabelY(
+  labelSide: "above" | "below",
+  tier: WallSegment["tier"],
+  offset: number,
+  band: { top: number; height: number }
+): number {
+  const guideY = widthChainGuideY(labelSide, tier);
+  return labelSide === "below"
+    ? guideY + offset - band.top
+    : guideY - offset - band.height - band.top;
+}
+
+/** Chain rule for one segment, closed by a witness line at each board edge. */
+function widthChainGuidePath(
+  x: number,
+  width: number,
+  labelSide: "above" | "below",
+  tier: WallSegment["tier"]
 ): string {
-  const direction = Math.sign(segmentCenter - labelCenter) || 1;
-  const nearEdge =
-    labelCenter + direction * Math.max(0, labelWidth / 2 - 2);
-  const landing = labelSide === "below" ? labelY - 8 : labelY + 2;
-  return `M ${segmentCenter} ${guideY} L ${nearEdge} ${landing}`;
+  const guideY = widthChainGuideY(labelSide, tier);
+  const witnessY =
+    guideY +
+    (labelSide === "above"
+      ? WIDTH_CHAIN_EXTENSION_LENGTH
+      : -WIDTH_CHAIN_EXTENSION_LENGTH);
+  return `M ${x} ${guideY} V ${witnessY} M ${x} ${guideY} H ${x + width} M ${x + width} ${witnessY} V ${guideY}`;
 }
 
 /**
- * One width-chain number. It sits on its segment's midpoint when there is room
- * and otherwise wherever the run's placement moved it, trailing a leader back
- * to the midpoint so the number is never read against the wrong segment.
+ * One width-chain number. It sits on the chain rule when its own board is wide
+ * enough to hold it, and otherwise steps out onto its own row directly below
+ * that board so the reader can tell at a glance which board it reads.
  */
 function ChainWidthLabel({
   segment,
@@ -177,49 +201,46 @@ function ChainWidthLabel({
 }: {
   segment: WallSegment;
   segmentCenter: number;
-  placement: DimensionLabelPlacement | undefined;
+  placement: ChainLabelPlacement | undefined;
   labelSide: "above" | "below";
 }) {
-  const text = formatSixteenths(segment.widthSixteenths);
-  const lane = placement?.lane ?? 0;
   const center = placement?.center ?? segmentCenter;
-  const labelY = widthChainLabelY(labelSide, segment.tier, lane);
+  const stacked = placement?.stacked ?? false;
+  const offset = placement?.offset ?? STACKED_LABEL_LEAD;
   const guideY = widthChainGuideY(labelSide, segment.tier);
-  const moved = lane > 0 || (placement?.shifted ?? false);
+  const labelY = stacked
+    ? stackedChainLabelY(
+        labelSide,
+        segment.tier,
+        offset,
+        dimensionBackdropBand(dimensionParts(segment.widthSixteenths))
+      )
+    : widthChainLabelY(labelSide, segment.tier);
 
   return (
     <>
-      {moved && (
-        <path
+      {/* A number standing off the chain rule needs its centreline drawn in for
+          the eye to carry it back to its own board — plumb, never at an angle. */}
+      {stacked && (
+        <line
           data-chain-leader={segment.id}
-          d={chainLeaderPath(
-            segmentCenter,
-            center,
-            measureDimensionLabel(text, DIMENSION_FONT_SIZE),
-            guideY,
-            labelY,
-            labelSide
-          )}
+          x1={center}
+          y1={guideY}
+          x2={center}
+          y2={guideY + (labelSide === "below" ? offset : -offset)}
           stroke={DIMENSION_COLOR}
-          strokeWidth={LEADER_STROKE_WIDTH}
-          fill="none"
-          className={PAIR_HIGHLIGHT_LEADER}
+          strokeWidth="0.75"
+          className={PAIR_HIGHLIGHT_LINE}
         />
       )}
-      <text
-        data-chain-label={segment.id}
+      <DimensionValue
+        value={segment.widthSixteenths}
         x={center}
         y={labelY}
-        textAnchor="middle"
-        fontFamily="var(--studio-mono)"
-        fontSize={DIMENSION_FONT_SIZE}
-        fontWeight="bold"
-        stroke="none"
-        fill={DIMENSION_COLOR}
+        attribute="data-chain-label"
+        id={segment.id}
         className={PAIR_HIGHLIGHT_TEXT}
-      >
-        {text}
-      </text>
+      />
     </>
   );
 }
@@ -314,46 +335,217 @@ function carriesChainLabel(segment: WallSegment): boolean {
   return segment.sourceCornerId != null || segment.intentionalGap === true;
 }
 
+/** A board too narrow to carry its own number between its witness lines. */
+function chainLabelIsStacked(segment: WallSegment, widthPx: number): boolean {
+  return (
+    widthPx <
+    dimensionLabelWidth(segment.widthSixteenths) + DIMENSION_LABEL_FIT_PADDING
+  );
+}
+
+type ChainLabelPlacement = {
+  /** Where the number is drawn along the chain. */
+  center: number;
+  /** Clear distance from the chain rule to the number; 0 when it sits on it. */
+  offset: number;
+  /** Number stepped off the rule because its board is too narrow to hold it. */
+  stacked: boolean;
+};
+
 /**
- * Chain labels for one run, placed as a whole. A cramped label clears itself by
- * sliding past its neighbours, so placement cannot be decided segment by
- * segment; labels are grouped by the row they belong to (the upper and base
- * chains are separate lines) and each row is packed on its own.
+ * How far a chain may stack numbers off its rule before it runs off the sheet:
+ * the overall dimension bounds the chain above the run, the sheet edge the one
+ * below it. The corner breakdown row shares that lower gutter and gives way.
+ */
+function stackedLabelBudget(
+  labelSide: "above" | "below",
+  tier: WallSegment["tier"]
+): number {
+  const chainY = widthChainGuideY(labelSide, tier);
+  return labelSide === "above"
+    ? chainY -
+        (ELEVATION_VIEWBOX_TOP + OVERALL_LABEL_CLEARANCE + STACKED_LABEL_GAP)
+    : ELEVATION_VIEWBOX_TOP +
+        ELEVATION_VIEWBOX_HEIGHT -
+        STACKED_LABEL_GAP -
+        chainY;
+}
+
+/**
+ * Chain labels for one run, placed as a whole. Numbers are grouped by the chain
+ * they belong to (upper and base are separate rules) and each chain is split in
+ * two: numbers their own board can hold sit on the rule, where the board itself
+ * keeps them apart, and the rest step out onto their own row, still upright and
+ * still plumb over the board they measure.
  */
 function placeRunChainLabels(
   segments: readonly WallSegment[],
   centers: readonly number[],
+  widthsPx: readonly number[],
   carries: readonly boolean[],
   labelSide: "above" | "below"
-): Map<string, DimensionLabelPlacement> {
-  const rows = new Map<number, number[]>();
+): Map<string, ChainLabelPlacement> {
+  const chains = new Map<number, number[]>();
   segments.forEach((segment, index) => {
     if (!carries[index]) return;
-    const row = widthChainLabelY(labelSide, segment.tier);
-    const indices = rows.get(row);
+    const chain = widthChainLabelY(labelSide, segment.tier);
+    const indices = chains.get(chain);
     if (indices) indices.push(index);
-    else rows.set(row, [index]);
+    else chains.set(chain, [index]);
   });
 
-  const placed = new Map<string, DimensionLabelPlacement>();
-  for (const indices of rows.values()) {
-    const placements = layoutDimensionLabels(
-      indices.map((index) => ({
-        center: centers[index],
-        text: formatSixteenths(segments[index].widthSixteenths)
-      })),
-      {
-        fontSize: DIMENSION_FONT_SIZE,
-        bounds: [RUN_LEFT, RUN_LEFT + RUN_WIDTH],
-        maxShift: MAX_LABEL_SHIFT,
-        maxLanes: CHAIN_LANES
-      }
+  const bounds: [number, number] = [
+    RUN_LEFT - RUN_CHAIN_LABEL_OVERHANG,
+    RUN_LEFT + RUN_WIDTH + RUN_CHAIN_LABEL_OVERHANG
+  ];
+  const placed = new Map<string, ChainLabelPlacement>();
+  for (const indices of chains.values()) {
+    const stacked = indices.filter((index) =>
+      chainLabelIsStacked(segments[index], widthsPx[index])
     );
-    indices.forEach((index, position) => {
-      placed.set(segments[index].id, placements[position]);
+    const onRule = indices.filter(
+      (index) => !chainLabelIsStacked(segments[index], widthsPx[index])
+    );
+
+    const rulePlacements = layoutDimensionLabels(
+      onRule.map((index) => ({
+        center: centers[index],
+        text: formatSixteenths(segments[index].widthSixteenths),
+        width: dimensionLabelWidth(segments[index].widthSixteenths)
+      })),
+      { fontSize: DIMENSION_FONT_SIZE, bounds, maxLanes: 1 }
+    );
+    onRule.forEach((index, position) => {
+      placed.set(segments[index].id, {
+        center: rulePlacements[position].center,
+        offset: 0,
+        stacked: false
+      });
+    });
+
+    if (stacked.length === 0) continue;
+    const spans = stacked.map((index) =>
+      dimensionLabelSpan(segments[index].widthSixteenths)
+    );
+    const depths = stacked.map(
+      (index) =>
+        dimensionBackdropBand(dimensionParts(segments[index].widthSixteenths))
+          .height
+    );
+    const rows = stackAnchoredLabels(
+      stacked.map((index, position) => ({
+        center: centers[index],
+        width: spans[position]
+      })),
+      STACKED_LABEL_GAP
+    );
+    const offsets = stackedRowOffsets(rows, depths);
+    const budget = stackedLabelBudget(labelSide, segments[stacked[0]].tier);
+    // The last row that still fits the sheet takes everything that would have
+    // stacked past it; only there, where nothing else is left, may a number
+    // slide off its board rather than be lost.
+    const lastRow = offsets.reduce(
+      (last, offset, row) =>
+        offset + rowDepth(rows, depths, row) <= budget ? row : last,
+      0
+    );
+    const crowded = stacked
+      .map((_, position) => position)
+      .filter((position) => rows[position] >= lastRow);
+    const slid = layoutDimensionLabels(
+      crowded.map((position) => ({
+        center: centers[stacked[position]],
+        text: formatSixteenths(segments[stacked[position]].widthSixteenths),
+        width: spans[position]
+      })),
+      { fontSize: DIMENSION_FONT_SIZE, bounds, gap: STACKED_LABEL_GAP, maxLanes: 1 }
+    );
+
+    stacked.forEach((index, position) => {
+      const slidAt = crowded.indexOf(position);
+      placed.set(segments[index].id, {
+        center: slidAt >= 0 ? slid[slidAt].center : centers[index],
+        offset: offsets[Math.min(rows[position], lastRow)],
+        stacked: true
+      });
     });
   }
   return placed;
+}
+
+/** How far past its chain rule a run's deepest number reaches. */
+function stackedChainReach(
+  segments: readonly WallSegment[],
+  placements: ReadonlyMap<string, ChainLabelPlacement>
+): number {
+  return segments.reduce((reach, segment) => {
+    const placement = placements.get(segment.id);
+    if (!placement?.stacked) return reach;
+    const band = dimensionBackdropBand(dimensionParts(segment.widthSixteenths));
+    return Math.max(reach, placement.offset + band.height);
+  }, 0);
+}
+
+/**
+ * Keep the overall width close to the main upper chain unless stacked narrow
+ * labels occupy that space. In a crowded run it retreats toward the sheet edge
+ * while the numbers remain vertically aligned with their own boards.
+ */
+function overallDimensionGuideY(
+  segments: readonly WallSegment[],
+  total: number,
+  mirrored: boolean
+): number {
+  if (segments.length === 0 || total <= 0) {
+    return COMPACT_OVERALL_DIMENSION_GUIDE_Y;
+  }
+  const widths = segments.map(
+    (segment) => (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH
+  );
+  const centers = runSegmentCenters(widths, mirrored);
+  const placements = placeRunChainLabels(
+    segments,
+    centers,
+    widths,
+    segments.map(carriesChainLabel),
+    "above"
+  );
+  const stackedReach = stackedChainReach(segments, placements);
+  const chainY = widthChainGuideY("above", "upper");
+
+  return Math.max(
+    ELEVATION_VIEWBOX_TOP + OVERALL_LABEL_CLEARANCE,
+    Math.min(
+      COMPACT_OVERALL_DIMENSION_GUIDE_Y,
+      chainY - stackedReach - OVERALL_LABEL_CLEARANCE
+    )
+  );
+}
+
+function rowDepth(
+  rows: readonly number[],
+  depths: readonly number[],
+  row: number
+): number {
+  return rows.reduce(
+    (deepest, assigned, position) =>
+      assigned === row ? Math.max(deepest, depths[position]) : deepest,
+    0
+  );
+}
+
+/** Each row is only as deep as the tallest number standing in it. */
+function stackedRowOffsets(
+  rows: readonly number[],
+  depths: readonly number[]
+): number[] {
+  const offsets: number[] = [];
+  let cursor = STACKED_LABEL_LEAD;
+  for (let row = 0; row <= Math.max(...rows); row += 1) {
+    offsets[row] = cursor;
+    cursor += rowDepth(rows, depths, row) + STACKED_LABEL_GAP;
+  }
+  return offsets;
 }
 
 // Corner returns follow NKBA section conventions: sectioned side profile in
@@ -433,8 +625,29 @@ function hasCountertop(
   // A full-height side panel beside a tall unit breaks the counter; a
   // tier-height panel (run end, dishwasher side) sits under it like a cabinet.
   if (segment.kind === "panel") return segment.panelSpan === "tier";
-  if (segment.kind === "opening" || segment.kind === "gap") return false;
+  if (segment.kind === "opening") return false;
+  // A sourced corner-return reservation is encoded as a gap because the
+  // cabinet belongs to the adjacent wall, but its countertop still crosses
+  // this wall. Intentional/open gaps remain genuine counter breaks.
+  if (segment.kind === "gap") return Boolean(segment.sourceCornerId);
   return resolveSegmentRole(segment, { fixedPoints }) !== "range";
+}
+
+/**
+ * The counter line runs across every counter-topped segment, while the shallow
+ * slab/shadow is reserved for ordinary base cabinets. Corner units and
+ * finished panels are shown with the clean top line only, so their section or
+ * hatch notation is never darkened by a second horizontal band.
+ */
+function hasCountertopSlabShadow(
+  segment: WallSegment,
+  fixedPoints: Round2FixedPoint[]
+): boolean {
+  if (!hasCountertop(segment, fixedPoints)) return false;
+  if (segment.kind === "panel" || segment.cabinetKind === "corner") {
+    return false;
+  }
+  return !(segment.kind === "gap" && segment.sourceCornerId);
 }
 
 function segmentBox(
@@ -526,6 +739,7 @@ export function WallElevation({
     layout.profile
   );
   const mirrored = isMirroredElevationWall(wall);
+  const overallGuideY = overallDimensionGuideY(upper, total, mirrored);
   const editingSegment =
     wall?.segments.find((segment) => segment.id === editingId) ?? null;
   const cornerReturns = buildCornerReturnTargets(model, wall);
@@ -585,22 +799,21 @@ export function WallElevation({
         <g data-elevation-layer="dimensions" stroke={DIMENSION_COLOR} fill={DIMENSION_COLOR} fontFamily="var(--studio-mono)">
           <path
             data-chain-guide="overall"
-            d={`M ${RUN_LEFT} ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M ${RUN_LEFT + RUN_WIDTH} ${OVERALL_DIMENSION_GUIDE_Y - WIDTH_CHAIN_EXTENSION_LENGTH} V ${OVERALL_DIMENSION_GUIDE_Y + WIDTH_CHAIN_EXTENSION_LENGTH} M ${RUN_LEFT} ${OVERALL_DIMENSION_GUIDE_Y} H ${RUN_LEFT + RUN_WIDTH}`}
+            d={`M ${RUN_LEFT} ${overallGuideY - WIDTH_CHAIN_EXTENSION_LENGTH} V ${overallGuideY + WIDTH_CHAIN_EXTENSION_LENGTH} M ${RUN_LEFT + RUN_WIDTH} ${overallGuideY - WIDTH_CHAIN_EXTENSION_LENGTH} V ${overallGuideY + WIDTH_CHAIN_EXTENSION_LENGTH} M ${RUN_LEFT} ${overallGuideY} H ${RUN_LEFT + RUN_WIDTH}`}
             strokeWidth={DIMENSION_STROKE_WIDTH}
           />
-          <text
-            data-chain-label="overall"
-            x="320"
-            y={OVERALL_DIMENSION_LABEL_Y}
-            textAnchor="middle"
-            fontSize={DIMENSION_FONT_SIZE}
-            fontWeight="bold"
-            stroke="none"
-            fill={DIMENSION_COLOR}
-          >
-            {formatSixteenths(wall?.lengthSixteenths)}
-          </text>
-          <HeightChain model={model} layout={layout} />
+          <DimensionValue
+            value={wall?.lengthSixteenths}
+            x={RUN_LEFT + RUN_WIDTH / 2}
+            y={overallGuideY}
+            attribute="data-chain-label"
+            id="overall"
+          />
+          <HeightChain
+            model={model}
+            layout={layout}
+            tallUnitCount={base.filter((segment) => segment.cabinetKind === "tall").length}
+          />
         </g>
 
         <defs>
@@ -856,65 +1069,53 @@ function WallOverflowWarning({
 
 function HeightChain({
   model,
-  layout
+  layout,
+  tallUnitCount
 }: {
   model: Round2Model | null;
   layout: VerticalLayout;
+  tallUnitCount: number;
 }) {
   const { profile } = layout;
+  const roomChainX = roomHeightChainX(tallUnitCount);
   return (
     <g data-elevation-layer="height-chain">
       <path
-        d={`M ${ROOM_HEIGHT_CHAIN_X - 6} ${CEILING_Y} H ${ROOM_HEIGHT_CHAIN_X + 6} M ${ROOM_HEIGHT_CHAIN_X - 6} ${FLOOR_Y} H ${ROOM_HEIGHT_CHAIN_X + 6} M ${ROOM_HEIGHT_CHAIN_X} ${CEILING_Y} V ${FLOOR_Y}`}
+        d={`M ${roomChainX - 6} ${CEILING_Y} H ${roomChainX + 6} M ${roomChainX - 6} ${FLOOR_Y} H ${roomChainX + 6} M ${roomChainX} ${CEILING_Y} V ${FLOOR_Y}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
-      <text
-        data-height-label="ceiling"
-        x={ROOM_HEIGHT_LABEL_X}
+      <DimensionValue
+        value={model?.ceilingHeightSixteenths}
+        x={roomChainX}
         y={(CEILING_Y + FLOOR_Y) / 2}
-        textAnchor="middle"
-        fontSize={DIMENSION_FONT_SIZE}
-        fontWeight="bold"
-        fill={DIMENSION_COLOR}
-        stroke="none"
-        transform={`rotate(-90 ${ROOM_HEIGHT_LABEL_X} ${(CEILING_Y + FLOOR_Y) / 2})`}
-      >
-        {formatSixteenths(model?.ceilingHeightSixteenths)}
-      </text>
+        vertical
+        attribute="data-height-label"
+        id="ceiling"
+      />
       <path
-        d={`M 58 ${layout.baseBodyTop} H 66 M 58 ${FLOOR_Y} H 66 M 62 ${layout.baseBodyTop} V ${FLOOR_Y}`}
+        d={`M ${PROFILE_HEIGHT_CHAIN_X - 4} ${layout.baseBodyTop} H ${PROFILE_HEIGHT_CHAIN_X + 4} M ${PROFILE_HEIGHT_CHAIN_X - 4} ${FLOOR_Y} H ${PROFILE_HEIGHT_CHAIN_X + 4} M ${PROFILE_HEIGHT_CHAIN_X} ${layout.baseBodyTop} V ${FLOOR_Y}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
-      <text
-        data-height-label="counter"
-        x="49"
+      <DimensionValue
+        value={baseBodyHeightSixteenths(profile)}
+        x={PROFILE_HEIGHT_CHAIN_X}
         y={(layout.baseBodyTop + FLOOR_Y) / 2}
-        textAnchor="middle"
-        fontSize={DIMENSION_FONT_SIZE}
-        fontWeight="bold"
-        fill={DIMENSION_COLOR}
-        stroke="none"
-        transform={`rotate(-90 49 ${(layout.baseBodyTop + FLOOR_Y) / 2})`}
-      >
-        {formatSixteenths(baseBodyHeightSixteenths(profile))}
-      </text>
+        vertical
+        attribute="data-height-label"
+        id="counter"
+      />
       <path
-        d={`M 58 ${layout.upperTop} H 66 M 58 ${layout.upperBottom} H 66 M 62 ${layout.upperTop} V ${layout.upperBottom}`}
+        d={`M ${PROFILE_HEIGHT_CHAIN_X - 4} ${layout.upperTop} H ${PROFILE_HEIGHT_CHAIN_X + 4} M ${PROFILE_HEIGHT_CHAIN_X - 4} ${layout.upperBottom} H ${PROFILE_HEIGHT_CHAIN_X + 4} M ${PROFILE_HEIGHT_CHAIN_X} ${layout.upperTop} V ${layout.upperBottom}`}
         strokeWidth={DIMENSION_STROKE_WIDTH}
       />
-      <text
-        data-height-label="upper"
-        x="49"
+      <DimensionValue
+        value={profile.upperHeightSixteenths}
+        x={PROFILE_HEIGHT_CHAIN_X}
         y={(layout.upperTop + layout.upperBottom) / 2}
-        textAnchor="middle"
-        fontSize={DIMENSION_FONT_SIZE}
-        fontWeight="bold"
-        fill={DIMENSION_COLOR}
-        stroke="none"
-        transform={`rotate(-90 49 ${(layout.upperTop + layout.upperBottom) / 2})`}
-      >
-        {formatSixteenths(profile.upperHeightSixteenths)}
-      </text>
+        vertical
+        attribute="data-height-label"
+        id="upper"
+      />
     </g>
   );
 }
@@ -950,6 +1151,7 @@ function CounterBand({
   placed.sort((a, b) => a.start - b.start);
 
   const bands: { start: number; end: number }[] = [];
+  const slabs: { start: number; end: number }[] = [];
   for (const item of placed) {
     if (!hasCountertop(item.segment, fixedPoints)) continue;
     const previous = bands[bands.length - 1];
@@ -958,12 +1160,34 @@ function CounterBand({
     } else {
       bands.push({ start: item.start, end: item.end });
     }
+
+    if (!hasCountertopSlabShadow(item.segment, fixedPoints)) continue;
+    const previousSlab = slabs[slabs.length - 1];
+    if (previousSlab && Math.abs(previousSlab.end - item.start) < 0.5) {
+      previousSlab.end = item.end;
+    } else {
+      slabs.push({ start: item.start, end: item.end });
+    }
   }
   if (bands.length === 0) return null;
 
   const thickness = layout.baseBodyTop - layout.baseTop;
   return (
     <g data-elevation-layer="countertop" className="pointer-events-none">
+      {thickness > 0 &&
+        slabs.map((slab, index) => (
+          <rect
+            key={`slab-${index}`}
+            data-countertop-slab={index}
+            x={slab.start}
+            y={layout.baseTop}
+            width={Math.max(1, slab.end - slab.start)}
+            height={thickness}
+            fill={COUNTER_SLAB_FILL}
+            stroke={COUNTER_SLAB_STROKE}
+            strokeWidth="1"
+          />
+        ))}
       {bands.map((band, index) => {
         const left = Math.max(RUN_LEFT, band.start - COUNTER_END_OVERHANG_PX);
         const right = Math.min(
@@ -972,17 +1196,6 @@ function CounterBand({
         );
         return (
           <g key={index} data-countertop-band={index}>
-            {thickness > 0 && (
-              <rect
-                x={left}
-                y={layout.baseTop}
-                width={Math.max(1, right - left)}
-                height={thickness}
-                fill={COUNTER_SLAB_FILL}
-                stroke={COUNTER_SLAB_STROKE}
-                strokeWidth="1"
-              />
-            )}
             <line
               data-countertop-band={index}
               x1={left}
@@ -1001,8 +1214,8 @@ function CounterBand({
 
 /**
  * Tall units (refrigerator, oven/pantry towers) run floor-to-cabinet-top with
- * no counter/upper split, so each gets its own overall height dimension drawn
- * inside its column — mirroring the A-sheet.
+ * no counter/upper split, so each gets its own external overall-height
+ * dimension lane.
  */
 function TallUnitHeights({
   base,
@@ -1034,8 +1247,7 @@ function TallUnitHeights({
           segment,
           fridgeAboveHeights
         );
-        const x = TALL_HEIGHT_CHAIN_X - tallLane * 12;
-        const labelX = TALL_HEIGHT_LABEL_X - tallLane * 12;
+        const x = TALL_HEIGHT_CHAIN_X - tallLane * TALL_HEIGHT_LANE_STEP;
         tallLane += 1;
         const fridgeTop =
           aboveHeight == null
@@ -1058,18 +1270,14 @@ function TallUnitHeights({
                 d={`M ${x - 4} ${top} H ${x + 4} M ${x - 4} ${bottom} H ${x + 4} M ${x} ${top} V ${bottom}`}
                 strokeWidth={DIMENSION_STROKE_WIDTH}
               />
-              <text
-                {...(labelAttr ? { "data-tall-height-label": labelAttr } : {})}
-                x={labelX}
+              <DimensionValue
+                value={heightSixteenths}
+                x={x}
                 y={mid}
-                textAnchor="middle"
-                fontSize={DIMENSION_FONT_SIZE}
-                fontWeight="bold"
-                transform={`rotate(-90 ${labelX} ${mid})`}
-                stroke="none"
-              >
-                {formatSixteenths(heightSixteenths)}
-              </text>
+                vertical
+                attribute={labelAttr ? "data-tall-height-label" : undefined}
+                id={labelAttr}
+              />
             </g>
           );
         };
@@ -1125,25 +1333,20 @@ function SinkUpperHeights({
         const top = layout.upperTop;
         const bottom = top + heightSixteenths * layout.scale;
         const mid = (top + bottom) / 2;
-        const labelX = chainX - 9;
         return (
           <g key={`sink-upper-${segment.id}`}>
             <path
               d={`M ${chainX - 4} ${top} H ${chainX + 4} M ${chainX - 4} ${bottom} H ${chainX + 4} M ${chainX} ${top} V ${bottom}`}
               strokeWidth={DIMENSION_STROKE_WIDTH}
             />
-            <text
-              data-sink-upper-height={segment.id}
-              x={labelX}
+            <DimensionValue
+              value={heightSixteenths}
+              x={chainX}
               y={mid}
-              textAnchor="middle"
-              fontSize={DIMENSION_FONT_SIZE}
-              fontWeight="bold"
-              transform={`rotate(-90 ${labelX} ${mid})`}
-              stroke="none"
-            >
-              {formatSixteenths(heightSixteenths)}
-            </text>
+              vertical
+              attribute="data-sink-upper-height"
+              id={segment.id}
+            />
           </g>
         );
       })}
@@ -1188,12 +1391,6 @@ function ElevationRun({
     (segment) => (Math.max(0, segment.widthSixteenths) / total) * RUN_WIDTH
   );
   const centers = runSegmentCenters(widthsPx, mirrored);
-  const chainPlacements = placeRunChainLabels(
-    segments,
-    centers,
-    segments.map(carriesChainLabel),
-    labelSide
-  );
   const breakdownParts = segments.map((segment, index) => {
     const atLeft = cornerBreakdownSide(
       segment,
@@ -1213,6 +1410,17 @@ function ElevationRun({
     );
   });
   const breakdownPlacements = placeCornerBreakdownLabels(breakdownParts);
+  const chainPlacements = placeRunChainLabels(
+    segments,
+    centers,
+    widthsPx,
+    segments.map(carriesChainLabel),
+    labelSide
+  );
+  const breakdownGuideY = cornerBreakdownGuideY(
+    labelSide,
+    stackedChainReach(segments, chainPlacements)
+  );
   const labelClipIdPrefix = useId().replaceAll(":", "");
   let cursor = 0;
 
@@ -1238,7 +1446,8 @@ function ElevationRun({
           cornerReturns
         );
         if (cornerReturn) {
-          const guideY = widthChainGuideY(labelSide, segment.tier);
+          const chainPlacement = chainPlacements.get(segment.id);
+          const chainLabelCenter = chainPlacement?.center ?? centers[index];
           return (
             <g
               key={segment.id}
@@ -1267,11 +1476,11 @@ function ElevationRun({
               <g data-elevation-layer="width-chain">
                 <path
                   data-chain-guide={segment.id}
-                  d={
-                    labelSide === "above"
-                      ? `M ${x} ${guideY} V ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
-                      : `M ${x} ${guideY} V ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
-                  }
+                  data-chain-stacked={chainPlacement?.stacked ?? false}
+                  data-chain-segment-start={x}
+                  data-chain-segment-end={x + width}
+                  data-chain-label-x={chainLabelCenter}
+                  d={widthChainGuidePath(x, width, labelSide, segment.tier)}
                   stroke={DIMENSION_COLOR}
                   strokeWidth={DIMENSION_STROKE_WIDTH}
                   fill="none"
@@ -1280,7 +1489,7 @@ function ElevationRun({
                 <ChainWidthLabel
                   segment={segment}
                   segmentCenter={centers[index]}
-                  placement={chainPlacements.get(segment.id)}
+                  placement={chainPlacement}
                   labelSide={labelSide}
                 />
               </g>
@@ -1292,6 +1501,7 @@ function ElevationRun({
                   parts={breakdownParts[index]!}
                   placements={breakdownPlacements[index]}
                   labelSide={labelSide}
+                  guideY={breakdownGuideY}
                 />
               )}
             </g>
@@ -1314,6 +1524,9 @@ function ElevationRun({
             : resolveSegmentFront(segment, designIntent);
         const role = resolveSegmentRole(segment, { fixedPoints });
         const roleTag = role ? SEGMENT_ROLE_TAGS[role] : null;
+        const trashPulloutTag = front?.accessories.includes("trashPullout")
+          ? "TP"
+          : null;
         const isWindow =
           segment.kind === "opening" &&
           fixedPoints.find((point) => point.id === segment.sourceFixedPointId)
@@ -1329,7 +1542,8 @@ function ElevationRun({
                 CABINET_STANDARDS.depths.baseSixteenths * (RUN_WIDTH / total)
               )
             : 0;
-        const guideY = widthChainGuideY(labelSide, segment.tier);
+        const chainPlacement = chainPlacements.get(segment.id);
+        const chainLabelCenter = chainPlacement?.center ?? centers[index];
         return (
           <g
             key={segment.id}
@@ -1361,15 +1575,6 @@ function ElevationRun({
               strokeDasharray={intentionalGap ? "6 4" : undefined}
               className={selected ? undefined : PAIR_HIGHLIGHT_BODY}
             />
-            {segment.kind === "panel" && (
-              <PanelHatch
-                x={x}
-                y={y}
-                width={Math.max(8, width)}
-                height={height}
-                clipId={clipId}
-              />
-            )}
             {front && hostedCornerEnd == null && (
               <SegmentFace
                 x={x}
@@ -1422,9 +1627,9 @@ function ElevationRun({
                 stroke={CABINET_FACE_STROKE}
               />
             )}
-            {roleTag && width >= 26 && (
+            {(roleTag || trashPulloutTag) && width >= 26 && (
               <text
-                data-role-tag={role}
+                data-role-tag={role ?? "trashPullout"}
                 x={x + width / 2}
                 y={y + height / 2 + 18}
                 textAnchor="middle"
@@ -1434,18 +1639,18 @@ function ElevationRun({
                 fill="#5d6b64"
                 clipPath={`url(#${clipId})`}
               >
-                {roleTag}
+                {roleTag ?? trashPulloutTag}
               </text>
             )}
             {(segment.kind !== "gap" || intentionalGap) && (
               <g data-elevation-layer="width-chain">
                 <path
                   data-chain-guide={segment.id}
-                  d={
-                    labelSide === "above"
-                      ? `M ${x} ${guideY} V ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY + WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
-                      : `M ${x} ${guideY} V ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} M ${x} ${guideY} H ${x + width} M ${x + width} ${guideY - WIDTH_CHAIN_EXTENSION_LENGTH} V ${guideY}`
-                  }
+                  data-chain-stacked={chainPlacement?.stacked ?? false}
+                  data-chain-segment-start={x}
+                  data-chain-segment-end={x + width}
+                  data-chain-label-x={chainLabelCenter}
+                  d={widthChainGuidePath(x, width, labelSide, segment.tier)}
                   stroke={DIMENSION_COLOR}
                   strokeWidth={DIMENSION_STROKE_WIDTH}
                   fill="none"
@@ -1454,7 +1659,7 @@ function ElevationRun({
                 <ChainWidthLabel
                   segment={segment}
                   segmentCenter={centers[index]}
-                  placement={chainPlacements.get(segment.id)}
+                  placement={chainPlacement}
                   labelSide={labelSide}
                 />
               </g>
@@ -1467,6 +1672,7 @@ function ElevationRun({
                 parts={breakdownParts[index]!}
                 placements={breakdownPlacements[index]}
                 labelSide={labelSide}
+                guideY={breakdownGuideY}
               />
             )}
             {lastAbsorbed?.segmentId === segment.id && (
@@ -1587,7 +1793,8 @@ function CornerHostBreakdownDimensions({
   width,
   parts,
   placements,
-  labelSide
+  labelSide,
+  guideY
 }: {
   segmentId: string;
   x: number;
@@ -1595,9 +1802,9 @@ function CornerHostBreakdownDimensions({
   parts: CornerBreakdownParts;
   placements: CornerBreakdownPlacements;
   labelSide: "above" | "below";
+  guideY: number;
 }) {
-  const guideY = cornerBreakdownGuideY(labelSide);
-  const labelY = cornerBreakdownLabelY(labelSide);
+  const labelY = guideY;
   const tickEndY = guideY + (labelSide === "above" ? WIDTH_CHAIN_EXTENSION_LENGTH : -WIDTH_CHAIN_EXTENSION_LENGTH);
   const slots = [
     { slot: "first" as const, part: parts.first, placement: placements.first },
@@ -1621,37 +1828,16 @@ function CornerHostBreakdownDimensions({
       />
       {slots.map(({ slot, part, placement }) => {
         if (part.width <= 0 || !placement) return null;
-        const text = formatSixteenths(part.sixteenths);
         return (
           <g key={slot}>
-            {placement.shifted && (
-              <path
-                data-corner-breakdown-leader={slot}
-                d={chainLeaderPath(
-                  part.center,
-                  placement.center,
-                  measureDimensionLabel(text, DIMENSION_FONT_SIZE),
-                  guideY,
-                  labelY,
-                  labelSide
-                )}
-                strokeWidth={LEADER_STROKE_WIDTH}
-                fill="none"
-                className={PAIR_HIGHLIGHT_LEADER}
-              />
-            )}
-            <text
-              data-corner-breakdown-label={slot}
+            <DimensionValue
+              value={part.sixteenths}
               x={placement.center}
               y={labelY}
-              textAnchor="middle"
-              fontSize={DIMENSION_FONT_SIZE}
-              fontWeight="bold"
-              stroke="none"
+              attribute="data-corner-breakdown-label"
+              id={slot}
               className={PAIR_HIGHLIGHT_TEXT}
-            >
-              {text}
-            </text>
+            />
           </g>
         );
       })}
@@ -1659,14 +1845,22 @@ function CornerHostBreakdownDimensions({
   );
 }
 
-/** The sectional chain sits one row outside the width chain it belongs to. */
-function cornerBreakdownGuideY(labelSide: "above" | "below"): number {
-  return labelSide === "above" ? UPPER_CHAIN_LABEL_Y + 27 : FLOOR_Y + 34;
-}
-
-function cornerBreakdownLabelY(labelSide: "above" | "below"): number {
-  const guideY = cornerBreakdownGuideY(labelSide);
-  return labelSide === "above" ? guideY - 5 : guideY + 10;
+/**
+ * The sectional chain sits one row outside the width chain it belongs to, and
+ * beyond whatever numbers that chain has stacked into the same gutter.
+ */
+function cornerBreakdownGuideY(
+  labelSide: "above" | "below",
+  stackedReach = 0
+): number {
+  if (labelSide === "above") return UPPER_CHAIN_LABEL_Y + 27;
+  return Math.min(
+    ELEVATION_VIEWBOX_TOP + ELEVATION_VIEWBOX_HEIGHT - 12,
+    Math.max(
+      widthChainGuideY("below", "base") + 32,
+      widthChainGuideY("below", "base") + stackedReach + STACKED_LABEL_LEAD
+    )
+  );
 }
 
 type CornerBreakdownPart = {
@@ -1960,15 +2154,6 @@ function CornerReturnSection({
       )}
       {isBase ? (
         <>
-          <line
-            data-corner-return-counter="true"
-            x1={x}
-            y1={y}
-            x2={x + width}
-            y2={y}
-            stroke="#1d1d1b"
-            strokeWidth="2"
-          />
           <path
             data-corner-return-profile="true"
             d={profilePath}
@@ -1988,56 +2173,6 @@ function CornerReturnSection({
           stroke={CORNER_SECTION_COLOR}
           strokeWidth="1.5"
         />
-      )}
-    </g>
-  );
-}
-
-/** Diagonal hatch + label marking a finished panel (见光板) in the elevation. */
-function PanelHatch({
-  x,
-  y,
-  width,
-  height,
-  clipId
-}: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  clipId: string;
-}) {
-  const step = 7;
-  const count = Math.ceil((width + height) / step);
-  return (
-    <g clipPath={`url(#${clipId})`} className="pointer-events-none">
-      {Array.from({ length: count }).map((_, index) => {
-        const offset = index * step;
-        return (
-          <line
-            key={index}
-            x1={x + offset}
-            y1={y}
-            x2={x + offset - height}
-            y2={y + height}
-            stroke="#b7a6c4"
-            strokeWidth="0.6"
-          />
-        );
-      })}
-      {width >= 26 && (
-        <text
-          x={x + width / 2}
-          y={y + height / 2}
-          textAnchor="middle"
-          transform={`rotate(-90 ${x + width / 2} ${y + height / 2})`}
-          fontFamily="var(--studio-mono)"
-          fontSize="9"
-          letterSpacing="0.1em"
-          fill="#6c5b78"
-        >
-          PANEL
-        </text>
       )}
     </g>
   );
@@ -2094,8 +2229,49 @@ function SegmentFace({
     faceHeight = height - falseFrontHeight;
     extraLines = (
       <line x1={x + 3} y1={faceY} x2={x + width - 3} y2={faceY} stroke={accent} strokeWidth="1" fill="none" />
+      );
+  }
+
+  // A trash pull-out is a single continuous front with a centered top pull,
+  // not a hinged door. Keep it visually distinct from the standard door
+  // notation while leaving its accessory data intact for the editor/schedule.
+  if (front.accessories.includes("trashPullout")) {
+    const handleWidth = Math.min(56, Math.max(24, width * 0.34));
+    const handleHeight = Math.min(7, Math.max(4, faceHeight * 0.055));
+    const handleX = x + (width - handleWidth) / 2;
+    const handleY = faceY + Math.min(12, Math.max(5, faceHeight * 0.06));
+
+    return (
+      <g data-face="trash-pullout" stroke={accent} strokeWidth="1" fill="none">
+        {extraLines}
+        {front.hardware === "handle" ? (
+          <rect
+            data-trash-pullout-handle="true"
+            x={handleX}
+            y={handleY}
+            width={handleWidth}
+            height={handleHeight}
+            rx={handleHeight / 2}
+            fill="#1d1d1b"
+            stroke="none"
+          />
+        ) : (
+          <line
+            data-trash-pullout-handle="true"
+            x1={handleX}
+            y1={handleY + handleHeight / 2}
+            x2={handleX + handleWidth}
+            y2={handleY + handleHeight / 2}
+            stroke="#1d1d1b"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        )}
+        <AccessoryTag x={x} y={faceY} front={front} />
+      </g>
     );
   }
+
   if (front.drawerStack.length > 0) {
     const totalUnits = front.drawerStack.reduce((sum, unit) => sum + unit, 0);
     let offset = 0;
@@ -2156,7 +2332,6 @@ function SegmentFace({
 }
 
 const ACCESSORY_TAGS: Record<string, string> = {
-  trashPullout: "TP",
   spicePullout: "SP",
   lazySusan: "LS",
   magicCorner: "MC",
@@ -2174,8 +2349,13 @@ function AccessoryTag({
   front: ResolvedFront;
 }) {
   if (front.accessories.length === 0) return null;
+  const displayedAccessories = front.accessories.filter(
+    (item) => item !== "trashPullout"
+  );
+  if (displayedAccessories.length === 0) return null;
   return (
     <text
+      data-accessory-tag={displayedAccessories.join("·")}
       x={x + 4}
       y={y + 11}
       fontFamily="var(--studio-mono)"
@@ -2183,7 +2363,9 @@ function AccessoryTag({
       fill="#7a5b00"
       stroke="none"
     >
-      {front.accessories.map((item) => ACCESSORY_TAGS[item] ?? item).join("·")}
+      {displayedAccessories
+        .map((item) => ACCESSORY_TAGS[item] ?? item)
+        .join("·")}
     </text>
   );
 }
@@ -2218,6 +2400,29 @@ export const KIND_OPTIONS: { value: CabinetKind; label: string }[] = [
   { value: "base", label: "Base" },
   { value: "tall", label: "Tall" }
 ];
+
+/** Human-readable name shown in the segment editor header. */
+export function segmentEditorName(
+  segment: WallSegment,
+  front: ResolvedFront | null
+): string {
+  if (front?.accessories.includes("trashPullout")) return "trash pullout";
+  if (front?.accessories.includes("spicePullout")) return "spice pullout";
+  if (segment.cabinetKind === "corner") return "转角柜";
+  if (segment.tier === "upper" || segment.cabinetKind === "upper") {
+    return "吊柜";
+  }
+  if (segment.cabinetKind === "tall") return "高柜";
+  if (segment.cabinetKind === "base" || segment.cabinetKind === "sink") {
+    return "地柜";
+  }
+  if (segment.kind === "panel") return "见光板";
+  if (segment.kind === "filler") return "填充板";
+  if (segment.kind === "gap") return "开放空间";
+  if (segment.kind === "opening") return "开口";
+  if (segment.kind === "appliance") return "电器";
+  return "柜子";
+}
 
 export function canEditSegmentKind(segment: WallSegment): boolean {
   return (
@@ -2322,8 +2527,7 @@ function SegmentEditorCard({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-[10px] font-semibold">
-          SELECTED UNIT ·{" "}
-          {formatSixteenths(segment.widthSixteenths)}
+          {segmentEditorName(segment, front)} - {formatSixteenths(segment.widthSixteenths)}
         </span>
         <div className="flex items-center gap-1.5">
           {isFiller && (
@@ -2672,7 +2876,9 @@ function SegmentEditorCard({
 
 export const CORNER_STRATEGY_OPTIONS: { value: CornerStrategy; label: string }[] = [
   { value: "lazySusan", label: "Lazy Susan" },
-  { value: "blindBase", label: "Blind base" },
+  { value: "diagonalCorner", label: "Diagonal Corner" },
+  { value: "leMans", label: "LeMans" },
+  { value: "blindBase", label: "Blind · none" },
   { value: "magicCorner", label: "Magic Corner" },
   { value: "blindCornerPullOut", label: "Blind pull-out" },
   { value: "cornerPullOutShelves", label: "Pull-out shelves" }
@@ -2874,6 +3080,8 @@ function inferCornerStrategy(segment: WallSegment): CornerStrategy {
   if (accessories.includes("blindCornerPullOut")) return "blindCornerPullOut";
   if (accessories.includes("cornerPullOutShelves")) return "cornerPullOutShelves";
   if ((segment.code ?? segment.label).startsWith("LS")) return "lazySusan";
+  if ((segment.code ?? segment.label).startsWith("DC")) return "diagonalCorner";
+  if ((segment.code ?? segment.label).startsWith("LM")) return "leMans";
   if ((segment.code ?? segment.label).startsWith("BB")) return "blindBase";
   return "lazySusan";
 }

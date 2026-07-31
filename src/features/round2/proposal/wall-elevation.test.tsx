@@ -8,13 +8,57 @@ import {
   canEditSegmentKind,
   CORNER_STRATEGY_OPTIONS,
   KIND_OPTIONS,
-  WallElevation
+  WallElevation,
+  segmentEditorName
 } from "./wall-elevation";
 
-/** Ink above the baseline of an 11px dimension number. */
-const DIMENSION_CAP_HEIGHT = 8;
-
 describe("WallElevation", () => {
+  test("uses the cabinet name and width in the segment editor title", () => {
+    expect(
+      segmentEditorName(
+        {
+          ...cabinet("wall-cabinet", 36 * 16),
+          tier: "upper",
+          cabinetKind: "upper"
+        },
+        null
+      )
+    ).toBe("吊柜");
+    expect(
+      segmentEditorName(
+        cabinet("trash-pullout", 36 * 16),
+        {
+          doorCount: 1,
+          drawerStack: [],
+          hardware: "handle",
+          accessories: ["trashPullout"]
+        }
+      )
+    ).toBe("trash pullout");
+    expect(
+      segmentEditorName(
+        {
+          ...cabinet("corner-cabinet", 36 * 16),
+          cabinetKind: "corner"
+        },
+        null
+      )
+    ).toBe("转角柜");
+
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel()}
+        selectedObjectId="a-base-1"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    expect(html).toContain("地柜 - 30″");
+    expect(html).not.toContain("SELECTED UNIT ·");
+  });
+
   test("keeps the editor header on a solid background above the grid", () => {
     const html = render(elevationModel());
 
@@ -58,6 +102,26 @@ describe("WallElevation", () => {
     expect(html).toContain('data-face="drawers"');
   });
 
+  test("renders the trash pull-out TP shorthand on the elevation", () => {
+    const html = render(
+      elevationModel([
+        {
+          ...cabinet("a-trash-pullout", 30 * 16),
+          label: "WB30",
+          front: { accessories: ["trashPullout"] }
+        }
+      ])
+    );
+
+    expect(html).toContain(">TP<");
+    expect(html).toContain('data-role-tag="trashPullout"');
+    expect(html).not.toContain('data-accessory-tag="trashPullout"');
+    expect(html).toContain('data-face="trash-pullout"');
+    expect(html).toContain('data-trash-pullout-handle="true"');
+    expect(html).not.toContain('data-face="single-door"');
+    expect(html).not.toContain('stroke-dasharray="6 4"');
+  });
+
   test("exposes every run segment as a clickable width-chain label", () => {
     const model = elevationModel();
     const html = render(model);
@@ -86,7 +150,7 @@ describe("WallElevation", () => {
     expect(overlappingChainLabels(html)).toEqual([]);
   });
 
-  test("leads a moved chain label back to the segment it dimensions", () => {
+  test("leads a stacked chain label back to its board plumb, never diagonally", () => {
     const model = elevationModel([
       cabinet("wide-1", 36 * 16),
       cabinet("strip-1", 12, "filler"),
@@ -94,21 +158,24 @@ describe("WallElevation", () => {
       cabinet("wide-2", 36 * 16)
     ]);
     const html = render(model);
+    const leaders = [
+      ...html.matchAll(
+        /<line data-chain-leader="([^"]+)" x1="([^"]+)" y1="([^"]+)" x2="([^"]+)"/g
+      )
+    ];
 
-    // A label that left its midpoint carries a leader; one that never moved
-    // stays bare, so leaders only appear where they are earning their ink.
-    expect(html).toContain('data-chain-leader="strip-1"');
-    expect(html).toContain('data-chain-leader="strip-2"');
-    expect(html).not.toContain('data-chain-leader="wide-1"');
-
-    const leader = tagFor(html, "path", 'data-chain-leader="strip-1"');
-    const from = leader.match(/d="M ([\d.]+) /);
-    expect(Number(from?.[1])).toBeCloseTo(chainGuideMidX(html, "strip-1"), 1);
+    // The two strips are too close to share a row, so the outer one is led
+    // back to its board — straight down its own centreline, never at an angle.
+    expect(leaders.length).toBeGreaterThan(0);
+    for (const [, id, x1, , x2] of leaders) {
+      expect(Number(x1)).toBe(Number(x2));
+      expect(Number(x1)).toBeCloseTo(chainGuideMidX(html, id), 5);
+    }
   });
 
   test("keeps every dimension on the drawing when a run is crowded", () => {
-    // Twelve 1 1/2″ strips cannot fit on one row at any placement; they spill
-    // to a second row rather than losing a number.
+    // Twelve 1 1/2″ strips cannot fit on one row at their true centres; they
+    // stack down their own columns rather than losing a number.
     const model = elevationModel([
       cabinet("wide-1", 60 * 16),
       ...Array.from({ length: 12 }, (_, index) =>
@@ -123,15 +190,34 @@ describe("WallElevation", () => {
     }
     expect(overlappingChainLabels(html)).toEqual([]);
 
-    const rows = [...new Set(chainLabelBoxes(html).map((box) => box.y))].sort(
-      (a, b) => a - b
-    );
-    expect(rows).toHaveLength(2);
-    // The spill row stacks toward the overall chain, so it has to clear that
-    // rule — otherwise the numbers are legible but struck through.
-    const overallRule = tagFor(html, "path", 'data-chain-guide="overall"');
-    const rule = Number(overallRule.match(/M [\d.]+ ([\d.]+) H/)?.[1]);
-    expect(rows[0] - DIMENSION_CAP_HEIGHT).toBeGreaterThan(rule);
+    // The stack stays on the sheet. A run this crowded runs out of rows before
+    // it runs out of strips, and only then may the leftovers slide off their
+    // own board — the run below covers the alignment a real wall gets.
+    for (const box of chainLabelBoxes(html)) {
+      expect(box.bottom).toBeLessThanOrEqual(-36 + 560);
+    }
+  });
+
+  test("keeps a run of narrow boards each on its own centreline", () => {
+    // Three 1 1/2″ strips back to back — a panel between two fillers — is tight
+    // enough to need stacking, and every number still hangs plumb over its own
+    // board rather than sliding along the chain.
+    const model = elevationModel([
+      cabinet("wide-1", 60 * 16),
+      ...Array.from({ length: 3 }, (_, index) =>
+        cabinet(`strip-${index}`, 24, "filler")
+      ),
+      cabinet("wide-2", 60 * 16)
+    ]);
+    const html = render(model);
+
+    for (const segment of model.walls[0].segments) {
+      expect(chainLabelPlacementX(html, segment.id)).toBeCloseTo(
+        chainGuideMidX(html, segment.id),
+        5
+      );
+    }
+    expect(overlappingChainLabels(html)).toEqual([]);
   });
 
   test("pairs a dimension with its cabinet on hover and on selection", () => {
@@ -171,7 +257,7 @@ describe("WallElevation", () => {
     expect(labelY).toBeLessThanOrEqual(upperTop - 14);
   });
 
-  test("puts upper dimensions above and base dimensions below the elevation", () => {
+  test("centres upper and base dimensions on their own chain lines", () => {
     const html = render(
       elevationModel([
         { ...cabinet("upper-row", 36 * 16), tier: "upper" },
@@ -180,9 +266,9 @@ describe("WallElevation", () => {
       ])
     );
 
-    expect(chainLabelY(html, "upper-row")).toBe(42);
-    expect(chainLabelY(html, "base-row")).toBe(416);
-    expect(chainLabelY(html, "full-row")).toBe(416);
+    expect(chainLabelY(html, "upper-row")).toBe(chainGuideY(html, "upper-row"));
+    expect(chainLabelY(html, "base-row")).toBe(chainGuideY(html, "base-row"));
+    expect(chainLabelY(html, "full-row")).toBe(chainGuideY(html, "full-row"));
   });
 
   test("keeps overall and upper dimensions above the ceiling line", () => {
@@ -198,6 +284,7 @@ describe("WallElevation", () => {
     expect(overallLabelY(html)).toBeLessThan(30);
     expect(overallGuideY(html)).toBeLessThan(40);
     expect(chainLabelY(html, "upper-center")).toBeLessThan(50);
+    expect(chainGuideY(html, "upper-center") - overallGuideY(html)).toBe(35);
     expect(chainGuideTick(html, "upper-center").endY).toBeLessThan(ceiling);
   });
 
@@ -205,7 +292,7 @@ describe("WallElevation", () => {
     const html = renderCornerModel("A", { includeUpperCorner: true });
     const elevation = tagFor(html, "svg", 'role="img"');
 
-    expect(elevation).toContain('viewBox="-35 -36 690 502"');
+    expect(elevation).toContain('viewBox="-125 -36 780 560"');
   });
 
   test("keeps all three upper corner dimension rows above the ceiling line", () => {
@@ -237,7 +324,7 @@ describe("WallElevation", () => {
     expect(baseTick.endY).toBeLessThan(baseTick.startY);
   });
 
-  test("keeps upper cabinet width-chain labels on one baseline", () => {
+  test("steps an undersized upper dimension out onto its own row", () => {
     const model = elevationModel([
       { ...cabinet("upper-left", 33 * 16), tier: "upper" },
       { ...cabinet("upper-filler", 3 * 16, "filler"), tier: "upper" },
@@ -245,15 +332,105 @@ describe("WallElevation", () => {
       { ...cabinet("upper-right", 24 * 16), tier: "upper" }
     ]);
     const html = render(model);
+    const boxes = new Map(chainLabelBoxes(html).map((box) => [box.id, box]));
+    const primaryY = chainLabelY(html, "upper-left");
 
-    const labelYs = [
-      chainLabelY(html, "upper-left"),
-      chainLabelY(html, "upper-filler"),
-      chainLabelY(html, "upper-center"),
-      chainLabelY(html, "upper-right")
-    ];
+    expect(chainLabelY(html, "upper-center")).toBe(primaryY);
+    expect(chainLabelY(html, "upper-right")).toBe(primaryY);
+    // The 3″ filler cannot hold its own number, so the number steps above the
+    // chain rule — upright, and still plumb over the board it measures.
+    expect(boxes.get("upper-filler")?.bottom).toBeLessThan(
+      chainGuideY(html, "upper-filler")
+    );
+    expect(chainLabelPlacementX(html, "upper-filler")).toBeCloseTo(
+      chainGuideMidX(html, "upper-filler"),
+      5
+    );
+    expect(
+      tagFor(html, "text", 'data-chain-label="upper-filler"')
+    ).not.toContain("rotate");
+  });
 
-    expect(new Set(labelYs).size).toBe(1);
+  test("keeps adjacent narrow dimensions vertically aligned to their boards", () => {
+    const model = elevationModel([
+      cabinet("base-filler-left", 12, "filler"),
+      {
+        ...cabinet("base-fridge", 36 * 16, "appliance"),
+        cabinetKind: "tall"
+      },
+      cabinet("base-filler-middle", 12, "filler"),
+      cabinet("base-wide", 36 * 16),
+      cabinet("base-right", 34 * 16 + 8),
+      cabinet("base-nine", 9 * 16),
+      cabinet("base-two-quarter", 36, "filler"),
+      cabinet("base-three-quarter", 12, "filler"),
+      {
+        ...cabinet("upper-offset", 37 * 16 + 8, "gap"),
+        tier: "upper"
+      },
+      { ...cabinet("upper-wide", 36 * 16), tier: "upper" },
+      { ...cabinet("upper-nine", 9 * 16), tier: "upper" },
+      { ...cabinet("upper-narrow", 24, "filler"), tier: "upper" },
+      { ...cabinet("upper-twelve", 12 * 16), tier: "upper" },
+      { ...cabinet("upper-right", 24 * 16), tier: "upper" }
+    ]);
+    const html = render(model);
+    const boxes = new Map(chainLabelBoxes(html).map((box) => [box.id, box]));
+
+    for (const id of ["base-filler-left", "base-filler-middle"]) {
+      const box = boxes.get(id);
+      expect(box).toBeDefined();
+      expect(chainLabelPlacementX(html, id)).toBeCloseTo(
+        chainGuideMidX(html, id),
+        5
+      );
+      // The number sits below the chain rule its board's ticks close on, and
+      // stays upright while it does.
+      expect(box?.top).toBeGreaterThan(chainGuideY(html, id));
+      expect(tagFor(html, "text", `data-chain-label="${id}"`)).not.toContain(
+        "rotate"
+      );
+    }
+
+    const twoQuarterGuide = tagFor(
+      html,
+      "path",
+      'data-chain-guide="base-two-quarter"'
+    );
+    const threeQuarterGuide = tagFor(
+      html,
+      "path",
+      'data-chain-guide="base-three-quarter"'
+    );
+    const twoQuarterSpan = chainGuideSegmentSpan(html, "base-two-quarter");
+    const threeQuarterSpan = chainGuideSegmentSpan(
+      html,
+      "base-three-quarter"
+    );
+
+    // Two boards back to back: each number stays plumb over its own board and
+    // the second stacks below the first instead of sliding along the chain.
+    expect(chainLabelPlacementX(html, "base-two-quarter")).toBeCloseTo(
+      (twoQuarterSpan.start + twoQuarterSpan.end) / 2,
+      5
+    );
+    expect(chainLabelPlacementX(html, "base-three-quarter")).toBeCloseTo(
+      (threeQuarterSpan.start + threeQuarterSpan.end) / 2,
+      5
+    );
+    expect(twoQuarterGuide).not.toContain("data-chain-callout");
+    expect(threeQuarterGuide).not.toContain("data-chain-callout");
+    expect(twoQuarterSpan.end).toBeCloseTo(threeQuarterSpan.start, 5);
+    expect(twoQuarterGuide).not.toMatch(/\sL\s/);
+    expect(threeQuarterGuide).not.toMatch(/\sL\s/);
+    expect(boxes.get("base-two-quarter")?.top).not.toBe(
+      boxes.get("base-three-quarter")?.top
+    );
+
+    expect(boxes.get("upper-narrow")?.bottom).toBeLessThan(
+      chainLabelY(html, "upper-nine")
+    );
+    expect(overlappingChainLabels(html)).toEqual([]);
   });
 
   test("draws width-chain guide linework for unstaggered upper and lower labels", () => {
@@ -273,10 +450,20 @@ describe("WallElevation", () => {
   test("extends every horizontal dimension guide endpoint by eight SVG units", () => {
     const html = renderCornerModel("A", { includeUpperCorner: true });
 
-    expect(tagFor(html, "path", 'data-chain-guide="overall"')).toContain("V 29");
+    expect(tagFor(html, "path", 'data-chain-guide="overall"')).toContain(
+      "M 40 4 V 20"
+    );
     expect(tagFor(html, "path", 'data-chain-guide="a-upper-corner-ls"')).toMatch(/V 55/);
     expect(tagFor(html, "path", 'data-chain-guide="a-corner-ls"')).toMatch(/V 398/);
     expect(tagFor(html, "path", 'data-corner-breakdown-guide="a-upper-corner-ls"')).toMatch(/V 77/);
+
+    const baseBreakdown = tagFor(
+      html,
+      "path",
+      'data-corner-breakdown-guide="a-corner-ls"'
+    );
+    const baseBreakdownY = Number(baseBreakdown.match(/d="M [\d.]+ ([\d.]+)/)?.[1]);
+    expect(baseBreakdownY - chainGuideY(html, "a-corner-ls")).toBe(32);
   });
 
   test("mirrors left-wall elevations so the upper corner reads on the right", () => {
@@ -309,6 +496,39 @@ describe("WallElevation", () => {
     expect(html).toMatch(/data-elevation-layer="height-chain"[\s\S]*font-size="11"/);
   });
 
+  test("shows a fractional dimension as a stacked numerator and denominator", () => {
+    const model = elevationModel([
+      cabinet("fractional-filler", 20 * 16 + 4, "filler"),
+      cabinet("remainder", 40 * 16 - 4)
+    ]);
+    const html = render(model);
+    const attributeStart = html.indexOf('data-chain-label="fractional-filler"');
+    const labelStart = html.lastIndexOf("<text", attributeStart);
+    const label = html.slice(labelStart, html.indexOf("</text>", attributeStart) + 7);
+
+    expect(label).toContain('data-dimension-value="20 1/4″"');
+    expect(label).toContain('data-dimension-numerator="true"');
+    expect(label).toContain('data-dimension-denominator="true"');
+    expect(html).toContain('data-dimension-fraction-bar="true"');
+    expect(label).not.toContain(">20 1/4″</text>");
+  });
+
+  test("centres overall and vertical values on their dimension lines", () => {
+    const html = render(elevationModel());
+    const overall = tagFor(html, "text", 'data-chain-label="overall"');
+
+    expect(Number(overall.match(/\sy="([^"]+)"/)?.[1])).toBe(
+      overallGuideY(html)
+    );
+    const ceiling = tagFor(html, "text", 'data-height-label="ceiling"');
+    const counter = tagFor(html, "text", 'data-height-label="counter"');
+    const ceilingX = Number(ceiling.match(/\sx="([^"]+)"/)?.[1]);
+    const counterX = Number(counter.match(/\sx="([^"]+)"/)?.[1]);
+    expect(ceilingX).toBe(-24);
+    expect(counterX).toBe(4);
+    expect(counterX - ceilingX).toBe(28);
+  });
+
   test("bolds every dimension label consistently", () => {
     // Labels were standardized to a single bold weight (commit f7df17b) so
     // overall/ceiling no longer stand out from per-segment counter/upper.
@@ -328,6 +548,20 @@ describe("WallElevation", () => {
     expect(upper).toContain('fill="#079ca5"');
     expect(counter).toContain('stroke="none"');
     expect(upper).toContain('stroke="none"');
+  });
+
+  test("keeps the left-side height chains outside the cabinet run", () => {
+    const html = render(elevationModel());
+    const ceiling = tagFor(html, "text", 'data-height-label="ceiling"');
+    const counter = tagFor(html, "text", 'data-height-label="counter"');
+    const upper = tagFor(html, "text", 'data-height-label="upper"');
+    const x = (tag: string) => Number(tag.match(/\sx="([^"]+)"/)?.[1]);
+
+    // The cabinet run starts at x=40. Profile, room, and tall lanes must all
+    // remain to its left, with the room total farther out than the profiles.
+    expect(x(counter)).toBeLessThan(40);
+    expect(x(upper)).toBeLessThan(40);
+    expect(x(ceiling)).toBeLessThan(x(counter));
   });
 
   test("does not render cabinet swing lines for F-coded filler panels", () => {
@@ -366,6 +600,24 @@ describe("WallElevation", () => {
 
     expect(sliverHtml).not.toContain('data-face="');
     expect(sliverHtml).not.toContain("data-display-label=");
+  });
+
+  test("renders finished panels as clean filler-style strips", () => {
+    const html = render(
+      elevationModel([
+        { ...cabinet("finished-panel", 12 * 16, "panel"), panelSpan: "tier" },
+        cabinet("filler-strip", 12 * 16, "filler"),
+        cabinet("base-right", 36 * 16)
+      ])
+    );
+    const panel = segmentMarkup(html, "finished-panel");
+    const filler = segmentMarkup(html, "filler-strip");
+
+    expect(panel).toContain('fill="#ffffff"');
+    expect(panel).not.toContain("#b7a6c4");
+    expect(panel).not.toContain(">PANEL<");
+    expect(panel).not.toContain('stroke-dasharray=');
+    expect(filler).toContain('fill="#ffffff"');
   });
 
   test("renders cabinet face swing lines in black with reversed direction", () => {
@@ -407,7 +659,7 @@ describe("WallElevation", () => {
 
     expect(cornerHtml).toContain('data-face="corner-return"');
     expect(cornerHtml).toContain('data-corner-return-profile="true"');
-    expect(cornerHtml).toContain('data-corner-return-counter="true"');
+    expect(cornerHtml).not.toContain('data-corner-return-counter="true"');
     expect(html).not.toContain("<title>Corner return</title>");
     expect(cornerHtml).not.toContain("data-display-label=");
     // Without the paired wall in the model there is no jump target.
@@ -592,8 +844,8 @@ describe("WallElevation", () => {
     expect(midpoints[1] - midpoints[0]).toBeLessThan(needed);
 
     expect(boxes[0].right).toBeLessThan(boxes[1].left);
-    // Numbers that moved off their part carry a leader back to it.
-    expect(html).toContain("data-corner-breakdown-leader=");
+    // Corner breakdown labels are also free of diagonal leaders.
+    expect(html).not.toContain("data-corner-breakdown-leader=");
   });
 
   test("keeps the corner breakdown numbers put when they already clear", () => {
@@ -607,6 +859,8 @@ describe("WallElevation", () => {
   test("does not offer dead corner as a corner setup strategy", () => {
     expect(CORNER_STRATEGY_OPTIONS.map((option) => option.value)).toEqual([
       "lazySusan",
+      "diagonalCorner",
+      "leMans",
       "blindBase",
       "magicCorner",
       "blindCornerPullOut",
@@ -1019,7 +1273,7 @@ describe("WallElevation", () => {
     ]);
   });
 
-  test("places tall-unit height dimensions to the far left of the regular height chain", () => {
+  test("keeps the room height at the far left of the vertical dimension chain", () => {
     const model = elevationModel([
       {
         ...cabinet("a-fridge", 36 * 16, "appliance"),
@@ -1031,9 +1285,39 @@ describe("WallElevation", () => {
     ]);
     const html = render(model);
     const tallLabel = tagFor(html, "text", 'data-tall-height-label="a-fridge"');
+    const ceilingLabel = tagFor(html, "text", 'data-height-label="ceiling"');
 
-    expect(Number(tallLabel.match(/\sx="([^"]+)"/)?.[1])).toBeLessThan(49);
+    expect(Number(ceilingLabel.match(/\sx="([^"]+)"/)?.[1])).toBeLessThan(
+      Number(tallLabel.match(/\sx="([^"]+)"/)?.[1])
+    );
     expect(tallLabel).toContain('font-weight="bold"');
+  });
+
+  test("keeps the room height outside every tall-unit height lane", () => {
+    const model = elevationModel([
+      {
+        ...cabinet("a-tall-one", 36 * 16, "appliance"),
+        label: "REF36",
+        cabinetKind: "tall"
+      },
+      {
+        ...cabinet("a-tall-two", 30 * 16, "appliance"),
+        label: "PAN30",
+        cabinetKind: "tall"
+      }
+    ]);
+    const html = render(model);
+    const ceiling = Number(
+      tagFor(html, "text", 'data-height-label="ceiling"').match(/\sx="([^"]+)"/)?.[1]
+    );
+    const tallXs = ["a-tall-one", "a-tall-two"].map((id) =>
+      Number(
+        tagFor(html, "text", `data-tall-height-label="${id}"`).match(/\sx="([^"]+)"/)?.[1]
+      )
+    );
+
+    expect(tallXs).toHaveLength(2);
+    expect(tallXs.every((tallX) => ceiling < tallX)).toBe(true);
   });
 
   test("draws window sash lines on window opening segments", () => {
@@ -1105,9 +1389,64 @@ describe("WallElevation", () => {
     );
     // The 1 1/2″ slab is drawn as an undimensioned band over the base run —
     // the height chain reads the 34 1/2″ cabinet body, never the slab.
-    expect(html).toContain('data-countertop-band="0"><rect');
+    expect(html).toContain('data-countertop-slab="0"');
     const counter = tagFor(html, "text", 'data-height-label="counter"');
     expect(html.slice(html.indexOf(counter))).toContain("34 1/2″");
+  });
+
+  test("continues the countertop across a hosted corner and its return", () => {
+    const hostHtml = renderCornerModel("A");
+    const returnHtml = renderCornerModel("B");
+
+    for (const html of [hostHtml, returnHtml]) {
+      const counter = tagFor(html, "line", 'data-countertop-band="0"');
+      expect(counter).toContain('x1="40"');
+      expect(counter).toContain('x2="600"');
+      expect(html).not.toContain('data-countertop-band="1"');
+    }
+  });
+
+  test("keeps countertop shadows off corner units and finished panels", () => {
+    const hostHtml = renderCornerModel("A");
+    const returnHtml = renderCornerModel("B");
+    const panelHtml = render(
+      elevationModel([
+        {
+          ...cabinet("tier-panel", 12 * 16, "panel"),
+          panelSpan: "tier"
+        },
+        cabinet("base-after-panel", 36 * 16)
+      ])
+    );
+
+    const hostSlab = tagFor(hostHtml, "rect", 'data-countertop-slab="0"');
+    const returnSlab = tagFor(returnHtml, "rect", 'data-countertop-slab="0"');
+    const panelSlab = tagFor(panelHtml, "rect", 'data-countertop-slab="0"');
+
+    // The continuous top line still spans the whole counter run, but each
+    // shallow slab begins only at the ordinary cabinet next to the special
+    // segment — never over the corner or finished panel itself.
+    expect(Number(hostSlab.match(/\sx="([^"]+)"/)?.[1])).toBeCloseTo(
+      40 + (36 / 66) * 560
+    );
+    expect(returnSlab).toContain('x="40"');
+    expect(panelSlab).toContain('x="180"');
+    expect(panelHtml).toContain('data-countertop-band="0"');
+    expect(panelHtml).not.toContain('data-countertop-band="1"');
+  });
+
+  test("keeps an intentional open gap as a countertop break", () => {
+    const html = render(
+      elevationModel([
+        cabinet("left-base", 30 * 16),
+        cabinet("intentional-gap", 12 * 16, "gap"),
+        cabinet("right-base", 18 * 16)
+      ])
+    );
+
+    expect(html).toContain('data-countertop-band="0"');
+    expect(html).toContain('data-countertop-band="1"');
+    expect(html).not.toContain('data-countertop-band="2"');
   });
 
   test("draws tier panels at their tier height and full panels floor to cabinet top", () => {
@@ -1348,38 +1687,55 @@ function boxForSegment(
 
 type ChainLabelBox = {
   id: string;
-  x: number;
-  y: number;
   left: number;
   right: number;
+  top: number;
+  bottom: number;
 };
 
-/** Every per-segment chain label as the box its text actually occupies. */
+/**
+ * Every per-segment chain label as the box it covers on the sheet, read off the
+ * white backdrop the number punches through the linework — the same rectangle
+ * that would rub out a neighbour's glyphs.
+ */
 function chainLabelBoxes(html: string): ChainLabelBox[] {
-  const pattern =
-    /<text data-chain-label="([^"]+)" x="([^"]+)" y="([^"]+)"[^>]*>([^<]*)<\/text>/g;
-  return [...html.matchAll(pattern)]
+  const backdrops = [
+    ...html.matchAll(
+      /<rect data-dimension-label-backdrop="true" x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g
+    )
+  ];
+  return [...html.matchAll(/<text data-chain-label="([^"]+)"/g)]
     .filter(([, id]) => id !== "overall")
-    .map(([, id, x, y, text]) => {
-      const width = measureDimensionLabel(text, 11);
+    .map((label) => {
+      const backdrop = backdrops
+        .filter((rect) => (rect.index ?? 0) < (label.index ?? 0))
+        .pop();
+      expect(backdrop).toBeDefined();
+      const [, x, y, width, height] = backdrop!;
       return {
-        id,
-        x: Number(x),
-        y: Number(y),
-        left: Number(x) - width / 2,
-        right: Number(x) + width / 2
+        id: label[1],
+        left: Number(x),
+        right: Number(x) + Number(width),
+        top: Number(y),
+        bottom: Number(y) + Number(height)
       };
     });
 }
 
-/** Pairs of labels sharing a row whose text runs together. */
+/** Pairs of labels whose backdrops run together on the sheet — touching is fine. */
 function overlappingChainLabels(html: string): string[] {
   const boxes = chainLabelBoxes(html);
+  const touching = 0.5;
   const collisions: string[] = [];
   for (let a = 0; a < boxes.length; a += 1) {
     for (let b = a + 1; b < boxes.length; b += 1) {
-      if (boxes[a].y !== boxes[b].y) continue;
-      if (boxes[a].left < boxes[b].right && boxes[b].left < boxes[a].right) {
+      const across =
+        Math.min(boxes[a].right, boxes[b].right) -
+        Math.max(boxes[a].left, boxes[b].left);
+      const along =
+        Math.min(boxes[a].bottom, boxes[b].bottom) -
+        Math.max(boxes[a].top, boxes[b].top);
+      if (across > touching && along > touching) {
         collisions.push(`${boxes[a].id}/${boxes[b].id}`);
       }
     }
@@ -1390,9 +1746,9 @@ function overlappingChainLabels(html: string): string[] {
 /** The corner breakdown's two numbers, left to right, as the boxes they fill. */
 function cornerBreakdownBoxes(html: string) {
   const pattern =
-    /<text data-corner-breakdown-label="[^"]+" x="([^"]+)" y="([^"]+)"[^>]*>([^<]*)<\/text>/g;
+    /<text data-corner-breakdown-label="[^"]+" data-dimension-value="([^"]+)" x="([^"]+)" y="([^"]+)"[^>]*>/g;
   return [...html.matchAll(pattern)]
-    .map(([, x, y, text]) => {
+    .map(([, text, x, y]) => {
       const width = measureDimensionLabel(text, 11);
       return {
         text,
@@ -1422,12 +1778,31 @@ function cornerBreakdownPartCenters(
   return [(start + split) / 2, (split + end) / 2];
 }
 
+/** Centreline the run's placement drew a number on. */
+function chainLabelPlacementX(html: string, segmentId: string): number {
+  const tag = tagFor(html, "path", `data-chain-guide="${segmentId}"`);
+  const x = tag.match(/data-chain-label-x="(-?[\d.]+)"/);
+  expect(x).not.toBeNull();
+  return Number(x?.[1]);
+}
+
 /** Midpoint of a segment's chain rule — where its leader has to start. */
 function chainGuideMidX(html: string, segmentId: string): number {
+  const span = chainGuideSegmentSpan(html, segmentId);
+  return (span.start + span.end) / 2;
+}
+
+/** Physical board endpoints stay exact even when its label moves sideways. */
+function chainGuideSegmentSpan(
+  html: string,
+  segmentId: string
+): { start: number; end: number } {
   const tag = tagFor(html, "path", `data-chain-guide="${segmentId}"`);
-  const span = tag.match(/d="M ([\d.]+) [\d.]+ V [\d.]+ M [\d.]+ [\d.]+ H ([\d.]+)/);
-  expect(span).not.toBeNull();
-  return (Number(span?.[1]) + Number(span?.[2])) / 2;
+  const start = tag.match(/data-chain-segment-start="([\d.]+)"/);
+  const end = tag.match(/data-chain-segment-end="([\d.]+)"/);
+  expect(start).not.toBeNull();
+  expect(end).not.toBeNull();
+  return { start: Number(start?.[1]), end: Number(end?.[1]) };
 }
 
 function chainLabelY(html: string, segmentId: string): number {
@@ -1442,7 +1817,7 @@ function chainLabelY(html: string, segmentId: string): number {
 
 function chainGuideY(html: string, segmentId: string): number {
   const tag = tagFor(html, "path", `data-chain-guide="${segmentId}"`);
-  const y = tag.match(/ V ([\d.]+) M/);
+  const y = tag.match(/M [\d.]+ ([\d.]+) V/);
   expect(y).not.toBeNull();
   return Number(y?.[1]);
 }
@@ -1456,7 +1831,7 @@ function overallLabelY(html: string): number {
 
 function overallGuideY(html: string): number {
   const tag = tagFor(html, "path", 'data-chain-guide="overall"');
-  const y = tag.match(/M 40 ([\d.]+) H 600/);
+  const y = tag.match(/M 40 (-?[\d.]+) H 600/);
   expect(y).not.toBeNull();
   return Number(y?.[1]);
 }

@@ -39,6 +39,26 @@ describe("Round 2 constrained adjustments", () => {
     expect(adjusted.decisionItems).toHaveLength(0);
   });
 
+  test("preserves the trash pullout role when its width changes", () => {
+    const wall = wallWithSegments();
+    wall.segments = wall.segments.map((segment) =>
+      segment.id === "a-base-cabinet"
+        ? { ...segment, widthSixteenths: 36 * 16, label: "WB36" }
+        : segment
+    );
+    const adjusted = stepCabinetWidth(
+      modelWithWall(wall),
+      "a-base-cabinet",
+      18 * 16
+    );
+    const segment = adjusted.walls[0].segments.find(
+      (item) => item.id === "a-base-cabinet"
+    );
+
+    expect(segment?.widthSixteenths).toBe(18 * 16);
+    expect(segment?.label).toBe("WB18");
+  });
+
   test("keeps the run closed and emits a decision when filler goes below minimum", () => {
     const model = modelWithWall(wallWithSegments());
     const adjusted = stepCabinetWidth(model, "a-base-cabinet", 36 * 16);

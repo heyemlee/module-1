@@ -13,7 +13,11 @@ import {
 import { deriveWallsFromRound1 } from "./model/derive-walls";
 import { CABINET_STANDARDS } from "./model/cabinet-standards";
 import {
+  buildDesignIntentQuestions,
   buildIntentConfirmationDecisions,
+  confirmDesignIntentAnswers,
+  draftDesignIntentAnswer,
+  groupDesignIntentQuestions,
   initializeDesignIntent,
   setDesignIntentAnswer
 } from "./model/design-intent";
@@ -89,6 +93,7 @@ export function reduceRound2Prototype(
       return { ...state, role: action.role };
     case "SET_TASK":
       if (!state.referenceLocked) return state;
+      if (action.task === "INTENT" && !intentUnlocked(state)) return state;
       if (
         (action.task === "PROPOSAL" || action.task === "DRAWINGS") &&
         !proposalUnlocked(state)
@@ -123,11 +128,18 @@ export function reduceRound2Prototype(
     case "SET_DESIGN_INTENT":
       if (!state.model) return state;
       {
-        const designIntent = setDesignIntentAnswer(
-          state.designIntent,
-          action.key,
-          action.value
-        );
+        const designIntent =
+          action.confirm === false
+            ? draftDesignIntentAnswer(
+                state.designIntent,
+                action.key,
+                action.value
+              )
+            : setDesignIntentAnswer(
+                state.designIntent,
+                action.key,
+                action.value
+              );
         // Corner, fridge, and gap-resolution intents are edited from the
         // proposal (drawing or rail card), so they regenerate live whenever
         // segments exist — even if another intent edit already dropped the
@@ -140,22 +152,37 @@ export function reduceRound2Prototype(
         ) {
           return regenerateProposalFromIntent(state, designIntent, action.key);
         }
+        // Design intent is its own stage now, so answering a question must not
+        // reopen field measurement. It does invalidate a proposal that was
+        // already generated from the previous answers.
+        const generated = proposalUnlocked(state);
         return {
           ...state,
           designIntent,
-          measurementStatus: "DRAFT",
-          proposalStatus:
-            state.measurementStatus === "SUBMITTED"
-              ? "STALE"
-              : state.proposalStatus,
-          drawingStatus:
-            state.measurementStatus === "SUBMITTED"
-              ? "STALE"
-              : state.drawingStatus
+          proposalStatus: generated ? "STALE" : state.proposalStatus,
+          drawingStatus: generated ? "STALE" : state.drawingStatus
         };
       }
+    case "CONFIRM_DESIGN_INTENT": {
+      if (!state.model) return state;
+      const designIntent = confirmDesignIntentAnswers(
+        state.designIntent,
+        action.keys
+      );
+      if (designIntent === state.designIntent) return state;
+      // Confirming changes no geometry, so the proposal is not regenerated and
+      // its version does not move. It does retire the matching Confirmation
+      // Required items, so refresh them on a model that already carries them.
+      return {
+        ...state,
+        designIntent,
+        ...refreshIntentDecisions(state, designIntent)
+      };
+    }
     case "SUBMIT_MEASUREMENT":
       return submitMeasurement(state, false);
+    case "GENERATE_PROPOSAL":
+      return generateProposal(state);
     case "REQUEST_REMEASURE":
       return {
         ...state,
@@ -338,6 +365,34 @@ export function proposalUnlocked(state: Round2PrototypeState): boolean {
   );
 }
 
+/**
+ * Design-intent questions still unconfirmed, counted in groups so the merged
+ * upper-height pair counts once. Shown on the stage chip, so the outstanding
+ * count is legible without entering the stage.
+ */
+export function openIntentCount(state: Round2PrototypeState): number {
+  const confirmed = new Set(state.designIntent.confirmedKeys);
+  return groupDesignIntentQuestions(
+    buildDesignIntentQuestions(state.model, state.measurements)
+  ).filter((group) =>
+    group.questions.some((question) => !confirmed.has(question.key))
+  ).length;
+}
+
+/**
+ * Design intent opens once the room is fully measured — the same point at which
+ * the measurement can be submitted, and the point at which questions like
+ * "run uppers to the 108″ ceiling?" can be phrased against a real number.
+ * A generated proposal keeps it open regardless, so returning to revise intent
+ * never depends on the measurement still being complete.
+ */
+export function intentUnlocked(state: Round2PrototypeState): boolean {
+  return (
+    proposalUnlocked(state) ||
+    (!!state.model && measurementsComplete(state.model, state.measurements))
+  );
+}
+
 function lockReference(
   state: Round2PrototypeState,
   reference: Round1ReferenceSource,
@@ -391,9 +446,42 @@ function updateMeasurements(
   };
 }
 
+/**
+ * Closes out field measurement and hands off to the design-intent stage. This
+ * deliberately does not autofill: the intent answers shape the segments, so
+ * generating here would build a proposal from defaults the user has not seen yet
+ * and force a regeneration the moment they answer. GENERATE_PROPOSAL does the
+ * autofill once intent is settled.
+ */
 function submitMeasurement(
   state: Round2PrototypeState,
   newVersion: boolean
+): Round2PrototypeState {
+  if (!state.model || !measurementsComplete(state.model, state.measurements)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    task: "INTENT",
+    measurementVersion: newVersion
+      ? state.measurementVersion + 1
+      : state.measurementVersion,
+    measurementStatus: "SUBMITTED",
+    // A resubmit invalidates whatever the previous intent pass generated.
+    proposalStatus: "STALE",
+    drawingStatus: "STALE",
+    selectedObjectId: null
+  };
+}
+
+/**
+ * Builds the proposal from the measured model plus the settled design intent —
+ * the design-intent stage's exit. Unconfirmed intent does not block it: those
+ * answers ride along as Confirmation Required decision items.
+ */
+function generateProposal(
+  state: Round2PrototypeState
 ): Round2PrototypeState {
   if (!state.model || !measurementsComplete(state.model, state.measurements)) {
     return state;
@@ -412,16 +500,49 @@ function submitMeasurement(
     ...state,
     model,
     task: "PROPOSAL",
-    measurementVersion: newVersion
-      ? state.measurementVersion + 1
-      : state.measurementVersion,
-    measurementStatus: "SUBMITTED",
     proposalVersion: state.proposalVersion + 1,
-    proposalStatus: newVersion ? "STALE" : proposalStatus,
-    drawingStatus: newVersion ? "STALE" : "REVIEW_READY",
+    proposalStatus,
+    drawingStatus: "REVIEW_READY",
     selectedWall: firstSelectable?.wallId ?? state.selectedWall,
     selectedObjectId: null,
     issueObjectId: model.decisionItems[0]?.objectId ?? null
+  };
+}
+
+/**
+ * Rebuilds the `decision-intent-*` items against a new confirmation set, for
+ * edits that change nothing geometric. Models that carry no intent decisions yet
+ * (field measurement before the first submit, where autofill has not run) are
+ * left alone: the items are born with the autofill that first needs them, and
+ * adding them early would surface Confirmation Required against a proposal the
+ * user has not generated.
+ */
+function refreshIntentDecisions(
+  state: Round2PrototypeState,
+  designIntent: Round2PrototypeState["designIntent"]
+): Partial<Round2PrototypeState> {
+  const current = state.model;
+  if (!current) return {};
+  const hasIntentDecisions = current.decisionItems.some((item) =>
+    item.id.startsWith("decision-intent-")
+  );
+  if (!hasIntentDecisions) return {};
+
+  const decisionItems = [
+    ...current.decisionItems.filter(
+      (item) => !item.id.startsWith("decision-intent-")
+    ),
+    ...buildIntentConfirmationDecisions(current, designIntent, state.measurements)
+  ];
+  const model = { ...current, decisionItems };
+
+  return {
+    model,
+    proposalStatus:
+      state.proposalStatus === "NEEDS_DECISION" && decisionItems.length === 0
+        ? "READY"
+        : state.proposalStatus,
+    issueObjectId: decisionItems[0]?.objectId ?? null
   };
 }
 

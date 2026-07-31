@@ -69,6 +69,30 @@ describe("Round 2 autofill", () => {
     expectTiersClosed(filled);
   });
 
+  test.each([
+    ["diagonalCorner", "DC36"],
+    ["leMans", "LM36"]
+  ] as const)("%s intent keeps true-corner geometry", (strategy, label) => {
+    const filled = autofillRound2Model(
+      uShapeModel(),
+      {},
+      intentWith({ "corner.TL.strategy": strategy })
+    );
+    const top = filled.walls.find((wall) => wall.sourceWall === "TOP")!;
+    const left = filled.walls.find((wall) => wall.sourceWall === "LEFT")!;
+
+    expect(baseTier(top)[0]).toMatchObject({
+      cabinetKind: "corner",
+      label,
+      widthSixteenths: 36 * 16
+    });
+    expect(baseTier(left)[0]).toMatchObject({
+      kind: "gap",
+      label: `${label} return`,
+      widthSixteenths: 36 * 16
+    });
+  });
+
   test("blind base intent consumes the blind width plus the adjacent pull", () => {
     const filled = autofillRound2Model(
       uShapeModel(),
@@ -498,16 +522,16 @@ describe("Round 2 autofill", () => {
         const right = run[index + 1];
         expect(left?.kind === "cabinet" && right?.kind === "cabinet").toBe(false);
       }
-      // The remainder sits at the run end, inside the finished end panel.
-      expect(run[run.length - 1].kind).toBe("panel");
-      expect(run[run.length - 2].kind).toBe("filler");
+      // The remainder itself closes the run end; no finished panel is stacked
+      // beside the filler at the same location.
+      expect(run[run.length - 1].kind).toBe("filler");
+      expectNoDuplicateRunEndClosure(run);
     }
   });
 
   test("keeps the widest cabinets when the remainder is a supply-able strip", () => {
-    // 101 1/2″ wall = 100″ behind the end panels. The 1″ remainder is inside
-    // the 3/4″–3″ filler range, so the run keeps 36+36+27 rather than stepping
-    // a cabinet down to manufacture a wider filler.
+    // The 1″ remainder absorbs the reserved 3/4″ end panel and becomes one
+    // 1 3/4″ closure strip, so the run keeps 36+36+27 without duplicate parts.
     const filled = autofillRound2Model(
       modelWithWall(wallWithLength(101 * 16 + 8))
     );
@@ -522,21 +546,20 @@ describe("Round 2 autofill", () => {
       base
         .filter((segment) => segment.kind === "filler")
         .map((segment) => segment.widthSixteenths)
-    ).toEqual([16]);
+    ).toEqual([28]);
     expect(
       filled.decisionItems.filter((item) => item.title.includes("filler"))
     ).toHaveLength(0);
   });
 
   test("closes a sub-minimum remainder with two in-range strips", () => {
-    // 101″ wall = 99 1/2″ behind the end panels. The 1/2″ remainder is below
-    // the 3/4″ minimum strip, so the run gives up one 3″ cabinet step and
-    // splits the resulting 3 1/2″ into two strips the shop can supply.
+    // The sub-minimum remainder and the reserved panel are repartitioned into
+    // two approved fillers, with no separate end panel beside them.
     const filled = autofillRound2Model(modelWithWall(wallWithLength(101 * 16)));
     const base = baseTier(filled.walls[0]);
     const fillers = base.filter((segment) => segment.kind === "filler");
 
-    expect(fillers.map((segment) => segment.widthSixteenths)).toEqual([12, 44]);
+    expect(fillers.map((segment) => segment.widthSixteenths)).toEqual([48, 20]);
     for (const filler of fillers) {
       expect(filler.widthSixteenths).toBeGreaterThanOrEqual(
         CABINET_STANDARDS.filler.minSixteenths
@@ -649,33 +672,40 @@ describe("Round 2 autofill", () => {
       segment?.widthSixteenths ?? 0;
     const cabinets = (segments: WallSegment[]) =>
       segments.filter((segment) => segment.kind === "cabinet");
+    const ordinaryCabinets = (segments: WallSegment[]) =>
+      cabinets(segments).filter(
+        (segment) =>
+          !segment.label.startsWith("WB") && !segment.label.startsWith("DB")
+      );
 
     // The widest cabinet hugs the sink on both sides and the run steps down
-    // toward the walls, where the filler is parked.
-    expect(width(cabinets(left).at(-1))).toBe(
-      Math.max(...cabinets(left).map(width))
+    // toward the walls, where the filler is parked. Functional pull-outs are
+    // intentionally excluded because their standard width is fixed at 18″.
+    expect(width(ordinaryCabinets(left).at(-1))).toBe(
+      Math.max(...ordinaryCabinets(left).map(width))
     );
-    expect(width(cabinets(right)[0])).toBe(
-      Math.max(...cabinets(right).map(width))
-    );
+    expect(cabinets(right)[0]).toMatchObject({
+      label: "WB18",
+      widthSixteenths: 18 * 16
+    });
     expect(left.findIndex((segment) => segment.kind === "filler")).toBeLessThan(
       left.findIndex((segment) => segment.kind === "cabinet")
     );
-    expect(right.at(-1)).toMatchObject({ kind: "panel" });
-    expect(right.at(-2)).toMatchObject({ kind: "filler" });
+    expect(right.at(-1)).toMatchObject({ kind: "filler" });
+    expectNoDuplicateRunEndClosure(right);
     expectTiersClosed(filled);
   });
 
   test("repartitions a four-inch residual into one valid filler", () => {
-    // 44 1/2″ wall = 43″ behind the two 3/4″ end panels: 42″ of cabinets and
-    // the narrowest strip that closes the run.
+    // The original 1″ remainder absorbs the adjacent 3/4″ panel into one
+    // 1 3/4″ run-end filler.
     const filled = autofillRound2Model(
       modelWithWall(wallWithLength(44 * 16 + 8))
     );
     const base = baseTier(filled.walls[0]);
 
     expect(base.filter((segment) => segment.kind === "filler")).toEqual([
-      expect.objectContaining({ widthSixteenths: 16 })
+      expect.objectContaining({ widthSixteenths: 28 })
     ]);
     expect(
       base
@@ -861,8 +891,7 @@ describe("Round 2 autofill", () => {
     );
 
     // Each run beside the window keeps one approved filler pushed to the run
-    // edge (behind the finished end panels) instead of a sliver against the
-    // window and an unexplained blank.
+    // edge. A filler at an outer edge absorbs that edge's finished panel.
     expect(
       uppers.some(
         (segment) =>
@@ -871,11 +900,11 @@ describe("Round 2 autofill", () => {
     ).toBe(false);
     expect(uppers.filter((segment) => segment.kind === "gap")).toHaveLength(0);
     expect(uppers.filter((segment) => segment.kind === "filler")).toEqual([
-      expect.objectContaining({ widthSixteenths: 2 * 16 + 4 }),
-      expect.objectContaining({ widthSixteenths: 16 + 4 })
+      expect.objectContaining({ widthSixteenths: 3 * 16 }),
+      expect.objectContaining({ widthSixteenths: 2 * 16 })
     ]);
-    expect(uppers[uppers.length - 1].kind).toBe("panel");
-    expect(uppers[uppers.length - 2].kind).toBe("filler");
+    expect(uppers[uppers.length - 1].kind).toBe("filler");
+    expectNoDuplicateRunEndClosure(uppers);
     expectTiersClosed(filled);
   });
 
@@ -930,12 +959,11 @@ describe("Round 2 autofill", () => {
         segment?.label.startsWith("DB")
       )
     ).toBe(true);
-    expect(
-      base
-        .slice(sinkIndex + 1)
-        .find((segment) => segment.kind === "cabinet")
-        ?.label.startsWith("WB")
-    ).toBe(true);
+    const trashPullout = base
+      .slice(sinkIndex + 1)
+      .find((segment) => segment.kind === "cabinet" && segment.label.startsWith("WB"));
+    expect(trashPullout).toBeDefined();
+    expect(trashPullout?.widthSixteenths).toBe(18 * 16);
   });
 
   test("preserves appliance widths and a window-centered sink across rebalanced spans", () => {
@@ -995,14 +1023,13 @@ describe("Round 2 autofill", () => {
     expect(sink.start + sink.segment.widthSixteenths / 2).toBe(
       80 * 16 + (30 * 16) / 2
     );
-    // The range nudge closes both of its flanking spans exactly; only the
-    // run-edge fillers behind the finished end panels (out of the range's
-    // reach) remain.
+    // The range nudge closes both flanking spans exactly; run-edge filler
+    // clusters absorb their adjacent finished-panel widths.
     expect(
       base.filter((segment) => segment.kind === "filler").map(
         (segment) => segment.widthSixteenths
       )
-    ).toEqual([2 * 16 + 12, 2 * 16 + 4]);
+    ).toEqual([12, 2 * 16 + 12, 3 * 16]);
     expectTiersClosed(filled);
 
     const adjacentCabinet = base[base.indexOf(sink.segment) + 1]!;
@@ -1463,7 +1490,7 @@ describe("Round 2 fridge surround", () => {
 describe("Round 2 finished end panels", () => {
   const PANEL = CABINET_STANDARDS.finishedPanel.sideWidthSixteenths;
 
-  test("closes both exposed run ends with tier-height panels on both tiers", () => {
+  test("keeps a standalone end panel but never stacks one beside filler", () => {
     const filled = autofillRound2Model(modelWithWall(wallWithLength(120 * 16)));
     const wall = filled.walls[0];
 
@@ -1475,10 +1502,10 @@ describe("Round 2 finished end panels", () => {
         widthSixteenths: PANEL
       });
       expect(run[run.length - 1]).toMatchObject({
-        kind: "panel",
-        panelSpan: "tier",
-        widthSixteenths: PANEL
+        kind: "filler",
+        widthSixteenths: 2 * 16 + 4
       });
+      expectNoDuplicateRunEndClosure(run);
     }
     expectTiersClosed(filled);
   });
@@ -1508,10 +1535,9 @@ describe("Round 2 finished end panels", () => {
     const base = baseTier(filled.walls[0]);
 
     expect(base[0].kind).toBe("opening");
-    expect(base[base.length - 1]).toMatchObject({
-      kind: "panel",
-      panelSpan: "tier"
-    });
+    expect(base[base.length - 1]).toMatchObject({ kind: "filler" });
+    expect(base.some((segment) => segment.kind === "panel")).toBe(false);
+    expectNoDuplicateRunEndClosure(base);
     expectTiersClosed(filled);
   });
 
@@ -1670,6 +1696,14 @@ function expectTiersClosed(model: Round2Model) {
         .reduce((sum, segment) => sum + segment.widthSixteenths, 0);
       expect(total).toBe(wall.lengthSixteenths);
     }
+  }
+}
+
+function expectNoDuplicateRunEndClosure(run: readonly WallSegment[]) {
+  const endPairs = [run.slice(0, 2), run.slice(-2)];
+  for (const pair of endPairs) {
+    const kinds = new Set(pair.map((segment) => segment.kind));
+    expect(kinds.has("panel") && kinds.has("filler")).toBe(false);
   }
 }
 

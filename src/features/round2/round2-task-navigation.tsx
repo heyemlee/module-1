@@ -6,6 +6,7 @@ import type { Round2Task } from "./round2-types";
 
 const TASKS = [
   { id: "MEASUREMENT", label: "Field Measurement", meta: "SALES" },
+  { id: "INTENT", label: "Design Intent", meta: "SALES" },
   { id: "PROPOSAL", label: "Design Proposal", meta: "DESIGNER" },
   { id: "DRAWINGS", label: "Drawings & Review", meta: "OUTPUT" }
 ] as const;
@@ -13,31 +14,49 @@ const TASKS = [
 export function Round2TaskNavigation({
   task,
   onTaskChange,
+  intentUnlocked = true,
   proposalUnlocked = true,
-  drawingsBlocked = false
+  drawingsBlocked = false,
+  openIntentCount = 0
 }: {
   task: Round2Task;
   onTaskChange: (task: Round2Task) => void;
-  /** Proposal/Drawings stay locked until field measurement is submitted. */
+  /** Design intent stays locked until the room is fully measured. */
+  intentUnlocked?: boolean;
+  /** Proposal/Drawings stay locked until the proposal has been generated. */
   proposalUnlocked?: boolean;
   /** Drawings stay locked while any blocking decision is unresolved. */
   drawingsBlocked?: boolean;
+  /**
+   * Unconfirmed design-intent questions, surfaced on the stage chip so the count
+   * is visible without opening the stage.
+   */
+  openIntentCount?: number;
 }) {
   return (
     <nav aria-label="Round 2 tasks">
-      <ol className="grid grid-cols-3">
+      <ol className="grid grid-cols-2 sm:grid-cols-4">
         {TASKS.map((item, index) => {
           const active = item.id === task;
           const measurementLocked =
-            !proposalUnlocked &&
-            (item.id === "PROPOSAL" || item.id === "DRAWINGS");
+            (!proposalUnlocked &&
+              (item.id === "PROPOSAL" || item.id === "DRAWINGS")) ||
+            (!intentUnlocked && item.id === "INTENT");
           const blockingLocked =
             !measurementLocked && drawingsBlocked && item.id === "DRAWINGS";
           const locked = measurementLocked || blockingLocked;
           const lockTitle = blockingLocked
             ? "Resolve blocking issues to unlock"
-            : "Submit field measurement to unlock";
+            : item.id === "INTENT"
+              ? "Capture every measurement to unlock"
+              : "Generate the proposal to unlock";
           const lockMeta = blockingLocked ? "BLOCKED" : "LOCKED";
+          // The intent chip carries its own outstanding count, so the number of
+          // questions still open is legible from the stage bar.
+          const meta =
+            item.id === "INTENT" && !locked && openIntentCount > 0
+              ? `${openIntentCount} OPEN`
+              : item.meta;
           return (
             <li key={item.id}>
               <button
@@ -73,8 +92,15 @@ export function Round2TaskNavigation({
                   <span className="block truncate text-[13px] font-semibold">
                     {item.label}
                   </span>
-                  <span className="block font-mono text-[9px] tracking-[0.12em] text-studio-quiet">
-                    {locked ? lockMeta : item.meta}
+                  <span
+                    className={cn(
+                      "block font-mono text-[9px] tracking-[0.12em]",
+                      !locked && meta !== item.meta
+                        ? "text-[#9a5b17]"
+                        : "text-studio-quiet"
+                    )}
+                  >
+                    {locked ? lockMeta : meta}
                   </span>
                 </span>
               </button>

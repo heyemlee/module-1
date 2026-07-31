@@ -15,7 +15,7 @@ import type {
 } from "./model/design-intent";
 
 export type Round2DemoRole = "SALES" | "DESIGNER";
-export type Round2Task = "MEASUREMENT" | "PROPOSAL" | "DRAWINGS";
+export type Round2Task = "MEASUREMENT" | "INTENT" | "PROPOSAL" | "DRAWINGS";
 export type MeasurementStatus =
   | "DRAFT"
   | "SUBMITTED"
@@ -97,8 +97,23 @@ export type Round2PrototypeAction =
       type: "SET_DESIGN_INTENT";
       key: DesignIntentKey;
       value: DesignIntentValue;
+      /**
+       * Whether picking the value also confirms it. Defaults to true, because
+       * for most call sites (the elevation's corner and fridge cards) the click
+       * on a specific unit *is* the decision. The field-measurement checklist
+       * passes false: there, choosing and confirming are separate steps.
+       */
+      confirm?: boolean;
     }
+  /** Confirms answers as they stand — the explicit "Keep default" / "Confirm". */
+  | { type: "CONFIRM_DESIGN_INTENT"; keys: DesignIntentKey[] }
   | { type: "SUBMIT_MEASUREMENT" }
+  /**
+   * Autofills the proposal from the measured model plus the settled design
+   * intent. Submitting the measurement no longer does this — it hands off to the
+   * design-intent stage, and this is that stage's exit.
+   */
+  | { type: "GENERATE_PROPOSAL" }
   | { type: "REQUEST_REMEASURE"; objectId: string }
   | { type: "SUBMIT_NEW_MEASUREMENT" }
   | { type: "SELECT_WALL"; wall: WallId }

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   createRound2PrototypeState,
+  intentUnlocked,
+  openIntentCount,
   proposalUnlocked,
   reduceRound2Prototype
 } from "./round2-state";
@@ -55,16 +57,62 @@ describe("Round 2 prototype state", () => {
     });
     expect(blocked.task).toBe("MEASUREMENT");
 
+    // Submitting hands off to design intent; the proposal is still ungenerated
+    // and therefore still gated.
     const submitted = reduceRound2Prototype(completeMeasurements(locked), {
       type: "SUBMIT_MEASUREMENT"
     });
-    expect(proposalUnlocked(submitted)).toBe(true);
+    expect(submitted.task).toBe("INTENT");
+    expect(intentUnlocked(submitted)).toBe(true);
+    expect(proposalUnlocked(submitted)).toBe(false);
+    expect(
+      reduceRound2Prototype(submitted, { type: "SET_TASK", task: "PROPOSAL" })
+        .task
+    ).toBe("INTENT");
 
-    const advanced = reduceRound2Prototype(submitted, {
+    const generated = reduceRound2Prototype(submitted, {
+      type: "GENERATE_PROPOSAL"
+    });
+    expect(proposalUnlocked(generated)).toBe(true);
+    expect(generated.task).toBe("PROPOSAL");
+
+    const advanced = reduceRound2Prototype(generated, {
       type: "SET_TASK",
       task: "PROPOSAL"
     });
     expect(advanced.task).toBe("PROPOSAL");
+  });
+
+  test("gates design intent until the room is fully measured", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    const clearedKey = Object.keys(locked.measurements)[0];
+    const incomplete = reduceRound2Prototype(locked, {
+      type: "EDIT_MEASUREMENT",
+      field: clearedKey,
+      value: null
+    });
+
+    expect(intentUnlocked(incomplete)).toBe(false);
+    expect(
+      reduceRound2Prototype(incomplete, { type: "SET_TASK", task: "INTENT" })
+        .task
+    ).toBe("MEASUREMENT");
+
+    const complete = completeMeasurements(locked);
+    expect(intentUnlocked(complete)).toBe(true);
+    expect(
+      reduceRound2Prototype(complete, { type: "SET_TASK", task: "INTENT" }).task
+    ).toBe("INTENT");
+
+    // Once a proposal exists, intent stays reachable even if a measurement is
+    // cleared again — revising intent must not depend on that.
+    const generated = submitComplete(createRound2PrototypeState("SALES"));
+    const cleared = reduceRound2Prototype(generated, {
+      type: "EDIT_MEASUREMENT",
+      field: clearedKey,
+      value: null
+    });
+    expect(intentUnlocked(cleared)).toBe(true);
   });
 
   test("clears a prior cabinet selection when opening the proposal", () => {
@@ -96,7 +144,7 @@ describe("Round 2 prototype state", () => {
     expect(restored.selectedObjectId).toBeNull();
   });
 
-  test("requires complete dynamic measurements before submit autofills proposal model", () => {
+  test("requires complete dynamic measurements before submit hands off to intent", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
     // The layout pre-fills every field, so clear a required one to recreate the
     // incomplete state the submit gate must reject.
@@ -118,13 +166,25 @@ describe("Round 2 prototype state", () => {
       type: "SUBMIT_MEASUREMENT"
     });
 
+    // Submit closes the measurement and opens design intent. It deliberately
+    // builds nothing: the intent answers shape the segments.
     expect(submitted.measurementStatus).toBe("SUBMITTED");
-    expect(submitted.proposalStatus).toBe("NEEDS_DECISION");
-    expect(submitted.drawingStatus).toBe("REVIEW_READY");
-    expect(submitted.model?.walls[0].segments.length).toBeGreaterThan(0);
+    expect(submitted.task).toBe("INTENT");
+    expect(submitted.proposalStatus).toBe("STALE");
+    expect(submitted.drawingStatus).toBe("STALE");
+    expect(submitted.model?.walls[0].segments).toHaveLength(0);
     expect(submitted.selectedObjectId).toBeNull();
+
+    const generated = reduceRound2Prototype(submitted, {
+      type: "GENERATE_PROPOSAL"
+    });
+
+    expect(generated.task).toBe("PROPOSAL");
+    expect(generated.proposalStatus).toBe("NEEDS_DECISION");
+    expect(generated.drawingStatus).toBe("REVIEW_READY");
+    expect(generated.model?.walls[0].segments.length).toBeGreaterThan(0);
     expect(
-      submitted.model?.decisionItems.some((item) =>
+      generated.model?.decisionItems.some((item) =>
         item.title.includes("Confirmation required")
       )
     ).toBe(true);
@@ -134,7 +194,8 @@ describe("Round 2 prototype state", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
 
     expect(Object.keys(locked.designIntent.answers).length).toBeGreaterThan(0);
-    expect(locked.designIntent.answers["hardware.style"]).toBe("handle");
+    expect(locked.designIntent.answers["hood.style"]).toBe("cabinetInsert");
+    expect(locked.designIntent.answers["hardware.style"]).toBeUndefined();
     expect(locked.designIntent.confirmedKeys).toEqual([]);
   });
 
@@ -142,12 +203,101 @@ describe("Round 2 prototype state", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
     const updated = reduceRound2Prototype(locked, {
       type: "SET_DESIGN_INTENT",
-      key: "hardware.style",
-      value: "fingerPull"
+      key: "hood.style",
+      value: "chimney"
     });
 
-    expect(updated.designIntent.answers["hardware.style"]).toBe("fingerPull");
-    expect(updated.designIntent.confirmedKeys).toEqual(["hardware.style"]);
+    expect(updated.designIntent.answers["hood.style"]).toBe("chimney");
+    expect(updated.designIntent.confirmedKeys).toEqual(["hood.style"]);
+  });
+
+  test("selecting an option in the measurement checklist does not confirm it", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    const drafted = reduceRound2Prototype(locked, {
+      type: "SET_DESIGN_INTENT",
+      key: "hood.style",
+      value: "chimney",
+      confirm: false
+    });
+
+    expect(drafted.designIntent.answers["hood.style"]).toBe("chimney");
+    expect(drafted.designIntent.confirmedKeys).toEqual([]);
+
+    const confirmed = reduceRound2Prototype(drafted, {
+      type: "CONFIRM_DESIGN_INTENT",
+      keys: ["hood.style"]
+    });
+
+    // Confirming settles the question without touching the value.
+    expect(confirmed.designIntent.answers["hood.style"]).toBe("chimney");
+    expect(confirmed.designIntent.confirmedKeys).toEqual(["hood.style"]);
+  });
+
+  test("counts unconfirmed intent groups for the stage chip", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    const total = openIntentCount(locked);
+    expect(total).toBeGreaterThan(0);
+
+    const hood = reduceRound2Prototype(locked, {
+      type: "CONFIRM_DESIGN_INTENT",
+      keys: ["hood.style"]
+    });
+    expect(openIntentCount(hood)).toBe(total - 1);
+
+    // The merged upper-height pair is one group: confirming half of it does not
+    // move the count.
+    const half = reduceRound2Prototype(hood, {
+      type: "CONFIRM_DESIGN_INTENT",
+      keys: ["uppers.termination"]
+    });
+    expect(openIntentCount(half)).toBe(total - 1);
+
+    const whole = reduceRound2Prototype(half, {
+      type: "CONFIRM_DESIGN_INTENT",
+      keys: ["uppers.moulding"]
+    });
+    expect(openIntentCount(whole)).toBe(total - 2);
+  });
+
+  test("changing a confirmed answer from the checklist reopens it", () => {
+    const locked = lock(createRound2PrototypeState("SALES"));
+    const confirmed = reduceRound2Prototype(locked, {
+      type: "CONFIRM_DESIGN_INTENT",
+      keys: ["hood.style", "trash.location"]
+    });
+    const reopened = reduceRound2Prototype(confirmed, {
+      type: "SET_DESIGN_INTENT",
+      key: "hood.style",
+      value: "chimney",
+      confirm: false
+    });
+
+    expect(reopened.designIntent.confirmedKeys).toEqual(["trash.location"]);
+  });
+
+  test("confirming an intent retires its decision without a new proposal version", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    expect(
+      submitted.model?.decisionItems.some(
+        (item) => item.id === "decision-intent-hood.style"
+      )
+    ).toBe(true);
+
+    const confirmed = reduceRound2Prototype(submitted, {
+      type: "CONFIRM_DESIGN_INTENT",
+      keys: ["hood.style"]
+    });
+
+    expect(
+      confirmed.model?.decisionItems.some(
+        (item) => item.id === "decision-intent-hood.style"
+      )
+    ).toBe(false);
+    // Nothing geometric moved, so the proposal is neither re-versioned nor
+    // marked stale.
+    expect(confirmed.proposalVersion).toBe(submitted.proposalVersion);
+    expect(confirmed.drawingStatus).toBe(submitted.drawingStatus);
+    expect(confirmed.model?.walls).toEqual(submitted.model?.walls);
   });
 
   test("adopting a relocked basis resets design intent to fresh defaults", () => {
@@ -155,8 +305,8 @@ describe("Round 2 prototype state", () => {
       lock(createRound2PrototypeState("SALES")),
       {
         type: "SET_DESIGN_INTENT",
-        key: "hardware.style",
-        value: "fingerPull"
+        key: "hood.style",
+        value: "chimney"
       }
     );
     const replaced = reduceRound2Prototype(locked, {
@@ -165,28 +315,32 @@ describe("Round 2 prototype state", () => {
       version: 2
     });
 
-    expect(replaced.designIntent.answers["hardware.style"]).toBe("handle");
+    expect(replaced.designIntent.answers["hood.style"]).toBe("cabinetInsert");
     expect(replaced.designIntent.confirmedKeys).toEqual([]);
   });
 
-  test("submits without intent confirmation and removes confirmed defaults from decisions", () => {
+  test("generates without intent confirmation and removes confirmed defaults from decisions", () => {
     const locked = lock(createRound2PrototypeState("SALES"));
     const confirmed = reduceRound2Prototype(locked, {
       type: "SET_DESIGN_INTENT",
-      key: "hardware.style",
-      value: "handle"
+      key: "hood.style",
+      value: "cabinetInsert"
     });
     const submitted = reduceRound2Prototype(completeMeasurements(confirmed), {
       type: "SUBMIT_MEASUREMENT"
     });
+    const generated = reduceRound2Prototype(submitted, {
+      type: "GENERATE_PROPOSAL"
+    });
 
-    expect(submitted.measurementStatus).toBe("SUBMITTED");
+    // Unconfirmed intent never blocks generation; it rides along as decisions.
+    expect(generated.task).toBe("PROPOSAL");
     expect(
-      submitted.model?.decisionItems.some(
-        (item) => item.id === "decision-intent-hardware.style"
+      generated.model?.decisionItems.some(
+        (item) => item.id === "decision-intent-hood.style"
       )
     ).toBe(false);
-    expect(submitted.model?.decisionItems.length).toBeGreaterThan(0);
+    expect(generated.model?.decisionItems.length).toBeGreaterThan(0);
   });
 
   test("keeps unconfirmed intent decisions after a proposal adjustment", () => {
@@ -481,28 +635,30 @@ describe("Round 2 prototype state", () => {
     expect(adjusted.proposalVersion).toBe(withFridge.proposalVersion + 1);
   });
 
-  test("still regenerates the fridge surround after another intent change marked measurements draft", () => {
+  test("still regenerates the fridge surround after an unrelated intent change", () => {
     const withFridge = withFridgeFixedPoint(
       submitComplete(createRound2PrototypeState("DESIGNER"))
     );
-    // Any non-live intent edit (hardware, hood style, …) drops the measurement
-    // status back to DRAFT while the proposal segments persist.
-    const drafted = reduceRound2Prototype(withFridge, {
+    // A non-live intent edit (hood style, trash location, …) stales the generated
+    // proposal but must leave field measurement alone — design intent is its own
+    // stage and no longer reopens the measurement.
+    const staled = reduceRound2Prototype(withFridge, {
       type: "SET_DESIGN_INTENT",
-      key: "hardware.style",
-      value: "fingerPull"
+      key: "hood.style",
+      value: "chimney"
     });
-    expect(drafted.measurementStatus).toBe("DRAFT");
+    expect(staled.measurementStatus).toBe("SUBMITTED");
+    expect(staled.proposalStatus).toBe("STALE");
 
-    const adjusted = reduceRound2Prototype(drafted, {
+    const adjusted = reduceRound2Prototype(staled, {
       type: "SET_DESIGN_INTENT",
       key: `fridge.${FRIDGE_FIXED_POINT_ID}.above`,
       value: "wallCabinet"
     });
 
     expect(hasUpperCabinetAboveFridge(adjusted)).toBe(true);
-    // The live regen must not fake a submit: the draft status stays.
-    expect(adjusted.measurementStatus).toBe("DRAFT");
+    // The live regen must not fake a submit either way.
+    expect(adjusted.measurementStatus).toBe("SUBMITTED");
   });
 
   test("steps the global height profile and keeps the selection", () => {
@@ -660,10 +816,17 @@ function completeMeasurements(
   };
 }
 
+/**
+ * Walks a fresh state all the way to a generated proposal. Submitting the
+ * measurement now only hands off to the design-intent stage, so reaching the
+ * proposal takes the stage's own exit as well.
+ */
 function submitComplete(state: Round2PrototypeState): Round2PrototypeState {
-  return reduceRound2Prototype(completeMeasurements(lock(state)), {
-    type: "SUBMIT_MEASUREMENT"
-  });
+  const submitted = reduceRound2Prototype(
+    completeMeasurements(lock(state)),
+    { type: "SUBMIT_MEASUREMENT" }
+  );
+  return reduceRound2Prototype(submitted, { type: "GENERATE_PROPOSAL" });
 }
 
 function valueForKey(key: string): number {

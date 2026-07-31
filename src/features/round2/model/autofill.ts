@@ -34,6 +34,7 @@ const BASE_WIDTHS_DESCENDING = [...BASE_WIDTHS_ASCENDING].sort(
 const MIN_CABINET_WIDTH_SIXTEENTHS = BASE_WIDTHS_ASCENDING[0];
 const FILLER_MIN_SIXTEENTHS = CABINET_STANDARDS.filler.minSixteenths;
 const FILLER_MAX_SIXTEENTHS = CABINET_STANDARDS.filler.maxSixteenths;
+const TRASH_PULLOUT_DEFAULT_WIDTH_SIXTEENTHS = 18 * 16;
 
 type FillTier = Extract<SegmentTier, "upper" | "base">;
 type FillerSide = "start" | "end";
@@ -58,6 +59,7 @@ type BlindBaseCornerStrategy =
   | "magicCorner"
   | "blindCornerPullOut"
   | "cornerPullOutShelves";
+type TrueCornerStrategy = "lazySusan" | "diagonalCorner" | "leMans";
 
 type PlacedReservation = {
   fixedPoint: Round2FixedPoint;
@@ -253,11 +255,17 @@ function buildCornerInsets(
       upperTierFor
     );
 
-    if (strategy === "lazySusan") {
+    if (isTrueCornerStrategy(strategy)) {
       const width = pickCornerWidth(
         CABINET_STANDARDS.corner.lazySusan.widthOptionsSixteenths,
         [corner.primary, corner.secondary]
       );
+      const labelPrefix =
+        strategy === "diagonalCorner"
+          ? "DC"
+          : strategy === "leMans"
+            ? "LM"
+            : "LS";
       tierFor(corner.primary.id)[corner.primaryEnd].push({
         id: `${primaryId}-base-corner-${cornerId}`,
         wallId: corner.primary.id,
@@ -266,7 +274,7 @@ function buildCornerInsets(
         cabinetKind: "corner",
         widthSixteenths: width,
         standardWidthSixteenths: width,
-        label: `LS${width / 16}`,
+        label: `${labelPrefix}${width / 16}`,
         sourceCornerId: corner.id
       });
       tierFor(corner.secondary.id)[corner.secondaryEnd].push({
@@ -275,7 +283,7 @@ function buildCornerInsets(
         tier: "base",
         kind: "gap",
         widthSixteenths: width,
-        label: `LS${width / 16} return`,
+        label: `${labelPrefix}${width / 16} return`,
         sourceCornerId: corner.id
       });
     } else {
@@ -425,10 +433,20 @@ function resolveUpperCornerStrategy(strategy: unknown): UpperCornerStrategy {
 
 function resolveCornerStrategy(
   strategy: unknown
-): "lazySusan" | BlindBaseCornerStrategy {
-  if (strategy === "lazySusan") return "lazySusan";
+): TrueCornerStrategy | BlindBaseCornerStrategy {
+  if (isTrueCornerStrategy(strategy)) return strategy;
   if (isBlindBaseCornerStrategy(strategy)) return strategy;
   return "lazySusan";
+}
+
+function isTrueCornerStrategy(
+  strategy: unknown
+): strategy is TrueCornerStrategy {
+  return (
+    strategy === "lazySusan" ||
+    strategy === "diagonalCorner" ||
+    strategy === "leMans"
+  );
 }
 
 function isBlindBaseCornerStrategy(
@@ -494,6 +512,64 @@ function finishedPanelSegment(
     sourceFixedPointId,
     panelSpan: span
   };
+}
+
+/**
+ * A run-end filler is already the scribed closure against that end. Keeping a
+ * separate 3/4″ finished panel beside it creates two closure pieces for one
+ * location (for example 2 1/4″ filler + 3/4″ panel). Fold the reserved panel
+ * width into the filler cluster; an end with no filler keeps its panel.
+ */
+function coalesceRunEndPanelWithFiller(
+  segments: readonly WallSegment[],
+  side: "start" | "end"
+): WallSegment[] {
+  if (segments.length < 2) return [...segments];
+
+  const panelIndex = side === "start" ? 0 : segments.length - 1;
+  const panel = segments[panelIndex];
+  if (
+    panel.kind !== "panel" ||
+    !panel.id.endsWith(`-endpanel-${side}`)
+  ) {
+    return [...segments];
+  }
+
+  let fillerStart = side === "start" ? 1 : panelIndex - 1;
+  let fillerEnd = side === "start" ? 1 : panelIndex - 1;
+  if (segments[fillerStart]?.kind !== "filler") return [...segments];
+
+  if (side === "start") {
+    while (segments[fillerEnd + 1]?.kind === "filler") fillerEnd += 1;
+  } else {
+    while (segments[fillerStart - 1]?.kind === "filler") fillerStart -= 1;
+  }
+
+  const fillers = segments.slice(fillerStart, fillerEnd + 1);
+  const combinedWidth =
+    panel.widthSixteenths +
+    fillers.reduce((sum, filler) => sum + filler.widthSixteenths, 0);
+  const widths = splitFillerWidths(combinedWidth) ?? [combinedWidth];
+  const source = fillers[0];
+  const mergedFillers = widths.map((width, index) => ({
+    ...source,
+    id: index === 0 ? source.id : `${source.id}-split-${index + 1}`,
+    widthSixteenths: width,
+    label: `F${Math.round(width / 16)}`
+  }));
+
+  return side === "start"
+    ? [...mergedFillers, ...segments.slice(fillerEnd + 1)]
+    : [...segments.slice(0, fillerStart), ...mergedFillers];
+}
+
+function coalesceRunEndClosures(
+  segments: readonly WallSegment[]
+): WallSegment[] {
+  return coalesceRunEndPanelWithFiller(
+    coalesceRunEndPanelWithFiller(segments, "start"),
+    "end"
+  );
 }
 
 function fillBaseTier(
@@ -693,7 +769,7 @@ function fillBaseTier(
   }
   segments.push(...endInsets);
 
-  return tagFunctionalNeighbors(segments, intent);
+  return tagFunctionalNeighbors(coalesceRunEndClosures(segments), intent);
 }
 
 /**
@@ -1715,14 +1791,64 @@ function tagFunctionalNeighbors(
       segment.cabinetKind === "base" &&
       !segment.label.startsWith("DB")
     ) {
-      tagged[index] = {
-        ...segment,
-        label: `WB${Math.round(segment.widthSixteenths / 16)}`
-      };
+      const target = tagTrashPulloutWidth(
+        segment,
+        trashPreference === "sinkLeft"
+      );
+      tagged.splice(index, 1, ...target);
       break;
     }
   }
   return tagged;
+}
+
+/**
+ * Give the trash pull-out its standard 18″ cabinet width when the selected
+ * run can be split into valid stock widths. The remainder stays in the same
+ * wall run as ordinary base cabinet(s), so tagging the functional neighbor
+ * never creates an unaccounted gap in the elevation.
+ */
+function tagTrashPulloutWidth(
+  segment: WallSegment,
+  trashIsAtRightEdge: boolean
+): WallSegment[] {
+  const targetWidth = TRASH_PULLOUT_DEFAULT_WIDTH_SIXTEENTHS;
+  if (segment.widthSixteenths === targetWidth) {
+    return [{
+      ...segment,
+      label: `WB${targetWidth / 16}`,
+      standardWidthSixteenths: targetWidth
+    }];
+  }
+
+  if (segment.widthSixteenths < targetWidth) return [segment];
+
+  const remainder = exactBaseCabinetPartition(
+    segment.widthSixteenths - targetWidth
+  );
+  if (!remainder) {
+    return [{
+      ...segment,
+      label: `WB${Math.round(segment.widthSixteenths / 16)}`
+    }];
+  }
+
+  const widths = trashIsAtRightEdge
+    ? [...remainder, targetWidth]
+    : [targetWidth, ...remainder];
+  return widths.map((width, index) => {
+    const isTrash = trashIsAtRightEdge
+      ? index === widths.length - 1
+      : index === 0;
+    return {
+      ...segment,
+      id: index === 0 ? segment.id : `${segment.id}-trash-split-${index}`,
+      widthSixteenths: width,
+      standardWidthSixteenths: width,
+      label: isTrash ? `WB${width / 16}` : `B${width / 16}`,
+      front: isTrash ? segment.front : undefined
+    };
+  });
 }
 
 /** One classified stretch of the upper tier before segments are emitted. */
@@ -2004,7 +2130,7 @@ function deriveUpperTier(
   });
 
   const wallPrefix = wall.id.toLowerCase();
-  return [
+  return coalesceRunEndClosures([
     ...startInsets,
     ...(startPanel
       ? [
@@ -2030,7 +2156,7 @@ function deriveUpperTier(
         ]
       : []),
     ...endInsets
-  ];
+  ]);
 }
 
 /**

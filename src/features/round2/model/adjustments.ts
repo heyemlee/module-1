@@ -693,5 +693,14 @@ function withLabel(segment: WallSegment): WallSegment {
   if (segment.cabinetKind === "tall") {
     return { ...segment, label: `T${width}` };
   }
+  if (
+    segment.label.startsWith("WB") ||
+    segment.front?.accessories?.includes("trashPullout")
+  ) {
+    return { ...segment, cabinetKind: "base", label: `WB${width}` };
+  }
+  if (segment.label.startsWith("DB")) {
+    return { ...segment, cabinetKind: "base", label: `DB${width}` };
+  }
   return { ...segment, cabinetKind: "base", label: `B${width}` };
 }

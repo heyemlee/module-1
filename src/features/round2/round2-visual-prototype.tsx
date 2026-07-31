@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/server/platform/types";
 import { DrawingReview } from "./drawings/drawing-review";
 import { BasisGate } from "./handoff/basis-gate";
+import { DesignIntentWorkspace } from "./intent/design-intent-workspace";
 import { MeasurementWorkspace } from "./measurement/measurement-workspace";
 import { ProposalWorkspace } from "./proposal/proposal-workspace";
 import { hasBlockingDecisions } from "./model/round2-model";
 import {
   createRound2PrototypeState,
+  intentUnlocked,
+  openIntentCount,
   proposalUnlocked,
   reduceRound2Prototype
 } from "./round2-state";
@@ -159,6 +162,8 @@ export function Round2VisualPrototype({
     />
   ) : state.task === "MEASUREMENT" ? (
       <MeasurementWorkspace state={state} dispatch={dispatch} />
+    ) : state.task === "INTENT" ? (
+      <DesignIntentWorkspace state={state} dispatch={dispatch} />
     ) : state.task === "PROPOSAL" ? (
       <ProposalWorkspace state={state} dispatch={dispatch} />
     ) : (
@@ -235,8 +240,10 @@ export function Round2VisualPrototype({
           <Round2TaskNavigation
             task={state.task}
             onTaskChange={(task) => dispatch({ type: "SET_TASK", task })}
+            intentUnlocked={intentUnlocked(state)}
             proposalUnlocked={proposalUnlocked(state)}
             drawingsBlocked={hasBlockingDecisions(state.model)}
+            openIntentCount={openIntentCount(state)}
           />
         ) : (
           <div className="flex min-h-[58px] items-center justify-between gap-4 px-5">

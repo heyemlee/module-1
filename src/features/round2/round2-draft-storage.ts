@@ -16,7 +16,12 @@ type Round2DraftEnvelope = {
 };
 
 const ROLES: readonly Round2DemoRole[] = ["SALES", "DESIGNER"];
-const TASKS: readonly Round2Task[] = ["MEASUREMENT", "PROPOSAL", "DRAWINGS"];
+const TASKS: readonly Round2Task[] = [
+  "MEASUREMENT",
+  "INTENT",
+  "PROPOSAL",
+  "DRAWINGS"
+];
 const MEASUREMENT_STATUSES: readonly MeasurementStatus[] = [
   "DRAFT",
   "SUBMITTED",

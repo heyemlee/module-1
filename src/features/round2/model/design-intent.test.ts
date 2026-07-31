@@ -6,6 +6,9 @@ import type { Round2Model } from "./round2-model";
 import {
   buildDesignIntentQuestions,
   buildIntentConfirmationDecisions,
+  confirmDesignIntentAnswers,
+  draftDesignIntentAnswer,
+  groupDesignIntentQuestions,
   initializeDesignIntent,
   setDesignIntentAnswer
 } from "./design-intent";
@@ -24,7 +27,7 @@ describe("Round 2 design intent", () => {
     ).toHaveLength(count);
   });
 
-  test("offers corner hardware only in the corner strategy setup", () => {
+  test("groups corner cabinet styles separately from blind cabinet hardware", () => {
     const model = deriveWallsFromRound1(
       planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
     );
@@ -33,22 +36,38 @@ describe("Round 2 design intent", () => {
     );
 
     expect(question?.options).toEqual([
-      { value: "lazySusan", label: "Lazy Susan" },
-      { value: "blindBase", label: "Blind base" },
-      { value: "magicCorner", label: "Blind base + Magic Corner" },
+      {
+        value: "lazySusan",
+        label: "Lazy Susan",
+        group: "cornerCabinet"
+      },
+      {
+        value: "diagonalCorner",
+        label: "Diagonal Corner",
+        group: "cornerCabinet"
+      },
+      { value: "leMans", label: "LeMans", group: "cornerCabinet" },
+      { value: "blindBase", label: "None", group: "blindCabinet" },
+      {
+        value: "magicCorner",
+        label: "Magic Corner",
+        group: "blindCabinet"
+      },
       {
         value: "blindCornerPullOut",
-        label: "Blind base + Blind Corner Pull-Out"
+        label: "Blind Corner Pull-Out",
+        group: "blindCabinet"
       },
       {
         value: "cornerPullOutShelves",
-        label: "Blind base + Corner Pull-Out Shelves"
+        label: "Pull-Out Shelves",
+        group: "blindCabinet"
       }
     ]);
     expect(question?.defaultValue).toBe("lazySusan");
   });
 
-  test("asks about sink-to-window alignment only when both share a wall", () => {
+  test("omits the removed sink, tall, front-balance, and hardware questions", () => {
     const base = planFor("LEFT_L_SHAPE", ["TOP", "LEFT"]);
     const withSinkUnderWindow = deriveWallsFromRound1({
       ...base,
@@ -65,18 +84,16 @@ describe("Round 2 design intent", () => {
         }
       ]
     });
-    const windowWithoutSink = deriveWallsFromRound1(base);
+    const questions = buildDesignIntentQuestions(withSinkUnderWindow, {});
 
-    expect(
-      buildDesignIntentQuestions(withSinkUnderWindow, {}).filter(
-        (question) => question.kind === "sink-window-alignment"
-      )
-    ).toHaveLength(1);
-    expect(
-      buildDesignIntentQuestions(windowWithoutSink, {}).filter(
-        (question) => question.kind === "sink-window-alignment"
-      )
-    ).toHaveLength(0);
+    expect(questions.map((question) => question.key)).not.toEqual(
+      expect.arrayContaining([
+        "sink-window.A.alignment",
+        "tall.location",
+        "fronts.balance",
+        "hardware.style"
+      ])
+    );
   });
 
   test("uses measured ceiling height in the upper-cabinet prompt", () => {
@@ -160,21 +177,144 @@ describe("Round 2 design intent", () => {
     const model = deriveWallsFromRound1(
       planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
     );
-    const questions = buildDesignIntentQuestions(model, {});
-    const first = questions[0];
+    const groups = groupDesignIntentQuestions(
+      buildDesignIntentQuestions(model, {})
+    );
+    const first = groups[0];
     const initial = initializeDesignIntent(model);
     const confirmed = setDesignIntentAnswer(
       initial,
-      first.key,
-      first.options[1]?.value ?? first.defaultValue
+      first.id,
+      first.questions[0].options[1]?.value ?? first.questions[0].defaultValue
     );
     const decisions = buildIntentConfirmationDecisions(model, confirmed, {});
 
-    expect(decisions).toHaveLength(questions.length - 1);
-    expect(decisions.some((decision) => decision.id.includes(first.key))).toBe(
+    // One item per unconfirmed group, so the count the stage promises is the
+    // count the proposal shows.
+    expect(decisions).toHaveLength(groups.length - 1);
+    expect(decisions.some((decision) => decision.id.includes(first.id))).toBe(
       false
     );
     expect(decisions[0]?.title).toContain("Confirmation required");
+  });
+
+  test("reports a merged group as one outstanding item", () => {
+    const model = deriveWallsFromRound1(
+      planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
+    );
+    const intent = initializeDesignIntent(model);
+
+    const upperItems = () =>
+      buildIntentConfirmationDecisions(model, intent, {}).filter((decision) =>
+        decision.id.startsWith("decision-intent-uppers.")
+      );
+    expect(upperItems()).toHaveLength(1);
+    expect(upperItems()[0]?.body).toContain("Standard height · 3″");
+
+    // Confirming only the termination half leaves the single item standing.
+    const half = confirmDesignIntentAnswers(intent, ["uppers.termination"]);
+    expect(
+      buildIntentConfirmationDecisions(model, half, {}).filter((decision) =>
+        decision.id.startsWith("decision-intent-uppers.")
+      )
+    ).toHaveLength(1);
+
+    const whole = confirmDesignIntentAnswers(half, ["uppers.moulding"]);
+    expect(
+      buildIntentConfirmationDecisions(model, whole, {}).filter((decision) =>
+        decision.id.startsWith("decision-intent-uppers.")
+      )
+    ).toHaveLength(0);
+  });
+
+  test("groups the moulding follow-up into the upper-height row", () => {
+    const model = deriveWallsFromRound1(
+      planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
+    );
+    const questions = buildDesignIntentQuestions(model, {});
+    const groups = groupDesignIntentQuestions(questions);
+
+    // One row per question, minus the moulding question folded into its lead.
+    expect(groups).toHaveLength(questions.length - 1);
+    expect(
+      groups.some((group) => group.kind === "flat-moulding")
+    ).toBe(false);
+
+    const upper = groups.find((group) => group.kind === "upper-termination");
+    expect(upper?.id).toBe("uppers.termination");
+    expect(upper?.questions.map((question) => question.key)).toEqual([
+      "uppers.termination",
+      "uppers.moulding"
+    ]);
+
+    // Every question still reaches exactly one row, so nothing can be
+    // confirmed-by-omission.
+    expect(groups.flatMap((group) => group.questions)).toHaveLength(
+      questions.length
+    );
+  });
+
+  test("keeps a moulding question that has no upper-height lead", () => {
+    const model = deriveWallsFromRound1(
+      planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
+    );
+    const moulding = buildDesignIntentQuestions(model, {}).filter(
+      (question) => question.kind === "flat-moulding"
+    );
+    const groups = groupDesignIntentQuestions(moulding);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.questions).toEqual(moulding);
+  });
+
+  test("drafting an answer leaves it unconfirmed and reopens a settled one", () => {
+    const model = deriveWallsFromRound1(
+      planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
+    );
+    const confirmed = setDesignIntentAnswer(
+      initializeDesignIntent(model),
+      "hood.style",
+      "chimney"
+    );
+    expect(confirmed.confirmedKeys).toContain("hood.style");
+
+    const drafted = draftDesignIntentAnswer(
+      confirmed,
+      "hood.style",
+      "underCabinet"
+    );
+
+    expect(drafted.answers["hood.style"]).toBe("underCabinet");
+    expect(drafted.confirmedKeys).not.toContain("hood.style");
+    expect(
+      buildIntentConfirmationDecisions(model, drafted, {}).some((decision) =>
+        decision.id.includes("hood.style")
+      )
+    ).toBe(true);
+  });
+
+  test("confirming changes no answers and is idempotent", () => {
+    const model = deriveWallsFromRound1(
+      planFor("LEFT_L_SHAPE", ["TOP", "LEFT"])
+    );
+    const initial = initializeDesignIntent(model);
+    const confirmed = confirmDesignIntentAnswers(initial, [
+      "hood.style",
+      "trash.location"
+    ]);
+
+    expect(confirmed.answers).toEqual(initial.answers);
+    expect(confirmed.confirmedKeys).toEqual(["hood.style", "trash.location"]);
+    expect(
+      buildIntentConfirmationDecisions(model, confirmed, {}).some((decision) =>
+        decision.id.includes("hood.style")
+      )
+    ).toBe(false);
+
+    // Re-confirming is a no-op, so a bulk "confirm all" cannot duplicate keys.
+    expect(confirmDesignIntentAnswers(confirmed, ["hood.style"])).toBe(
+      confirmed
+    );
   });
 });
 

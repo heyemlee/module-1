@@ -11,6 +11,8 @@ import { deriveCorners } from "./corners";
 
 export type CornerStrategy =
   | "lazySusan"
+  | "diagonalCorner"
+  | "leMans"
   | "blindBase"
   | "magicCorner"
   | "blindCornerPullOut"
@@ -111,17 +113,14 @@ export type DesignIntentQuestionKind =
   | "corner-upper-strategy"
   | "upper-termination"
   | "flat-moulding"
-  | "tall-location"
   | "trash-pullout"
-  | "cabinet-fronts"
   | "hood-style"
-  | "hardware"
-  | "sink-window-alignment"
   | "dishwasher-placement";
 
 export type DesignIntentOption = {
   value: DesignIntentValue;
   label: string;
+  group?: "cornerCabinet" | "blindCabinet";
 };
 
 export type DesignIntentQuestion = {
@@ -143,29 +142,6 @@ export function buildDesignIntentQuestions(
 
   const firstWall = model.walls[0];
   const questions: DesignIntentQuestion[] = [];
-
-  // The sink cabinet is confirmed first in the design proposal: it anchors to
-  // the window center and every other placement packs around it.
-  for (const wall of model.walls) {
-    const window = wall.fixedPoints.find((point) => point.type === "window");
-    const sink = wall.fixedPoints.find(
-      (point) => point.type === "appliance" && point.symbol === "sink"
-    );
-    if (!window || !sink) continue;
-    questions.push({
-      key: `sink-window.${wall.id}.alignment`,
-      kind: "sink-window-alignment",
-      label: `Center the sink under Wall ${wall.label} window?`,
-      helper: "This becomes a fixed alignment rule during autofill.",
-      defaultValue: "align",
-      options: [
-        { value: "align", label: "Center under window" },
-        { value: "keepRound1", label: "Keep Round 1 intent" }
-      ],
-      wallId: wall.id,
-      objectId: window.id
-    });
-  }
 
   // The dishwasher docks against the sink by default (shared plumbing). When
   // Round 1 placed it more than one cabinet away from the docked position,
@@ -217,19 +193,36 @@ export function buildDesignIntentQuestions(
       key: corner.intentKey,
       kind: "corner-strategy",
       label: `Corner ${corner.primary.label}–${corner.secondary.label} strategy`,
-      helper: "Default uses a true corner cabinet; blind-base options stay straight on their main wall.",
+      helper:
+        "Corner cabinets turn the corner with a carousel or diagonal door; blind cabinets close it flat and reach the dead space with hardware.",
       defaultValue: "lazySusan",
       options: [
-        { value: "lazySusan", label: "Lazy Susan" },
-        { value: "blindBase", label: "Blind base" },
-        { value: "magicCorner", label: "Blind base + Magic Corner" },
+        {
+          value: "lazySusan",
+          label: "Lazy Susan",
+          group: "cornerCabinet"
+        },
+        {
+          value: "diagonalCorner",
+          label: "Diagonal Corner",
+          group: "cornerCabinet"
+        },
+        { value: "leMans", label: "LeMans", group: "cornerCabinet" },
+        { value: "blindBase", label: "None", group: "blindCabinet" },
+        {
+          value: "magicCorner",
+          label: "Magic Corner",
+          group: "blindCabinet"
+        },
         {
           value: "blindCornerPullOut",
-          label: "Blind base + Blind Corner Pull-Out"
+          label: "Blind Corner Pull-Out",
+          group: "blindCabinet"
         },
         {
           value: "cornerPullOutShelves",
-          label: "Blind base + Corner Pull-Out Shelves"
+          label: "Pull-Out Shelves",
+          group: "blindCabinet"
         }
       ],
       wallId: corner.primary.id,
@@ -278,24 +271,8 @@ export function buildDesignIntentQuestions(
       defaultValue: "flat3",
       options: [
         { value: "none", label: "None" },
-        { value: "flat2", label: "2″ flat" },
-        { value: "flat3", label: "3″ flat" }
-      ],
-      wallId: firstWall.id,
-      objectId: firstWall.id
-    },
-    {
-      key: "tall.location",
-      kind: "tall-location",
-      label: "Tall cabinet location",
-      helper: "Auto keeps tall cabinets near a wall end and away from windows.",
-      defaultValue: "auto",
-      options: [
-        { value: "auto", label: "Auto" },
-        ...model.walls.map((wall) => ({
-          value: `wall:${wall.id}` as TallCabinetLocation,
-          label: `Wall ${wall.label}`
-        }))
+        { value: "flat2", label: "2″" },
+        { value: "flat3", label: "3″" }
       ],
       wallId: firstWall.id,
       objectId: firstWall.id
@@ -315,20 +292,6 @@ export function buildDesignIntentQuestions(
       objectId: firstWall.id
     },
     {
-      key: "fronts.balance",
-      kind: "cabinet-fronts",
-      label: "Drawer-to-door preference",
-      helper: "This sets the starting mix; individual cabinets remain editable.",
-      defaultValue: "balanced",
-      options: [
-        { value: "drawerForward", label: "More drawers" },
-        { value: "balanced", label: "Balanced" },
-        { value: "doorForward", label: "More doors" }
-      ],
-      wallId: firstWall.id,
-      objectId: firstWall.id
-    },
-    {
       key: "hood.style",
       kind: "hood-style",
       label: "Range hood form",
@@ -341,23 +304,100 @@ export function buildDesignIntentQuestions(
       ],
       wallId: firstWall.id,
       objectId: firstWall.id
-    },
-    {
-      key: "hardware.style",
-      kind: "hardware",
-      label: "Global hardware default",
-      helper: "The proposal can override this cabinet by cabinet.",
-      defaultValue: "handle",
-      options: [
-        { value: "handle", label: "Handle" },
-        { value: "fingerPull", label: "Finger pull" }
-      ],
-      wallId: firstWall.id,
-      objectId: firstWall.id
     }
   );
 
   return questions;
+}
+
+/**
+ * One row in the design-intent checklist. Most questions stand alone, but a few
+ * only make sense together — the upper-cabinet height and its moulding
+ * treatment are one decision the user makes in one place — so the UI iterates
+ * over groups rather than raw questions. That also makes the progress count
+ * honest: a merged pair is one thing to confirm, not two.
+ */
+export type DesignIntentGroup = {
+  /** Stable id for the row; the lead question's key. */
+  id: string;
+  kind: DesignIntentQuestionKind;
+  /** Which heading the group files under in the design-intent stage. */
+  section: DesignIntentSection;
+  label: string;
+  helper: string;
+  /** Lead question first, then any follow-up shown in the same row. */
+  questions: DesignIntentQuestion[];
+  wallId: WallId;
+  objectId: string;
+};
+
+/**
+ * Headings the design-intent stage groups questions under. Corners come and go
+ * with the topology and appliance questions are conditional, so a section can be
+ * empty and must not render.
+ */
+export type DesignIntentSection = "corners" | "uppers" | "appliances";
+
+export const DESIGN_INTENT_SECTIONS: readonly DesignIntentSection[] = [
+  "corners",
+  "uppers",
+  "appliances"
+];
+
+function sectionFor(kind: DesignIntentQuestionKind): DesignIntentSection {
+  if (kind === "corner-strategy" || kind === "corner-upper-strategy") {
+    return "corners";
+  }
+  if (kind === "upper-termination" || kind === "flat-moulding") return "uppers";
+  return "appliances";
+}
+
+export function groupDesignIntentQuestions(
+  questions: readonly DesignIntentQuestion[]
+): DesignIntentGroup[] {
+  const followUps = questions.filter(
+    (question) => question.kind === "flat-moulding"
+  );
+  const groups: DesignIntentGroup[] = [];
+
+  for (const question of questions) {
+    if (question.kind === "flat-moulding") continue;
+    groups.push({
+      id: question.key,
+      kind: question.kind,
+      section: sectionFor(question.kind),
+      label: question.label,
+      helper: question.helper,
+      questions:
+        question.kind === "upper-termination"
+          ? [question, ...followUps]
+          : [question],
+      wallId: question.wallId,
+      objectId: question.objectId
+    });
+  }
+
+  // A follow-up with no lead question would otherwise vanish from the
+  // checklist — and from the confirmation count — so give it its own row.
+  if (
+    followUps.length > 0 &&
+    !questions.some((question) => question.kind === "upper-termination")
+  ) {
+    for (const question of followUps) {
+      groups.push({
+        id: question.key,
+        kind: question.kind,
+        section: sectionFor(question.kind),
+        label: question.label,
+        helper: question.helper,
+        questions: [question],
+        wallId: question.wallId,
+        objectId: question.objectId
+      });
+    }
+  }
+
+  return groups;
 }
 
 export function initializeDesignIntent(
@@ -374,6 +414,12 @@ export function initializeDesignIntent(
   };
 }
 
+/**
+ * Sets an answer and treats the edit itself as the confirmation. Used where
+ * picking the control *is* the deliberate decision — the elevation's corner and
+ * fridge setup cards, where a designer clicks a specific strategy on a specific
+ * unit.
+ */
 export function setDesignIntentAnswer(
   intent: Round2DesignIntent,
   key: DesignIntentKey,
@@ -387,26 +433,79 @@ export function setDesignIntentAnswer(
   };
 }
 
+/**
+ * Sets an answer *without* confirming it, and drops any earlier confirmation.
+ * Used by the field-measurement panel, where selecting an option and confirming
+ * it are separate acts: a value the user is still trying out must not silently
+ * clear its Confirmation Required item, and re-opening a settled question to
+ * change it puts that question back in play.
+ */
+export function draftDesignIntentAnswer(
+  intent: Round2DesignIntent,
+  key: DesignIntentKey,
+  value: DesignIntentValue
+): Round2DesignIntent {
+  return {
+    answers: { ...intent.answers, [key]: value },
+    confirmedKeys: intent.confirmedKeys.filter((item) => item !== key)
+  };
+}
+
+/**
+ * Confirms answers as they currently stand, changing no values. This is the
+ * explicit "Keep default" / "Confirm" action: accepting a default is a real
+ * click that the user can be held to, rather than something inferred from them
+ * having re-picked the option that was already selected.
+ */
+export function confirmDesignIntentAnswers(
+  intent: Round2DesignIntent,
+  keys: readonly DesignIntentKey[]
+): Round2DesignIntent {
+  const added = keys.filter((key) => !intent.confirmedKeys.includes(key));
+  if (added.length === 0) return intent;
+  return {
+    answers: intent.answers,
+    confirmedKeys: [...intent.confirmedKeys, ...added]
+  };
+}
+
+function appliedLabel(
+  question: DesignIntentQuestion,
+  intent: Round2DesignIntent
+): string {
+  const answer = intent.answers[question.key] ?? question.defaultValue;
+  const option =
+    question.options.find((item) => item.value === answer) ??
+    question.options.find((item) => item.value === question.defaultValue);
+  return option?.label ?? String(answer);
+}
+
+/**
+ * One Confirmation Required item per unconfirmed *group*, matching what the
+ * design-intent stage counts and asks. Emitting one per question would promise
+ * the user six outstanding items and then show them seven, because the upper
+ * height and its moulding are one question in the stage and two keys underneath.
+ */
 export function buildIntentConfirmationDecisions(
   model: Round2Model,
   intent: Round2DesignIntent,
   measurements: Record<string, number | null>
 ): Round2DecisionItem[] {
   const confirmed = new Set(intent.confirmedKeys);
-  return buildDesignIntentQuestions(model, measurements)
-    .filter((question) => !confirmed.has(question.key))
-    .map((question) => {
-      const answer = intent.answers[question.key] ?? question.defaultValue;
-      const option =
-        question.options.find((item) => item.value === answer) ??
-        question.options.find((item) => item.value === question.defaultValue);
-      return {
-        id: `decision-intent-${question.key}`,
-        objectId: question.objectId,
-        wallId: question.wallId,
-        severity: "warning",
-        title: `Confirmation required: ${question.label}`,
-        body: `Default “${option?.label ?? answer}” was applied. Confirm or revise this design intent before final review.`
-      };
-    });
+  return groupDesignIntentQuestions(
+    buildDesignIntentQuestions(model, measurements)
+  )
+    .filter((group) =>
+      group.questions.some((question) => !confirmed.has(question.key))
+    )
+    .map((group) => ({
+      id: `decision-intent-${group.id}`,
+      objectId: group.objectId,
+      wallId: group.wallId,
+      severity: "warning" as const,
+      title: `Confirmation required: ${group.label}`,
+      body: `Default “${group.questions
+        .map((question) => appliedLabel(question, intent))
+        .join(" · ")}” was applied. Confirm or revise this design intent before final review.`
+    }));
 }
