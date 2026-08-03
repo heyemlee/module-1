@@ -12,6 +12,7 @@ import {
   formatSixteenths
 } from "./round2-model";
 import { CABINET_STANDARDS } from "./cabinet-standards";
+import { mergeUnits, updateModelDecisions } from "./adjustments";
 import { deriveCorners, type Round2Corner } from "./corners";
 import {
   buildIntentConfirmationDecisions,
@@ -204,19 +205,82 @@ export function autofillRound2Model(
     })
   }));
 
-  const filledModel: Round2Model = {
-    ...measuredModel,
-    walls: preservedWalls,
-    heightProfile: height.profile,
-    decisionItems
-  };
+  const filledModel = replayMerges(
+    {
+      ...measuredModel,
+      walls: preservedWalls,
+      heightProfile: height.profile,
+      decisionItems
+    },
+    measuredModel
+  );
   if (!intent) return filledModel;
 
   return {
     ...filledModel,
     decisionItems: [
-      ...decisionItems,
+      ...filledModel.decisionItems,
       ...buildIntentConfirmationDecisions(filledModel, intent, measurements)
+    ]
+  };
+}
+
+/**
+ * Re-applies the merges a designer made — two cabinets folded into one, a
+ * filler absorbed by its neighbour — after the run has been rebuilt.
+ *
+ * This runs last, on the finished geometry, rather than feeding the partition:
+ * the upper tier is derived from the base run's seams, so letting a merge
+ * reshape the partition would re-flow the uppers. Replaying afterwards keeps
+ * every other unit exactly where autofill put it, which is the whole point of
+ * merging rather than deleting.
+ *
+ * A merge whose units no longer exist (a remeasure repartitioned the span, an
+ * appliance changed width) cannot be replayed. That is reported rather than
+ * applied approximately, so the designer re-makes the call on the new run.
+ */
+function replayMerges(
+  model: Round2Model,
+  previous: Round2Model
+): Round2Model {
+  const records = previous.walls.flatMap((wall) =>
+    wall.segments
+      .filter((segment) => (segment.mergedFrom?.length ?? 0) > 0)
+      .map((segment) => ({
+        wall,
+        label: segment.label,
+        ids: (segment.mergedFrom ?? []).map((unit) => unit.id)
+      }))
+  );
+  if (records.length === 0) return model;
+
+  const decisionItems = [...model.decisionItems];
+  let merged = model;
+  for (const record of records) {
+    const next = mergeUnits(merged, record.ids);
+    if (next === merged) {
+      decisionItems.push({
+        id: `decision-${record.ids[0]}-merge-dropped`,
+        objectId: record.ids[0],
+        wallId: record.wall.id,
+        severity: "warning",
+        title: `Wall ${record.wall.label} merge was not reapplied`,
+        body: `${record.label} was merged from ${record.ids.length} units that this layout no longer has. The run was rebuilt without it — merge again if it still applies.`
+      });
+      continue;
+    }
+    // mergeUnits recomputes decisions for the whole model; autofill owns that
+    // list here, so keep it and pick the oversize warnings back up below.
+    merged = { ...next, decisionItems: model.decisionItems };
+  }
+
+  return {
+    ...merged,
+    decisionItems: [
+      ...decisionItems,
+      ...updateModelDecisions(merged).decisionItems.filter((item) =>
+        item.id.endsWith("-oversize")
+      )
     ]
   };
 }

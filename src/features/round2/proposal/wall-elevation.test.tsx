@@ -1103,6 +1103,106 @@ describe("WallElevation", () => {
     expect(gapHtml).toContain("Cabinets beside it will not resize or shift.");
   });
 
+  test("offers merge buttons naming the cabinet each merge would produce", () => {
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          cabinet("a-b12-1", 12 * 16),
+          cabinet("a-b12-2", 12 * 16),
+          cabinet("a-window-filler", 3 * 16, "filler")
+        ])}
+        selectedObjectId="a-b12-2"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const editor = html.slice(
+      html.indexOf('<div data-testid="segment-editor-card"')
+    );
+
+    expect(editor).toContain('aria-label="Merge left into B24"');
+    expect(editor).toContain('aria-label="Merge right into B15"');
+  });
+
+  test("offers no merge past the run end and refuses to absorb an appliance", () => {
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          cabinet("a-b12-1", 12 * 16),
+          {
+            ...cabinet("a-range", 30 * 16, "appliance"),
+            label: "RNG30",
+            sourceFixedPointId: "a-range-point"
+          }
+        ])}
+        selectedObjectId="a-b12-1"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const editor = html.slice(
+      html.indexOf('<div data-testid="segment-editor-card"')
+    );
+
+    expect(editor).toContain('aria-label="No unit to merge left"');
+    // The appliance side is refused, so it is never named as an outcome.
+    expect(editor).toContain('aria-label="No unit to merge right"');
+    expect(editor).not.toContain("B42");
+    expect(editor).toContain("disabled");
+    expect(editor).toContain("RNG30 is fixed geometry");
+  });
+
+  test("keeps open space the default for a filler, with absorbing as a second option", () => {
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          cabinet("a-b12-1", 12 * 16),
+          cabinet("a-window-filler", 3 * 16, "filler")
+        ])}
+        selectedObjectId="a-window-filler"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    const editor = html.slice(
+      html.indexOf('<div data-testid="segment-editor-card"')
+    );
+
+    expect(editor.indexOf("Remove filler · keep open space")).toBeLessThan(
+      editor.indexOf("OR ABSORB INTO A NEIGHBOUR")
+    );
+    expect(editor).toContain('aria-label="Merge left into B15"');
+  });
+
+  test("offers a restore control on a merged cabinet", () => {
+    const html = renderToStaticMarkup(
+      <WallElevation
+        wallId="A"
+        model={elevationModel([
+          {
+            ...cabinet("a-b24", 24 * 16),
+            mergedFrom: [
+              { id: "a-b12-1", kind: "cabinet", widthSixteenths: 12 * 16 },
+              { id: "a-b12-2", kind: "cabinet", widthSixteenths: 12 * 16 }
+            ]
+          }
+        ])}
+        selectedObjectId="a-b24"
+        canEdit={true}
+        dispatch={() => {}}
+        onSelect={() => {}}
+      />
+    );
+
+    expect(html).toContain("Restore 2 units");
+  });
+
   test("offers a re-center control on an anchored sink that has drifted off the window", () => {
     const model = elevationModel([
       cabinet("a-left", 30 * 16),

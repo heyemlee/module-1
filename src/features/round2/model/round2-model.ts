@@ -57,6 +57,14 @@ export type WallSegmentFront = {
   accessories?: FrontAccessory[];
 };
 
+/** One unit absorbed by a merge, kept only so the merge can be undone. */
+export type MergedUnit = {
+  id: string;
+  kind: Extract<WallSegmentKind, "cabinet" | "filler" | "gap">;
+  widthSixteenths: number;
+  intentionalGap?: boolean;
+};
+
 export type WallSegment = {
   id: string;
   wallId: WallId;
@@ -80,6 +88,14 @@ export type WallSegment = {
   anchored?: boolean;
   /** User explicitly kept this former filler as open space. */
   intentionalGap?: boolean;
+  /**
+   * The units this cabinet was merged from, in run order, so one "restore"
+   * puts the original run back. Merges flatten into a single list, so merging
+   * an already-merged unit again still restores all the way to autofill's
+   * partition. Front exceptions on the absorbed units are not kept: the merged
+   * face re-derives from the combined width.
+   */
+  mergedFrom?: MergedUnit[];
   /**
    * Vertical span of a finished panel (见光板). "full" runs floor to cabinet
    * top beside a tall unit; "tier" matches its own tier's cabinet height (the

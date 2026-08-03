@@ -6,10 +6,14 @@ import {
 } from "./round2-model";
 import {
   heightProfileTotal,
+  mergeUnits,
   nudgeGroup,
+  previewMerge,
   recenterSink,
   removeFiller,
+  renumberUnits,
   restoreFiller,
+  splitUnit,
   setFillerPlacement,
   setHeightProfile,
   setSegmentFront,
@@ -516,6 +520,196 @@ describe("Round 2 constrained adjustments", () => {
     expect(updated.decisionItems[0].body).toContain("3");
   });
 });
+
+describe("Round 2 unit merging", () => {
+  test("merges two adjacent 12″ cabinets into one 24″ without moving the run", () => {
+    const before = modelWithWall(wallWithTwelvePair());
+    const rangeStart = segmentStart(before.walls[0], "a-range");
+
+    const merged = mergeUnits(before, ["a-b12-1", "a-b12-2"]);
+    const wall = merged.walls[0];
+
+    expect(segmentWidth(wall, "a-b12-1")).toBe(24 * 16);
+    expect(segmentWidth(wall, "a-b12-2")).toBeUndefined();
+    expect(findSeg(wall, "a-b12-1")?.label).toBe("B24");
+    expect(segmentStart(wall, "a-range")).toBe(rangeStart);
+    expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+    expect(merged.decisionItems).toHaveLength(0);
+  });
+
+  test("absorbs a window-side filler into the cabinet beside it", () => {
+    const before = modelWithWall(wallWithTwelvePair());
+    const rangeStart = segmentStart(before.walls[0], "a-range");
+
+    const merged = mergeUnits(before, ["a-b12-2", "a-window-filler"]);
+    const wall = merged.walls[0];
+
+    expect(segmentWidth(wall, "a-b12-2")).toBe(14 * 16 + 4);
+    expect(segmentWidth(wall, "a-window-filler")).toBeUndefined();
+    expect(findSeg(wall, "a-b12-2")?.standardWidthSixteenths).toBeUndefined();
+    expect(segmentStart(wall, "a-range")).toBe(rangeStart);
+    expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+  });
+
+  test("refuses to absorb an appliance or an anchored sink", () => {
+    const ranged = modelWithWall(wallWithTwelvePair());
+    expect(mergeUnits(ranged, ["a-window-filler", "a-range"])).toBe(ranged);
+    expect(
+      previewMerge(ranged.walls[0], "a-window-filler", "right")?.blockedReason
+    ).toContain("fixed geometry");
+
+    const sinked = modelWithWall(wallWithAnchoredSink());
+    expect(mergeUnits(sinked, ["a-left-filler", "a-sink"])).toBe(sinked);
+  });
+
+  test("refuses a merge that is not contiguous or holds no cabinet", () => {
+    const model = modelWithWall(wallWithTwelvePair());
+    expect(mergeUnits(model, ["a-b12-1", "a-window-filler"])).toBe(model);
+    expect(mergeUnits(model, ["a-b12-1"])).toBe(model);
+  });
+
+  test("offers no merge past the end of the run", () => {
+    const model = modelWithWall(wallWithTwelvePair());
+    expect(previewMerge(model.walls[0], "a-b12-1", "left")).toBeNull();
+    expect(previewMerge(model.walls[0], "a-b12-1", "right")?.label).toBe("B24");
+  });
+
+  test("restores the original units, including after a second merge", () => {
+    const model = modelWithWall(wallWithTwelvePair());
+    const once = mergeUnits(model, ["a-b12-1", "a-b12-2"]);
+    const twice = mergeUnits(once, ["a-b12-1", "a-window-filler"]);
+    expect(segmentWidth(twice.walls[0], "a-b12-1")).toBe(26 * 16 + 4);
+
+    const restored = splitUnit(twice, "a-b12-1");
+    const wall = restored.walls[0];
+
+    expect(segmentWidth(wall, "a-b12-1")).toBe(12 * 16);
+    expect(segmentWidth(wall, "a-b12-2")).toBe(12 * 16);
+    expect(segmentWidth(wall, "a-window-filler")).toBe(2 * 16 + 4);
+    expect(findSeg(wall, "a-window-filler")?.kind).toBe("filler");
+    expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+    expect(splitUnit(restored, "a-b12-1")).toBe(restored);
+  });
+
+  test("absorbs open space the designer kept, and gives it back on restore", () => {
+    const opened = removeFiller(
+      modelWithWall(wallWithTwelvePair()),
+      "a-window-filler"
+    );
+    const merged = mergeUnits(opened, ["a-b12-2", "a-window-filler"]);
+    expect(segmentWidth(merged.walls[0], "a-b12-2")).toBe(14 * 16 + 4);
+
+    const restored = splitUnit(merged, "a-b12-2");
+    const gap = findSeg(restored.walls[0], "a-window-filler");
+    expect(gap?.kind).toBe("gap");
+    expect(gap?.intentionalGap).toBe(true);
+  });
+
+  test("reissues cabinet and filler codes so the schedule has no gaps", () => {
+    const numbered = renumberUnits(modelWithWall(wallWithAnchoredSink()));
+    expect(numbered.walls[0].segments.map((segment) => segment.code)).toEqual([
+      "#1",
+      "F1",
+      "#2",
+      "F2",
+      "#3"
+    ]);
+
+    const merged = mergeUnits(numbered, ["a-left-cabinet", "a-left-filler"]);
+    expect(merged.walls[0].segments.map((segment) => segment.code)).toEqual([
+      "#1",
+      "#2",
+      "F1",
+      "#3"
+    ]);
+  });
+
+  test("keeps an over-standard merge closed but raises it as a decision", () => {
+    const merged = mergeUnits(modelWithWall(wallWithAnchoredSink()), [
+      "a-left-cabinet",
+      "a-left-filler"
+    ]);
+    const wall = merged.walls[0];
+
+    expect(segmentWidth(wall, "a-left-cabinet")).toBe(45 * 16);
+    expect(wallTierTotal(wall, "base")).toBe(wall.lengthSixteenths);
+    expect(
+      merged.decisionItems.filter((item) => item.severity === "blocking")
+    ).toHaveLength(0);
+    expect(
+      merged.decisionItems.find((item) => item.id.endsWith("-oversize"))?.body
+    ).toContain("36″");
+    expect(previewMerge(merged.walls[0], "a-left-cabinet", "right")).not.toBeNull();
+  });
+
+  test("drops a door exception chosen against the old width", () => {
+    const wall = wallWithTwelvePair();
+    wall.segments = wall.segments.map((segment) =>
+      segment.id === "a-b12-1"
+        ? {
+            ...segment,
+            front: { doorCount: 1 as const, hardware: "fingerPull" as const }
+          }
+        : segment
+    );
+    const merged = mergeUnits(modelWithWall(wall), ["a-b12-1", "a-b12-2"]);
+    const front = findSeg(merged.walls[0], "a-b12-1")?.front;
+
+    expect(front?.doorCount).toBeUndefined();
+    expect(front?.hardware).toBe("fingerPull");
+  });
+});
+
+// 56 1/4″ wall: two 12″ cabinets side by side, a 2 1/4″ strip beside the range.
+function wallWithTwelvePair(): Round2Wall {
+  return {
+    id: "A",
+    label: "A",
+    sourceWall: "TOP",
+    lengthSixteenths: 56 * 16 + 4,
+    fixedPoints: [],
+    notes: [],
+    segments: [
+      {
+        id: "a-b12-1",
+        wallId: "A",
+        tier: "base",
+        kind: "cabinet",
+        widthSixteenths: 12 * 16,
+        label: "B12",
+        cabinetKind: "base",
+        standardWidthSixteenths: 12 * 16
+      },
+      {
+        id: "a-b12-2",
+        wallId: "A",
+        tier: "base",
+        kind: "cabinet",
+        widthSixteenths: 12 * 16,
+        label: "B12",
+        cabinetKind: "base",
+        standardWidthSixteenths: 12 * 16
+      },
+      {
+        id: "a-window-filler",
+        wallId: "A",
+        tier: "base",
+        kind: "filler",
+        widthSixteenths: 2 * 16 + 4,
+        label: "F2"
+      },
+      {
+        id: "a-range",
+        wallId: "A",
+        tier: "base",
+        kind: "appliance",
+        widthSixteenths: 30 * 16,
+        label: "RNG30",
+        sourceFixedPointId: "a-range-point"
+      }
+    ]
+  };
+}
 
 function wallWithSegments(): Round2Wall {
   return {

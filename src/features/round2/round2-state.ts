@@ -1,5 +1,6 @@
 import { autofillRound2Model } from "./model/autofill";
 import {
+  mergeUnits,
   nudgeGroup,
   recenterSink,
   removeFiller,
@@ -8,6 +9,7 @@ import {
   setHeightProfile,
   setSegmentFront,
   setSegmentKind,
+  splitUnit,
   stepCabinetWidth
 } from "./model/adjustments";
 import { deriveWallsFromRound1 } from "./model/derive-walls";
@@ -249,6 +251,20 @@ export function reduceRound2Prototype(
       return applyProposalAdjustment(
         state,
         (model) => restoreFiller(model, action.objectId),
+        action.objectId
+      );
+    case "MERGE_UNITS":
+      // The merged unit keeps the leftmost id, so the selection and the open
+      // editor card follow the merge rather than pointing at a dropped unit.
+      return applyProposalAdjustment(
+        state,
+        (model) => mergeUnits(model, action.objectIds),
+        survivingMergeId(state.model, action.objectIds)
+      );
+    case "SPLIT_UNIT":
+      return applyProposalAdjustment(
+        state,
+        (model) => splitUnit(model, action.objectId),
         action.objectId
       );
     case "SET_SEGMENT_KIND":
@@ -810,6 +826,24 @@ function findAbsorbedFiller(
     }
   }
   return null;
+}
+
+/**
+ * Which id a merge leaves behind: the one earliest in its wall's run, since
+ * that is the unit the merged cabinet inherits.
+ */
+function survivingMergeId(
+  model: Round2Model | null,
+  objectIds: readonly string[]
+): string | null {
+  if (!model || objectIds.length === 0) return null;
+  for (const wall of model.walls) {
+    const survivor = wall.segments.find((segment) =>
+      objectIds.includes(segment.id)
+    );
+    if (survivor) return survivor.id;
+  }
+  return objectIds[0];
 }
 
 function firstSegmentById(

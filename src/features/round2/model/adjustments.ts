@@ -2,6 +2,7 @@ import { CABINET_STANDARDS } from "./cabinet-standards";
 import {
   type CabinetKind,
   type FrontAccessory,
+  type MergedUnit,
   type Round2DecisionItem,
   type Round2HeightProfile,
   type Round2Model,
@@ -16,6 +17,12 @@ import {
 
 export type NudgeDirection = "left" | "right";
 export type FillerPlacement = "start" | "end" | "split";
+export type MergeSide = "left" | "right";
+
+const MAX_CABINET_WIDTH_SIXTEENTHS =
+  CABINET_STANDARDS.base.widthsSixteenths[
+    CABINET_STANDARDS.base.widthsSixteenths.length - 1
+  ];
 
 export function removeFiller(model: Round2Model, segmentId: string): Round2Model {
   const context = findSegmentContext(model, segmentId);
@@ -44,6 +51,274 @@ export function restoreFiller(model: Round2Model, segmentId: string): Round2Mode
       : segment
   );
   return updateModelDecisions(replaceWallSegments(model, context.wall.id, segments));
+}
+
+/**
+ * Merging is how a unit is removed. Segment widths must total the wall length
+ * (see updateModelDecisions), so a unit cannot simply vanish — its width is
+ * handed to the neighbour it merges with. The merged run keeps the same start
+ * and end, so nothing else on the wall moves: two 12″ cabinets become one 24″,
+ * and a filler beside a window becomes part of the cabinet next to it.
+ *
+ * Ids must name segments of one wall and one tier that sit next to each other
+ * in the run, with at least one cabinet among them. Anything else — an
+ * appliance, an opening, a finished panel, a corner unit, the sink anchored to
+ * a window — is left out on purpose: absorbing those would move fixed geometry.
+ */
+export function mergeUnits(
+  model: Round2Model,
+  segmentIds: readonly string[]
+): Round2Model {
+  const plan = planMerge(model, segmentIds);
+  if (!plan) return model;
+
+  const absorbed = new Set(plan.members.slice(1).map((member) => member.id));
+  const merged = mergedSegment(plan.members);
+  const segments = plan.wall.segments
+    .filter((segment) => !absorbed.has(segment.id))
+    .map((segment) => (segment.id === merged.id ? merged : segment));
+
+  return updateModelDecisions(
+    renumberUnits(replaceWallSegments(model, plan.wall.id, segments))
+  );
+}
+
+/**
+ * Undoes every merge on a unit at once, restoring autofill's original run. A
+ * unit that was never merged is left alone.
+ */
+export function splitUnit(model: Round2Model, segmentId: string): Round2Model {
+  const context = findSegmentContext(model, segmentId);
+  const origin = context?.segment.mergedFrom;
+  if (!context || !origin || origin.length === 0) return model;
+
+  const restored = origin.map((unit) =>
+    withLabel({
+      id: unit.id,
+      wallId: context.wall.id,
+      tier: context.segment.tier,
+      kind: unit.kind,
+      widthSixteenths: unit.widthSixteenths,
+      label: unit.kind === "gap" ? "Open gap" : "",
+      cabinetKind:
+        unit.kind === "cabinet"
+          ? context.segment.tier === "upper"
+            ? ("upper" as const)
+            : ("base" as const)
+          : undefined,
+      standardWidthSixteenths:
+        unit.kind === "cabinet" ? unit.widthSixteenths : undefined,
+      intentionalGap: unit.intentionalGap
+    })
+  );
+
+  const segments = context.wall.segments.flatMap((segment) =>
+    segment.id === segmentId ? restored : [segment]
+  );
+
+  return updateModelDecisions(
+    renumberUnits(replaceWallSegments(model, context.wall.id, segments))
+  );
+}
+
+export type MergePreview = {
+  neighborId: string;
+  widthSixteenths: number;
+  label: string;
+  /** Why this merge is refused, or null when it can go ahead. */
+  blockedReason: string | null;
+  /**
+   * Past the widest standard cabinet. Not refused — the shop can build it to
+   * order — but it becomes an explicit design decision (see the oversize
+   * warning in updateModelDecisions).
+   */
+  oversize: boolean;
+};
+
+/**
+ * What merging a unit with its neighbour on one side would produce, for the
+ * button that offers it. Null means there is no same-tier neighbour that way
+ * at all (the unit sits at the end of the run), so the button is not offered;
+ * a preview carrying a `blockedReason` is offered but disabled, with the
+ * reason as its explanation.
+ */
+export function previewMerge(
+  wall: Round2Wall,
+  segmentId: string,
+  side: MergeSide
+): MergePreview | null {
+  const segment = wall.segments.find((item) => item.id === segmentId);
+  if (!segment) return null;
+
+  const run = wall.segments.filter((item) => item.tier === segment.tier);
+  const index = run.findIndex((item) => item.id === segmentId);
+  const neighbor = run[side === "left" ? index - 1 : index + 1];
+  if (!neighbor) return null;
+
+  const widthSixteenths = segment.widthSixteenths + neighbor.widthSixteenths;
+  const label = withLabel({
+    ...mergeCarrier(segment, neighbor, side),
+    widthSixteenths
+  }).label;
+
+  return {
+    neighborId: neighbor.id,
+    widthSixteenths,
+    label,
+    blockedReason: mergeBlockedReason(segment, neighbor),
+    oversize: widthSixteenths > MAX_CABINET_WIDTH_SIXTEENTHS
+  };
+}
+
+/**
+ * Re-issues the `#n` / `Fn` codes the way autofill does — one run of counters
+ * across every wall, in segment order. Merging and splitting change how many
+ * units a wall holds, so the codes have to be reissued or the schedule and the
+ * drawings skip and repeat numbers.
+ */
+export function renumberUnits(model: Round2Model): Round2Model {
+  let cabinetNumber = 1;
+  let fillerNumber = 1;
+
+  return {
+    ...model,
+    walls: model.walls.map((wall) => ({
+      ...wall,
+      segments: wall.segments.map((segment) => {
+        if (
+          segment.kind === "cabinet" ||
+          (segment.kind === "appliance" && segment.cabinetKind != null)
+        ) {
+          return { ...segment, code: `#${cabinetNumber++}` };
+        }
+        if (segment.kind === "filler") {
+          return { ...segment, code: `F${fillerNumber++}` };
+        }
+        return segment;
+      })
+    }))
+  };
+}
+
+type MergePlan = { wall: Round2Wall; members: WallSegment[] };
+
+function planMerge(
+  model: Round2Model,
+  segmentIds: readonly string[]
+): MergePlan | null {
+  const ids = [...new Set(segmentIds)];
+  if (ids.length < 2) return null;
+
+  const first = findSegmentContext(model, ids[0]);
+  if (!first) return null;
+  const wall = first.wall;
+  const tier = first.segment.tier;
+
+  const run = wall.segments.filter((segment) => segment.tier === tier);
+  const positions = ids.map((id) =>
+    run.findIndex((segment) => segment.id === id)
+  );
+  if (positions.some((position) => position === -1)) return null;
+
+  positions.sort((a, b) => a - b);
+  const contiguous = positions.every(
+    (position, index) => index === 0 || position === positions[index - 1] + 1
+  );
+  if (!contiguous) return null;
+
+  const members = positions.map((position) => run[position]);
+  if (!members.some(isOrdinaryCabinet)) return null;
+  if (members.some((member) => !isMergeable(member))) return null;
+
+  return { wall, members };
+}
+
+/** Why these two units cannot merge, or null when they can. */
+function mergeBlockedReason(
+  segment: WallSegment,
+  neighbor: WallSegment
+): string | null {
+  if (!isMergeable(segment) || !isMergeable(neighbor)) {
+    const fixed = isMergeable(segment) ? neighbor : segment;
+    return `${fixed.code ?? fixed.label} is fixed geometry — merging it would move the run.`;
+  }
+  if (!isOrdinaryCabinet(segment) && !isOrdinaryCabinet(neighbor)) {
+    return "A merge has to include a cabinet.";
+  }
+  return null;
+}
+
+/**
+ * Units a merge may absorb: ordinary cabinets, fillers, and open space the
+ * designer chose to keep. Appliances, openings, finished panels, corner units
+ * and the window-anchored sink are reservation geometry and stay put.
+ */
+function isMergeable(segment: WallSegment): boolean {
+  if (segment.anchored) return false;
+  if (segment.kind === "filler") return true;
+  if (segment.kind === "gap") return segment.intentionalGap === true;
+  return isOrdinaryCabinet(segment);
+}
+
+/**
+ * The member whose identity the merged unit inherits: the first cabinet in run
+ * order, so a merge into the trash-pullout or drawer base keeps that role.
+ */
+function mergeCarrier(
+  segment: WallSegment,
+  neighbor: WallSegment,
+  side: MergeSide
+): WallSegment {
+  const ordered = side === "left" ? [neighbor, segment] : [segment, neighbor];
+  return ordered.find(isOrdinaryCabinet) ?? ordered[0];
+}
+
+function mergedSegment(members: readonly WallSegment[]): WallSegment {
+  const head = members[0];
+  const carrier = members.find(isOrdinaryCabinet) ?? head;
+  const widthSixteenths = members.reduce(
+    (sum, member) => sum + member.widthSixteenths,
+    0
+  );
+  const isStandard =
+    CABINET_STANDARDS.base.widthsSixteenths.includes(widthSixteenths);
+
+  return withLabel({
+    ...carrier,
+    // The merged unit keeps the leftmost id so the elevation's selection and
+    // the open editor card survive the edit.
+    id: head.id,
+    kind: "cabinet",
+    widthSixteenths,
+    label: carrier.label,
+    standardWidthSixteenths: isStandard ? widthSixteenths : undefined,
+    intentionalGap: undefined,
+    // Door and drawer exceptions were chosen against the old width; drop them
+    // so the face re-derives (a merged 24″ opens as a double door). Hardware
+    // and accessories are the designer's standing choices, so they carry over.
+    front: carrier.front
+      ? { hardware: carrier.front.hardware, accessories: carrier.front.accessories }
+      : undefined,
+    mergedFrom: members.flatMap(mergeOrigin)
+  });
+}
+
+/** A member's own pre-merge units, so nested merges restore in one step. */
+function mergeOrigin(member: WallSegment): MergedUnit[] {
+  if (member.mergedFrom && member.mergedFrom.length > 0) {
+    return member.mergedFrom;
+  }
+  return [
+    {
+      id: member.id,
+      kind:
+        member.kind === "cabinet" || member.kind === "filler"
+          ? member.kind
+          : ("gap" as const),
+      widthSixteenths: member.widthSixteenths,
+      ...(member.intentionalGap ? { intentionalGap: true } : {})
+    }
+  ];
 }
 
 export function standardWidthOptionsSixteenths(): number[] {
@@ -369,6 +644,19 @@ export function updateModelDecisions(model: Round2Model): Round2Model {
         severity: "warning",
         title: `Wall ${wall.label} sink off window center`,
         body: `${segment.code ?? segment.label} sits ${formatSixteenths(Math.abs(offset))} ${offset > 0 ? "left of" : "right of"} the window center. Re-center it or accept the offset.`
+      });
+    }
+
+    for (const segment of wall.segments) {
+      if (!isOrdinaryCabinet(segment)) continue;
+      if (segment.widthSixteenths <= MAX_CABINET_WIDTH_SIXTEENTHS) continue;
+      decisionItems.push({
+        id: `decision-${segment.id}-oversize`,
+        objectId: segment.id,
+        wallId: wall.id,
+        severity: "warning",
+        title: `Wall ${wall.label} cabinet over standard width`,
+        body: `${segment.code ?? segment.label} is ${formatSixteenths(segment.widthSixteenths)}, wider than the ${formatSixteenths(MAX_CABINET_WIDTH_SIXTEENTHS)} standard maximum. Confirm it as made to order, or split it back.`
       });
     }
 

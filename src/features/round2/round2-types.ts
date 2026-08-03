@@ -125,6 +125,15 @@ export type Round2PrototypeAction =
   | { type: "SET_FILLER_PLACEMENT"; objectId: string; placement: FillerPlacement }
   | { type: "REMOVE_FILLER"; objectId: string }
   | { type: "RESTORE_FILLER"; objectId: string }
+  /**
+   * Folds adjacent units into one cabinet — two 12″ boxes into a 24″, or an
+   * unwanted filler into the cabinet beside it. The ids must sit next to each
+   * other in one tier of one wall; the run keeps its start and end, so nothing
+   * else moves.
+   */
+  | { type: "MERGE_UNITS"; objectIds: string[] }
+  /** Undoes every merge on a unit, restoring autofill's original run. */
+  | { type: "SPLIT_UNIT"; objectId: string }
   | { type: "SET_SEGMENT_KIND"; objectId: string; cabinetKind: CabinetKind }
   | { type: "SET_SEGMENT_FRONT"; objectId: string; front: WallSegmentFront }
   | { type: "SET_HEIGHT_PROFILE"; profile: Partial<Round2HeightProfile> }

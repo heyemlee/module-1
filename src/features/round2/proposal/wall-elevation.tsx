@@ -21,7 +21,10 @@ import {
 } from "../model/segment-role";
 import { ApplianceGlyph, WindowGlyph } from "../appliance-glyphs";
 import { CABINET_STANDARDS } from "../model/cabinet-standards";
-import { standardWidthOptionsSixteenths } from "../model/adjustments";
+import {
+  previewMerge,
+  standardWidthOptionsSixteenths
+} from "../model/adjustments";
 import {
   layoutDimensionLabels,
   stackAnchoredLabels,
@@ -2465,6 +2468,84 @@ function applianceWidthOptions(symbol: string | undefined): number[] {
   return definition ? [...definition.widthOptionsSixteenths] : [];
 }
 
+/**
+ * Merge buttons for the unit on each side. Merging is how a unit is removed:
+ * its width is handed to the neighbour, so the run keeps its start and end and
+ * nothing else on the wall moves. Each button names what the merge produces
+ * (`B24`) rather than the act, so the outcome is readable before the click.
+ * A side with no same-tier neighbour is not offered; a side that would absorb
+ * fixed geometry is offered disabled, with the reason underneath.
+ */
+function MergeControls({
+  segment,
+  wall,
+  sectionLabel,
+  dispatch
+}: {
+  segment: WallSegment;
+  wall: Round2Wall;
+  sectionLabel: string;
+  dispatch: Dispatch<Round2PrototypeAction>;
+}) {
+  const sides = (["left", "right"] as const).map((side) => ({
+    side,
+    preview: previewMerge(wall, segment.id, side)
+  }));
+  const offered = sides.filter(({ preview }) => preview != null);
+  if (offered.length === 0) return null;
+
+  const note =
+    offered.find(({ preview }) => preview?.blockedReason)?.preview
+      ?.blockedReason ??
+    (offered.some(({ preview }) => preview?.oversize)
+      ? "Over the standard maximum — it goes on the schedule as made to order."
+      : null);
+
+  return (
+    <>
+      <CardSectionLabel>{sectionLabel}</CardSectionLabel>
+      <div className="mt-1.5 grid grid-cols-2 gap-1">
+        {sides.map(({ side, preview }) => {
+          // A refused merge has no outcome to name — showing the width it
+          // would have had reads as an offer. Only an allowed merge is named.
+          const allowed = preview != null && preview.blockedReason == null;
+          return (
+            <button
+              key={side}
+              type="button"
+              disabled={!allowed}
+              aria-label={
+                allowed
+                  ? `Merge ${side} into ${preview.label}`
+                  : `No unit to merge ${side}`
+              }
+              onClick={() =>
+                allowed &&
+                dispatch({
+                  type: "MERGE_UNITS",
+                  objectIds: [segment.id, preview.neighborId]
+                })
+              }
+              className={cn(
+                CARD_CHIP_CLASS,
+                "flex flex-col items-center justify-center leading-tight disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-studio-line"
+              )}
+            >
+              <span className="text-[7px] tracking-[0.08em] text-studio-quiet">
+                {side === "left" ? "◀ MERGE LEFT" : "MERGE RIGHT ▶"}
+              </span>
+              <span>{allowed ? preview.label : "—"}</span>
+            </button>
+          );
+        })}
+      </div>
+      {note && (
+        <p className="mt-1.5 text-[9.5px] leading-4 text-studio-muted">{note}</p>
+      )}
+    </>
+  );
+}
+
 function CardSectionLabel({ children }: { children: string }) {
   return (
     <span className="mt-2.5 block font-mono text-[8px] tracking-[0.12em] text-studio-quiet">
@@ -2513,6 +2594,7 @@ function SegmentEditorCard({
   const isFiller = segment.kind === "filler";
   const isIntentionalGap = segment.kind === "gap" && segment.intentionalGap;
   const isPanel = segment.kind === "panel";
+  const isMerged = (segment.mergedFrom?.length ?? 0) > 0;
   const front = isPanel ? null : resolveSegmentFront(segment, designIntent);
   const cornerIntentKey = cornerIntentKeyForSegment(segment);
   const fridgeIntentKeys = fridgeIntentKeysForSegment(segment, wall);
@@ -2607,7 +2689,23 @@ function SegmentEditorCard({
             }}
             ariaLabel="Custom width"
           />
+          <MergeControls
+            segment={segment}
+            wall={wall}
+            sectionLabel="MERGE"
+            dispatch={dispatch}
+          />
         </>
+      )}
+
+      {isMerged && (
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "SPLIT_UNIT", objectId: segment.id })}
+          className="mt-1.5 w-full rounded-[8px] border border-studio-line bg-white px-2 py-1.5 font-mono text-[9px] text-studio-ink outline-none transition-colors hover:border-studio-ink"
+        >
+          Restore {segment.mergedFrom?.length} units
+        </button>
       )}
 
       {canAdjustApplianceWidth && (
@@ -2850,6 +2948,15 @@ function SegmentEditorCard({
           >
             Remove filler · keep open space
           </button>
+          {/* Removing leaves the space open and the cabinets untouched, which
+              is the default. Absorbing it into a neighbour is the second
+              choice, so it sits below as a plain option. */}
+          <MergeControls
+            segment={segment}
+            wall={wall}
+            sectionLabel="OR ABSORB INTO A NEIGHBOUR"
+            dispatch={dispatch}
+          />
         </>
       )}
 
@@ -2868,6 +2975,12 @@ function SegmentEditorCard({
           >
             Restore filler
           </button>
+          <MergeControls
+            segment={segment}
+            wall={wall}
+            sectionLabel="OR ABSORB INTO A NEIGHBOUR"
+            dispatch={dispatch}
+          />
         </>
       )}
     </div>

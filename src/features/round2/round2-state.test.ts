@@ -11,6 +11,7 @@ import {
   hasBlockingDecisions,
   initializeMeasurements
 } from "./model/round2-model";
+import { wallTierTotal } from "./model/adjustments";
 import type {
   Round1ReferenceSource,
   Round2PrototypeState
@@ -358,6 +359,162 @@ describe("Round 2 prototype state", () => {
       )
     ).toBe(true);
     expect(adjusted.proposalStatus).toBe("NEEDS_DECISION");
+  });
+
+  test("merging keeps the wall closed and follows the surviving unit", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const wall = submitted.model?.walls.find((item) =>
+      item.segments.some((segment) => segment.tier === "base")
+    );
+    const run = (wall?.segments ?? []).filter(
+      (segment) => segment.tier === "base"
+    );
+    const index = run.findIndex(
+      (segment, position) =>
+        position > 0 &&
+        segment.kind === "cabinet" &&
+        segment.cabinetKind !== "corner" &&
+        segment.sourceCornerId == null &&
+        run[position - 1].kind === "cabinet" &&
+        run[position - 1].cabinetKind !== "corner" &&
+        run[position - 1].sourceCornerId == null
+    );
+    if (index < 1) throw new Error("Expected two adjacent base cabinets");
+    const [left, right] = [run[index - 1], run[index]];
+    const before = wallTierTotal(wall!, "base");
+
+    const merged = reduceRound2Prototype(submitted, {
+      type: "MERGE_UNITS",
+      objectIds: [right.id, left.id]
+    });
+    const mergedWall = merged.model?.walls.find((item) => item.id === wall?.id);
+
+    // The leftmost id survives, whichever order the ids arrive in.
+    expect(merged.selectedObjectId).toBe(left.id);
+    expect(segmentById(merged, left.id)?.widthSixteenths).toBe(
+      left.widthSixteenths + right.widthSixteenths
+    );
+    expect(segmentById(merged, right.id)).toBeUndefined();
+    expect(wallTierTotal(mergedWall!, "base")).toBe(before);
+    expect(merged.drawingStatus).toBe("STALE");
+    expect(merged.proposalVersion).toBe(submitted.proposalVersion + 1);
+
+    const restored = reduceRound2Prototype(merged, {
+      type: "SPLIT_UNIT",
+      objectId: left.id
+    });
+    expect(segmentById(restored, left.id)?.widthSixteenths).toBe(
+      left.widthSixteenths
+    );
+    expect(segmentById(restored, right.id)?.widthSixteenths).toBe(
+      right.widthSixteenths
+    );
+  });
+
+  test("a merge survives a regeneration that reflows the run", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const wall = submitted.model?.walls.find((item) =>
+      item.segments.some((segment) => segment.tier === "base")
+    );
+    const run = (wall?.segments ?? []).filter(
+      (segment) => segment.tier === "base"
+    );
+    const index = run.findIndex(
+      (segment, position) =>
+        position > 0 &&
+        segment.kind === "cabinet" &&
+        segment.cabinetKind !== "corner" &&
+        segment.sourceCornerId == null &&
+        run[position - 1].kind === "cabinet" &&
+        run[position - 1].cabinetKind !== "corner" &&
+        run[position - 1].sourceCornerId == null
+    );
+    if (index < 1) throw new Error("Expected two adjacent base cabinets");
+    const [left, right] = [run[index - 1], run[index]];
+
+    const merged = reduceRound2Prototype(submitted, {
+      type: "MERGE_UNITS",
+      objectIds: [left.id, right.id]
+    });
+    const width = segmentById(merged, left.id)?.widthSixteenths;
+
+    // Any intent edit that re-runs autofill rebuilds every segment. The merge
+    // is a designer decision about this run, so it has to come back with it.
+    const regenerated = reduceRound2Prototype(merged, {
+      type: "GENERATE_PROPOSAL"
+    });
+
+    expect(segmentById(regenerated, left.id)?.widthSixteenths).toBe(width);
+    expect(segmentById(regenerated, right.id)).toBeUndefined();
+    expect(
+      regenerated.model?.decisionItems.some((item) =>
+        item.id.endsWith("-merge-dropped")
+      )
+    ).toBe(false);
+  });
+
+  test("reports a merge that a new measurement made impossible", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const wall = submitted.model?.walls[0];
+    const stale: Round2PrototypeState = {
+      ...submitted,
+      model: {
+        ...submitted.model!,
+        walls: submitted.model!.walls.map((item) =>
+          item.id === wall?.id
+            ? {
+                ...item,
+                segments: item.segments.map((segment, position) =>
+                  position === 0
+                    ? {
+                        ...segment,
+                        mergedFrom: [
+                          {
+                            id: "gone-1",
+                            kind: "cabinet" as const,
+                            widthSixteenths: 12 * 16
+                          },
+                          {
+                            id: "gone-2",
+                            kind: "cabinet" as const,
+                            widthSixteenths: 12 * 16
+                          }
+                        ]
+                      }
+                    : segment
+                )
+              }
+            : item
+        )
+      }
+    };
+
+    const regenerated = reduceRound2Prototype(stale, {
+      type: "GENERATE_PROPOSAL"
+    });
+    const dropped = regenerated.model?.decisionItems.find((item) =>
+      item.id.endsWith("-merge-dropped")
+    );
+
+    expect(dropped?.severity).toBe("warning");
+    expect(dropped?.body).toContain("merge again");
+    expect(hasBlockingDecisions(regenerated.model)).toBe(false);
+  });
+
+  test("sales cannot merge or split units", () => {
+    const submitted = submitComplete(createRound2PrototypeState("DESIGNER"));
+    const sales = { ...submitted, role: "SALES" as const };
+    const target = firstResizableSegment(submitted);
+
+    expect(
+      reduceRound2Prototype(sales, {
+        type: "MERGE_UNITS",
+        objectIds: [target.id, "anything"]
+      })
+    ).toBe(sales);
+    expect(
+      reduceRound2Prototype(sales, { type: "SPLIT_UNIT", objectId: target.id })
+    ).toBe(sales);
   });
 
   test("remeasure blocks review and a new version makes outputs stale", () => {
