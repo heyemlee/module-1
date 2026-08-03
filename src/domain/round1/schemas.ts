@@ -25,9 +25,23 @@ const nullableNumberSchema = z.number().positive().nullable();
 const statusSchema = z.enum(["YES", "NO", "UNKNOWN"]);
 const cabinetStyleSchema = z.enum(["EUROPEAN_FRAMELESS", "AMERICAN_FRAMED"]);
 
+/**
+ * Optional per-cabinet-type door colors. `doorColorId` stays the single source
+ * of truth for the kitchen's main finish; a tier entry is an override that only
+ * repaints that cabinet type in the concept rendering. `null` means "same as
+ * the main door color", so a plain single-color project keeps writing exactly
+ * the shape it wrote before this field existed.
+ */
+const tierColorIdsSchema = z.object({
+  BASE: z.string().min(1).nullable().default(null),
+  WALL: z.string().min(1).nullable().default(null),
+  TALL: z.string().min(1).nullable().default(null)
+});
+
 const renderingPreferencesSchema = z.object({
   cabinetStyle: cabinetStyleSchema.default("EUROPEAN_FRAMELESS"),
-  doorColorId: z.string().min(1).nullable().default(null)
+  doorColorId: z.string().min(1).nullable().default(null),
+  tierColorIds: tierColorIdsSchema.optional()
 });
 const roughApplianceSchema = z.object({
   status: statusSchema,
@@ -269,6 +283,7 @@ export const round1NormalizedSchema = z.object({
 });
 
 export type CabinetStyle = z.infer<typeof cabinetStyleSchema>;
+export type Round1TierColorIds = z.infer<typeof tierColorIdsSchema>;
 export type Round1RenderingPreferences = z.infer<
   typeof renderingPreferencesSchema
 >;

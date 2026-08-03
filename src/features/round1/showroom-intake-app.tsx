@@ -38,7 +38,8 @@ import {
   renderingPreferenceStampForForm,
   renderingPreferenceStampMatches,
   renderingPreferencesComplete,
-  selectedRenderingColor,
+  renderingSwatchGroups,
+  resolveRenderingColorPlan,
   renderingPreferencesForForm,
   CABINET_STYLE_LABELS,
   type RenderingPreferenceStamp
@@ -797,16 +798,22 @@ export function ShowroomIntakeApp({
       const referenceImagesBase64 = await rasterizeRenderingReferences([
         { role: "TOP_DOWN_PLAN", svg: referenceTopDownSvg }
       ]);
-      // Also send the selected door color's swatch as a MATERIAL reference so the
-      // image model matches the actual color/finish, not just the text prompt.
-      const selectedColor = selectedRenderingColor(cabinetColors, form);
-      if (selectedColor?.swatchImageUrl) {
+      // Also send each selected door color's swatch as a MATERIAL reference so
+      // the image model matches the actual color/finish, not just the text
+      // prompt. One swatch per distinct color: a single-color kitchen sends one,
+      // a kitchen with per-cabinet-type colors sends one per finish.
+      const colorPlan = resolveRenderingColorPlan(cabinetColors, form);
+      for (const group of colorPlan ? renderingSwatchGroups(colorPlan) : []) {
+        if (!group.color.swatchImageUrl) continue;
         try {
           const swatchPng = await rasterizeImageSourceToPngBase64(
-            selectedColor.swatchImageUrl
+            group.color.swatchImageUrl
           );
           if (swatchPng) {
-            referenceImagesBase64.push({ role: "MATERIAL_SWATCH", imageBase64: swatchPng });
+            referenceImagesBase64.push({
+              role: group.role,
+              imageBase64: swatchPng
+            });
           }
         } catch {
           // Best-effort: fall back to the text prompt if the swatch can't rasterize.
@@ -1282,7 +1289,7 @@ export function ShowroomIntakeApp({
     <div className="ml-2 flex flex-1 items-center gap-2.5">
       <RenderingPreferencesLockControl
         preferencesLocked={preferencesLocked}
-        canLock={selectedRenderingColor(cabinetColors, form) !== null}
+        canLock={preferencesComplete}
         onLock={() => {
           localSessionChangedRef.current = true;
           setPreferencesLocked(true);

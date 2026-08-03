@@ -1,7 +1,15 @@
 import type { Round1Snapshot } from "./snapshot";
 import type { Wall } from "./floorplan/plan-geometry";
-import type { CabinetStyle } from "@/domain/round1";
+import type { CabinetKind, CabinetStyle } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
+import {
+  buildRenderingColorPlan,
+  CABINET_TIER_LABELS,
+  groupTiersByColor,
+  renderingSwatchGroups,
+  type RenderingColorPlan,
+  type RenderingSwatchGroup
+} from "./rendering-preferences";
 import {
   applianceNoun,
   describeBehindCameraAppliances,
@@ -89,8 +97,31 @@ function visibleWallsForLayout(layout: string): Wall[] {
 
 export type RenderingPromptPreferences = {
   cabinetStyle: CabinetStyle;
+  /** Main door color; also the fallback for any cabinet type without an override. */
   color: CabinetColor;
+  /** Per-cabinet-type overrides, when the designer painted types separately. */
+  tierColors?: Partial<Record<CabinetKind, CabinetColor | null>>;
+  /**
+   * Material swatches actually attached to this request, in the order they are
+   * sent after the top-down plan. The caller passes what it really attached, so
+   * a swatch that failed to rasterize never gets a reference number here.
+   */
+  swatchGroups?: RenderingSwatchGroup[];
 };
+
+function colorPlanForPreferences(
+  preferences: RenderingPromptPreferences
+): RenderingColorPlan {
+  return buildRenderingColorPlan({
+    primary: preferences.color,
+    tierColors: preferences.tierColors
+  });
+}
+
+/** "base cabinets and tall (pantry and appliance) cabinets" */
+function tierListPhrase(tiers: CabinetKind[]) {
+  return joinList(tiers.map((tier) => CABINET_TIER_LABELS[tier]));
+}
 
 export function buildRound1RenderingPrompt(
   snapshot: Round1Snapshot,
@@ -119,7 +150,13 @@ export function buildRound1RenderingPrompt(
     (cabinet) => cabinet.kind === "WALL"
   ).length;
   const style = describeCabinetStyle(preferences.cabinetStyle);
-  const colorDescription = preferences.color.promptDescription;
+  const colorPlan = colorPlanForPreferences(preferences);
+  // Single-color kitchens keep the original wording verbatim; only a project
+  // that actually paints cabinet types separately gets the multi-tone language.
+  const colorDescription = describeCabinetFinishes(colorPlan);
+  const cabinetryColorDescription = colorPlan.multiColor
+    ? describeTierFinishes(colorPlan)
+    : colorDescription;
 
   // Positive, closed appliance inventory derived from the authoritative plan.
   // Stating what IS present (and nothing else) suppresses hallucinated extra
@@ -137,7 +174,7 @@ export function buildRound1RenderingPrompt(
   const lines: string[] = [
     "Create a warm, spacious, and photorealistic customer concept rendering of a high-end residential kitchen for a Round 1 sales preview in a luxury California Bay Area single-family house. Ensure the room features high ceilings and an airy, open-concept feel to maximize the perceived size of the space.",
     "",
-    `Design style: ${style.designStyle}, ${colorDescription}, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the selected cabinet door color.`,
+    `Design style: ${style.designStyle}, ${colorDescription}, calm contemporary California residential styling, bright natural daylight, and restrained neutral surfaces that complement the selected cabinet door color${colorPlan.multiColor ? "s" : ""}.`,
     "",
     `Appliances: use American residential appliances and proportions appropriate for a Bay Area single-family home (e.g., large stainless or panel-ready models). Do not use compact European appliance proportions.${inventoryLine ? ` ${inventoryLine}` : ""}`,
     "",
@@ -145,7 +182,7 @@ export function buildRound1RenderingPrompt(
     "",
     "Use the provided top-down plan as the authoritative spatial reference.",
     "- Reference 1 (top-down plan, a bird's-eye view) is the single source of truth for the room shell (walls, window, and door openings), which wall each item sits on, its position along that wall, and the gaps between items. Preserve its exact left/right handedness: do NOT mirror, flip, or rotate it. The camera is defined by the text above, not by this plan.",
-    "- Reference 2, when present, is a material swatch and controls the cabinet-door finish only.",
+    ...describeSwatchReferences(preferences),
     "Keep every wall, appliance, sink, window, corner cabinet, and cabinet run exactly where the plan places them. Do not rearrange, mirror, or move anything to a different wall.",
     "CRITICAL REQUIREMENT: Do not cluster or group appliances together (e.g., sink and dishwasher) unless they are physically adjacent in the layout reference. Strictly follow the reference for the empty counter space and gaps between appliances.",
     "",
@@ -153,12 +190,49 @@ export function buildRound1RenderingPrompt(
     `Approximate room size: ${roomDimensions}.`
   ];
 
-  // When a swatch image is available it is sent to the image model as an extra
-  // MATERIAL reference, so tell the model to match the cabinet door finish to it.
-  if (preferences.color.swatchImageUrl) {
+  // When swatch images are available they are sent to the image model as extra
+  // MATERIAL references, so tell the model to match each finish to its swatch.
+  const swatchGroups = attachedSwatchGroups(preferences, colorPlan);
+  if (swatchGroups.length === 1 && !colorPlan.multiColor) {
     lines.push(
       "",
       "A separate close-up image of the selected cabinet door color/material swatch is also provided as a reference. Match the cabinet door fronts' exact color, tone, sheen, and any wood-grain pattern to that swatch. The swatch is a material reference only — do not render it as a physical object in the room."
+    );
+  } else if (swatchGroups.length > 0) {
+    lines.push(
+      "",
+      `Separate close-up material swatch images are also provided, one per cabinet finish: ${joinList(
+        swatchGroups.map(
+          (group) =>
+            `the swatch for the ${tierListPhrase(group.tiers)} (${group.color.name})`
+        )
+      )}. Match each group of cabinet doors to its own swatch's exact color, tone, sheen, and any wood-grain pattern, and do not blend the finishes together or apply one swatch to every cabinet. The swatches are material references only — do not render them as physical objects in the room.`
+    );
+  }
+
+  // Image models drift toward one unified finish, so a multi-tone scheme needs
+  // the assignment stated positively, per cabinet type, and fenced off.
+  if (colorPlan.multiColor) {
+    const baseExtras = [
+      floorPlan.island ? "the island" : "",
+      floorPlan.peninsula ? "the peninsula" : ""
+    ].filter(Boolean);
+    lines.push(
+      "",
+      `CRITICAL FINISH REQUIREMENT: the cabinet doors are intentionally NOT all one finish. ${groupTiersByColor(
+        colorPlan
+      )
+        .map(
+          (group) =>
+            `Every door and drawer front of the ${tierListPhrase(group.tiers)}${
+              group.tiers.includes("BASE") && baseExtras.length
+                ? ` (including ${joinList(baseExtras)})`
+                : ""
+            } is ${group.color.promptDescription}.`
+        )
+        .join(
+          " "
+        )} Keep each finish strictly inside its own cabinet type; do not blend or average the finishes, do not repaint one type in another type's finish, and do not introduce any additional accent finish that is not listed here.`
     );
   }
 
@@ -250,7 +324,7 @@ export function buildRound1RenderingPrompt(
   lines.push(
     `Cabinetry: approximately ${baseCount} base cabinet${baseCount === 1 ? "" : "s"
     } and ${wallCount} wall cabinet${wallCount === 1 ? "" : "s"
-    }, using ${style.cabinetry} with ${colorDescription}.`,
+    }, using ${style.cabinetry} with ${cabinetryColorDescription}.`,
     "",
     "This is a sales-estimate concept image only, not a production drawing. All dimensions are approximate and subject to confirmation.",
     "Do not draw dimension lines, measurements, cabinet codes, labels, numbers, legends, or any text annotations on the image.",
@@ -258,6 +332,63 @@ export function buildRound1RenderingPrompt(
   );
 
   return lines.join("\n");
+}
+
+/**
+ * The swatches the caller actually attached. Falls back to the swatches the
+ * color plan implies, so a caller that has not been taught to pass them (older
+ * call sites, tests) still gets correct reference numbering.
+ */
+function attachedSwatchGroups(
+  preferences: RenderingPromptPreferences,
+  plan: RenderingColorPlan
+): RenderingSwatchGroup[] {
+  return preferences.swatchGroups ?? renderingSwatchGroups(plan);
+}
+
+/**
+ * The reference-legend line(s) that follow the top-down plan. Reference numbers
+ * are positional: the plan is Reference 1, then one line per attached swatch.
+ */
+function describeSwatchReferences(
+  preferences: RenderingPromptPreferences
+): string[] {
+  const plan = colorPlanForPreferences(preferences);
+  const groups = attachedSwatchGroups(preferences, plan);
+  if (groups.length === 0) {
+    return [
+      "- Reference 2, when present, is a material swatch and controls the cabinet-door finish only."
+    ];
+  }
+  if (groups.length === 1 && !plan.multiColor) {
+    return [
+      "- Reference 2, when present, is a material swatch and controls the cabinet-door finish only."
+    ];
+  }
+  return groups.map(
+    (group, index) =>
+      `- Reference ${index + 2} is a material swatch and controls the door finish of the ${tierListPhrase(
+        group.tiers
+      )} only (${group.color.name}). It applies to no other cabinet.`
+  );
+}
+
+/** Finish clause used where the prompt names the kitchen's cabinet color. */
+function describeCabinetFinishes(plan: RenderingColorPlan): string {
+  if (!plan.multiColor) return plan.primary.promptDescription;
+  return `a deliberate multi-tone cabinet scheme in which ${describeTierFinishes(
+    plan
+  )}`;
+}
+
+/** "the base cabinets are <finish>; the wall (upper) cabinets are <finish>" */
+function describeTierFinishes(plan: RenderingColorPlan): string {
+  return groupTiersByColor(plan)
+    .map(
+      (group) =>
+        `the ${tierListPhrase(group.tiers)} are ${group.color.promptDescription}`
+    )
+    .join("; ");
 }
 
 function describeCabinetStyle(cabinetStyle: CabinetStyle) {

@@ -437,6 +437,115 @@ describe("buildRound1RenderingPrompt", () => {
   });
 });
 
+describe("per-cabinet-type door colors", () => {
+  const graphiteWall: CabinetColor = {
+    ...europeanOak,
+    id: "eu-graphite",
+    name: "Graphite Matte",
+    promptDescription: "deep graphite matte slab cabinet doors",
+    swatchImageUrl: "https://example.com/graphite.jpg"
+  };
+  const oakWithSwatch: CabinetColor = {
+    ...europeanOak,
+    swatchImageUrl: "https://example.com/oak.jpg"
+  };
+
+  test("a single color keeps the original single-finish language", () => {
+    const prompt = buildPrompt(buildSnapshot(), {
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      color: europeanOak,
+      // An override that repeats the main color is not a second finish.
+      tierColors: { WALL: europeanOak }
+    });
+
+    expect(prompt).not.toContain("multi-tone");
+    expect(prompt).not.toContain("CRITICAL FINISH REQUIREMENT");
+    expect(prompt).toContain("complement the selected cabinet door color.");
+  });
+
+  test("names the finish of each cabinet type and fences them off", () => {
+    const prompt = buildPrompt(buildSnapshot(), {
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      color: europeanOak,
+      tierColors: { WALL: graphiteWall }
+    });
+
+    expect(prompt).toContain("multi-tone cabinet scheme");
+    expect(prompt).toContain(
+      "the base cabinets and tall (pantry and appliance) cabinets are warm natural oak matte slab cabinet doors"
+    );
+    expect(prompt).toContain(
+      "the wall (upper) cabinets are deep graphite matte slab cabinet doors"
+    );
+    expect(prompt).toContain("CRITICAL FINISH REQUIREMENT");
+    expect(prompt).toContain(
+      "Keep each finish strictly inside its own cabinet type"
+    );
+    expect(prompt).toContain("complement the selected cabinet door colors.");
+  });
+
+  test("numbers one swatch reference per finish, in the order they are sent", () => {
+    const prompt = buildPrompt(buildSnapshot(), {
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      color: oakWithSwatch,
+      tierColors: { WALL: graphiteWall }
+    });
+
+    expect(prompt).toContain(
+      "- Reference 2 is a material swatch and controls the door finish of the base cabinets and tall (pantry and appliance) cabinets only (European Oak)."
+    );
+    expect(prompt).toContain(
+      "- Reference 3 is a material swatch and controls the door finish of the wall (upper) cabinets only (Graphite Matte)."
+    );
+    expect(prompt).toContain("one per cabinet finish");
+    expect(prompt).not.toContain("Reference 4");
+  });
+
+  test("skips reference numbers for swatches the caller did not attach", () => {
+    const prompt = buildPrompt(buildSnapshot(), {
+      cabinetStyle: "EUROPEAN_FRAMELESS",
+      color: oakWithSwatch,
+      tierColors: { WALL: graphiteWall },
+      // Only the wall swatch rasterized client-side.
+      swatchGroups: [
+        {
+          role: "MATERIAL_SWATCH_WALL",
+          tiers: ["WALL"],
+          color: graphiteWall
+        }
+      ]
+    });
+
+    expect(prompt).toContain(
+      "- Reference 2 is a material swatch and controls the door finish of the wall (upper) cabinets only (Graphite Matte)."
+    );
+    expect(prompt).not.toContain("Reference 3");
+    // The finish itself is still described in text for the unswatched type.
+    expect(prompt).toContain(
+      "the base cabinets and tall (pantry and appliance) cabinets are warm natural oak matte slab cabinet doors"
+    );
+  });
+
+  test("names the island and peninsula as base cabinetry so they follow the base finish", () => {
+    const prompt = buildPrompt(
+      buildSnapshot("ISLAND", (form) => {
+        form.layoutSensitiveCabinets.island = {
+          status: "YES",
+          requested: true,
+          functions: []
+        };
+      }),
+      {
+        cabinetStyle: "EUROPEAN_FRAMELESS",
+        color: europeanOak,
+        tierColors: { WALL: graphiteWall }
+      }
+    );
+
+    expect(prompt).toContain("(including the island)");
+  });
+});
+
 // Phase 1 of docs/ai-eval-plan.md: a deterministic golden matrix over the
 // representative layouts. Pins each shape's prompt language and guarantees the
 // non-authoritative safety markers survive for EVERY shape (not just the

@@ -103,7 +103,8 @@ describe("generateRound1Rendering", () => {
     expect(result.basedOnRenderingPreferences).toEqual({
       cabinetStyle: "EUROPEAN_FRAMELESS",
       doorColorId: "eu-oak",
-      colorUpdatedAt: "2026-06-19T00:00:00.000Z"
+      colorUpdatedAt: "2026-06-19T00:00:00.000Z",
+      tierColorIds: { BASE: null, WALL: null, TALL: null }
     });
 
     expect(calls).toHaveLength(1);

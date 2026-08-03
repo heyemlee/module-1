@@ -10,8 +10,15 @@ import { rateLimit } from "@/server/platform/rate-limit";
 import type { AuthUser } from "@/server/platform/types";
 import {
   getCabinetColor,
-  isColorCompatibleWithStyle
+  isColorCompatibleWithStyle,
+  type CabinetColor
 } from "@/server/platform/cabinet-color-repository";
+import type { CabinetKind } from "@/domain/round1";
+import {
+  buildRenderingColorPlan,
+  CABINET_TIERS,
+  renderingSwatchGroups
+} from "@/features/round1/rendering-preferences";
 import { getProjectForUser } from "@/server/platform/project-repository";
 import {
   getLatestRound1Snapshot,
@@ -27,7 +34,12 @@ const requestSchema = z.object({
       role: z.enum([
         "PERSPECTIVE_STRUCTURE",
         "TOP_DOWN_PLAN",
-        "MATERIAL_SWATCH"
+        "MATERIAL_SWATCH",
+        // One swatch per distinct door color when cabinet types are painted
+        // separately; carried by the first cabinet type that uses that color.
+        "MATERIAL_SWATCH_BASE",
+        "MATERIAL_SWATCH_WALL",
+        "MATERIAL_SWATCH_TALL"
       ]),
       imageBase64: z.string().min(1)
     })
@@ -102,15 +114,6 @@ export async function POST(
     );
   }
 
-  const roleOrder = [
-    "TOP_DOWN_PLAN",
-    "MATERIAL_SWATCH"
-  ] as const;
-
-  const orderedBase64 = roleOrder
-    .map((role) => input.referenceImages.find((r) => r.role === role)?.imageBase64)
-    .filter((b64): b64 is string => b64 !== undefined);
-
   const preferences = state?.showroomForm.renderingPreferences;
   if (!state || !preferences?.doorColorId) {
     return NextResponse.json(
@@ -126,6 +129,37 @@ export async function POST(
       { status: 409 }
     );
   }
+
+  // Optional per-cabinet-type colors. A stored override that no longer resolves
+  // to a usable color (retired after it was picked) falls back to the main door
+  // color, matching what the intake UI shows — a decorative override must never
+  // be the thing that blocks a render.
+  const tierColors: Partial<Record<CabinetKind, CabinetColor | null>> = {};
+  for (const { kind } of CABINET_TIERS) {
+    const tierColorId = preferences.tierColorIds?.[kind];
+    if (!tierColorId || tierColorId === color.id) continue;
+    const tierColor = await getCabinetColor(user.companyId, tierColorId);
+    tierColors[kind] =
+      tierColor && isColorCompatibleWithStyle(tierColor, preferences.cabinetStyle)
+        ? tierColor
+        : null;
+  }
+
+  const colorPlan = buildRenderingColorPlan({ primary: color, tierColors });
+  // Send the plan's swatches in reference order, but only those the client
+  // actually rasterized and attached, so the prompt's reference numbering can
+  // never drift from the images.
+  const attachedSwatchGroups = renderingSwatchGroups(colorPlan).filter((group) =>
+    input.referenceImages.some((reference) => reference.role === group.role)
+  );
+
+  const orderedBase64 = [
+    input.referenceImages.find((r) => r.role === "TOP_DOWN_PLAN")?.imageBase64,
+    ...attachedSwatchGroups.map(
+      (group) =>
+        input.referenceImages.find((r) => r.role === group.role)?.imageBase64
+    )
+  ].filter((b64): b64 is string => b64 !== undefined);
 
   const latest = await getLatestRound1Snapshot(projectId);
   if (!latest) return NextResponse.json({ error: "Round 1 snapshot required" }, { status: 409 });
@@ -151,7 +185,9 @@ export async function POST(
       referenceImagesBase64: orderedBase64,
       renderingPreferences: {
         cabinetStyle: preferences.cabinetStyle,
-        color
+        color,
+        tierColors,
+        swatchGroups: attachedSwatchGroups
       },
       adapter
     });

@@ -171,6 +171,81 @@ describe("RenderingPreferencesLockControl", () => {
     ).toBe(false);
   });
 
+  test("treats a per-cabinet-type recolor as new rendering inputs", () => {
+    const form = {
+      ...createDefaultShowroomForm(),
+      renderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        doorColorId: "color-1"
+      }
+    };
+    const normalized = normalizeRound1Form(form);
+    const snapshot = buildRound1Snapshot({
+      showroomForm: form,
+      normalized: normalized.normalized,
+      positionOverrides: {},
+      preliminaryCabinets: {
+        cabinets: [],
+        confirmationItems: [],
+        estimatedFillerWidth: 0,
+        salesEstimateOnly: true,
+        notForProduction: true
+      },
+      confirmationItems: normalized.confirmationItems,
+      readiness: normalized.readiness,
+      now: () => new Date("2026-06-30T12:00:00.000Z")
+    });
+    const white = {
+      id: "color-1",
+      companyId: "company-1",
+      name: "White",
+      colorCode: "WHITE",
+      cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+      promptDescription: "white slab",
+      active: true,
+      sortOrder: 1,
+      swatchHex: "#ffffff",
+      swatchImageUrl: null,
+      hoverExampleImageUrl: null,
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T01:00:00.000Z"
+    };
+    const colors = [
+      white,
+      { ...white, id: "color-2", name: "Graphite", colorCode: "GRAPHITE" }
+    ];
+    // A rendering made before per-cabinet-type colors existed: no tier stamp.
+    const rendering = {
+      basedOnSnapshotGeneratedAt: snapshot.generatedAt,
+      basedOnRenderingPreferences: {
+        cabinetStyle: "EUROPEAN_FRAMELESS" as const,
+        doorColorId: "color-1",
+        colorUpdatedAt: "2026-06-30T01:00:00.000Z"
+      }
+    };
+
+    expect(
+      renderingMatchesCurrentInputs({ rendering, snapshot, form, colors })
+    ).toBe(true);
+
+    // Recoloring only the base cabinets — the main color untouched — must make
+    // it stale, otherwise Generate stays disabled after the change.
+    expect(
+      renderingMatchesCurrentInputs({
+        rendering,
+        snapshot,
+        form: {
+          ...form,
+          renderingPreferences: {
+            ...form.renderingPreferences,
+            tierColorIds: { BASE: "color-2", WALL: null, TALL: null }
+          }
+        },
+        colors
+      })
+    ).toBe(false);
+  });
+
   test("treats layout changes as new rendering inputs even when color is unchanged", () => {
     const form = {
       ...createDefaultShowroomForm(),

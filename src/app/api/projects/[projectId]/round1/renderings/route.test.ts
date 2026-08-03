@@ -180,6 +180,132 @@ describe("POST /api/projects/[projectId]/round1/renderings", () => {
     expect(mocks.generateRound1Rendering).not.toHaveBeenCalled();
   });
 
+  test("resolves per-cabinet-type colors and orders their swatches after the plan", async () => {
+    const graphite: CabinetColor = {
+      ...europeanOak,
+      id: "eu-graphite",
+      name: "Graphite Matte",
+      promptDescription: "deep graphite matte slab cabinet doors",
+      swatchImageUrl: "https://example.com/graphite.jpg"
+    };
+    const oakWithSwatch: CabinetColor = {
+      ...europeanOak,
+      swatchImageUrl: "https://example.com/oak.jpg"
+    };
+    mocks.getRound1State.mockResolvedValue({
+      showroomForm: {
+        renderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-oak",
+          tierColorIds: { BASE: null, WALL: "eu-graphite", TALL: null }
+        }
+      }
+    });
+    mocks.getCabinetColor.mockImplementation(
+      async (_companyId: string, colorId: string) =>
+        colorId === "eu-graphite" ? graphite : oakWithSwatch
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/round1/renderings", {
+        method: "POST",
+        body: JSON.stringify({
+          referenceImages: [
+            { role: "MATERIAL_SWATCH_WALL", imageBase64: "wall-swatch" },
+            { role: "TOP_DOWN_PLAN", imageBase64: "plan" },
+            { role: "MATERIAL_SWATCH_BASE", imageBase64: "base-swatch" }
+          ]
+        })
+      }),
+      { params: Promise.resolve({ projectId: "project-1" }) }
+    );
+
+    expect(response.status).toBe(200);
+    const call = mocks.generateRound1Rendering.mock.calls[0][0];
+    // Plan first, then one swatch per finish in cabinet-type order.
+    expect(call.referenceImagesBase64).toEqual([
+      "plan",
+      "base-swatch",
+      "wall-swatch"
+    ]);
+    expect(call.renderingPreferences.tierColors).toEqual({ WALL: graphite });
+    expect(
+      call.renderingPreferences.swatchGroups.map(
+        (group: { role: string }) => group.role
+      )
+    ).toEqual(["MATERIAL_SWATCH_BASE", "MATERIAL_SWATCH_WALL"]);
+  });
+
+  test("falls back to the main color when a per-type color is no longer usable", async () => {
+    mocks.getRound1State.mockResolvedValue({
+      showroomForm: {
+        renderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-oak",
+          tierColorIds: { BASE: null, WALL: "retired-color", TALL: null }
+        }
+      }
+    });
+    mocks.getCabinetColor.mockImplementation(
+      async (_companyId: string, colorId: string) =>
+        colorId === "eu-oak" ? europeanOak : null
+    );
+
+    const response = await request();
+
+    // A decorative override must never be what blocks a rendering.
+    expect(response.status).toBe(200);
+    const call = mocks.generateRound1Rendering.mock.calls[0][0];
+    expect(call.renderingPreferences.tierColors).toEqual({ WALL: null });
+    expect(call.renderingPreferences.swatchGroups).toEqual([]);
+  });
+
+  test("drops swatch references the client never attached", async () => {
+    const graphite: CabinetColor = {
+      ...europeanOak,
+      id: "eu-graphite",
+      name: "Graphite Matte",
+      swatchImageUrl: "https://example.com/graphite.jpg"
+    };
+    mocks.getRound1State.mockResolvedValue({
+      showroomForm: {
+        renderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-oak",
+          tierColorIds: { BASE: null, WALL: "eu-graphite", TALL: null }
+        }
+      }
+    });
+    mocks.getCabinetColor.mockImplementation(
+      async (_companyId: string, colorId: string) =>
+        colorId === "eu-graphite"
+          ? graphite
+          : { ...europeanOak, swatchImageUrl: "https://example.com/oak.jpg" }
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/projects/project-1/round1/renderings", {
+        method: "POST",
+        body: JSON.stringify({
+          referenceImages: [
+            { role: "TOP_DOWN_PLAN", imageBase64: "plan" },
+            { role: "MATERIAL_SWATCH_WALL", imageBase64: "wall-swatch" }
+          ]
+        })
+      }),
+      { params: Promise.resolve({ projectId: "project-1" }) }
+    );
+
+    expect(response.status).toBe(200);
+    const call = mocks.generateRound1Rendering.mock.calls[0][0];
+    expect(call.referenceImagesBase64).toEqual(["plan", "wall-swatch"]);
+    expect(
+      call.renderingPreferences.swatchGroups.map(
+        (group: { role: string }) => group.role
+      )
+    ).toEqual(["MATERIAL_SWATCH_WALL"]);
+  });
+
   test("passes selected rendering preferences to concept generation", async () => {
     const response = await request();
 
@@ -189,7 +315,9 @@ describe("POST /api/projects/[projectId]/round1/renderings", () => {
         referenceImagesBase64: ["plan"],
         renderingPreferences: {
           cabinetStyle: "EUROPEAN_FRAMELESS",
-          color: europeanOak
+          color: europeanOak,
+          tierColors: {},
+          swatchGroups: []
         }
       })
     );

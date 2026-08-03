@@ -13,12 +13,37 @@ import {
 } from "./snapshot";
 import { DownloadButton } from "@/features/platform/download-button";
 import {
+  stampedColorIds,
+  type RenderingPreferenceStamp
+} from "./rendering-preferences";
+import {
   Dialog,
   DialogClose,
   DialogContent,
   DialogTitle
 } from "@/components/ui/dialog";
 import "./ghost-loader.css";
+
+/**
+ * Every finish a rendering actually shows, e.g. "SYN OAK 02 + MATTE WHITE" when
+ * cabinet types were painted separately. Falls back to the single door color
+ * for renderings saved before per-cabinet-type colors existed.
+ */
+function renderingColorLabel(
+  rendering: {
+    doorColorId: string | null;
+    basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
+  },
+  cabinetColors: { id: string; name: string }[]
+): string | null {
+  const names = stampedColorIds(
+    rendering.basedOnRenderingPreferences,
+    rendering.doorColorId
+  )
+    .map((id) => cabinetColors.find((color) => color.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+  return names.length ? names.join(" + ") : null;
+}
 
 // Newton's cradle: calm placeholder shown while a render image loads or when it
 // fails — replaces the browser's broken-image icon on the dark canvas.
@@ -158,7 +183,12 @@ export function Round1InlineRenderPreview({
 }: {
   busy: boolean;
   error: string | null;
-  renderings: { id: string; url: string; doorColorId: string | null }[];
+  renderings: {
+    id: string;
+    url: string;
+    doorColorId: string | null;
+    basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
+  }[];
   cabinetColors: { id: string; name: string }[];
   styleLabel: string;
   fitViewport?: boolean;
@@ -219,9 +249,7 @@ export function Round1InlineRenderPreview({
       setImageAspectRatio(ratio);
     }
   };
-  const colorName = current?.doorColorId
-    ? cabinetColors.find((c) => c.id === current.doorColorId)?.name ?? null
-    : null;
+  const colorName = current ? renderingColorLabel(current, cabinetColors) : null;
   const meta = colorName?.toUpperCase() ?? "";
   const hasOlder = idx < renderings.length - 1;
   const hasNewer = idx > 0;
@@ -501,7 +529,12 @@ export function RenderingControls({
   canRender: boolean;
   busy: boolean;
   error: string | null;
-  renderings: { id: string; url: string; doorColorId: string | null }[];
+  renderings: {
+    id: string;
+    url: string;
+    doorColorId: string | null;
+    basedOnRenderingPreferences?: RenderingPreferenceStamp | null;
+  }[];
   cabinetColors: { id: string; name: string }[];
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -586,9 +619,9 @@ export function RenderingControls({
                 className="aspect-video w-full rounded-lg object-cover transition hover:opacity-90"
               />
             </button>
-            {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
+            {renderingColorLabel(currentRendering, cabinetColors) && (
               <div className="absolute top-3 left-3 rounded bg-black/60 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm pointer-events-none">
-                {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
+                {renderingColorLabel(currentRendering, cabinetColors)}
               </div>
             )}
             {index === 0 && (
@@ -658,9 +691,9 @@ export function RenderingControls({
                 alt="Fullscreen rendering"
                 className="max-h-[95vh] max-w-[95vw] rounded-lg object-contain shadow-2xl"
               />
-              {currentRendering.doorColorId && cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name && (
+              {renderingColorLabel(currentRendering, cabinetColors) && (
                 <div className="absolute top-4 left-4 rounded-md bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md pointer-events-none">
-                  {cabinetColors.find(c => c.id === currentRendering.doorColorId)?.name}
+                  {renderingColorLabel(currentRendering, cabinetColors)}
                 </div>
               )}
               <DialogClose

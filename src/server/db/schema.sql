@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS renderings (
   based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED')),
   based_on_door_color_id UUID,
   based_on_color_updated_at TIMESTAMPTZ,
+  based_on_tier_color_ids JSONB,
   sales_estimate_only BOOLEAN NOT NULL CHECK (sales_estimate_only = true),
   not_for_production BOOLEAN NOT NULL CHECK (not_for_production = true),
   dimension_confidence TEXT NOT NULL CHECK (dimension_confidence = 'ROUGH'),
@@ -120,6 +121,9 @@ CREATE TABLE IF NOT EXISTS renderings (
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_cabinet_style TEXT CHECK (based_on_cabinet_style IN ('EUROPEAN_FRAMELESS', 'AMERICAN_FRAMED'));
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_door_color_id UUID;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ;
+-- Optional per-cabinet-type door colors ({BASE,WALL,TALL} -> color id or null).
+-- NULL means the rendering predates per-cabinet-type colors.
+ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_tier_color_ids JSONB;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_object_key TEXT;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_content_type TEXT;
 ALTER TABLE renderings ADD COLUMN IF NOT EXISTS image_bytes INTEGER;

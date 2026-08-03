@@ -66,6 +66,7 @@ describe("round1 postgres mappers", () => {
       based_on_cabinet_style: "EUROPEAN_FRAMELESS",
       based_on_door_color_id: "eu-oak",
       based_on_color_updated_at: new Date("2026-06-19T00:00:00.000Z"),
+      based_on_tier_color_ids: { BASE: null, WALL: "eu-graphite", TALL: null },
       sales_estimate_only: true,
       not_for_production: true,
       dimension_confidence: "ROUGH",
@@ -75,7 +76,8 @@ describe("round1 postgres mappers", () => {
     expect(rendering.basedOnRenderingPreferences).toEqual({
       cabinetStyle: "EUROPEAN_FRAMELESS",
       doorColorId: "eu-oak",
-      colorUpdatedAt: "2026-06-19T00:00:00.000Z"
+      colorUpdatedAt: "2026-06-19T00:00:00.000Z",
+      tierColorIds: { BASE: null, WALL: "eu-graphite", TALL: null }
     });
   });
 
@@ -90,6 +92,7 @@ describe("round1 postgres mappers", () => {
       based_on_cabinet_style: null,
       based_on_door_color_id: null,
       based_on_color_updated_at: null,
+      based_on_tier_color_ids: null,
       sales_estimate_only: true,
       not_for_production: true,
       dimension_confidence: "ROUGH",
@@ -159,6 +162,82 @@ describe("round1 postgres mappers", () => {
         "eu-oak",
         "2026-06-19T00:00:00.000Z",
         "user-1"
+      ])
+    );
+  });
+
+  test("leaves the tier stamp absent for rows saved before per-type colors", () => {
+    const rendering = mapRenderingHistoryRow({
+      id: "r1",
+      model: "gpt-image-test",
+      image_base64: "rendered",
+      prompt: "concept prompt",
+      size: "1536x1024",
+      based_on_snapshot_generated_at: new Date("2026-06-18T00:00:00.000Z"),
+      based_on_cabinet_style: "EUROPEAN_FRAMELESS",
+      based_on_door_color_id: "eu-oak",
+      based_on_color_updated_at: new Date("2026-06-19T00:00:00.000Z"),
+      based_on_tier_color_ids: null,
+      sales_estimate_only: true,
+      not_for_production: true,
+      dimension_confidence: "ROUGH",
+      created_at: new Date("2026-06-20T00:00:00.000Z")
+    });
+
+    expect(rendering.basedOnRenderingPreferences).not.toHaveProperty(
+      "tierColorIds"
+    );
+  });
+
+  test("persists per-cabinet-type colors alongside the main door color", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "rendering-1",
+            created_at: new Date("2026-06-20T00:00:00.000Z")
+          }
+        ]
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never);
+
+    await saveRenderingHistory({
+      projectId: "project-1",
+      snapshotId: "snapshot-1",
+      user: {
+        id: "user-1",
+        companyId: "company-1",
+        account: "ada",
+        email: "ada@example.com",
+        name: "Ada",
+        role: "SALES",
+        disabledAt: null,
+        monthlyRenderQuota: 50
+      },
+      rendering: {
+        model: "gpt-image-test",
+        imageBase64: "rendered",
+        prompt: "concept prompt",
+        size: "1536x1024",
+        basedOnSnapshotGeneratedAt: "2026-06-18T00:00:00.000Z",
+        basedOnRenderingPreferences: {
+          cabinetStyle: "EUROPEAN_FRAMELESS",
+          doorColorId: "eu-oak",
+          colorUpdatedAt: "2026-06-19T00:00:00.000Z",
+          tierColorIds: { BASE: null, WALL: "eu-graphite", TALL: null }
+        },
+        salesEstimateOnly: true,
+        notForProduction: true,
+        dimensionConfidence: "ROUGH"
+      }
+    });
+
+    expect(vi.mocked(query).mock.calls[0][0]).toContain(
+      "based_on_tier_color_ids"
+    );
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(
+      expect.arrayContaining([
+        { BASE: null, WALL: "eu-graphite", TALL: null }
       ])
     );
   });

@@ -48,6 +48,9 @@ describe("Postgres schema", () => {
     expect(schema).toContain(
       "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_color_updated_at TIMESTAMPTZ"
     );
+    expect(schema).toContain(
+      "ALTER TABLE renderings ADD COLUMN IF NOT EXISTS based_on_tier_color_ids JSONB"
+    );
   });
 
   test("adds nullable object storage metadata for image migration", () => {

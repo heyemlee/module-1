@@ -65,7 +65,9 @@ Secrets stay in `.env.local` / Railway Variables — never in chat, commits, or 
 2. Form → normalize → preliminary cabinets + confirmation items.
 3. `buildFloorPlan(...)` builds deterministic SVG geometry.
 4. `Generate Cabinet Fill` freezes `buildRound1Snapshot` and persists via Postgres.
-5. Concept rendering (optional) uses structured layout references + material swatch; never owns cabinet truth.
+5. Concept rendering (optional) uses structured layout references + one material swatch per selected door finish; never owns cabinet truth.
+
+Door color: `renderingPreferences.doorColorId` is the kitchen's main finish. `renderingPreferences.tierColorIds` (`BASE` / `WALL` / `TALL`, each nullable) optionally repaints one cabinet type in the concept rendering only — `null` means "same as the main color", an override that no longer resolves falls back to it, and the design basis still locks the main color alone.
 
 ### Round 1 → Round 2 handoff
 

@@ -4,7 +4,11 @@ import {
   buildObjectKey,
   createBucketStorageFromEnv
 } from "@/server/storage/bucket";
-import { round1FormSchema, type Round1FormInput } from "@/domain/round1";
+import {
+  round1FormSchema,
+  type Round1FormInput,
+  type Round1TierColorIds
+} from "@/domain/round1";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
 import type { PositionOverrides } from "@/features/round1/floorplan/plan-geometry";
 import type { Round1RenderingPreferenceStamp } from "@/server/round1/rendering-service";
@@ -62,6 +66,8 @@ type RenderingHistoryRow = {
   based_on_cabinet_style: Round1RenderingPreferenceStamp["cabinetStyle"] | null;
   based_on_door_color_id: string | null;
   based_on_color_updated_at: Date | null;
+  /** Per-cabinet-type overrides; NULL on renderings predating the feature. */
+  based_on_tier_color_ids: Round1TierColorIds | null;
   sales_estimate_only: true;
   not_for_production: true;
   dimension_confidence: "ROUGH";
@@ -107,18 +113,37 @@ export function mapRenderingSummaryRow(row: RenderingSummaryRow): RenderingSumma
     prompt: row.prompt,
     size: row.size,
     basedOnSnapshotGeneratedAt: row.based_on_snapshot_generated_at.toISOString(),
-    basedOnRenderingPreferences:
-      row.based_on_cabinet_style && row.based_on_door_color_id
-        ? {
-            cabinetStyle: row.based_on_cabinet_style,
-            doorColorId: row.based_on_door_color_id,
-            colorUpdatedAt: row.based_on_color_updated_at?.toISOString() ?? null
-          }
-        : null,
+    basedOnRenderingPreferences: mapRenderingPreferenceStamp(row),
     salesEstimateOnly: row.sales_estimate_only,
     notForProduction: row.not_for_production,
     dimensionConfidence: row.dimension_confidence,
     createdAt: row.created_at.toISOString()
+  };
+}
+
+/**
+ * Renderings saved before preference stamping carry no style/color at all and
+ * read as `null`. `tierColorIds` is left undefined for renderings saved before
+ * per-cabinet-type colors existed, which the staleness check reads as "this
+ * rendering predates the field" rather than "no overrides".
+ */
+function mapRenderingPreferenceStamp(
+  row: Pick<
+    RenderingHistoryRow,
+    | "based_on_cabinet_style"
+    | "based_on_door_color_id"
+    | "based_on_color_updated_at"
+    | "based_on_tier_color_ids"
+  >
+): Round1RenderingPreferenceStamp | null {
+  if (!row.based_on_cabinet_style || !row.based_on_door_color_id) return null;
+  return {
+    cabinetStyle: row.based_on_cabinet_style,
+    doorColorId: row.based_on_door_color_id,
+    colorUpdatedAt: row.based_on_color_updated_at?.toISOString() ?? null,
+    ...(row.based_on_tier_color_ids
+      ? { tierColorIds: row.based_on_tier_color_ids }
+      : {})
   };
 }
 
@@ -132,15 +157,7 @@ export function mapRenderingHistoryRow(
     prompt: row.prompt,
     size: row.size,
     basedOnSnapshotGeneratedAt: row.based_on_snapshot_generated_at.toISOString(),
-    basedOnRenderingPreferences:
-      row.based_on_cabinet_style && row.based_on_door_color_id
-        ? {
-            cabinetStyle: row.based_on_cabinet_style,
-            doorColorId: row.based_on_door_color_id,
-            colorUpdatedAt:
-              row.based_on_color_updated_at?.toISOString() ?? null
-          }
-        : null,
+    basedOnRenderingPreferences: mapRenderingPreferenceStamp(row),
     salesEstimateOnly: row.sales_estimate_only,
     notForProduction: row.not_for_production,
     dimensionConfidence: row.dimension_confidence,
@@ -270,10 +287,11 @@ export async function saveRenderingHistory(input: {
        id, project_id, round1_snapshot_id, model,
        image_object_key, image_content_type, image_bytes, prompt, size,
        based_on_snapshot_generated_at, based_on_cabinet_style,
-       based_on_door_color_id, based_on_color_updated_at, sales_estimate_only,
+       based_on_door_color_id, based_on_color_updated_at,
+       based_on_tier_color_ids, sales_estimate_only,
        not_for_production, dimension_confidence, created_by_user_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, true, 'ROUGH', $14)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, true, 'ROUGH', $15)
      RETURNING id, created_at`,
     [
       renderingId,
@@ -289,6 +307,7 @@ export async function saveRenderingHistory(input: {
       basedOnRenderingPreferences.cabinetStyle,
       basedOnRenderingPreferences.doorColorId,
       basedOnRenderingPreferences.colorUpdatedAt,
+      basedOnRenderingPreferences.tierColorIds ?? null,
       input.user.id
     ]
   );
@@ -313,6 +332,7 @@ export async function listRenderings(projectId: string): Promise<RenderingSummar
     `SELECT r.id, r.model, r.prompt, r.size, r.round1_snapshot_id,
             r.based_on_snapshot_generated_at, r.based_on_cabinet_style,
             r.based_on_door_color_id, r.based_on_color_updated_at,
+            r.based_on_tier_color_ids,
             r.sales_estimate_only, r.not_for_production, r.dimension_confidence,
             r.created_at,
             COALESCE(jsonb_array_length(s.snapshot_json->'confirmationItems'), 0)

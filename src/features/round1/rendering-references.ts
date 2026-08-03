@@ -1,11 +1,9 @@
 "use client";
 
 import { rasterizeSvgElement } from "./rasterize-svg";
+import type { RenderingReferenceRole } from "./rendering-preferences";
 
-export type RenderingReferenceRole =
-  | "PERSPECTIVE_STRUCTURE"
-  | "TOP_DOWN_PLAN"
-  | "MATERIAL_SWATCH";
+export type { RenderingReferenceRole };
 
 export type RenderingReference = {
   role: RenderingReferenceRole;

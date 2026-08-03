@@ -1,7 +1,14 @@
 import { buildRound1RenderingPrompt } from "@/features/round1/rendering-prompt";
 import type { Round1Snapshot } from "@/features/round1/snapshot";
-import type { CabinetStyle } from "@/domain/round1";
+import type { CabinetKind, CabinetStyle, Round1TierColorIds } from "@/domain/round1";
 import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
+import {
+  buildRenderingColorPlan,
+  effectiveTierColorIds,
+  latestColorUpdatedAt,
+  renderingSwatchGroups,
+  type RenderingSwatchGroup
+} from "@/features/round1/rendering-preferences";
 import type {
   ImageGenerationSize,
   OpenAIImageAdapter
@@ -18,6 +25,13 @@ export type Round1RenderingPreferenceStamp = {
   cabinetStyle: CabinetStyle;
   doorColorId: string;
   colorUpdatedAt: string | null;
+  /**
+   * Per-cabinet-type overrides actually used, `null` per type meaning "same as
+   * the main door color". Lets the UI mark a rendering stale when only a
+   * cabinet type was recolored. Absent on renderings generated before
+   * per-cabinet-type colors existed.
+   */
+  tierColorIds?: Round1TierColorIds | null;
 };
 
 /**
@@ -54,6 +68,15 @@ export async function generateRound1Rendering(input: {
   renderingPreferences: {
     cabinetStyle: CabinetStyle;
     color: CabinetColor;
+    /** Optional per-cabinet-type door colors; unset types follow `color`. */
+    tierColors?: Partial<Record<CabinetKind, CabinetColor | null>>;
+    /**
+     * Material swatches actually attached, in the order they appear after the
+     * top-down plan in `referenceImagesBase64`. Omit to let the color plan
+     * decide, which is only correct when the caller attached every swatch the
+     * plan implies.
+     */
+    swatchGroups?: RenderingSwatchGroup[];
   };
   adapter: OpenAIImageAdapter;
   size?: ImageGenerationSize;
@@ -62,10 +85,17 @@ export async function generateRound1Rendering(input: {
     throw new Error("At least one floor plan reference image is required for rendering");
   }
 
-  const prompt = buildRound1RenderingPrompt(
-    input.snapshot,
-    input.renderingPreferences
-  );
+  const colorPlan = buildRenderingColorPlan({
+    primary: input.renderingPreferences.color,
+    tierColors: input.renderingPreferences.tierColors
+  });
+  const prompt = buildRound1RenderingPrompt(input.snapshot, {
+    cabinetStyle: input.renderingPreferences.cabinetStyle,
+    color: input.renderingPreferences.color,
+    tierColors: input.renderingPreferences.tierColors,
+    swatchGroups:
+      input.renderingPreferences.swatchGroups ?? renderingSwatchGroups(colorPlan)
+  });
   const size = input.size ?? DEFAULT_RENDERING_SIZE;
 
   const result = await input.adapter.generateConceptRendering({
@@ -84,7 +114,10 @@ export async function generateRound1Rendering(input: {
     basedOnRenderingPreferences: {
       cabinetStyle: input.renderingPreferences.cabinetStyle,
       doorColorId: input.renderingPreferences.color.id,
-      colorUpdatedAt: input.renderingPreferences.color.updatedAt ?? null
+      // Newest edit across every color in use, so re-uploading any swatch marks
+      // the rendering stale — not just an edit to the main color.
+      colorUpdatedAt: latestColorUpdatedAt(colorPlan),
+      tierColorIds: effectiveTierColorIds(colorPlan)
     },
     salesEstimateOnly: true,
     notForProduction: true,
