@@ -151,8 +151,8 @@ export function StudioRail({
         >
           <span className="absolute inset-[2.5px] rounded-[1px] bg-studio-ink" />
         </span>
-        <span className="font-mono text-[11px] tracking-[0.3em] text-studio-ink">
-          ABCABINET
+        <span className="font-sans text-[15px] font-semibold tracking-[-0.01em] text-studio-ink">
+          Design
         </span>
       </Link>
 

@@ -49,22 +49,7 @@ export function LoginForm() {
       </div>
 
       {/* LEFT — brand showpiece (desktop only) */}
-      <section className="relative z-[1] hidden flex-col justify-between p-[46px_52px] lg:flex">
-        <div className="relative z-[2] flex items-center gap-3">
-          <span
-            aria-hidden
-            className="relative size-[15px] shrink-0 rounded-[4px] border-[1.5px] border-studio-ink"
-          >
-            <span className="absolute inset-[3px] rounded-[1px] bg-studio-ink" />
-          </span>
-          <span className="font-mono text-[12px] tracking-[0.36em] text-studio-ink">
-            ABCABINET
-          </span>
-          <span className="font-mono text-[12px] tracking-[0.36em] text-[#9a9a96]">
-            STUDIO
-          </span>
-        </div>
-
+      <section className="relative z-[1] hidden flex-col items-center justify-center gap-[40px] p-[46px_52px] lg:flex">
         <div
           className="relative w-full max-w-[600px] rounded-[26px] p-[36px_34px]"
           style={{

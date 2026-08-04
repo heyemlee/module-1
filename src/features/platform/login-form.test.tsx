@@ -21,7 +21,6 @@ describe("LoginForm", () => {
   test("uses the Studio theme + handoff brand copy", () => {
     const html = renderToStaticMarkup(<LoginForm />);
 
-    expect(html).toContain("ABCABINET");
     expect(html).toContain("From conversation to kitchen concept");
     expect(html).not.toContain("--font-playfair");
     expect(html).not.toContain("--font-instrument-serif");
