@@ -14,7 +14,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { AuthUser } from "@/server/platform/types";
+import { ADMIN_ROLES, type AuthUser } from "@/server/platform/types";
 import type { ProjectSummary } from "@/server/platform/project-repository";
 import {
   projectDashboardCounts,
@@ -44,6 +44,9 @@ export function ProjectDashboard({
 }) {
   const router = useRouter();
   const canDeleteProjects = user.role === "ADMIN" || user.role === "OWNER";
+  // Owners/admins are the only roles whose list spans other people's projects,
+  // so they are the only ones for whom "whose project is this" is a question.
+  const showSalesColumn = ADMIN_ROLES.includes(user.role);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -63,9 +66,15 @@ export function ProjectDashboard({
     { label: "TOTAL", value: projects.length, unit: "projects" }
   ];
 
-  const gridCols = showCheckboxes
-    ? "grid-cols-[auto_minmax(0,1.6fr)_1fr_0.7fr]"
-    : "grid-cols-[minmax(0,1.6fr)_1fr_0.7fr]";
+  // Spelled out rather than assembled: Tailwind only emits arbitrary values it
+  // can see verbatim in the source.
+  const gridCols = showSalesColumn
+    ? showCheckboxes
+      ? "grid-cols-[auto_minmax(0,1.5fr)_minmax(0,0.8fr)_1fr_0.7fr]"
+      : "grid-cols-[minmax(0,1.5fr)_minmax(0,0.8fr)_1fr_0.7fr]"
+    : showCheckboxes
+      ? "grid-cols-[auto_minmax(0,1.6fr)_1fr_0.7fr]"
+      : "grid-cols-[minmax(0,1.6fr)_1fr_0.7fr]";
 
   const toggleAll = () => {
     if (selectedIds.size === projects.length) {
@@ -234,6 +243,7 @@ export function ProjectDashboard({
                 </span>
               )}
               <span>CUSTOMER / PROJECT</span>
+              {showSalesColumn && <span>SALES</span>}
               <span>STATUS</span>
               <span className="text-right">UPDATED</span>
             </div>
@@ -294,6 +304,21 @@ export function ProjectDashboard({
                           </div>
                         </div>
                       </div>
+                      {showSalesColumn && (
+                        <div className="min-w-0 pr-3" data-project-sales>
+                          <div className="truncate text-[13px] text-[#16161a]">
+                            {project.createdByName ?? "—"}
+                          </div>
+                          {project.createdByRole &&
+                            project.createdByRole !== "SALES" && (
+                              // Owners/admins/designers create projects too;
+                              // labelling one of them "sales" would be a lie.
+                              <div className="truncate font-mono text-[10px] tracking-[0.1em] text-[#a4a49e]">
+                                {project.createdByRole}
+                              </div>
+                            )}
+                        </div>
+                      )}
                       <div>
                         <span
                           data-project-status={project.status}

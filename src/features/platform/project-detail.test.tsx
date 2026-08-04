@@ -15,6 +15,8 @@ const projectFixture = {
   projectName: "Elm Street Kitchen",
   status: "INTAKE" as const,
   createdByUserId: "u1",
+  createdByName: "Sales",
+  createdByRole: "SALES" as const,
   assignedDesignerId: null,
   updatedAt: "2026-06-24T12:00:00.000Z"
 };

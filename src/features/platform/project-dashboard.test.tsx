@@ -12,7 +12,7 @@ const salesUser = {
   companyId: "c1",
   account: "sales" as const,
   email: "s@example.com",
-  name: "Sales",
+  name: "Amy Chen",
   role: "SALES" as const,
   disabledAt: null,
   monthlyRenderQuota: 50
@@ -37,6 +37,8 @@ const projectFixture = {
   projectName: "Main Kitchen",
   status: "INTAKE" as const,
   createdByUserId: "u1",
+  createdByName: "Amy Chen",
+  createdByRole: "SALES" as const,
   assignedDesignerId: null,
   updatedAt: "2026-06-19T00:00:00.000Z"
 };
@@ -100,6 +102,69 @@ describe("ProjectDashboard", () => {
     expect(html).toContain("TOTAL");
     expect(html).toContain('data-project-status="INTAKE"');
     expect(html).toContain('data-project-status="RENDERING_READY"');
+  });
+
+  test("shows admins which sales rep each project belongs to", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDashboard user={adminUser} projects={[projectFixture]} />
+    );
+
+    expect(html).toContain("<span>SALES</span>");
+    expect(html).toContain("data-project-sales");
+    expect(html).toContain("Amy Chen");
+  });
+
+  test("owners see the same project ownership column as admins", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDashboard
+        user={{ ...adminUser, role: "OWNER" }}
+        projects={[projectFixture]}
+      />
+    );
+
+    expect(html).toContain("data-project-sales");
+    expect(html).toContain("Amy Chen");
+  });
+
+  test("labels the creator's role when the project was not created by sales", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDashboard
+        user={adminUser}
+        projects={[
+          {
+            ...projectFixture,
+            createdByUserId: "u2",
+            createdByName: "Admin",
+            createdByRole: "ADMIN" as const
+          }
+        ]}
+      />
+    );
+
+    expect(html).toContain("ADMIN");
+  });
+
+  test("falls back to a dash when the creating user is gone", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDashboard
+        user={adminUser}
+        projects={[
+          { ...projectFixture, createdByName: null, createdByRole: null }
+        ]}
+      />
+    );
+
+    expect(html).toContain("data-project-sales");
+    expect(html).not.toContain("Amy Chen");
+  });
+
+  test("hides the ownership column from sales users, who only see their own", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDashboard user={salesUser} projects={[projectFixture]} />
+    );
+
+    expect(html).not.toContain("data-project-sales");
+    expect(html).not.toContain("<span>SALES</span>");
   });
 
   test("uses the shared destructive action instead of the expanding Uiverse control", () => {

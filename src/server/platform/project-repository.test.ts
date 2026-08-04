@@ -3,6 +3,7 @@ import { query } from "@/server/db/client";
 import {
   canAccessProject,
   deleteProjectForUser,
+  listProjectsForUser,
   projectListWhereClause
 } from "./project-repository";
 import type { AuthUser } from "./types";
@@ -50,6 +51,58 @@ describe("project authorization helpers", () => {
       text: "projects.company_id = $1 AND projects.created_by_user_id = $2",
       values: ["company-1", "sales-1"]
     });
+  });
+
+  test("lists each project with the user it belongs to", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "project-1",
+          company_id: "company-1",
+          customer_id: "customer-1",
+          customer_name: "Chen Family",
+          project_name: "Main Kitchen",
+          status: "INTAKE",
+          created_by_user_id: "sales-1",
+          created_by_name: "Sales",
+          created_by_role: "SALES",
+          assigned_designer_id: null,
+          updated_at: new Date("2026-06-19T00:00:00.000Z")
+        }
+      ]
+    } as never);
+
+    const projects = await listProjectsForUser({ ...sales, role: "ADMIN" });
+
+    expect(vi.mocked(query).mock.calls[0][0]).toContain("LEFT JOIN users AS creator");
+    expect(projects[0].createdByName).toBe("Sales");
+    expect(projects[0].createdByRole).toBe("SALES");
+  });
+
+  test("keeps a project listed when its creator row is missing", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "project-1",
+          company_id: "company-1",
+          customer_id: "customer-1",
+          customer_name: "Chen Family",
+          project_name: "Main Kitchen",
+          status: "INTAKE",
+          created_by_user_id: "sales-1",
+          created_by_name: null,
+          created_by_role: null,
+          assigned_designer_id: null,
+          updated_at: new Date("2026-06-19T00:00:00.000Z")
+        }
+      ]
+    } as never);
+
+    const projects = await listProjectsForUser({ ...sales, role: "ADMIN" });
+
+    expect(projects).toHaveLength(1);
+    expect(projects[0].createdByName).toBeNull();
+    expect(projects[0].createdByRole).toBeNull();
   });
 
   test("deletes projects only inside the user's company boundary", async () => {
