@@ -23,7 +23,8 @@ export async function PUT(
     const updated = await setCompanyUserQuota({
       companyId: user.companyId,
       userId,
-      monthlyRenderQuota: input.quota
+      monthlyRenderQuota: input.quota,
+      actorRole: user.role
     });
 
     return NextResponse.json({ user: updated });

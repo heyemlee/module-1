@@ -7,7 +7,8 @@ import {
   createCompanyUser,
   mapCompanyUserRow,
   isAssignableRole,
-  setCompanyUserDisabled
+  setCompanyUserDisabled,
+  setCompanyUserQuota
 } from "./user-admin-repository";
 
 vi.mock("@/server/db/client", () => ({
@@ -153,6 +154,85 @@ describe("user admin helpers", () => {
     expect(vi.mocked(query).mock.calls[0][1]).toEqual(["user-2", "company-1", false]);
     expect(deleteSessionsForUser).not.toHaveBeenCalled();
     expect(updated.disabledAt).toBeNull();
+  });
+
+  test("lets an owner raise the owner account's own quota", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "owner-1",
+          account: "owner",
+          email: "owner@users.internal",
+          name: "owner",
+          role: "OWNER",
+          disabled_at: null,
+          created_at: new Date("2026-06-19T00:00:00.000Z"),
+          monthly_render_quota: 500
+        }
+      ]
+    } as never);
+
+    const updated = await setCompanyUserQuota({
+      companyId: "company-1",
+      userId: "owner-1",
+      monthlyRenderQuota: 500,
+      actorRole: "OWNER"
+    });
+
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual([
+      "owner-1",
+      "company-1",
+      500,
+      "OWNER"
+    ]);
+    expect(updated.monthlyRenderQuota).toBe(500);
+  });
+
+  test("does not let an admin change the owner's quota", async () => {
+    // The owner row is filtered out by the WHERE clause for a non-owner actor.
+    vi.mocked(query).mockResolvedValueOnce({ rows: [] } as never);
+
+    await expect(
+      setCompanyUserQuota({
+        companyId: "company-1",
+        userId: "owner-1",
+        monthlyRenderQuota: 0,
+        actorRole: "ADMIN"
+      })
+    ).rejects.toBeInstanceOf(CompanyUserNotFoundError);
+
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual([
+      "owner-1",
+      "company-1",
+      0,
+      "ADMIN"
+    ]);
+  });
+
+  test("lets an admin change a non-owner user's quota", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "user-2",
+          account: "sales-two",
+          email: "sales-two@users.internal",
+          name: "sales-two",
+          role: "SALES",
+          disabled_at: null,
+          created_at: new Date("2026-06-23T00:00:00.000Z"),
+          monthly_render_quota: 80
+        }
+      ]
+    } as never);
+
+    const updated = await setCompanyUserQuota({
+      companyId: "company-1",
+      userId: "user-2",
+      monthlyRenderQuota: 80,
+      actorRole: "ADMIN"
+    });
+
+    expect(updated.monthlyRenderQuota).toBe(80);
   });
 
   test("rejects status updates for users outside the company", async () => {

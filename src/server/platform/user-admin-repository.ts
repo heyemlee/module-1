@@ -97,8 +97,8 @@ export async function createCompanyUser(input: {
   return mapCompanyUserRow(result.rows[0]);
 }
 
-// ponytail: `role <> 'OWNER'` keeps anyone from disabling/deleting/re-quota'ing the
-// single OWNER account through the app (an owner row matches 0 rows -> not-found),
+// ponytail: `role <> 'OWNER'` keeps anyone from disabling/deleting the single
+// OWNER account through the app (an owner row matches 0 rows -> not-found),
 // preventing lockout. Add per-rank gating if multiple owners ever co-manage.
 export async function setCompanyUserDisabled(input: {
   companyId: string;
@@ -119,18 +119,25 @@ export async function setCompanyUserDisabled(input: {
   return mapCompanyUserRow(row);
 }
 
+// Quota is not a lockout risk the way disable/delete are — the render route
+// enforces monthly_render_quota against every role, OWNER included, so an owner
+// who hits their cap needs to be able to raise it. The OWNER row is therefore
+// editable here, but only by an OWNER actor: an ADMIN must not be able to
+// throttle the owner's renders (a non-owner actor matches 0 rows -> not-found).
 export async function setCompanyUserQuota(input: {
   companyId: string;
   userId: string;
   monthlyRenderQuota: number;
+  actorRole: UserRole;
 }) {
   const result = await query<CompanyUserRow>(
     `UPDATE users
      SET monthly_render_quota = $3,
          updated_at = now()
-     WHERE id = $1 AND company_id = $2 AND role <> 'OWNER'
+     WHERE id = $1 AND company_id = $2
+       AND (role <> 'OWNER' OR $4::text = 'OWNER')
      RETURNING id, account, email, name, role, disabled_at, created_at, monthly_render_quota`,
-    [input.userId, input.companyId, input.monthlyRenderQuota]
+    [input.userId, input.companyId, input.monthlyRenderQuota, input.actorRole]
   );
   const row = result.rows[0];
   if (!row) throw new CompanyUserNotFoundError("User not found");
