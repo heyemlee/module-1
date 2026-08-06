@@ -9,11 +9,7 @@ import {
   listRenderings
 } from "@/server/platform/round1-postgres-repository";
 import { getCurrentDesignBasis } from "@/server/platform/design-basis-repository";
-
-const CABINET_STYLE_LABELS: Record<string, string> = {
-  EUROPEAN_FRAMELESS: "European Frameless",
-  AMERICAN_FRAMED: "American Framed"
-};
+import { CABINET_STYLE_LABELS } from "@/features/round1/rendering-preferences";
 
 export default async function ProjectPage({
   params

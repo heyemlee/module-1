@@ -7,10 +7,11 @@ import type { CabinetColor } from "@/server/platform/cabinet-color-repository";
 import { CabinetColorForm, buildCabinetColorPayload } from "./cabinet-color-form";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/api-client";
+import { CABINET_STYLE_LABELS } from "@/features/round1/rendering-preferences";
 
 const TABS = [
-  { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
-  { value: "AMERICAN_FRAMED", label: "American Framed" }
+  { value: "EUROPEAN_FRAMELESS", label: CABINET_STYLE_LABELS.EUROPEAN_FRAMELESS },
+  { value: "AMERICAN_FRAMED", label: CABINET_STYLE_LABELS.AMERICAN_FRAMED }
 ] as const;
 
 type Draft = {

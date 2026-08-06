@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { fetchJson } from "@/lib/api-client";
+import { CABINET_STYLE_LABELS } from "@/features/round1/rendering-preferences";
 
 const STYLES = [
-  { value: "EUROPEAN_FRAMELESS", label: "European Frameless" },
-  { value: "AMERICAN_FRAMED", label: "American Framed" }
+  { value: "EUROPEAN_FRAMELESS", label: CABINET_STYLE_LABELS.EUROPEAN_FRAMELESS },
+  { value: "AMERICAN_FRAMED", label: CABINET_STYLE_LABELS.AMERICAN_FRAMED }
 ] as const;
 
 // Inline uploads are stored as data URLs in the existing text columns, so cap

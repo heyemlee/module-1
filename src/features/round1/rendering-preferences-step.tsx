@@ -13,14 +13,15 @@ import {
   preferencesWithTierColor,
   renderingPreferencesForForm,
   selectedRenderingColor,
-  selectedTierColor
+  selectedTierColor,
+  CABINET_STYLE_LABELS
 } from "./rendering-preferences";
 import { Step } from "./showroom-intake-controls";
 import { cn } from "@/lib/utils";
 
-const STYLE_OPTIONS: { value: CabinetStyle; label: string; sub: string }[] = [
-  { value: "EUROPEAN_FRAMELESS", label: "European Frameless", sub: "FULL OVERLAY" },
-  { value: "AMERICAN_FRAMED", label: "American Framed", sub: "FACE FRAME" }
+const STYLE_OPTIONS: { value: CabinetStyle; label: string }[] = [
+  { value: "EUROPEAN_FRAMELESS", label: CABINET_STYLE_LABELS.EUROPEAN_FRAMELESS },
+  { value: "AMERICAN_FRAMED", label: CABINET_STYLE_LABELS.AMERICAN_FRAMED }
 ];
 
 /**
@@ -146,14 +147,6 @@ export function RenderingPreferencesStep({
               )}
             >
               <span className="text-[13px] font-semibold">{option.label}</span>
-              <span
-                className={cn(
-                  "mt-0.5 font-mono text-[9px] tracking-[0.1em]",
-                  active ? "text-white/55" : "text-[#9a9a94]"
-                )}
-              >
-                {option.sub}
-              </span>
             </button>
           );
         })}

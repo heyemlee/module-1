@@ -53,8 +53,8 @@ export type RenderingPreferenceStamp = {
 };
 
 export const CABINET_STYLE_LABELS: Record<CabinetStyle, string> = {
-  EUROPEAN_FRAMELESS: "European Frameless",
-  AMERICAN_FRAMED: "American Framed"
+  EUROPEAN_FRAMELESS: "Frameless",
+  AMERICAN_FRAMED: "Framed"
 };
 
 export function renderingPreferencesForForm(form: Round1FormInput) {

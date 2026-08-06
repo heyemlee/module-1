@@ -10,11 +10,7 @@ import {
 } from "./studio-page";
 import { RenderingsGallery, type RenderingCard } from "./renderings-gallery";
 import { renderingImageUrl } from "./rendering-image-url";
-
-const STYLE_LABELS: Record<string, string> = {
-  EUROPEAN_FRAMELESS: "European Frameless",
-  AMERICAN_FRAMED: "American Framed"
-};
+import { CABINET_STYLE_LABELS } from "@/features/round1/rendering-preferences";
 
 type RenderingHistoryItem = {
   id: string;
@@ -78,7 +74,7 @@ export function RenderingsView({
                 Design basis v{basis.version} locked
               </p>
               <p className="mt-0.5 text-[12px] text-studio-muted">
-                {STYLE_LABELS[basis.cabinetStyle] ?? basis.cabinetStyle} ·{" "}
+                {CABINET_STYLE_LABELS[basis.cabinetStyle as keyof typeof CABINET_STYLE_LABELS] ?? basis.cabinetStyle} ·{" "}
                 {colorNameById.get(basis.doorColorId) ?? "Unknown color"} · locked{" "}
                 {new Date(basis.lockedAt).toLocaleDateString("en-US", {
                   month: "short",
