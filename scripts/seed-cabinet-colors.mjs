@@ -15,7 +15,8 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, isAbsolute } from "node:path";
+import { dirname, extname, join, isAbsolute } from "node:path";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -28,15 +29,65 @@ const dryRun = Boolean(process.env.DRY_RUN);
 const colorsFileArg = process.env.COLORS_FILE || "scripts/cabinet-colors-eu.json";
 const colorsFile = isAbsolute(colorsFileArg) ? colorsFileArg : join(repoRoot, colorsFileArg);
 
-const colors = JSON.parse(readFileSync(colorsFile, "utf8"));
-if (!Array.isArray(colors) || colors.length === 0) {
+const parsedColors = JSON.parse(readFileSync(colorsFile, "utf8"));
+if (!Array.isArray(parsedColors) || parsedColors.length === 0) {
   throw new Error(`No colors found in ${colorsFile}`);
 }
+
+const imageContentTypes = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp"
+};
+
+const colors = parsedColors.map((color) => {
+  if (!color.swatchImagePath) return color;
+
+  const imagePath = isAbsolute(color.swatchImagePath)
+    ? color.swatchImagePath
+    : join(repoRoot, color.swatchImagePath);
+  const contentType = imageContentTypes[extname(imagePath).toLowerCase()];
+  if (!contentType) {
+    throw new Error(`Unsupported swatch image type: ${imagePath}`);
+  }
+
+  const body = readFileSync(imagePath);
+  return {
+    ...color,
+    swatchImageUrl: `data:${contentType};base64,${body.toString("base64")}`,
+    swatchUpload: {
+      body,
+      contentType,
+      extension: extname(imagePath).toLowerCase().replace(".jpeg", ".jpg").slice(1)
+    }
+  };
+});
 for (const c of colors) {
   if (!c.name || !c.cabinetStyle || !c.promptDescription) {
     throw new Error(`Invalid color entry (needs name/cabinetStyle/promptDescription): ${JSON.stringify(c.name)}`);
   }
 }
+
+const colorsNeedUpload = colors.some((color) => color.swatchUpload);
+const bucketEnvNames = ["BUCKET", "ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY"];
+const missingBucketEnv = bucketEnvNames.filter((name) => !process.env[name]);
+if (colorsNeedUpload && !dryRun && missingBucketEnv.length > 0) {
+  throw new Error(
+    `Local swatch images require object storage; missing: ${missingBucketEnv.join(", ")}`
+  );
+}
+
+const bucketClient = colorsNeedUpload && missingBucketEnv.length === 0
+  ? new S3Client({
+      region: process.env.REGION ?? "auto",
+      endpoint: process.env.ENDPOINT,
+      credentials: {
+        accessKeyId: process.env.ACCESS_KEY_ID,
+        secretAccessKey: process.env.SECRET_ACCESS_KEY
+      }
+    })
+  : null;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -81,6 +132,7 @@ console.log(dryRun ? "Mode: DRY RUN (no writes)\n" : "Mode: WRITE\n");
 
 let created = 0;
 let updated = 0;
+let uploaded = 0;
 
 for (const color of colors) {
   const found = await pool.query(
@@ -96,7 +148,8 @@ for (const color of colors) {
   console.log(`  [${action}] ${color.name}`);
   if (dryRun) continue;
 
-  if (found.rows[0]) {
+  let colorId = found.rows[0]?.id;
+  if (colorId) {
     await pool.query(
       `UPDATE cabinet_colors SET
          swatch_image_url = $2,
@@ -107,15 +160,16 @@ for (const color of colors) {
          sort_order = $5,
          updated_at = now()
        WHERE id = $1`,
-      [found.rows[0].id, color.swatchImageUrl ?? null, color.swatchHex ?? null, color.promptDescription, color.sortOrder ?? 0]
+      [colorId, color.swatchImageUrl ?? null, color.swatchHex ?? null, color.promptDescription, color.sortOrder ?? 0]
     );
   } else {
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO cabinet_colors (
          company_id, cabinet_style, name, color_code, swatch_image_url,
          swatch_hex, hover_example_image_url, prompt_description, active, sort_order
        )
-       VALUES ($1, $2, $3, NULL, $4, $5, NULL, $6, true, $7)`,
+       VALUES ($1, $2, $3, NULL, $4, $5, NULL, $6, true, $7)
+       RETURNING id`,
       [
         company.id,
         color.cabinetStyle,
@@ -126,6 +180,24 @@ for (const color of colors) {
         color.sortOrder ?? 0
       ]
     );
+    colorId = inserted.rows[0]?.id;
+  }
+
+  if (color.swatchUpload && bucketClient && colorId) {
+    const objectKey = `cabinet-colors/${colorId}/swatch.${color.swatchUpload.extension}`;
+    await bucketClient.send(
+      new PutObjectCommand({
+        Bucket: process.env.BUCKET,
+        Key: objectKey,
+        Body: color.swatchUpload.body,
+        ContentType: color.swatchUpload.contentType
+      })
+    );
+    await pool.query(
+      `UPDATE cabinet_colors SET swatch_object_key = $1 WHERE id = $2`,
+      [objectKey, colorId]
+    );
+    uploaded += 1;
   }
 }
 
@@ -133,5 +205,5 @@ await pool.end();
 console.log(
   `\n${dryRun ? "[DRY RUN] Would create" : "Created"} ${created}, ${
     dryRun ? "would update" : "updated"
-  } ${updated} (total ${colors.length}).`
+  } ${updated} (total ${colors.length})${dryRun ? "" : `; uploaded ${uploaded} swatches`}.`
 );

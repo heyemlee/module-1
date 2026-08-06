@@ -36,6 +36,7 @@ npm run db:migrate            # 干净库上验证迁移可执行
 npm run db:seed-admin         # SEED_ADMIN_ACCOUNT=qa-admin
 npm run db:seed-user          # SEED_USER_ACCOUNT=qa-sales
 npm run db:seed-cabinet-colors
+npm run db:seed-framed-colors # Framed Shaker: Oak / Grey / White / Blue / Mocha / Charcoal Gray
 ```
 固定测试夹具：**1 个 admin（qa-admin）+ 2 个 sales（qa-sales-A / qa-sales-B）**。两个 sales 用于验证数据隔离（见 P0-07）。
 

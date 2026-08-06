@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Oak",
+    "cabinetStyle": "AMERICAN_FRAMED",
+    "promptDescription": "light natural oak finish in a warm golden-beige tone with fine vertical wood grain and a soft matte sheen, applied to standard square five-piece Shaker door fronts",
+    "swatchHex": "#c3915f",
+    "sortOrder": 1,
+    "swatchImageUrl": "/cabinet-colors/framed/01-oak.jpg",
+    "swatchImagePath": "public/cabinet-colors/framed/01-oak.jpg"
+  },
+  {
+    "name": "Grey",
+    "cabinetStyle": "AMERICAN_FRAMED",
+    "promptDescription": "solid neutral medium-grey painted finish with a smooth low-sheen matte surface, applied to standard square five-piece Shaker door fronts",
+    "swatchHex": "#8d8984",
+    "sortOrder": 2,
+    "swatchImageUrl": "/cabinet-colors/framed/02-grey.jpg",
+    "swatchImagePath": "public/cabinet-colors/framed/02-grey.jpg"
+  },
+  {
+    "name": "White",
+    "cabinetStyle": "AMERICAN_FRAMED",
+    "promptDescription": "solid clean soft-white painted finish with a smooth low-sheen matte surface, applied to standard square five-piece Shaker door fronts",
+    "swatchHex": "#f0efec",
+    "sortOrder": 3,
+    "swatchImageUrl": "/cabinet-colors/framed/03-white.jpg",
+    "swatchImagePath": "public/cabinet-colors/framed/03-white.jpg"
+  },
+  {
+    "name": "Blue",
+    "cabinetStyle": "AMERICAN_FRAMED",
+    "promptDescription": "solid muted deep-blue painted finish with a smooth low-sheen matte surface, applied to standard square five-piece Shaker door fronts",
+    "swatchHex": "#38588a",
+    "sortOrder": 4,
+    "swatchImageUrl": "/cabinet-colors/framed/04-blue.jpg",
+    "swatchImagePath": "public/cabinet-colors/framed/04-blue.jpg"
+  },
+  {
+    "name": "Mocha",
+    "cabinetStyle": "AMERICAN_FRAMED",
+    "promptDescription": "warm mocha brown-grey finish with subtle natural wood texture and a soft matte sheen, applied to standard square five-piece Shaker door fronts",
+    "swatchHex": "#665a52",
+    "sortOrder": 5,
+    "swatchImageUrl": "/cabinet-colors/framed/05-mocha.jpg",
+    "swatchImagePath": "public/cabinet-colors/framed/05-mocha.jpg"
+  },
+  {
+    "name": "Charcoal Gray",
+    "cabinetStyle": "AMERICAN_FRAMED",
+    "promptDescription": "solid dark charcoal-grey painted finish with a smooth low-sheen matte surface, applied to standard square five-piece Shaker door fronts",
+    "swatchHex": "#414244",
+    "sortOrder": 6,
+    "swatchImageUrl": "/cabinet-colors/framed/06-charcoal-gray.jpg",
+    "swatchImagePath": "public/cabinet-colors/framed/06-charcoal-gray.jpg"
+  }
+]

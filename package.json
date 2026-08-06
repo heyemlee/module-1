@@ -12,6 +12,7 @@
     "db:promote-owner": "node scripts/promote-owner.mjs",
     "db:prepare-cabinet-colors": "node scripts/prepare-cabinet-colors.mjs",
     "db:seed-cabinet-colors": "node scripts/seed-cabinet-colors.mjs",
+    "db:seed-framed-colors": "COLORS_FILE=scripts/cabinet-colors-framed.json node scripts/seed-cabinet-colors.mjs",
     "db:migrate-images-to-bucket": "node scripts/migrate-images-to-bucket.mjs",
     "db:report-image-storage": "node scripts/report-image-storage.mjs",
     "lint": "next lint",

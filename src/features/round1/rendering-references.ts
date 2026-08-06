@@ -52,8 +52,10 @@ export async function rasterizeImageSourceToPngBase64(
   }
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, size, size);
-  // Cover-fit so the swatch fills the square without distortion.
-  const ratio = Math.max(size / image.width, size / image.height);
+  // Contain-fit preserves a complete framed/Shaker door reference. Square
+  // frameless texture swatches still fill the canvas, while portrait door
+  // samples keep their rails and stiles instead of being cropped to the center.
+  const ratio = Math.min(size / image.width, size / image.height);
   const w = image.width * ratio;
   const h = image.height * ratio;
   ctx.drawImage(image, (size - w) / 2, (size - h) / 2, w, h);
