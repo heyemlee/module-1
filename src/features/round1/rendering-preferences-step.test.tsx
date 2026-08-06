@@ -108,8 +108,9 @@ describe("RenderingPreferencesStep", () => {
     expect(html).toContain("Natural Oak Matte");
     expect(html).toContain("2 AVAILABLE");
     expect(html).toContain('aria-label="Select Natural Oak Matte"');
-    expect(html).toContain("object-contain");
-    expect(html).not.toContain("object-cover");
+    expect(html).toContain("object-cover");
+    expect(html).not.toContain("object-contain");
+    expect(html).not.toContain("linear-gradient(155deg");
   });
 
   test("marks a confirmed cabinet color as locked", () => {

@@ -382,22 +382,9 @@ function ColorSwatchButton({
           alt=""
           loading="lazy"
           decoding="async"
-          className="absolute inset-0 h-full w-full object-contain"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       )}
-      <span
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(155deg,rgba(255,255,255,0.45),transparent 40%)"
-        }}
-      />
-      <span
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5"
-        style={{
-          background: "linear-gradient(180deg,transparent,rgba(10,10,12,0.8))"
-        }}
-      />
       {selected &&
         (badge ? (
           <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-[rgba(10,10,12,0.72)] px-1.5 py-0.5 font-mono text-[8px] font-semibold leading-none tracking-[0.06em] text-white backdrop-blur-sm">
@@ -414,7 +401,7 @@ function ColorSwatchButton({
           </span>
         ))}
       <span className="absolute inset-x-0 bottom-0 overflow-hidden px-2 py-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-        <span className="swatch-name-track text-[11.5px] font-medium text-white">
+        <span className="swatch-name-track text-[11.5px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           <span>{color.name}</span>
           <span aria-hidden="true">{color.name}</span>
         </span>
